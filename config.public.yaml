@@ -1,0 +1,68 @@
+# Public smoke-test data: Mip-NeRF 360 "room" stitched into a video by slurm/fetch_public.sbatch.
+# No marker in this scene, so stage 4 uses an ASSUMED camera height instead of a measurement.
+run_name: public
+video: data/public_room.mp4
+work_dir: out/public
+
+frames:
+  target: 180                   # frames kept
+  min: 150                      # PASS threshold
+  max_side: 1600                # px, longest side
+
+colmap:
+  matcher: sequential           # video => sequential; use exhaustive for unordered photos
+  min_registered: 0.80
+
+splat:
+  steps: 7000
+  test_every: 8                 # every 8th frame held out for PSNR
+  min_psnr: 20.0
+
+scale:
+  manual_factor: null           # set a number to skip marker detection
+  assume_camera_height_m: 1.5   # no marker: scale so the median camera height is this (ASSUMED, stage reports SKIP)
+  marker_dict: DICT_4X4_50
+  marker_id: 0
+  marker_size_m: 0.100          # tape-measure the black square edge as displayed/printed
+  tolerance_pct: 3.0
+  ground_truth:                 # tape-measured distances checked against the splat
+    - name: marker_height       # floor to the centre of the marker
+      kind: marker_height
+      meters: 0.750
+
+floor:
+  ransac_iters: 2000
+  inlier_m: 0.02
+
+grid:
+  cell_m: 0.02
+  floor_band_m: 0.015           # |z| below this counts as floor
+  floor_close_cells: 5          # fill small holes in the observed floor
+  obstacle_z: [0.05, 1.8]
+  bump_z: [0.015, 0.05]         # rugs, thresholds
+  min_count: 2                  # Gaussians per cell to mark it
+
+plan:
+  start: null                   # [x, y] metres in the floor frame: read off out/<run>/occupancy.png (1 m grid)
+  goal: null                    # null = auto (two far-apart reachable points); or read off occupancy.png
+  walker_width_m: 0.66
+  preferred_clearance_m: 0.30   # path prefers this much room on each side when it can
+  clearance_weight: 5.0
+
+hazards:
+  clearance_margin_m: 0.10      # flag where side clearance < this
+
+fix:
+  backend: stub                 # image-editing backend name in stages/09_fix_render.py BACKENDS
+  max_renders: 3
+  camera_back_m: 1.5
+  camera_height_m: 1.4
+
+viewer:
+  timeout_ms: 60000
+
+cluster:
+  ssh: hpg
+  control_path: ~/.ssh/cm-hpg
+  repo: $HPG_ROOT/Homeclear
+  env: $HPG_ROOT/envs/homeclear

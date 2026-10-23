@@ -1,0 +1,127 @@
+# Realistic demo scene: Mip-NeRF 360 "room" (public dataset, license note in proof/realistic_sim/dataset_license.md).
+# Trained by slurm/train_best.sbatch (gsplat MCMC, 30k steps, full res) into out/room_best/{splat.ply,cameras.json};
+# this config runs stages 4-12 on it. APPROXIMATE SCALE (public dataset): no marker, scale from a known-size object.
+run_name: room_best
+video: null                     # stages 1-3 come from train_best.sbatch
+work_dir: out/room_best
+
+frames:
+  target: 180                   # frames kept
+  min: 150                      # PASS threshold
+  max_side: 1600                # px, longest side
+
+colmap:
+  matcher: exhaustive           # home.mp4 = chest + waist clips joined: sequential matching would not link them
+  min_registered: 0.80
+
+splat:
+  steps: 7000
+  test_every: 8                 # every 8th frame held out for PSNR
+  min_psnr: 20.0
+
+scale:
+  note: "APPROXIMATE SCALE (public dataset): door leaf assumed 1.981 m"
+  manual_factor: null           # set a number to skip marker detection
+  known_object:                 # APPROXIMATE SCALE (public dataset): no marker. UK standard internal door leaf, ASSUMED 1981 mm
+    name: door leaf height
+    meters: 1.981
+    points:                     # free edge of the open door, top then bottom corner: {image: [u, v]} picked by eye at data_factor 4
+      - {DSCF4699.JPG: [391.0, 56.3], DSCF4723.JPG: [404.3, 55.9]}
+      - {DSCF4699.JPG: [366.7, 352.7], DSCF4723.JPG: [409.8, 349.0]}
+  marker_dict: DICT_4X4_50
+  marker_id: 0
+  marker_size_m: 0.100          # tape-measure the black square edge as displayed/printed
+  tolerance_pct: 3.0
+  ground_truth:                 # tape-measured distances checked against the splat
+    - name: marker_height       # floor to the centre of the marker
+      kind: marker_height
+      meters: 0.750
+
+clean:                          # stage 5b: visual cleanup before the maps and the viewer
+  min_opacity: 0.05             # near-invisible Gaussians
+  max_scale_m: 0.5              # blobs bigger than this are background/sky, not room
+  room_margin_m: 0.6            # keep walls/furniture this far beyond the seen floor
+  below_floor_m: 0.15
+  ceiling_m: 2.9
+  floater_voxel_m: 0.05
+  floater_min_neighbours: 8     # Gaussians in the 15 cm block around it; fewer = floating in empty space
+
+floor:
+  ransac_iters: 2000
+  inlier_m: 0.02
+  min_opacity: 0.1              # MCMC splats draw the smooth wood floor with semi-transparent Gaussians (op 0.1-0.3)
+  near_cameras_m: 2.0           # fit only Gaussians within the camera spread + this
+
+grid:
+  cell_m: 0.02
+  min_opacity: 0.1              # Gaussians counted in the maps (default 0.3): MCMC draws the floor semi-transparent
+  floor_band_m: 0.015           # |z| below this counts as floor
+  floor_close_cells: 5          # fill small holes in the observed floor
+  obstacle_z: [0.05, 1.8]
+  bump_z: [0.004, 0.05]         # rugs, thresholds, cables: height above the LOCAL floor
+  floor_local_m: 1.0            # local floor block for bump heights: 0.3 m blocks inside a big rug took the rug top as floor (rug 15 mm read 6.5 mm)
+  thin:                         # bumps no wider than this are cables/cords: classified, height ESTIMATED, not measured
+    max_width_m: 0.08            # as mapped: a 1 cm cord spreads over ~4 cells of 2 cm in the splat
+    min_length_m: 0.3
+    typical_height_m: 0.006     # ASSUMED typical lamp/charger cord; OT to verify
+  min_count: 2                  # Gaussians per cell to mark it
+  bump_link_cells: 3            # bump cells up to 3 apart are one patch: the splat leaves gaps in a real rug (332 pieces -> 1 hazard per rug)
+
+plan:
+  start: [-1.9, 0.65]             # [x, y] metres in the floor frame: read off out/<run>/occupancy.png (1 m grid)
+  goal: [0.35, -0.3]             # null = auto (two far-apart reachable points); or read off occupancy.png
+  walker_width_m: 0.66
+  preferred_clearance_m: 0.30   # path prefers this much room on each side when it can
+  clearance_weight: 5.0
+
+hazards:
+  clearance_margin_m: 0.10      # flag where side clearance < this
+  bump_limit_m: 0.01            # bumps at least this high are a trip risk (the viewer's "OT should check")
+
+fix:
+  backend: stub                 # image-editing backend name in stages/09_fix_render.py BACKENDS
+  max_renders: 3
+  camera_back_m: 1.5
+  camera_height_m: 1.4
+
+viewer:
+  timeout_ms: 60000
+
+cluster:
+  ssh: hpg
+  control_path: ~/.ssh/cm-hpg
+  repo: $HPG_ROOT/Homeclear
+  env: $HPG_ROOT/envs/homeclear
+
+game:                           # walker game (viewer/) + stage 12 export. Coordinates: floor frame, metres (occupancy.png)
+  walker:                       # standard folding walker; measure the patient's own and edit
+    width_m: 0.66               # outer width (keep = plan.walker_width_m)
+    depth_m: 0.50               # front legs to rear legs
+    handle_height_m: 0.85
+    user_gap_m: 0.25            # user's body centre to the rear legs
+    leg_radius_m: 0.015
+  persona:
+    eye_height_m: 1.55
+    gait_profile: older_adult_walker
+    stride_m: 0.35              # step length
+    stride_cv: 0.10
+    foot_sep_m: 0.20            # left/right foot spacing
+    toe_clearance_cv: 0.25      # per-step spread of toe clearance, applied as a factor on effective hazard height
+  risk:
+    rollouts: 500               # simulated night trips per evaluation
+    trips_per_night: 2
+    days_per_month: 30
+    path_offset_sd_m: 0.05      # how far a real walk wanders from the planned line
+    step_jitter_m: 0.04
+    dark_contact_multiplier: 1.5   # contact risk outside any nightlight's radius (ASSUMED, calibrate)
+    ghosts: 24                  # rollout paths drawn in the viewer
+    leg_flash_m: 0.010          # walker leg over a bump taller than this flashes
+    # Hazard height (m) -> toe-contact probability per stride crossing it, by gait profile.
+    # PLACEHOLDER, NOT CALIBRATED: shape follows the idea that minimum toe clearance in older adults is ~1-2 cm
+    # with wide spread. Must be calibrated against published minimum-toe-clearance data before any number is quoted.
+    contact_table:
+      older_adult_walker:
+        height_m: [0.0, 0.005, 0.010, 0.015, 0.020, 0.030, 0.050]
+        p_per_stride: [0.0, 0.001, 0.005, 0.015, 0.035, 0.08, 0.20]
+  objects: []                   # movable objects: {name, kind: bed|rug|nightstand|nightlight|other, box_xy: [[x0,y0],[x1,y1]], z_max}
+  interventions: []             # {id, label, kind: remove|move|flatten, object?, to?: [x, y, yaw_deg], box_xy?, height_m?}

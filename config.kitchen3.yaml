@@ -1,0 +1,123 @@
+# Kitchen (REAL, daylight): ONE continuous 238 s 4K video in data/kitchen3_clips,
+# same settings as kitchen2 (9 clips, 231 s) so the two compare directly: one long take vs separate clips. 520 frames.
+# Scale: tape-measured table (data/measurements.yaml), set once the corners are picked after COLMAP.
+run_name: kitchen3
+video: data/kitchen3_4k.mkv
+work_dir: out/kitchen3
+frames:
+  target: 520
+  min: 400
+  max_side: 1600
+colmap:
+  matcher: exhaustive
+  min_registered: 0.8
+splat:
+  steps: 7000
+  test_every: 8
+  min_psnr: 20.0
+scale:
+  manual_factor: null   # set from tools/table_scale.py after COLMAP
+  marker_dict: DICT_4X4_50
+  marker_id: 0
+  marker_size_m: 0.1
+  tolerance_pct: 3.0
+  ground_truth:
+  - name: marker_height
+    kind: marker_height
+    meters: 0.75
+  assume_camera_height_m: 1.2
+clean:
+  min_opacity: 0.05
+  max_scale_m: 0.5
+  room_margin_m: 0.6
+  below_floor_m: 0.15
+  ceiling_m: 2.9
+  floater_voxel_m: 0.05
+  floater_min_neighbours: 8
+floor:
+  ransac_iters: 2000
+  inlier_m: 0.02
+  min_opacity: 0.1
+  near_cameras_m: 2.0
+grid:
+  cell_m: 0.02
+  min_opacity: 0.1
+  floor_band_m: 0.015
+  floor_close_cells: 10   # textureless vinyl floor, seen sparsely (fills gaps up to 40 cm in observed floor)
+  obstacle_z:
+  - 0.05
+  - 1.8
+  bump_z:
+  - 0.004
+  - 0.05
+  floor_local_m: 1.0
+  thin:
+    max_width_m: 0.08
+    min_length_m: 0.3
+    typical_height_m: 0.006
+  min_count: 2
+  speck: {max_cells: 6, min_span_m: 0.10, floor_gap_m: 0.15}   # mid-air floaters of ~3 Gaussians each would block the walker
+  bump_link_cells: 3
+plan:
+  # start/goal unset: stage 7 picks two far-apart cells of the largest walker-reachable region (no bed or bathroom in this scene)
+  walker_width_m: 0.66
+  preferred_clearance_m: 0.3
+  clearance_weight: 5.0
+hazards:
+  clearance_margin_m: 0.1
+  bump_limit_m: 0.01
+fix:
+  backend: stub
+  max_renders: 3
+  camera_back_m: 1.5
+  camera_height_m: 1.4
+viewer:
+  timeout_ms: 60000
+cluster:
+  ssh: hpg
+  control_path: ~/.ssh/cm-hpg
+  repo: $HPG_ROOT/Homeclear
+  env: $HPG_ROOT/envs/homeclear
+game:
+  walker:
+    width_m: 0.66
+    depth_m: 0.5
+    handle_height_m: 0.85
+    user_gap_m: 0.25
+    leg_radius_m: 0.015
+  persona:
+    eye_height_m: 1.55
+    gait_profile: older_adult_walker
+    stride_m: 0.35
+    stride_cv: 0.1
+    foot_sep_m: 0.2
+    toe_clearance_cv: 0.25
+  risk:
+    rollouts: 500
+    trips_per_night: 2
+    days_per_month: 30
+    path_offset_sd_m: 0.05
+    step_jitter_m: 0.04
+    dark_contact_multiplier: 1.5
+    ghosts: 24
+    leg_flash_m: 0.01
+    contact_table:
+      older_adult_walker:
+        height_m:
+        - 0.0
+        - 0.005
+        - 0.01
+        - 0.015
+        - 0.02
+        - 0.03
+        - 0.05
+        p_per_stride:
+        - 0.0
+        - 0.001
+        - 0.005
+        - 0.015
+        - 0.035
+        - 0.08
+        - 0.2
+  objects: []   # new COLMAP run = new floor frame: re-measure the rug/table boxes
+  interventions: []
