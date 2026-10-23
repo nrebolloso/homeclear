@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cleared</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="view"></div>
+  <aside id="left" class="panel">
+    <h1>Cleared</h1>
+    <div class="row">
+      <button id="autoplay">Autoplay route</button>
+      <button id="free">Free walk</button>
+      <button id="fly">Fly (noclip)</button>
+      <label><input type="checkbox" id="night" /> Night</label>
+      <label><input type="checkbox" id="ghosts" checked /> Ghosts</label>
+      <label><input type="checkbox" id="imagfill" checked /> Imagined floor</label>
+      <label><input type="checkbox" id="imagceil" checked /> Imagined ceiling</label>
+    </div>
+    <p class="hint">Free walk: WASD / arrows, drag to look. Fly (F): WASD, Q/E down/up, Shift fast, no walls. Click furniture to move it: drag the gizmo or use the arrow keys (5 cm steps), T move, R rotate, Esc deselect.</p>
+    <div id="status" class="status"></div>
+    <h2>Toe contacts per month</h2>
+    <div id="risk"></div>
+    <h2>Hazards on the route</h2>
+    <ul id="hazards"></ul>
+    <div class="legend">
+      <span class="measured">measured</span> from the splat geometry and the simulation ·
+      <span class="imagined">imagined, not measured</span> generated content, never used for numbers
+    </div>
+  </aside>
+  <aside id="right" class="panel">
+    <h2>Fixes</h2>
+    <button id="planfixes">Plan fixes</button>
+    <button id="remove" disabled title="or press Delete">Remove selected</button>
+    <button id="reset">Reset layout</button>
+    <ol id="fixes"></ol>
+    <h2>Cosmos clips <span class="imagined">imagined</span></h2>
+    <ul id="clips"></ul>
+    <label>Prompt <textarea id="prompt" rows="3">The same home at 3 AM, lights off, lit only by a small warm nightlight near the floor; an older adult pushing a walker slowly along the route; realistic home interior.</textarea></label>
+    <button id="export">Export for Cosmos</button>
+    <div id="exportstatus" class="status"></div>
+  </aside>
+  <div id="player" hidden>
+    <div class="wrap"><video id="video" controls muted playsinline></video><canvas id="overlay"></canvas>
+      <div class="tag imagined">Imagined by Cosmos Transfer, not measured · markers are measured hazards</div></div>
+    <button id="closeplayer">Close</button>
+  </div>
+  <div id="hud"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

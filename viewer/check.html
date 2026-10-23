@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cleared Splat Check</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { margin: 0; overflow: hidden; background: #111; color: #eee; font: 14px system-ui, sans-serif; }
+  #panel { position: absolute; top: 8px; left: 8px; max-width: 340px; background: rgba(0,0,0,.7); padding: 8px 12px; border-radius: 6px; }
+  #panel li { cursor: pointer; margin: 4px 0; }
+  .tight_clearance { color: #ff5a5a; } .floor_bump { color: #ffa500; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+  "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.4.0/dist/spark.module.js"
+} }
+</script>
+</head>
+<body data-status="loading">
+<div id="panel"><b>Hazards</b> (measured from splat geometry)<ul id="list"></ul><small>Path in blue. Drag to orbit; click a hazard to fly to it.</small></div>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
+
+// ?run=out/<name>  (paths relative to the repo root, which is what stage 10 serves)
+const params = new URLSearchParams(location.search);
+const run = params.get("run") || "out/public";
+let loadedAt = 0;
+// ?selftest=1 (stage 10): report status + a canvas screenshot back to the stage's local server
+const report = (status, png) => { document.body.dataset.status = status;
+  if (params.has("selftest")) fetch("/__status", { method: "POST", body: JSON.stringify({ status, png, hazards: document.querySelectorAll("li").length }) }); };
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.01, 200);
+camera.up.set(0, 0, 1);  // our frame: floor z=0, up=+z, metres
+const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });  // so the self-test can grab the canvas
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+scene.add(new SparkRenderer({ renderer }));
+const controls = new OrbitControls(camera, renderer.domElement);
+addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+renderer.setAnimationLoop(() => {
+  controls.update(); renderer.render(scene, camera);
+  // Spark sorts splats in a worker, so give it a few seconds after load (software GL in headless Chrome is slow)
+  if (loadedAt && performance.now() - loadedAt > 4000) { loadedAt = 0; report("loaded", renderer.domElement.toDataURL("image/png")); }
+});
+
+try {
+  const [hz, path] = await Promise.all([
+    fetch(`../${run}/hazards.json`).then(r => r.json()),
+    fetch(`../${run}/path.json`).then(r => r.ok ? r.json() : null),
+  ]);
+  const splat = new SplatMesh({ url: new URL(`../${run}/splat_aligned.ply`, location.href).href });  // absolute: Spark fetches from a CDN-hosted worker
+  scene.add(splat);
+
+  if (path) {
+    const pts = path.xy.map(([x, y]) => new THREE.Vector3(x, y, 0.03));
+    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x3399ff, depthTest: false })));
+    const c = pts[Math.floor(pts.length / 2)];
+    camera.position.set(c.x, c.y - 4, 4); controls.target.copy(c);
+  }
+  const colors = { tight_clearance: 0xff3333, floor_bump: 0xffa500 };
+  const list = document.getElementById("list");
+  for (const h of hz.hazards) {
+    const [x, y, z] = h.position_m;
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.08), new THREE.MeshBasicMaterial({ color: colors[h.type] }));
+    m.position.set(x, y, z + 0.08);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 1.2), m.material);
+    pole.rotation.x = Math.PI / 2; pole.position.set(x, y, 0.6);
+    scene.add(m, pole);
+    const li = document.createElement("li");
+    li.className = h.type;
+    li.textContent = `#${h.id} ${h.type}: ` + (h.type === "tight_clearance"
+      ? `${(h.min_side_clearance_m * 100).toFixed(0)} cm side clearance (want ${(h.required_margin_m * 100).toFixed(0)})`
+      : `${h.max_bump_height_cm} cm bump`);
+    li.onclick = () => { controls.target.set(x, y, 0); camera.position.set(x - 1.5 * h.heading_xy[0], y - 1.5 * h.heading_xy[1], 1.4); };
+    list.appendChild(li);
+  }
+  await splat.initialized;
+  loadedAt = performance.now();
+} catch (e) {
+  report("error: " + e);
+  console.error(e);
+}
+</script>
+</body>
+</html>
