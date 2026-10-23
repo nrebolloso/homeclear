@@ -1,0 +1,1 @@
+{"origin_xy": [-0.3, -1.5], "cell_m": 0.02, "shape": [280, 290], "axes": "array[i, j] = world (x, y) = origin + (i, j) * cell", "source": "SYNTHETIC kitchen-like test map (worldmodel/maps.py), not measured"}

@@ -1,0 +1,13 @@
+# World model / rollout engine settings. Walker, persona and risk come from the project config's `game` section
+# (`base`), with `overrides` merged on top. See INTERFACE.md.
+base: config.yaml
+step_model: baseline        # baseline | learned  (learned = worldmodel/out/model.pt, see WORLD_MODEL.md)
+nights: 200
+seed: 0
+ghosts: 24                  # trips drawn on the ghost-walker plot
+extras:                     # ASSUMED values, not measured; labelled in every summary
+  step_time_s: 0.9          # one step for an older adult with a walker (~67 steps/min)
+  toe_offset_m: 0.17        # heel (Xsens ankle point) -> toe, along the step
+  brush_m: 0.03             # walker frame this close to an obstacle = a brush
+  snag_rise_m: {wheel: 0.015, glide: 0.010}   # edge a 5 in front wheel / a rear glide catches on
+overrides: {}               # e.g. {persona: {stride_m: 0.3}}
