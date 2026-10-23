@@ -1,0 +1,13 @@
+out/
+data/
+__pycache__/
+.venv
+*.pyc
+logs/
+viewer/node_modules/
+viewer/dist/
+viewer/public/scene/
+viewer/public/exports/
+viewer/public/clips/
+cosmos/inputs/
+cosmos/results_local/
