@@ -1,0 +1,98 @@
+[05c_shell] PASS {'walls': 16, 'angle_deg': 0.0, 'ceiling_z': 2.4, 'ceiling_assumed': True} (0.5s)
+[06_occupancy] PASS {'grid_cells': '345x221', 'area_m2': 25.61, 'obstacle_pct': 11.3, 'bump_cells': 4656, 'max_bump_cm': 2.3, 'estimated_thin_cells': 506, 'filled_floor_m2': 0.0} (0.1s)
+[06b_accuracy] PASS {'checks': 3, 'tape': 3, 'mean_error_cm': 1.36, 'max_error_cm': 4.0, 'margin_cm': {'height': 0.05, 'width': 4.0}, 'not_measured': []} (0.1s)
+[07_plan] PASS {'start_xy': [2.25, 2.69], 'goal_xy': [5.41, 1.49], 'walker_width_m': 0.66, 'path_length_m': 3.99, 'min_side_clearance_m': 0.031, 'min_passage_width_m': 0.721, 'min_clearance_xy': [4.09, 1.49]} (0.2s)
+[08_hazards] PASS {'hazards': 3, 'tight_clearance': 2, 'floor_bump': 1, 'borderline': 1, 'margin_cm': {'width': 4.0, 'height': 0.05}} (0.1s)
+[12_export_scene] PASS {'out': 'viewer\\public\\scene\\sample_objects', 'objects': {'bed': 0.55, 'nightstand': 0.6, 'rug_curl': 0.023, 'rug': 0.015, 'chair': 0.95, 'table': 0.45, 'nightlight': 0.2, 'door': 2.05}, 'main_gaussians': 182648, 'coverage_good_pct': 52.3} (1.7s)
+{
+ "bed": {
+  "pixels": 35358,
+  "seen_around_pct": 58.4,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": true,
+  "default": "ns"
+ },
+ "nightstand": {
+  "pixels": 3136,
+  "seen_around_pct": 66.8,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": true,
+  "default": "ns"
+ },
+ "rug_curl": {
+  "pixels": 567,
+  "seen_around_pct": 84.0,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "rug": {
+  "pixels": 17760,
+  "seen_around_pct": 76.4,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "chair": {
+  "pixels": 2652,
+  "seen_around_pct": 75.4,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "table": {
+  "pixels": 5916,
+  "seen_around_pct": 76.8,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "nightlight": {
+  "pixels": 352,
+  "seen_around_pct": 56.4,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "door": {
+  "pixels": 1452,
+  "seen_around_pct": 76.9,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": true,
+  "default": "ns"
+ }
+}
+{'bed': ('bed', 'obstacle', 3.28, 0.55), 'nightstand': ('nightstand', 'obstacle', 0.25, 0.6), 'rug_curl': ('rug', 'bump', 0.029, 0.023), 'rug': ('rug', 'bump', 1.596, 0.015), 'chair': ('chair', 'obstacle', 0.207, 0.95), 'table': ('other', 'obstacle', 0.478, 0.45), 'nightlight': ('nightlight', 'none', 0.014, 0.2), 'door': ('door', 'obstacle', 0.06, 2.05)}
+SAMPLE OBJECTS OK (SYNTHETIC) {'out': 'viewer\\public\\scene\\sample_objects', 'objects': {'bed': 0.55, 'nightstand': 0.6, 'rug_curl': 0.023, 'rug': 0.015, 'chair': 0.95, 'table': 0.45, 'nightlight': 0.2, 'door': 2.05}, 'main_gaussians': 182648, 'coverage_good_pct': 52.3}

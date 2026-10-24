@@ -1,0 +1,22 @@
+PASS desktop surface pointer updates each frame: {"p":[2.5015418048508096,1,0.003954662702612133],"snapped":false}
+PASS click places one point; dragging the view places none: {"one":1,"drag":1}
+PASS right click undoes, Space places at centre, Escape cancels: {"undo":0,"centre":1}
+PASS finishing a doorway exposes editable handles: [{"owner":"door|doorway","key":"a","at":[4.05,1.1,1]},{"owner":"door|doorway","key":"b","at":[4.05,1.9,1]}]
+PASS dragging a jamb remeasures and persists the doorway: {"name":"doorway","a":[4.05,1.1],"b":[4.05,1.95],"measured":"clicks","hinge":"b"}
+PASS saved annotations load without initialization errors: "reload"
+PASS REAL scan: guided stair marking records the clicked landing height and measured treads: {"name":"stairs","bottom":[[4.28,-0.68],[3.48,-0.68]],"top":[3.88,-1.6],"top_z":0.72,"treads_z":[0.15,0.346,0.561],"tread_fronts_m":[0.025,0.204,0.367],"tread_depth_m":0.171,"width_m":0.8,"measured":"splat","rails":{"left":"wall","right":"seen","height_m":{"right":0.849},"peak_m":{"left":0.725,"right":0.825}}}
+PASS parked walker stays at landing height and moves its receipt/report position: {"p":{"x":3.88,"y":-1.7000000000000002,"yaw":-1.5707963267948966},"z":0.72,"changes":[{"label":"Second walker kept at the top of the stairs; parked 0.1 m from its suggested spot","cost_usd":70,"minutes":5,"product":"folding walker","at":[3.88,-1.7000000000000002]}],"receipt":"Second walker kept at the top of the stairs; parked 0.1 m from its suggested spot $70 · 5 min Undo"}
+PASS putting a parked walker back clears its placement override: "default pose"
+PASS VR off-hand X starts doorway marking: "controller event"
+PASS VR trigger places on scan with a scene prompt and no teleport: {"state":{"marking":{"kind":"door","pts":[[2.996833749839035,1.0059626789001066,0.0034029420529579912]],"prompt":"2 / 2: the inside face of the other jamb"},"editing":false,"msg":"","handles":[],"pointer":{"p":[2.996833749839035,1.0059626789001066,0.0034029420529579912],"snapped":false},"dragging":null,"preview":{"lines":[{"a":[2.996833749839035,1.0059626789001066,0.9],"b":[2.996833749839035,1.0059626789001066,0.9],"tone":"bad"}],"tags":[{"at":[2.996833749839035,1.0059626789001066,1.1],"text":"0 cm clear · the walker needs 86 cm","tone":"bad"}]}},"tp":false,"sprites":1}
+PASS VR B undoes the last point: "controller event"
+PASS VR grip cancels marking: "controller event"
+PASS VR off-hand Y starts stairs: "controller event"
+PASS VR B opens saved-mark editing: "controller event"
+PASS VR A finishes editing: "controller event"
+PASS VR trigger drags a jamb handle along the scan and remeasures on release: {"heldHandle":"b","door":{"name":"doorway","a":[4.05,1.1],"b":[3.9984409137277748,2.0734690619749476],"measured":"clicks","hinge":"b"}}
+PASS VR trigger toggles the rail side: [2.559999942779541,1.5,1.4133333563804626]
+PASS VR off-hand X changes the top device while editing: "controller event"
+PASS VR drags the second walker on the landing plane: {"heldWalker":"stair_walker:stairs","movedWalker":{"x":3.0499996513695766,"y":2.050000321021428,"yaw":1.5707963267948966}}
+PASS VR advances renovation animation: "XR frame loop"
+PASS no page errors: []

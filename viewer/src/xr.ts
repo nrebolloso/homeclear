@@ -5,7 +5,7 @@
 // camera rides in a rig: +90 deg about x maps XR up (+y) to +z, then a turn about z by yaw - 90 deg points XR forward
 // (-z) along yaw.
 // Moving: walk for real (1:1). Holding a pinch or trigger on the non-wand hand glides forward where you look, only where
-// free walk could stand (walls, furniture and unfilmed floor stop it). No thumbsticks: people found them hard to use.
+// free walk could stand (walls, furniture and unfilmed floor stop it). Thumbstick movement and snap-turning are disabled.
 // Wand (right hand or controller; ?wand=left): point at furniture and hold to drag it (twist the wrist to turn it), hold
 // still to delete it; point at filmed floor and release to teleport. A pinch and a trigger are the same WebXR "select".
 // Moves go through the host's placement check and re-plan, like a desktop drag.
@@ -15,6 +15,8 @@ import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 import type { Pose, XY } from './grid.ts';
 import { floorHit, twistAngle, snapQuarter, holdProgress, DELETE_HOLD_S, DELETE_SHOW_S, DRAG_DEADZONE_M } from './wand.ts';
 import { tierAtLoad, xrCfg, type Tier } from './perf.ts';
+import { resetHoldProgress } from './resets.ts';
+import { card } from './reimagine.ts';
 
 export interface XrItem { proxy: THREE.Object3D; group: THREE.Object3D; outline: THREE.LineSegments }
 export interface XrHost {
@@ -37,8 +39,22 @@ export interface XrHost {
   enter(tier: Tier): void; exit(): void;
   /** big buttons on a card that follows you lazily: pressed like furniture is grabbed (point the wand, pinch) */
   buttons?: XrButton[];
+  resetObject(k: number): unknown; resetAll(): unknown;
+  /** The annotation lane owns marking state; XR owns controller tracking and routes each gesture exactly once. */
+  editor?: XrEditor;
+  /** A visual comparison is read-only; only the story-card buttons remain interactive. */
+  readOnly?(): boolean;
 }
 export interface XrButton { text(): string[]; press(): unknown; tone?(): 'go' | 'busy' | 'plain' }
+export interface XrEditor {
+  active(): boolean;
+  down(ray: THREE.Ray, rotation: THREE.Quaternion): boolean;
+  up(ray: THREE.Ray): void;
+  frame(ray: THREE.Ray | null, rotation: THREE.Quaternion | null): number | null;
+  buttons(pads: Record<string, Gamepad>, wand: XRHandedness): boolean;
+  cancelDrag(): void;
+  hint: THREE.Object3D;
+}
 
 
 export async function setupXR(host: XrHost) {
@@ -98,12 +114,18 @@ export async function setupXR(host: XrHost) {
     return wandRay.setFromXRController(c.group), wandRay.ray;
   }
   function wandDown(c: Ctl) {
+    if (host.readOnly?.()) { if (btnHover >= 0) btnPressed = btnHover; return; }
+    const r = aim(c), q = c.group.getWorldQuaternion(new THREE.Quaternion());
+    if (host.editor?.active() && host.editor.down(r, q)) { toolHeld = true; return; }
     if (btnHover >= 0) { btnPressed = btnHover; return; }
+    if (host.editor?.down(r, q)) { toolHeld = true; return; }
     if (hover < 0) { aiming = true; return; }
-    const r = aim(c), f = floorHit(r.origin, r.direction), p = host.poses()[hover], at: XY = f ? [f.x, f.y] : [p.x, p.y];
+    const f = floorHit(r.origin, r.direction), p = host.poses()[hover], at: XY = f ? [f.x, f.y] : [p.x, p.y];
     grab = { k: hover, off: [p.x - at[0], p.y - at[1]], start: at, drag: 0, t0: performance.now(), yaw0: p.yaw, q0: c.group.getWorldQuaternion(new THREE.Quaternion()) };
   }
   function wandUp() {
+    if (toolHeld) { toolHeld = false; const c = ctls.find(isWand); if (c) host.editor?.up(aim(c)); return; }
+    if (host.editor?.active()) return;
     if (btnPressed >= 0) { const i = btnPressed; btnPressed = -1; if (btnHover === i) btns[i].b.press(); return; }
     if (grab) { const { k, valid } = grab; grab = null; if (valid) host.commit(k, valid); return; }
     if (aiming && tpRing.visible) { xrRig.x += tpRing.position.x - head.x; xrRig.y += tpRing.position.y - head.y; placeRig(); anchor.set = false; }
@@ -112,14 +134,27 @@ export async function setupXR(host: XrHost) {
   function dropWand() {   // wand lost mid-gesture (hand out of view): put a dragged object back where the layout has it
     if (grab) host.resync();
     btnPressed = -1; grab = null; aiming = false; tpRing.visible = false;
+    toolHeld = false; host.editor?.cancelDrag();
   }
+  let toolHeld = false;
   function wandStep() {
     const c = ctls.find(isWand);
+    const other = ctls.find(o => o.source && !isWand(o)), hint = host.editor?.hint;
+    if (hint) {
+      if (other && hint.parent !== other.group) other.group.add(hint);
+      hint.visible = !!other?.source?.gamepad && !host.editor?.active() && !host.readOnly?.();
+    }
     for (const o of ctls) o.ray.visible = o === c;
     tpRing.visible = false;
     let prog = -1;
     if (c) {
       const r = aim(c), f = floorHit(r.origin, r.direction);
+      const toolDistance = host.editor?.frame(r, c.group.getWorldQuaternion(new THREE.Quaternion()));
+      if (toolDistance != null) {
+        hover = -1; btnHover = -1; aiming = false;
+        for (const it of items) it.outline.visible = false;
+        c.ray.scale.z = toolDistance; return;
+      }
       let len = f ? r.origin.distanceTo(f) : 5;
       if (grab) {
         const it = items[grab.k], twist = snapQuarter(twistAngle(grab.q0, c.group.getWorldQuaternion(new THREE.Quaternion())));
@@ -135,13 +170,13 @@ export async function setupXR(host: XrHost) {
         const bh = dash.visible ? wandRay.intersectObjects(btns.map(x => x.mesh))[0] : undefined;   // buttons sit in front of the room
         btnHover = bh ? btns.findIndex(x => x.mesh === bh.object) : -1;
         const poses = host.poses();
-        const hit = bh ? undefined : wandRay.intersectObjects(items.filter((_, k) => !poses[k].removed).map(i => i.proxy))[0];
+        const hit = bh || host.readOnly?.() ? undefined : wandRay.intersectObjects(items.filter((_, k) => !poses[k].removed).map(i => i.proxy))[0];
         hover = hit ? items.findIndex(i => i.proxy === hit.object) : -1;
         if (bh) len = bh.distance; else if (hit) len = hit.distance;
-        if (!bh && hover < 0 && aiming && f && host.standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
+        if (!host.readOnly?.() && !bh && hover < 0 && aiming && f && host.standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
       }
       c.ray.scale.z = len;
-    } else { hover = -1; btnHover = -1; }
+    } else { hover = -1; btnHover = -1; host.editor?.frame(null, null); }
     items.forEach((it, k) => {   // blue = pointed at, yellow = held, turning red = about to be deleted
       const held = grab?.k === k, m = it.outline.material as THREE.LineBasicMaterial;
       it.outline.visible = held || (!grab && k === hover);
@@ -200,10 +235,40 @@ export async function setupXR(host: XrHost) {
   }
   let btnHover = -1, btnPressed = -1;
 
+  // Controller shortcuts share the same priority as the wand: annotation gestures consume input before furniture.
+  let gripWas = false, aWas = false, bothHeld = 0, resetFired = false, ringN = 0, ringCard: THREE.Sprite | null = null;
+  function controllerButtons(dt: number, pads: Record<string, Gamepad>) {
+    const wp = pads[WAND], op = pads[WAND === 'left' ? 'right' : 'left'];
+    const grip = !!wp?.buttons[1]?.pressed, a = !!wp?.buttons[4]?.pressed, both = grip && !!op?.buttons[1]?.pressed;
+    const consumed = host.readOnly?.() || (host.editor?.buttons(pads, WAND) ?? false);
+    if (consumed) {
+      if (grab) host.resync();
+      grab = null; aiming = false;
+      if (!host.readOnly?.()) btnPressed = -1;   // comparison mode still needs the card's press/release gesture
+    } else {
+      if (grip && !gripWas) { const k = grab?.k ?? hover; if (k >= 0) { grab = null; host.resync(); host.resetObject(k); } }
+      if (a && !aWas && !grab && hover >= 0) host.remove(hover);
+    }
+    gripWas = grip; aWas = a;
+    bothHeld = both && !consumed ? bothHeld + dt : 0;
+    if (consumed && both) resetFired = true;   // cancelling an edit cannot turn into a global reset before both grips are released
+    if (!both) resetFired = false;
+    const p = resetHoldProgress(bothHeld);
+    if (p >= 1 && !resetFired) { resetFired = true; host.resetAll(); }
+    const n = both && !consumed && !resetFired ? Math.ceil(p * 5) : 0;
+    if (n !== ringN) {
+      ringN = n; ringCard?.removeFromParent(); ringCard?.material.dispose(); ringCard = null;
+      if (n) { ringCard = card(['Reset everything', '▮'.repeat(n) + '▯'.repeat(5 - n)], '#ffd84d'); scene.add(ringCard); }
+    }
+    ringCard?.position.copy(head).addScaledVector(headDir, 1).setZ(head.z - 0.15);
+  }
+
   // ---------- per frame ----------
   function step(dt: number) {
     const yaw = readHead();
-    if (pinching.size) {   // glide forward in sub-steps of at most half a cell, as in free walk
+    const pads: Record<string, Gamepad> = {};
+    for (const source of renderer.xr.getSession()?.inputSources ?? []) if (source.gamepad) pads[source.handedness] = source.gamepad;
+    if (pinching.size && !host.readOnly?.()) {   // glide forward in sub-steps of at most half a cell, as in free walk
       const v = 0.6 * dt, dx = Math.cos(yaw) * v, dy = Math.sin(yaw) * v, n = Math.max(1, Math.ceil(v / (host.cellM / 2)));
       for (let i = 0; i < n && host.standable(head.x + dx / n, head.y + dy / n); i++) {
         xrRig.x += dx / n; xrRig.y += dy / n; head.x += dx / n; head.y += dy / n;
@@ -212,6 +277,8 @@ export async function setupXR(host: XrHost) {
     placeRig();
     body.x = head.x; body.y = head.y;
     body.yaw += Math.atan2(Math.sin(yaw - body.yaw), Math.cos(yaw - body.yaw)) * Math.min(1, dt * 4);
+    controllerButtons(dt, pads);
+    dash.visible = btns.length > 0 && !host.editor?.active();
     wandStep();
     if (btns.length) { placeDash(yaw); drawButtons(btnHover); }
   }
@@ -236,6 +303,7 @@ export async function setupXR(host: XrHost) {
     },
     onExitXr: () => {
       camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1; btnHover = -1; dash.visible = false;
+      ringCard?.removeFromParent(); ringCard?.material.dispose(); ringCard = null; ringN = 0; bothHeld = 0; gripWas = false; aWas = false;
       for (const it of items) { it.outline.visible = false; (it.outline.material as THREE.LineBasicMaterial).color.setHex(0x66ccff); }
       host.exit();
     },

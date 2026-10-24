@@ -9,6 +9,8 @@
 </head>
 <body>
   <div id="view"></div>
+  <div id="markhud" role="status" aria-live="polite" hidden></div>
+  <div id="markcross" aria-hidden="true" hidden>+</div>
   <aside id="left" class="panel">
     <h1>Cleared</h1>
     <div class="row">
@@ -60,7 +62,8 @@
     <h2>Fixes</h2>
     <button id="planfixes">Plan fixes</button>
     <button id="remove" disabled title="or press Delete">Remove selected</button>
-    <button id="reset">Reset layout</button>
+    <button id="resetobj" disabled title="put the picked object back: press Z or double-click it">Reset selected</button>
+    <button id="reset" title="every object, removal and fix back to the scan: Shift+Z">Reset all</button>
     <button id="report" title="printable report for the occupational therapist">OT report</button>
     <button id="fixcard" title="QR code: the family's checklist on a phone">Fix card (QR)</button>
     <ol id="fixes"></ol>
@@ -88,6 +91,8 @@
     <button id="viewstairs" title="fly to a clear view of the first stair">View stairs</button>
     <button id="clearstairs" title="forget the stairs marked in this browser">Clear marked</button>
     <button id="copystairs" title="keep them: paste into config.&lt;scene&gt;.yaml under game:">Copy as config YAML</button>
+    <button id="editstairs">Edit marks</button>
+    <label>Device at the top <select id="topdevice"><option value="walker">Walker</option><option value="rollator">Rollator with seat</option></select></label>
     <label title="a rail for the stronger hand is needed going up AND coming down">Stronger hand <select id="strongside"><option value="">unknown</option><option value="left">left</option><option value="right">right</option></select></label>
     <div class="row" title="what the scan saw at each side can be another flight's railing or a wall: say what is really there">
       <label>Left rail <select id="railleft"><option value="">as scanned</option><option value="seen">rail</option><option value="none">none</option></select></label>
@@ -98,6 +103,9 @@
     <button id="markdoor" title="two clicks on the splat: the inside face of each jamb">Mark doorway</button>
     <button id="cleardoors" title="forget the doorways marked in this browser">Clear marked</button>
     <button id="copydoors" title="keep them: paste into config.&lt;scene&gt;.yaml under game:">Copy as config YAML</button>
+    <button id="editdoors">Edit marks</button>
+    <p class="hint">Click to mark, drag to look. Right click / Backspace: undo; Esc: cancel. Shift: no snapping; Space: aim at centre. After marking, drag a handle or click a rail side; Enter: done.</p>
+    <p class="hint">VR: off-hand X/A marks a doorway, Y/B marks stairs. Wand B/Y edits saved marks. Trigger places or drags; B/Y undoes; grip cancels or finishes. Off-hand grip disables snapping; off-hand X/A while editing changes the top device. Twist the parked walker to turn it.</p>
     <div id="doorstatus" class="status"></div>
     <h2>Cosmos clips <span class="imagined">imagined</span></h2>
     <ul id="clips"></ul>

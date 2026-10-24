@@ -80,6 +80,13 @@ try {
   await wait(1500);
 
   // 4. left trigger held = walk forward, never off filmed floor
+  const stick0 = await G(p, 'return game.xrPose()');
+  await G(p, "__xr.ctl('left').updateAxes('thumbstick', 1, -1); __xr.ctl('right').updateAxes('thumbstick', 1, 0)");
+  await wait(500);
+  const stick1 = await G(p, 'return game.xrPose()');
+  await G(p, "__xr.ctl('left').updateAxes('thumbstick', 0, 0); __xr.ctl('right').updateAxes('thumbstick', 0, 0)");
+  check('thumbsticks neither walk nor snap-turn', Math.hypot(stick1.head[0] - stick0.head[0], stick1.head[1] - stick0.head[1]) < 0.01 && Math.abs(stick1.rig.yaw - stick0.rig.yaw) < 0.01,
+    `rig yaw ${stick0.rig.yaw.toFixed(2)} -> ${stick1.rig.yaw.toFixed(2)}`);
   const w0 = await G(p, 'return game.xrPose().head');
   await G(p, "__xr.ctl('left').updateButtonValue('trigger', 1)");
   await wait(1000);
@@ -190,22 +197,65 @@ try {
   check('"Night walk" turns the lights down and back up', n1.on && n1.text[0] === 'Turn the lights back on' && !n2.on && n2.text[0] === 'Night walk',
     `pressed: night=${n1.on} "${n1.text.join(' / ')}"; again: night=${n2.on} "${n2.text[0]}"`);
 
-  // 8b. "See a safer room": the card floats ahead of you; point and pinch; the layout search runs, then the room morphs
-  // (through in-between steps, not a jump) and the button offers the way back; pressing again morphs back
+  // Layout changes replan; the separate comparison is visual only and leaves the active checks untouched.
+  const originalRoom = await G(p, 'return { layout: game.layout(), pm: game.current().per_month, len: game.current().length_m, actions: game.describeChanges() }');
   const card0 = await G(p, 'const b = game.debug.xrButtons()[2], h = game.xrPose().head; return { ...b, d: b.at ? Math.hypot(b.at[0] - h[0], b.at[1] - h[1]) : null }');
   await G(p, 'window.__ts = []; window.__ti = setInterval(() => __ts.push(game.reimagine.t()), 100)');
   const hov1 = await press('right', 2);
-  await p.waitForFunction(() => { const g = (window as any).game, b = g.debug.xrButtons()[2]; return (b.text[0] === 'Back to my room' && g.reimagine.t() === 1) || b.text[0].startsWith('Your room'); }, null, { timeout: 120000 }).catch(() => {});
-  const r1 = await G(p, "return { text: game.debug.xrButtons()[2].text, t: game.reimagine.t(), n: game.reimagine.changes().length, mid: __ts.filter(v => v > 0.05 && v < 0.95).length }");
-  check('"See a safer room" finds a layout and morphs the room around you', card0.text[0] === 'See a safer room' && card0.d > 0.35 && card0.d < 0.9 && hov1 === 2 &&
-    r1.text[0] === 'Back to my room' && r1.t === 1 && r1.n > 0 && r1.mid >= 3,
-    `card "${card0.text[0]}" ${card0.d?.toFixed(2)} m away, pointed at=${hov1 === 2}; then "${r1.text.join(' / ')}", t=${r1.t}, ${r1.n} changes, ${r1.mid} in-between frames`);
-  await G(p, 'window.__ts = []');
+  await p.waitForFunction(() => { const g = (window as any).game; return g.debug.xrButtons()[2].text[0] === 'Restore my room' && g.reimagine.t() === 1; }, null, { timeout: 120000 });
+  const saferRoom = await G(p, "clearInterval(__ti); return { layout: game.layout(), pm: game.current().per_month, evals: game.evals, n: game.reimagine.changes().length, mid: __ts.filter(v => v > 0.05 && v < 0.95).length }");
+  check('"See a safer room" applies a layout and morphs the room around you', card0.text[0] === 'See a safer room' && card0.d > 0.35 && card0.d < 0.9 && hov1 === 2 &&
+    saferRoom.n > 0 && saferRoom.mid >= 3, `${saferRoom.n} changes, ${saferRoom.mid} in-between frames`);
+  await press('right', 3);
+  await p.waitForFunction(() => (window as any).game.debug.xrComparison().previewT === 0, null, { timeout: 10000 });
+  const preview = await G(p, `return { layout: game.layout(), pm: game.current().per_month, evals: game.evals, text: game.debug.xrButtons()[3].text,
+    poses: game.debug.items.map(it => ({ x: it.group.position.x, y: it.group.position.y, visible: it.group.visible })) }`);
+  const visualPrior = preview.poses.every((q: any, k: number) => Math.hypot(q.x - originalRoom.layout.poses[k].x, q.y - originalRoom.layout.poses[k].y) < 1e-6 && q.visible === !originalRoom.layout.poses[k].removed);
+  check('comparison previews the prior room while explicitly keeping safer-layout checks', visualPrior && JSON.stringify(preview.layout) === JSON.stringify(saferRoom.layout) &&
+    preview.pm === saferRoom.pm && preview.evals === saferRoom.evals && preview.text[2] === 'Checks and walking: safer layout', preview.text.join(' / '));
   await press('right', 2);
-  await p.waitForFunction(() => (window as any).game.reimagine.t() === 0, null, { timeout: 10000 }).catch(() => {});
-  const r2 = await G(p, "clearInterval(__ti); return { text: game.debug.xrButtons()[2].text, t: game.reimagine.t(), mid: __ts.filter(v => v > 0.05 && v < 0.95).length }");
-  check('pressing again morphs back to your room', r2.t === 0 && r2.text[0] === 'See the safer room' && r2.mid >= 3,
-    `"${r2.text.join(' / ')}", t=${r2.t}, ${r2.mid} in-between frames`);
+  await p.waitForFunction(() => (window as any).game.debug.xrButtons()[2].text[0] === 'Use safer layout', null, { timeout: 15000 });
+  const restored = await G(p, 'return { layout: game.layout(), pm: game.current().per_month, len: game.current().length_m, actions: game.describeChanges(), evals: game.evals, previewing: game.debug.xrComparison().previewing }');
+  check('Restore my room restores the prior layout, receipts, routes and recalculated numbers', JSON.stringify(restored.layout) === JSON.stringify(originalRoom.layout) &&
+    Math.abs(restored.pm - originalRoom.pm) < 1e-9 && Math.abs(restored.len - originalRoom.len) < 1e-9 && JSON.stringify(restored.actions) === JSON.stringify(originalRoom.actions) &&
+    restored.evals > saferRoom.evals && !restored.previewing, `contacts/month ${saferRoom.pm.toFixed(2)} -> ${restored.pm.toFixed(2)}, evaluations ${saferRoom.evals} -> ${restored.evals}`);
+  await press('right', 3);
+  await p.waitForFunction(() => (window as any).game.debug.xrComparison().previewT === 1, null, { timeout: 10000 });
+  const priorPreview = await G(p, 'return { layout: game.layout(), pm: game.current().per_month, text: game.debug.xrButtons()[3].text }');
+  check('comparison can show the safer room while the prior layout stays active', JSON.stringify(priorPreview.layout) === JSON.stringify(originalRoom.layout) &&
+    priorPreview.pm === originalRoom.pm && priorPreview.text[2] === 'Checks and walking: prior layout', priorPreview.text.join(' / '));
+  await press('right', 2);
+  await p.waitForFunction(() => (window as any).game.debug.xrButtons()[2].text[0] === 'Restore my room', null, { timeout: 15000 });
+  check('Use safer layout restores its saved poses and recalculates its checks', await G(p, `return JSON.stringify(game.layout()) === ${JSON.stringify(JSON.stringify(saferRoom.layout))} && Math.abs(game.current().per_month - ${saferRoom.pm}) < 1e-9`), 'saved safer snapshot');
+
+  await G(p, "await game.resetAll(); await game.moveObject('bed', 2.0, 1.0, 90); game.removeObject('nightstand')");
+  await wait(500);
+  // 9. back to controllers: grip on the wand hand puts the pointed-at bed back; A removes it; both grips held reset everything
+  await G(p, "__xr.dev().primaryInputMode = 'controller'");
+  await wait(500);
+  await G(p, `__xr.aim(__xr.ctl('right'), ${JSON.stringify(await G(p, "return __xr.proxy('bed')"))})`);
+  await wait();
+  await G(p, "__xr.ctl('right').updateButtonValue('squeeze', 1)");
+  await wait();
+  await G(p, "__xr.ctl('right').updateButtonValue('squeeze', 0)");
+  await wait(500);
+  const bed2 = await G(p, "return game.layout().poses[game.items.indexOf('bed')]");
+  check('grip puts the pointed-at object back', Math.hypot(bed2.x - bed0.x, bed2.y - bed0.y) < 0.01 && Math.abs(bed2.yaw - bed0.yaw) < 0.01,
+    `bed (${bed2.x.toFixed(2)}, ${bed2.y.toFixed(2)}) vs original (${bed0.x.toFixed(2)}, ${bed0.y.toFixed(2)})`);
+  await G(p, `__xr.aim(__xr.ctl('right'), ${JSON.stringify(await G(p, "return __xr.proxy('bed')"))})`);
+  await wait();
+  await G(p, "__xr.ctl('right').updateButtonValue('a-button', 1)");
+  await wait();
+  await G(p, "__xr.ctl('right').updateButtonValue('a-button', 0)");
+  await wait(500);
+  const inv = await G(p, 'return game.inventory()');
+  check('A removes the pointed-at object', inv.includes('bed'), `removed: ${inv.join(', ')}`);
+  await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 1); __xr.ctl('right').updateButtonValue('squeeze', 1)");
+  await wait(1500);
+  await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 0); __xr.ctl('right').updateButtonValue('squeeze', 0)");
+  await wait(500);
+  const rest = await G(p, "return { gone: game.inventory(), bed: game.layout().poses[game.items.indexOf('bed')] }");
+  check('both grips held reset everything', rest.gone.length === 0 && Math.hypot(rest.bed.x - bed0.x, rest.bed.y - bed0.y) < 0.01, `removed: [${rest.gone.join(', ')}], bed (${rest.bed.x.toFixed(2)}, ${rest.bed.y.toFixed(2)})`);
 
   // 9. leaving VR puts the monitor back: DOM labels, performance mode as it was before entering
   await G(p, 'await game.debug.renderer.xr.getSession().end()');
