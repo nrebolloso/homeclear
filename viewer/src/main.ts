@@ -99,6 +99,10 @@ const original: Pose[] = objs.map(o => ({ x: o.pivot[0], y: o.pivot[1], yaw: 0 }
 // drag that still overlaps that spot snaps back (the kitchen rug couldn't move at all otherwise)
 const placeBase: Layers = { ...base, floor: base.floor.slice(), obst: base.obst.slice() };
 objs.forEach((o, k) => { for (const c of polyCells(g, worldFootprint(o, original[k]))) { placeBase.floor[c] = 1; placeBase.obst[c] = 0; } });
+// objects filmed overlapping (a chair pushed in under the table) share floor cells but not space: they may keep overlapping
+// shortcut: 2D footprints, so once apart they may also be dropped into each other; a height-aware check would fix that
+const startCells = objs.map((o, k) => new Set(polyCells(g, worldFootprint(o, original[k]))));
+const overlapOk = objs.map((_, k) => new Set(objs.map((_, n) => n).filter(n => n !== k && [...startCells[k]].some(c => startCells[n].has(c)))));
 const items = objs.map(o => {
   const group = new THREE.Group();
   group.position.set(o.pivot[0], o.pivot[1], 0);
@@ -328,7 +332,7 @@ function select(k: number) {
 }
 tc.addEventListener('objectChange', () => {   // walls/furniture block placement: snap back to the last valid spot
   const p = poseOf(selected), poses = layout.poses.map((q, n) => (n === selected ? p : q));
-  if (placementOk(g, placeBase, objs, poses, selected)) lastValid = p;
+  if (placementOk(g, placeBase, objs, poses, selected, overlapOk[selected])) lastValid = p;
   else { items[selected].group.position.set(lastValid!.x, lastValid!.y, 0); items[selected].group.rotation.z = lastValid!.yaw; refused(); }
 });
 function refused() {   // say why it snapped back; the next replan overwrites this
@@ -339,7 +343,7 @@ function nudge(code: string) {   // 5 cm per press along the view direction on t
   const f = camera.getWorldDirection(new THREE.Vector3()).setZ(0).normalize(), r = new THREE.Vector3(f.y, -f.x, 0);
   const d = { ArrowUp: f, ArrowDown: f.clone().negate(), ArrowRight: r, ArrowLeft: r.clone().negate() }[code]!.multiplyScalar(0.05);
   const q = poseOf(selected), p = { x: q.x + d.x, y: q.y + d.y, yaw: q.yaw };
-  if (!placementOk(g, placeBase, objs, layout.poses.map((o, n) => (n === selected ? p : o)), selected)) return refused();
+  if (!placementOk(g, placeBase, objs, layout.poses.map((o, n) => (n === selected ? p : o)), selected, overlapOk[selected])) return refused();
   items[selected].group.position.set(p.x, p.y, 0); lastValid = p;
   commitPose(selected, p);
 }
@@ -920,7 +924,7 @@ Object.assign(game, {
   fillVisible: (name: string) => items[objs.findIndex(o => o.name === name)].fill.visible,
   moveObject(name: string, x: number, y: number, yawDeg = 0) {   // same path as a finished drag
     const k = objs.findIndex(o => o.name === name), p = { x, y, yaw: (yawDeg * Math.PI) / 180 };
-    if (!placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k)) return Promise.resolve({ ok: false });
+    if (!placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k])) return Promise.resolve({ ok: false });
     return commitPose(k, p).then(ms => ({ ok: true, ms }));
   },
   removeObject: (name: string) => removeObject(objs.findIndex(o => o.name === name)),

@@ -1,14 +1,15 @@
 """Stage 6c: propose the movable objects and fixtures from the capture, instead of drawing every box by hand.
 Writes <work>/objects_proposed.yaml in the config's own format (game.objects / game.fixtures entries). A person
-accepts what is right into the config: hand-drawn boxes stay the authority, this only saves the drawing.
+can copy entries into the config, or set `game.objects: auto` to make every detected object movable (stage 12 then cuts
+each one out of the splat by <work>/objects_points.npz). Doors are left out of auto.
 
   python stages/06c_detect.py <config.yaml> [--frames 60]          (GPU: HiPerGator, slurm/detect.sbatch)
 
 1. Grounding DINO finds boxes for a home-safety vocabulary in capture frames; SAM 2 turns each box into a mask.
 2. Every solid Gaussian is projected into those frames (a point z-buffer decides what each frame actually sees) and
    votes for the label of the mask it lands in; a label sticks when >= half of the frames that saw it agree.
-3. Each label's Gaussians are split into pieces on a 5 cm floor grid; each piece becomes a rotated footprint
-   (poly_xy) with its height band, i.e. a config entry.
+3. instances() splits the labelled Gaussians into separate objects (3D connectivity, then labels inside touching
+   pieces); each becomes a rotated footprint (poly_xy) with its height band, i.e. a config entry.
 Models (pinned revisions in pipeline/models.lock.json-style, see MODELS below): text -> boxes, boxes -> masks.
 """
 import argparse, json, sys
@@ -26,7 +27,9 @@ MODELS = {   # text prompts -> boxes; boxes -> masks (Apache-2.0 both)
 VOCAB = {"bed": ("bed", "objects"), "nightstand": ("nightstand", "objects"), "bedside table": ("nightstand", "objects"),
          "rug": ("rug", "objects"), "bath mat": ("rug", "objects"), "chair": ("chair", "objects"), "table": ("other", "objects"),
          "lamp": ("other", "objects"), "door": ("door", "objects"), "toilet": ("toilet", "fixtures"),
-         "power cable": ("cable", "objects"), "light switch": ("switch", "fixtures")}
+         "power cable": ("cable", "objects"),
+         "trash can": ("other", "objects"), "stool": ("chair", "objects"), "bench": ("other", "objects"), "box": ("other", "objects"),
+         "bag": ("other", "objects"), "basket": ("other", "objects"), "potted plant": ("other", "objects"), "sofa": ("other", "objects"), "light switch": ("switch", "fixtures")}
 CELL = 0.05
 
 
@@ -45,22 +48,112 @@ def zbuffer_visible(xyz, w2c, K, W, H, step=4, slack=0.05):
     return vis, u, v
 
 
-def vote(xyz, frames, labels):
-    """frames: [{w2c, K, width, height, masks: [(label_index, bool HxW)]}]. Returns per-point label (-1 = none)."""
+def vote(xyz, frames, labels, with_hits=False):
+    """frames: [{w2c, K, width, height, masks: [(label_index, bool HxW)]}]. Returns per-point label (-1 = none), and with
+    with_hits the per-frame (point index, mask index) pairs. Where masks overlap a pixel goes to the smallest: a chair
+    box's mask that spills over the table must not out-vote the table's own mask."""
     L = len(labels)
-    seen, votes = np.zeros(len(xyz), int), np.zeros((len(xyz), L), int)
+    seen, votes, hits = np.zeros(len(xyz), int), np.zeros((len(xyz), L), int), []
     for f in frames:
         w2c, K = np.asarray(f["w2c"], float), np.asarray(f["K"], float)
         vis, u, v = zbuffer_visible(xyz, w2c, K, f["width"], f["height"])
         seen += vis
-        iu, iv = np.clip(u, 0, f["width"] - 1).astype(int), np.clip(v, 0, f["height"] - 1).astype(int)
-        for li, m in f["masks"]:
-            hit = vis.copy()
-            hit[vis] = m[iv[vis], iu[vis]]
-            votes[hit, li] += 1
+        owner = np.full((f["height"], f["width"]), -1)
+        for k in np.argsort([-m.sum() for _, m in f["masks"]]):
+            owner[f["masks"][k][1]] = k
+        idx = np.flatnonzero(vis)
+        o = owner[np.clip(v[idx], 0, f["height"] - 1).astype(int), np.clip(u[idx], 0, f["width"] - 1).astype(int)]
+        idx, o = idx[o >= 0], o[o >= 0]
+        np.add.at(votes, (idx, np.array([li for li, _ in f["masks"]], int)[o] if len(o) else idx[:0]), 1)
+        hits.append((idx, o))
     best = votes.argmax(1)
     share = votes[np.arange(len(xyz)), best] / np.maximum(seen, 1)
-    return np.where((seen >= 3) & (share >= 0.5), best, -1)
+    lab = np.where((seen >= 3) & (share >= 0.5), best, -1)
+    return (lab, hits) if with_hits else lab
+
+
+def pieces3d(p, vox):
+    """26-connected pieces of points on a vox grid -> piece id per point."""
+    from scipy import ndimage
+    q = np.floor((p - p.min(0)) / vox).astype(int)
+    grid = np.zeros(q.max(0) + 1, bool)
+    grid[tuple(q.T)] = True
+    return ndimage.label(grid, np.ones((3, 3, 3)))[0][tuple(q.T)] - 1
+
+
+def instances(xyz, lab, hits, vox=0.02, min_points=200, min_share=0.25, min_frames=3, min_pts=20, attach_m=0.1, join_m=0.1, fragment=0.25):
+    """Labelled points -> one id per object (-1 = none), robust to masks that spill:
+    1. pieces = 2 cm connected pieces of ALL labelled points: separate things have a gap (a chair pushed in under a table
+       is its own piece even where the table's mask covered its seat);
+    2. a piece holding two things that touch (an end chair against the table) splits by label, where a label holds
+       >= min_share of it; a smaller label share is mask spill and goes to its nearest kept neighbour;
+    3. pieces of one label within join_m of each other that the masks keep in ONE mask in most frames seeing both are
+       joined (a chair's back and seat; two chairs one mask took together are further apart);
+    4. a fragment (under min_points, or under fragment x the object it touches) joins the nearest object within attach_m
+       (a chair's feet, its seat under the table's mask), smallest first; a lone one under min_points is dropped."""
+    from scipy.spatial import cKDTree
+    sel = np.flatnonzero(lab >= 0)
+    piece, l = pieces3d(xyz[sel], vox), lab[sel]
+    ids, nxt = np.full(len(sel), -1), 0
+    for k in np.unique(piece):
+        i = np.flatnonzero(piece == k)
+        ls, cnt = np.unique(l[i], return_counts=True)
+        keep = ls[cnt >= max(min_points, min_share * len(i))]
+        keep = keep if len(keep) else ls[[cnt.argmax()]]
+        kept = i[np.isin(l[i], keep)]
+        for li in keep:
+            j = i[l[i] == li]
+            c = pieces3d(xyz[sel[j]], vox)
+            ids[j] = nxt + c
+            nxt += c.max() + 1
+        rest = i[~np.isin(l[i], keep)]
+        if len(rest):
+            ids[rest] = ids[kept[cKDTree(xyz[sel[kept]]).query(xyz[sel[rest]])[1]]]
+            l[rest] = l[kept[cKDTree(xyz[sel[kept]]).query(xyz[sel[rest]])[1]]]
+    inst = np.full(len(xyz), -1)
+    inst[sel] = ids
+    lab = lab.copy()
+    lab[sel] = l
+    # 3. join same-label pieces that share a mask in most frames
+    n = nxt
+    same, both = np.zeros((n, n)), np.zeros((n, n))
+    for idx, o in hits:   # each piece's dominant mask in this frame
+        c = inst[idx]
+        dom = {}
+        for k in np.unique(c[c >= 0]):
+            mk, cnt = np.unique(o[c == k], return_counts=True)
+            if cnt.max() >= min_pts:
+                dom[k] = mk[cnt.argmax()]
+        ks = np.array(list(dom), int)
+        d = np.array([dom[k] for k in ks])
+        both[np.ix_(ks, ks)] += 1
+        same[np.ix_(ks, ks)] += d[:, None] == d[None, :]
+    plab = np.full(n, -1)
+    plab[inst[sel]] = lab[sel]
+    root = list(range(n))
+    find = lambda i: i if root[i] == i else find(root[i])
+    pts = [xyz[sel[inst[sel] == k]] for k in range(n)]
+    for i, j in zip(*np.nonzero((both >= min_frames) & (same >= 0.5 * both) & (plab[:, None] == plab[None, :]))):
+        if i < j and find(i) != find(j) and cKDTree(pts[i]).query(pts[j], distance_upper_bound=join_m)[0].min() <= join_m:
+            root[find(i)] = find(j)
+    inst[sel] = np.array([find(i) for i in range(n)])[inst[sel]]
+    # 4. fragments join the object they touch, smallest first
+    for k in sorted(np.unique(inst[sel]), key=lambda k: (inst[sel] == k).sum()):
+        mine, other = sel[inst[sel] == k], sel[inst[sel] != k]
+        if not len(other):
+            break
+        d, j = cKDTree(xyz[other]).query(xyz[mine], distance_upper_bound=attach_m)
+        near = inst[other[j[d <= attach_m]]]
+        if len(near):
+            to = np.bincount(near).argmax()
+            if len(mine) < min_points or len(mine) < fragment * (inst[sel] == to).sum():
+                inst[mine] = to
+                continue
+        if len(mine) < min_points:
+            inst[mine] = -1
+            sel = sel[inst[sel] >= 0]
+    _, inst[inst >= 0] = np.unique(inst[inst >= 0], return_inverse=True)
+    return inst, lab
 
 
 def on_walls(xyz, shell, tol=0.03):
@@ -75,39 +168,60 @@ def on_walls(xyz, shell, tol=0.03):
     return hit
 
 
-def propose(xyz, lab, labels, min_points=200, shell=None):
-    """Per label: connected pieces on a 5 cm floor grid -> config entries with a rotated footprint and height band."""
+def propose(xyz, lab, labels, min_points=200, shell=None, inst=None):
+    """Per object (instances(); without them, connected pieces of each label on a 5 cm floor grid) -> config entries with a
+    rotated footprint and height band. Entries carry `instance` (the id in inst) when inst is given."""
     import cv2
     from scipy import ndimage
     out = {"objects": [], "fixtures": []}
-    lab = np.where(on_walls(xyz, shell), -1, lab)
-    for li, name in enumerate(labels):
-        pts = xyz[lab == li]
-        if len(pts) < min_points:
-            continue
-        lo = pts[:, :2].min(0)
-        ij = np.floor((pts[:, :2] - lo) / CELL).astype(int)
-        occ = np.zeros(ij.max(0) + 1, bool)
-        occ[tuple(ij.T)] = True
-        comp, n = ndimage.label(ndimage.binary_closing(occ, iterations=1))
-        for k in range(1, n + 1):
-            sel = comp[tuple(ij.T)] == k
-            if sel.sum() < min_points:
+    walls = on_walls(xyz, shell)
+    lab = np.where(walls, -1, lab)
+    pieces = []   # (label index, point indices, instance id)
+    if inst is not None:
+        for k in np.unique(inst[(inst >= 0) & ~walls]):
+            i = np.flatnonzero((inst == k) & ~walls)
+            pieces.append((np.bincount(lab[i][lab[i] >= 0]).argmax() if (lab[i] >= 0).any() else -1, i, int(k)))
+    else:
+        for li in range(len(labels)):
+            i = np.flatnonzero(lab == li)
+            if len(i) < min_points:
                 continue
-            p = pts[sel]
-            rect = cv2.minAreaRect(p[:, :2].astype(np.float32))
-            poly = np.round(cv2.boxPoints(rect).astype(float), 3).tolist()
-            kind, where = VOCAB.get(name, ("other", "objects"))
-            z = np.percentile(p[:, 2], [2, 99])
-            entry = {"name": f"{kind}{'' if not out[where] or all(e['kind'] != kind for e in out[where]) else len(out[where])}",
-                     "kind": kind, "poly_xy": poly, "points": int(sel.sum()), "detected_as": name}
-            if where == "objects":
-                xs, ys = [q[0] for q in poly], [q[1] for q in poly]
-                entry.update(box_xy=[[round(min(xs), 3), round(min(ys), 3)], [round(max(xs), 3), round(max(ys), 3)]],
-                             z_max=round(float(z[1]) + 0.02, 3),
-                             parts=[{"poly_xy": poly, "z": [round(max(float(z[0]), -0.5), 3), round(float(z[1]) + 0.02, 3)]}])
-            out[where].append(entry)
+            lo = xyz[i, :2].min(0)
+            ij = np.floor((xyz[i, :2] - lo) / CELL).astype(int)
+            occ = np.zeros(ij.max(0) + 1, bool)
+            occ[tuple(ij.T)] = True
+            comp, n = ndimage.label(ndimage.binary_closing(occ, iterations=1))
+            pieces += [(li, i[comp[tuple(ij.T)] == k], None) for k in range(1, n + 1)]
+    for li, sel, k in pieces:
+        if li < 0 or len(sel) < min_points:
+            continue
+        name = labels[li]
+        p = xyz[sel]
+        rect = cv2.minAreaRect(p[:, :2].astype(np.float32))
+        poly = np.round(cv2.boxPoints(rect).astype(float), 3).tolist()
+        kind, where = VOCAB.get(name, ("other", "objects"))
+        z = np.percentile(p[:, 2], [2, 99])
+        base = name.replace(" ", "_")   # chair, chair2, ... trash_can
+        n_same = sum(e["detected_as"] == name for e in out["objects"] + out["fixtures"])
+        entry = {"name": f"{base}{n_same + 1 if n_same else ''}",
+                 "kind": kind, "poly_xy": poly, "points": int(len(sel)), "detected_as": name}
+        if k is not None:
+            entry["instance"] = k
+        if where == "objects":
+            xs, ys = [q[0] for q in poly], [q[1] for q in poly]
+            entry.update(box_xy=[[round(min(xs), 3), round(min(ys), 3)], [round(max(xs), 3), round(max(ys), 3)]],
+                         z_max=round(float(z[1]) + 0.02, 3),
+                         parts=[{"poly_xy": poly, "z": [round(max(float(z[0]), -0.5), 3), round(float(z[1]) + 0.02, 3)]}])
+        out[where].append(entry)
     return out
+
+
+def label_of(text, labels):
+    """Detector phrase -> vocabulary word: the longest word inside it ('bedside table' is not 'bed'); a phrase naming two
+    different things ('chair table') is dropped."""
+    hits = [l for l in labels if l in text]
+    best = max(hits, key=len, default=None)
+    return best if all(h in best for h in hits) else None
 
 
 def detect(images, labels, boxes_threshold=0.3):
@@ -132,7 +246,7 @@ def detect(images, labels, boxes_threshold=0.3):
                 mo = sm(**si, multimask_output=False)
                 mk = sp.post_process_masks(mo.pred_masks.cpu(), si["original_sizes"])[0][:, 0].numpy() > 0.5
             for lab, m in zip(det["text_labels"], mk):
-                name = next((l for l in labels if l in str(lab)), None)
+                name = label_of(str(lab), labels)
                 if name:
                     masks.append((labels.index(name), m))
         out.append(masks)
@@ -143,6 +257,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("config")
     ap.add_argument("--frames", type=int, default=60)
+    ap.add_argument("--cached", action="store_true", help="reuse <work>/detect_masks.npz instead of running the models")
     a = ap.parse_args()
     import yaml
     from PIL import Image
@@ -165,13 +280,31 @@ def main():
         W, H = img.size
         imgs.append(img)
         frames.append({"w2c": c["w2c"], "K": np.array(c["K"], float) * [[W / c["width"]], [H / c["height"]], [1]], "width": W, "height": H})
-    for f, m in zip(frames, detect(imgs, labels)):
-        f["masks"] = m
-    lab = vote(xyz, frames, labels)
+    cache = w / "detect_masks.npz"   # masks at 1/4 res (the z-buffer works in 4 px blocks anyway): re-vote on CPU with --cached
+    if a.cached:
+        z = np.load(cache)
+        for i, f in enumerate(frames):
+            h, wd = z[f"s{i}"]
+            f["masks"] = [(int(li), np.unpackbits(z[f"m{i}_{k}"], count=h * wd).reshape(h, wd).astype(bool)
+                           .repeat(4, 0).repeat(4, 1)[:f["height"], :f["width"]]) for k, li in enumerate(z[f"l{i}"])]
+    else:
+        for f, m in zip(frames, detect(imgs, labels)):
+            f["masks"] = m
+        out = {}
+        for i, f in enumerate(frames):
+            out[f"l{i}"] = np.array([li for li, _ in f["masks"]], int)
+            out[f"s{i}"] = np.array((len(range(0, f["height"], 4)), len(range(0, f["width"], 4))))
+            for k, (_, m) in enumerate(f["masks"]):
+                out[f"m{i}_{k}"] = np.packbits(m[::4, ::4])
+        np.savez_compressed(cache, **out)
+    lab, hits = vote(xyz, frames, labels, with_hits=True)
+    inst, lab = instances(xyz, lab, hits)
     shell = json.loads((w / "shell.json").read_text()) if (w / "shell.json").exists() else None
-    prop = propose(xyz, lab, labels, shell=shell)
+    prop = propose(xyz, lab, labels, shell=shell, inst=inst)
+    keep = inst >= 0   # stage 12 (game.objects: auto) gives each Gaussian the object of its nearest labelled point
+    np.savez_compressed(w / "objects_points.npz", xyz=xyz[keep].astype(np.float32), instance=inst[keep])
     prop["note"] = ("PROPOSED by Grounding DINO + SAM 2 votes (stage 6c), floor frame. Check each against the splat and copy "
-                    "the right ones into game.objects / game.fixtures; hand-drawn boxes stay the authority.")
+                    "the right ones into game.objects / game.fixtures, or set game.objects: auto.")
     (w / "objects_proposed.yaml").write_text(yaml.safe_dump(prop, sort_keys=False))
     print(json.dumps({k: [e["name"] for e in prop[k]] for k in ("objects", "fixtures")}))
 

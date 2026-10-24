@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=dr-detect
+#SBATCH --job-name=hc-detect
 #SBATCH --partition=hpg-b200
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4

@@ -109,14 +109,5 @@ game:
   # table measured in this splat (floor frame; no rug in this capture: stage 6 found no bump patch): tabletop = tools/table_scale.py
   # min-area rectangle (1.574 x 0.851 m, top 0.695 m, -6.7 deg) grown 4% for the blurry edge; legs 1.36 x 0.66 m apart as kitchen1
   # (same table), 16 cm columns, checked against the leg-height Gaussians.
-  objects:
-  - name: table
-    kind: other
-    box_xy: [[-0.45, -1.73], [1.28, -0.66]]
-    parts:
-    - {poly_xy: [[-0.345, -0.66], [-0.449, -1.539], [1.176, -1.732], [1.28, -0.853]], z: [0.55, 0.79]}
-    - {box_xy: [[-0.30, -0.87], [-0.14, -0.71]], z: [0.02, 0.63]}
-    - {box_xy: [[-0.38, -1.52], [-0.22, -1.36]], z: [0.02, 0.63]}
-    - {box_xy: [[1.05, -1.03], [1.21, -0.87]], z: [0.02, 0.63]}
-    - {box_xy: [[0.97, -1.68], [1.13, -1.52]], z: [0.02, 0.63]}
+  objects: auto   # stage 6c detections (out/kitchen4/objects_proposed.yaml): every detected thing is movable
   interventions: []

@@ -75,9 +75,9 @@ export function stamp(g: GridMeta, base: Layers, objs: Footprinted[], poses: Pos
 }
 
 /** Can this object sit here? Every footprint cell must be floor with no static/other obstacle (bumps may overlap). */
-export function placementOk(g: GridMeta, base: Layers, objs: Footprinted[], poses: Pose[], k: number): boolean {
+export function placementOk(g: GridMeta, base: Layers, objs: Footprinted[], poses: Pose[], k: number, overlapOk: Set<number> = new Set()): boolean {
   if (objs[k].layer === 'none') return polyCells(g, worldFootprint(objs[k], poses[k])).every(c => base.floor[c] && !base.obst[c]);
-  const others = stamp(g, base, objs, poses.map((p, n) => (n === k || objs[n].layer !== 'obstacle' ? { ...p, removed: true } : p)));
+  const others = stamp(g, base, objs, poses.map((p, n) => (n === k || overlapOk.has(n) || objs[n].layer !== 'obstacle' ? { ...p, removed: true } : p)));
   const cells = polyCells(g, worldFootprint(objs[k], poses[k]));
   return cells.length > 0 && cells.every(c => others.floor[c] && !others.obst[c]);
 }
