@@ -51,3 +51,14 @@ model loads once instead of per object, and LaMa's padded output is cropped inst
 texture by up to 7 px = 7 cm). Only 10–42% of the 40 cm ring around each footprint has real floor in the splat, so most
 of what LaMa continues is itself unseen: it gives a streaky wood-like texture with dark smears
 (`kitchen4_lighter_table_fill_lama.png`); `ns` is smoother but flat. No wall patches: kitchen4 has no stage 5c shell.
+
+## Removed objects left leftovers (fixed)
+A Gaussian went with a detected object only if it was within 3 cm of a stage 6c labelled point, so faint Gaussians 6c
+never labelled stayed behind: on `kitchen4_lighter` 33% of the table (legs, haze), 42% of chair7, 18% of chair4, and
+the cup and other things on the table floated in the air after removing it. Stage 12 now also gives an object everything
+inside its footprint, from its lowest labelled point to 30 cm above its band, whose nearest labelled point (within
+10 cm) is its own or no object's. Room Gaussians left inside the footprint: table 4739 -> 48, chair4 660 -> 39, chair7
+1116 -> 172, basket 1684 -> 167, trash can 74 -> 0. Still left: the bedside tables (9-23%; their outlines overlap the
+chairs, so the leftovers are nearer the chair labels) and the counter under the basket (never filmed, shows as a blur).
+The boxes on the cabinet do not take the cabinet (the zone starts at their lowest labelled point). Re-ran the LaMa fills
+afterwards (job 47386024, 33 s). Live: `kitchen4_lighter_table_removed_clean.jpg` (table, chair4, chair7 removed).

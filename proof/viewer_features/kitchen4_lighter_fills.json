@@ -1,7 +1,7 @@
 {
  "chair": {
-  "pixels": 4049,
-  "seen_around_pct": 11.6,
+  "pixels": 4268,
+  "seen_around_pct": 12.5,
   "backends": [
    "lama",
    "median",
@@ -12,7 +12,7 @@
   "default": "lama"
  },
  "chair2": {
-  "pixels": 3164,
+  "pixels": 3551,
   "seen_around_pct": 18.3,
   "backends": [
    "lama",
@@ -24,8 +24,8 @@
   "default": "lama"
  },
  "bedside_table": {
-  "pixels": 2742,
-  "seen_around_pct": 25.9,
+  "pixels": 2768,
+  "seen_around_pct": 25.3,
   "backends": [
    "lama",
    "median",
@@ -36,8 +36,8 @@
   "default": "lama"
  },
  "bedside_table2": {
-  "pixels": 2180,
-  "seen_around_pct": 34.8,
+  "pixels": 2199,
+  "seen_around_pct": 34.9,
   "backends": [
    "lama",
    "median",
@@ -60,8 +60,8 @@
   "default": "lama"
  },
  "chair3": {
-  "pixels": 2853,
-  "seen_around_pct": 42.5,
+  "pixels": 3147,
+  "seen_around_pct": 41.7,
   "backends": [
    "lama",
    "median",
@@ -72,8 +72,8 @@
   "default": "lama"
  },
  "chair4": {
-  "pixels": 4417,
-  "seen_around_pct": 26.9,
+  "pixels": 4854,
+  "seen_around_pct": 26.3,
   "backends": [
    "lama",
    "median",
@@ -84,8 +84,8 @@
   "default": "lama"
  },
  "chair5": {
-  "pixels": 2872,
-  "seen_around_pct": 35.0,
+  "pixels": 2956,
+  "seen_around_pct": 35.4,
   "backends": [
    "lama",
    "median",
@@ -96,8 +96,8 @@
   "default": "lama"
  },
  "chair6": {
-  "pixels": 554,
-  "seen_around_pct": 39.4,
+  "pixels": 1004,
+  "seen_around_pct": 37.1,
   "backends": [
    "lama",
    "median",
@@ -108,8 +108,8 @@
   "default": "lama"
  },
  "table": {
-  "pixels": 14508,
-  "seen_around_pct": 37.3,
+  "pixels": 14811,
+  "seen_around_pct": 35.9,
   "backends": [
    "lama",
    "median",
@@ -120,8 +120,8 @@
   "default": "lama"
  },
  "chair7": {
-  "pixels": 3696,
-  "seen_around_pct": 25.4,
+  "pixels": 3849,
+  "seen_around_pct": 24.8,
   "backends": [
    "lama",
    "median",
@@ -132,8 +132,8 @@
   "default": "lama"
  },
  "chair8": {
-  "pixels": 2990,
-  "seen_around_pct": 39.1,
+  "pixels": 3040,
+  "seen_around_pct": 38.8,
   "backends": [
    "lama",
    "median",
@@ -144,8 +144,8 @@
   "default": "lama"
  },
  "basket": {
-  "pixels": 2531,
-  "seen_around_pct": 15.7,
+  "pixels": 2746,
+  "seen_around_pct": 15.6,
   "backends": [
    "lama",
    "median",
@@ -156,8 +156,8 @@
   "default": "lama"
  },
  "box": {
-  "pixels": 710,
-  "seen_around_pct": 18.9,
+  "pixels": 811,
+  "seen_around_pct": 19.1,
   "backends": [
    "lama",
    "median",
@@ -168,7 +168,7 @@
   "default": "lama"
  },
  "box2": {
-  "pixels": 792,
+  "pixels": 791,
   "seen_around_pct": 16.6,
   "backends": [
    "lama",
@@ -180,7 +180,7 @@
   "default": "lama"
  },
  "trash_can": {
-  "pixels": 1917,
+  "pixels": 2048,
   "seen_around_pct": 41.2,
   "backends": [
    "lama",
