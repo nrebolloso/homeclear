@@ -1,16 +1,20 @@
 // Frame-stepped storyboard clip (smooth whatever the machine load): the page clock is driven with game.tick, one
-// screenshot per frame, ffmpeg at --fps.  Needs `npm run dev` on 5173 and ffmpeg.
+// screenshot per frame, ffmpeg at --fps.  Starts its own dev server on 5175 with hot reload off (edits can't reload the
+// page mid-clip) and records in demo mode; needs ffmpeg.
 //   node e2e/shot.ts <out.mp4> <seconds> [--url u] [--fps 30] [--setup "<js, awaited once>"] [--cam "<js per frame, t = seconds>"]
 // e.g. --setup "game.setThird(true)"  --cam "game.setFly(1.2 - t * 0.1, 0.4, 3.4, -90, -80)"
 import { CHROME } from './env.ts';
 import { chromium } from 'playwright-core';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 
 const args = process.argv.slice(2), opt = (k: string, d: string) => { const i = args.indexOf(`--${k}`); return i < 0 ? d : args[i + 1]; };
-const [out, secs] = args, fps = +opt('fps', '30'), url = opt('url', 'http://localhost:5173/');
+const [out, secs] = args, fps = +opt('fps', '30'), url = opt('url', 'http://localhost:5175/?demo=1');
 const dir = mkdtempSync(`${tmpdir()}/shot-`);
+const vite = spawn('npx', ['vite', '--port', '5175', '--strictPort'], { env: { ...process.env, NO_HMR: '1' }, stdio: 'ignore', detached: true });
+process.on('exit', () => { try { process.kill(-vite.pid!); } catch {} });   // also when a frame throws
+for (let k = 0; k < 120 && !(await fetch('http://localhost:5175/').then(r => r.ok, () => false)); k++) await new Promise(r => setTimeout(r, 500));
 const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const p = await browser.newPage({ viewport: { width: 1600, height: 900 } });
 p.on('pageerror', e => console.log('pageerror', String(e)));
