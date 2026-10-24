@@ -267,6 +267,44 @@ try {
     `xr=${out.xr}, labels ${out.labels.join(' ')}, perf=${out.perf} (before VR: ${s0perf})`);
 
   check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | ') || 'none');
+
+  // 10. ?mount=left: the left controller is strapped to the walker (no room to walk). Turning the real walker turns the
+  // virtual one, its stick walks along the walker's heading (not the view) and snap-turns sideways; its trigger is ignored.
+  const m = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const mErrors: string[] = [];
+  m.on('pageerror', e => mErrors.push(String(e)));
+  await m.goto(`${BASE}/?scene=game_synth&emulate=quest2&mount=left`);
+  await m.waitForFunction(() => (window as any).game?.ready, null, { timeout: 60000 });
+  await m.evaluate(HELPERS);
+  await m.getByText('ENTER VR', { exact: true }).click();
+  await m.waitForFunction(() => (window as any).game.xr, null, { timeout: 10000 });
+  await m.waitForTimeout(600);
+  const M = (f: string) => G(m, f);
+  const yawOf = (q: any) => Math.atan2(Math.sin(q), Math.cos(q));
+  const m0 = await M('return { body: game.body.yaw, mount: game.debug.xrMount(), head: game.xrPose().head }');
+  await M("const c = __xr.ctl('left'); c.quaternion.set(0, Math.sin(Math.PI / 8), 0, Math.cos(Math.PI / 8))");   // the real walker turned 45 deg left
+  await m.waitForTimeout(400);
+  const m1 = await M('return { body: game.body.yaw, head: game.xrPose().head }');
+  const turned = yawOf(m1.body - m0.body);
+  check('mounted: turning the real walker turns the virtual one, the head stays', Math.abs(turned - Math.PI / 4) < 0.05 && Math.hypot(m1.head[0] - m0.head[0], m1.head[1] - m0.head[1]) < 0.01,
+    `offset taken ${m0.mount.offset?.toFixed(3)}, walker turned ${(turned * 180 / Math.PI).toFixed(1)} deg, head moved ${Math.hypot(m1.head[0] - m0.head[0], m1.head[1] - m0.head[1]).toFixed(3)} m`);
+  await M("__xr.ctl('left').updateAxes('thumbstick', 0, -1)");
+  await m.waitForTimeout(500);
+  await M("__xr.ctl('left').updateAxes('thumbstick', 0, 0)");
+  await m.waitForTimeout(200);
+  const m2 = await M('return { body: game.body.yaw, head: game.xrPose().head }');
+  const mv = [m2.head[0] - m1.head[0], m2.head[1] - m1.head[1]], along = yawOf(Math.atan2(mv[1], mv[0]) - m1.body);
+  check('mounted: stick up walks along the walker, not the view', Math.hypot(...mv) > 0.1 && Math.abs(along) < 0.1,
+    `walked ${Math.hypot(...mv).toFixed(2)} m, ${(along * 180 / Math.PI).toFixed(1)} deg off the walker's heading (view is ${(-turned * 180 / Math.PI).toFixed(0)} deg away)`);
+  const r0 = await M('return game.xrPose().rig.yaw');
+  await M("__xr.ctl('left').updateAxes('thumbstick', 1, 0)"); await m.waitForTimeout(400); await M("__xr.ctl('left').updateAxes('thumbstick', 0, 0)"); await m.waitForTimeout(200);
+  const r1 = await M('return game.xrPose().rig.yaw');
+  const h0 = await M('return game.xrPose().head');
+  await M("__xr.ctl('left').updateButtonValue('trigger', 1)"); await m.waitForTimeout(600); await M("__xr.ctl('left').updateButtonValue('trigger', 0)"); await m.waitForTimeout(200);
+  const h1 = await M('return game.xrPose().head');
+  check('mounted: stick sideways snap-turns 30 deg; its trigger does not glide', Math.abs(yawOf(r1 - r0) + Math.PI / 6) < 0.01 && Math.hypot(h1[0] - h0[0], h1[1] - h0[1]) < 0.01 && mErrors.length === 0,
+    `turned ${(yawOf(r1 - r0) * 180 / Math.PI).toFixed(0)} deg; trigger moved ${Math.hypot(h1[0] - h0[0], h1[1] - h0[1]).toFixed(3)} m; errors ${mErrors.length}`);
+  await m.close();
 } finally {
   writeFileSync(new URL('xr-results.json', import.meta.url), JSON.stringify(results, null, 1));
   await browser.close();

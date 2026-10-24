@@ -92,6 +92,13 @@ export async function setupXR(host: XrHost) {
 
   // ---------- wand ----------
   const WAND: XRHandedness = params.get('wand') === 'left' ? 'left' : 'right';
+  // ?mount=left: that controller is fixed on the walker (VR_WALKER_MOUNT.md; no room to walk). Its stick drives: up/down
+  // walks along the walker's heading, left/right snap-turns 30 deg; the virtual walker points where the real one does.
+  // The strap can't make it point exactly forward, so on entering VR (person standing behind the walker, facing its way)
+  // the offset between its ray and the head is taken; the "Line up the walker" button retakes it. Its trigger is ignored.
+  const MOUNT: XRHandedness | null = params.get('mount') === 'left' ? 'left' : params.get('mount') === 'right' ? 'right' : null;
+  let mountOffset: number | null = null;
+  const rayYaw = new THREE.Vector3();
   type Ctl = { group: THREE.XRTargetRaySpace; source?: XRInputSource; ray: THREE.Line };
   const wandRay = new THREE.Raycaster(), RED3 = new THREE.Color(0xff3030);
   const tpRing = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.24, 32),
@@ -103,6 +110,7 @@ export async function setupXR(host: XrHost) {
   let snapReady = true;   // one 30 deg turn per flick of the right stick
   const pinching = new Set<object>();   // non-wand hands/controllers holding select: glide
   const isWand = (c: Ctl) => c.source?.handedness === WAND;
+  const isMount = (c: Ctl) => !!MOUNT && c.source?.handedness === MOUNT && !c.source?.hand;   // a tracked hand isn't strapped on
   const ctls: Ctl[] = [0, 1].map(i => {
     const group = renderer.xr.getController(i);
     const ray = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x66ccff }));
@@ -111,7 +119,7 @@ export async function setupXR(host: XrHost) {
     const c: Ctl = { group, ray };
     group.addEventListener('connected', e => { c.source = e.data; });
     group.addEventListener('disconnected', () => { if (isWand(c)) dropWand(); pinching.delete(c); c.source = undefined; });
-    group.addEventListener('selectstart', () => { if (host.shell?.activate(group)) return; isWand(c) ? wandDown(c) : pinching.add(c); });
+    group.addEventListener('selectstart', () => { if (host.shell?.activate(group)) return; if (isMount(c)) return; isWand(c) ? wandDown(c) : pinching.add(c); });
     group.addEventListener('selectend', () => { if (host.shell?.release(group)) return; isWand(c) ? wandUp() : pinching.delete(c); });
     return c;
   });
@@ -203,7 +211,8 @@ export async function setupXR(host: XrHost) {
   const dash = new THREE.Group();
   dash.visible = false;
   scene.add(dash);
-  const btns = (host.buttons ?? []).map((b, i) => {
+  const lineUp: XrButton = { text: () => ['Line up the walker', 'stand behind it facing its way, then pinch'], tone: () => 'plain', press: () => { mountOffset = null; } };
+  const btns = [...(host.buttons ?? []), ...(MOUNT ? [lineUp] : [])].map((b, i) => {
     const cv = document.createElement('canvas');
     cv.width = 768; cv.height = 250;
     const tex = new THREE.CanvasTexture(cv);
@@ -274,6 +283,19 @@ export async function setupXR(host: XrHost) {
     ringCard?.position.copy(head).addScaledVector(headDir, 1).setZ(head.z - 0.15);
   }
 
+  /** The walker's heading (floor frame): the mounted controller's ray, levelled, plus the offset taken at line-up. Null with
+   *  no mount, no tracked controller, or a ray pointing straight up or down. The first reading after a line-up sets the offset. */
+  function walkerYaw(headYaw: number): number | null {
+    const c = ctls.find(isMount);
+    if (!c) return null;
+    c.group.updateWorldMatrix(true, false);
+    rayYaw.set(0, 0, -1).transformDirection(c.group.matrixWorld);
+    if (Math.hypot(rayYaw.x, rayYaw.y) < 0.2) return null;
+    const raw = Math.atan2(rayYaw.y, rayYaw.x);
+    mountOffset ??= headYaw - raw;
+    return raw + mountOffset;
+  }
+
   // ---------- per frame ----------
   function step(dt: number) {
     if (host.shell?.open()) return;
@@ -289,9 +311,12 @@ export async function setupXR(host: XrHost) {
     }
     if (!host.readOnly?.()) {   // thumbsticks: left walks (forward/back, sideways, relative to where you look), right snap-turns
       const stick = (g?: Gamepad) => (g ? [g.axes[2] ?? 0, g.axes[3] ?? 0].map(a => (Math.abs(a) < 0.2 ? 0 : a)) : [0, 0]);
-      const [sx, sy] = stick(pads.left), [tx] = stick(pads.right);
+      const wy = MOUNT ? walkerYaw(yaw) : null;
+      // mounted: one stick, up/down along the walker's heading, left/right snap-turns; held: left walks relative to the view
+      const [mx, my] = MOUNT ? stick(pads[MOUNT]) : [0, 0];
+      const [sx, sy] = MOUNT ? [0, my] : stick(pads.left), [tx] = MOUNT ? [mx] : stick(pads.right), dir = wy ?? yaw;
       if (sx || sy) {   // sub-steps of at most half a cell, as in free walk
-        const v = 0.6 * dt, dx = (-sy * Math.cos(yaw) + sx * Math.sin(yaw)) * v, dy = (-sy * Math.sin(yaw) - sx * Math.cos(yaw)) * v;
+        const v = 0.6 * dt, dx = (-sy * Math.cos(dir) + sx * Math.sin(dir)) * v, dy = (-sy * Math.sin(dir) - sx * Math.cos(dir)) * v;
         const n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / (host.cellM / 2)));
         for (let i = 0; i < n && host.standable(head.x + dx / n, head.y + dy / n); i++) {
           xrRig.x += dx / n; xrRig.y += dy / n; head.x += dx / n; head.y += dy / n;
@@ -305,7 +330,9 @@ export async function setupXR(host: XrHost) {
     }
     placeRig();
     body.x = head.x; body.y = head.y;
-    body.yaw += Math.atan2(Math.sin(yaw - body.yaw), Math.cos(yaw - body.yaw)) * Math.min(1, dt * 4);
+    const wyNow = MOUNT ? walkerYaw(readHead()) : null;   // after a snap the rig turned the controller too: read it again
+    if (wyNow !== null) body.yaw = wyNow;   // the walker is rigid: it points where the real one does
+    else body.yaw += Math.atan2(Math.sin(yaw - body.yaw), Math.cos(yaw - body.yaw)) * Math.min(1, dt * 4);
     controllerButtons(dt, pads);
     dash.visible = btns.length > 0 && !host.editor?.active();
     wandStep();
@@ -330,7 +357,7 @@ export async function setupXR(host: XrHost) {
     onEnterXr: () => {
       { const p = host.startPose(); if (p) Object.assign(body, p); }   // null: stay where the walker user is
       Object.assign(xrRig, { x: body.x, y: body.y, yaw: body.yaw }); placeRig(); rig.add(camera);
-      anchor.set = false; dash.visible = btns.length > 0;
+      anchor.set = false; dash.visible = btns.length > 0; mountOffset = null;
       host.enter(tier);
       // a lower refresh gives each frame more time (90 Hz = 11.1 ms, 72 Hz = 13.9 ms); the Quest 2 offers 60-120
       if (cfg.hz) renderer.xr.getSession()?.updateTargetFrameRate?.(cfg.hz).catch(() => {});
@@ -345,7 +372,7 @@ export async function setupXR(host: XrHost) {
 
   const w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3));
   return {
-    tier, device, rig, place, step, moveHead, rigState, restoreRig,
+    tier, device, rig, place, step, moveHead, rigState, restoreRig, mount: () => ({ hand: MOUNT, offset: mountOffset }),
     presenting: () => renderer.xr.isPresenting,
     /** where the XR camera and the user camera in its rig are (floor frame), and what is tracked */
     pose: () => ({ xr: renderer.xr.isPresenting, head: w(renderer.xr.getCamera()), userCam: w(camera), rig: { ...xrRig },
