@@ -23,6 +23,7 @@ from torch import nn
 from worldmodel.learned import K, D_IN, Learned, features, targets
 from worldmodel.models import Baseline, State, unit, left
 from worldmodel.rollout import load_cfg
+from worldmodel.trip_corr import component_zscores, lag_corr
 
 SPLIT = {"train": list(range(10)), "val": [10, 11], "test": [12, 13]}
 HIDDEN, EPOCHS, SEED, TURN_DEG = 128, int(os.environ.get("EPOCHS", 400)), 0, 15
@@ -116,6 +117,22 @@ def one_step(z, m, models, cfg, d_shift):
                       "cover_50": round(r["c50"][s].mean(), 3), "cover_90": round(r["c90"][s].mean(), 3),
                       "walker_pos_err_mean_cm": round(100 * r["wpos"][s].mean(), 2), "walker_yaw_err_mean_deg": round(r["wyaw"][s].mean(), 2)}
                   for g, s in groups.items()}
+    return out
+
+
+def step_autocorr(z, masks, models, cfg, d_shift):
+    """Within-trip persistence of each model's one-step residual (worldmodel/trip_corr.py): the value for rollout step_corr.
+    Scored on the held-out groups only (test = P12-P13; val+test = P10-P13, more pairs)."""
+    out = {}
+    for n, mod in models.items():
+        zs = np.full((len(z["pid"]), 2), np.nan)
+        for i in np.flatnonzero(masks["val+test"]):
+            zs[i] = component_zscores(mod.predict(state(z, i, shift(z["walker0"][i], d_shift)), z["action"][i]), z["heel1"][i])
+        out[n] = {}
+        for g, m in masks.items():
+            idx = np.flatnonzero(m)
+            out[n][g] = {"z_sd_along_across": np.round(zs[idx].std(0), 3).tolist(),
+                         **{f"lag{k}": lag_corr(zs[idx], z["trial"][idx], z["step"][idx], k) for k in (1, 2)}}
     return out
 
 
@@ -242,10 +259,12 @@ def main(npz, out):
     res = {"split_participants": SPLIT, "samples": log["samples"], "best_epoch": log["best_epoch"], "hand_rule_fit": {**hand, "sd_lat_m": sd_lat},
            "walker_gap_shift_m": round(d_shift, 3), "mean_user_to_camera_m": round(gap, 3),
            "one_step_test": one_step(z, sp["test"], {**models, "learned": Learned(cfg, out / "learned.npz", min_w=0)}, cfg, d_shift),   # full mixture density
-           "closed_loop_test": closed_loop(z, routes, sp["test"], models, cfg, d_shift)}
+           "closed_loop_test": closed_loop(z, routes, sp["test"], models, cfg, d_shift),
+           "step_noise_autocorr": step_autocorr(z, {"test": sp["test"], "val+test": sp["val"] | sp["test"]},
+                                                {"baseline_fit_to_train": models["baseline_fit_to_train"], "learned": Learned(cfg, out / "learned.npz", min_w=0)}, cfg, d_shift)}
     (out / "results.json").write_text(json.dumps(res, indent=1))
     (out / "train_log.json").write_text(json.dumps(log, indent=1))
-    print(json.dumps({k: res[k] for k in ("one_step_test", "closed_loop_test")}, indent=1))
+    print(json.dumps({k: res[k] for k in ("one_step_test", "closed_loop_test", "step_noise_autocorr")}, indent=1))
 
 
 if __name__ == "__main__":

@@ -113,3 +113,22 @@ def test_step_corr_zero_changes_nothing_and_raises_persistence():
     assert np.array_equal(out[0][0], out[1][0])                          # 0 = the old independent draws, bit for bit
     assert out[2][1]["sanity"]["final_feet_in_obstacle_pct"] == 0 and out[2][1]["step_corr"] == 0.8
     assert lag1(out[2][0]) > lag1(out[1][0]) + 0.1
+
+
+def test_trip_corr_recovers_rho_and_zscores():
+    from worldmodel.models import TripNoise
+    from worldmodel.trip_corr import component_zscores, lag_corr
+    u = np.array([np.cos(0.7), np.sin(0.7)])
+    R = np.stack([u, [-u[1], u[0]]], 1)
+    d = StepDist([0.5, 0.5], [[0, 0], [3, 3]], [[0.1, 0.05], [0.1, 0.05]], [R, R])
+    assert np.allclose(component_zscores(d, np.array([3, 3]) + R @ [0.2, -0.1]), [2.0, -2.0])   # nearer component, in its own frame
+    rng, trial, step, z = np.random.default_rng(5), [], [], []
+    for t in range(40):                                              # 40 trials x 60 steps of AR(1) noise
+        n = TripNoise(0.5)
+        for s in range(60):
+            z.append(n.next(rng)); trial.append(f"t{t}"); step.append(s)
+    r = lag_corr(np.array(z), trial, np.array(step), 1)
+    assert r["pairs"] == 40 * 59 and r["trials"] == 40
+    for ax in ("along", "across"):
+        assert r[ax]["ci90"][0] < 0.5 < r[ax]["ci90"][1] and abs(r[ax]["rho"] - 0.5) < 0.08
+    assert abs(lag_corr(np.array(z), trial, np.array(step), 2)["along"]["rho"] - 0.25) < 0.08       # rho^2 at lag 2
