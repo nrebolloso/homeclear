@@ -1,6 +1,6 @@
 """Shared helpers: config, per-stage result records, PLY I/O, floor fit."""
 import json, os, sys, time, traceback
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import numpy as np
 import yaml
@@ -8,13 +8,46 @@ import yaml
 ROOT = Path(__file__).resolve().parent
 
 
+def _ffmpeg():
+    """ffmpeg on PATH (HiPerGator module, Linux laptop), else the binary bundled with imageio-ffmpeg (Windows laptop)."""
+    import shutil
+    if shutil.which("ffmpeg"):
+        return "ffmpeg"
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except ImportError:
+        return "ffmpeg"
+
+
+FFMPEG = _ffmpeg()
+
+
 def load_cfg(path):
     cfg = yaml.safe_load(Path(path).read_text())
+    cfg["cluster"] = {**cfg.get("cluster", {}), **local_cluster()}
     cfg["work"] = Path(cfg["work_dir"]).expanduser()
     if not cfg["work"].is_absolute():
         cfg["work"] = ROOT / cfg["work"]
     cfg["work"].mkdir(parents=True, exist_ok=True)
     return cfg
+
+
+def local_cluster():
+    """Per-person cluster settings (ssh login, /blue base, repo, env) from the gitignored cluster.local.yaml, if any:
+    the configs keep the team defaults and each laptop overrides only what differs. No credentials go in it."""
+    p = ROOT / "cluster.local.yaml"
+    return (yaml.safe_load(p.read_text()) or {}).get("cluster", {}) if p.exists() else {}
+
+
+def cluster_shell(cfg_path):
+    """`eval "$(python -c ...)"` lines for the laptop scripts: HOST REPO ENV HPG_ROOT as shell assignments."""
+    import shlex
+    c = load_cfg(cfg_path)["cluster"]
+    repo, env = (os.path.expandvars(c[k]) for k in ("repo", "env"))
+    base = c.get("base") or os.environ.get("HPG_ROOT") or str(PurePosixPath(repo).parent)   # cluster paths are POSIX, also on a Windows laptop
+    vals = {"HOST": c["ssh"], "REPO": repo, "ENV": env, "HPG_ROOT": base}
+    return "\n".join(f"{k}={shlex.quote(str(v))}" for k, v in vals.items())
 
 
 def run_stage(name, fn):

@@ -1,0 +1,6 @@
+# LF everywhere, also on Windows checkouts: the scripts are rsynced to HiPerGator, where a CRLF breaks bash and sbatch
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.mp4 binary
+*.ply binary
