@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite",
     "dev:quest": "adb reverse tcp:5179 tcp:5179 && vite --host 127.0.0.1",
-    "mirror:quest": "scrcpy --no-audio --no-control --max-fps 30 --video-bit-rate 8M --crop 1500:1100:166:410 --window-title \"Quest 2 (left eye)\"",
+    "mirror:quest": "scrcpy --no-audio --no-control --max-fps 30 --video-codec=h265 --video-bit-rate 20M --crop 1600:900:70:510 --window-title \"Quest 2 (left eye)\"",
     "build": "tsc --noEmit && vite build",
     "test": "node --test tests/*.test.ts",
     "e2e": "node e2e/run.ts"
