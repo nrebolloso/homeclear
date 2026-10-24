@@ -363,7 +363,22 @@ function syncObjects() {
     m.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0.022);
     tapeGroup.add(m);
   }
+  const gone = objs.flatMap((o, k) => (layout.poses[k].removed ? [k] : []));
+  $('inventory').innerHTML = gone.length ? '' : '<li class="hint">nothing removed</li>';
+  for (const k of gone) {
+    const li = document.createElement('li'), b = document.createElement('button');
+    li.textContent = `${objs[k].name} (${objs[k].kind}) `;
+    b.textContent = 'Put back'; b.onclick = () => restoreObject(k);
+    li.appendChild(b); $('inventory').appendChild(li);
+  }
   updateNight();
+}
+function restoreObject(k: number) {   // back where it stood when removed, if that spot is still free
+  const poses = layout.poses.map((q, n) => (n === k ? { ...q, removed: false } : q));
+  if (!placementOk(g, placeBase, objs, poses, k, overlapOk[k])) return refused();
+  layout = { ...layout, poses };
+  syncObjects();
+  return replan();
 }
 function commitPose(k: number, p: Pose) {
   layout = { ...layout, poses: layout.poses.map((q, n) => (n === k ? { x: p.x, y: p.y, yaw: Math.round(p.yaw / (Math.PI / 2)) * (Math.PI / 2) } : q)) };
@@ -928,6 +943,8 @@ Object.assign(game, {
     return commitPose(k, p).then(ms => ({ ok: true, ms }));
   },
   removeObject: (name: string) => removeObject(objs.findIndex(o => o.name === name)),
+  restoreObject: (name: string) => restoreObject(objs.findIndex(o => o.name === name)),
+  inventory: () => objs.filter((_, k) => layout.poses[k].removed).map(o => o.name),
   applyFix, select: (name: string) => select(objs.findIndex(o => o.name === name)),
   exportForCosmos: (opts?: ExportOpts) => exportForCosmos(ctx, opts), layoutKey: () => layoutKey(objs, layout),
 });
