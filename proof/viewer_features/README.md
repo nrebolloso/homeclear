@@ -95,3 +95,10 @@ An object labelled from below 30 cm now takes everything unlabelled in its outli
 replaces that floor anyway). Yellow Gaussians left on the floor in chair7's box: ~183 -> 0
 (`kitchen4_lighter_chair7_runners_gone.jpg`; the leg still standing there is chair4's and goes with chair4). Cost: a moved
 chair carries a thin dark strip of floor under its runners. Fills re-run (job 47409131).
+Fourth follow-up: two legs still stood in chair7's box after removing it (user screenshot). They were chair7's leg bottoms:
+6c labels chair7 only from 22 cm up, so they were nearest to no label, and unlabelled points inside overlapping outlines
+went to whichever object came first (chair4, then the table). An unlabelled point now goes only to the object whose labels
+it stands under (nearest with height counted at 30%). Low points in chair7's box: table 159 -> 1, chair4 44 yellow -> 2
+(the rest of chair4's 29 there are faint wall-edge Gaussians), chair7 209 -> 721. Room Gaussians left per footprint
+barely change (largest: bedside tables +20 each, chair7 +16). Fills re-run (job 47411688). Not live-checked in the
+browser (extension disconnected).

@@ -1,7 +1,7 @@
 {
  "chair": {
   "pixels": 4374,
-  "seen_around_pct": 11.0,
+  "seen_around_pct": 11.4,
   "backends": [
    "lama",
    "median",
@@ -13,7 +13,7 @@
  },
  "chair2": {
   "pixels": 3561,
-  "seen_around_pct": 15.6,
+  "seen_around_pct": 16.3,
   "backends": [
    "lama",
    "median",
@@ -24,8 +24,8 @@
   "default": "lama"
  },
  "bedside_table": {
-  "pixels": 3003,
-  "seen_around_pct": 20.3,
+  "pixels": 2947,
+  "seen_around_pct": 20.8,
   "backends": [
    "lama",
    "median",
@@ -37,7 +37,7 @@
  },
  "bedside_table2": {
   "pixels": 3129,
-  "seen_around_pct": 30.0,
+  "seen_around_pct": 30.6,
   "backends": [
    "lama",
    "median",
@@ -61,7 +61,7 @@
  },
  "chair3": {
   "pixels": 3580,
-  "seen_around_pct": 18.1,
+  "seen_around_pct": 21.2,
   "backends": [
    "lama",
    "median",
@@ -72,8 +72,8 @@
   "default": "lama"
  },
  "chair4": {
-  "pixels": 5369,
-  "seen_around_pct": 9.3,
+  "pixels": 5323,
+  "seen_around_pct": 12.1,
   "backends": [
    "lama",
    "median",
@@ -85,7 +85,7 @@
  },
  "chair5": {
   "pixels": 3209,
-  "seen_around_pct": 15.9,
+  "seen_around_pct": 19.5,
   "backends": [
    "lama",
    "median",
@@ -96,8 +96,8 @@
   "default": "lama"
  },
  "table": {
-  "pixels": 15383,
-  "seen_around_pct": 21.0,
+  "pixels": 15154,
+  "seen_around_pct": 21.1,
   "backends": [
    "lama",
    "median",
@@ -108,8 +108,8 @@
   "default": "lama"
  },
  "chair7": {
-  "pixels": 4543,
-  "seen_around_pct": 6.4,
+  "pixels": 4680,
+  "seen_around_pct": 9.9,
   "backends": [
    "lama",
    "median",
@@ -121,7 +121,7 @@
  },
  "chair8": {
   "pixels": 3358,
-  "seen_around_pct": 25.2,
+  "seen_around_pct": 28.8,
   "backends": [
    "lama",
    "median",

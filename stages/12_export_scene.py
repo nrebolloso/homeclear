@@ -174,8 +174,10 @@ def nearest_instance(xyz, w):
     if key not in _nearest:
         z = np.load(Path(w) / "objects_points.npz")
         d, j = cKDTree(z["xyz"]).query(xyz, distance_upper_bound=GROW_M)
+        # and whose labels are nearest with height at 30%: a leg is a column under its own seat or back
+        col = z["instance"][cKDTree(z["xyz"] * [1, 1, 0.3]).query(xyz * [1, 1, 0.3])[1]]
         _nearest.clear()
-        _nearest[key] = np.where(d <= GROW_M, z["instance"][np.minimum(j, len(z["instance"]) - 1)], -1), d
+        _nearest[key] = np.where(d <= GROW_M, z["instance"][np.minimum(j, len(z["instance"]) - 1)], -1), d, col
     return _nearest[key]
 
 
@@ -185,7 +187,7 @@ def object_parts(o, xyz, g, w, lo, cell, shape):
                            (xyz[:, :2] >= np.min(q["box_xy"], 0) - cm).all(1) & (xyz[:, :2] <= np.max(q["box_xy"], 0) + cm).all(1))
     in_parts = lambda parts, cm: np.any([in_xy(q, cm) & (xyz[:, 2] >= q["z"][0]) & (xyz[:, 2] <= q["z"][1]) for q in parts], 0)
     if "instance" in o and o.get("kind") != "rug":   # stage 6c detection: its labelled points decide, above the floor band
-        inst, d = nearest_instance(xyz, w)
+        inst, d, col = nearest_instance(xyz, w)
         # inside its footprint, from its lowest labelled point (a box on a cabinet keeps off the cabinet) to ON_TOP_M above
         # its band, it also takes what is nearest to it or to nobody: legs 6c missed and what stood on it
         z = np.load(Path(w) / "objects_points.npz")
@@ -199,7 +201,9 @@ def object_parts(o, xyz, g, w, lo, cell, shape):
         # what is nearest to its own points also goes up to GROW_M past its outline, above the floor: a chair back's
         # far side 6c never labelled sits 5-12 cm behind the outline and stayed against the wall as a pale chair back
         near = in_parts([{**q, "z": [max(z0, STANDS_M), q["z"][1] + ON_TOP_M]} for q in o["parts"]], GROW_M)
-        return (own & (d <= MEMBER_M)) | (near & own) | (zone & (own | (inst == -1)))
+        # what is nearest to nobody goes to the one whose labels it stands under, not whichever outline came first: chair7's
+        # leg bottoms (labelled from 22 cm) went to chair4 and the table, whose outlines overlap it, and stayed in its fill
+        return (own & (d <= MEMBER_M)) | (near & own) | (zone & (own | ((inst == -1) & np.isin(col, ids))))
     # parts: the object is only these height-limited boxes (a table = top slab + legs; chairs pushed in under it stay put)
     parts = o.get("parts") or [{"box_xy": o["box_xy"], "z": [g["bump_z"][0], o.get("z_max", 2.0)]}]
     if o.get("kind") == "rug":   # a rug lies at an angle: its box takes bare floor too, so cut the measured bump patch instead
