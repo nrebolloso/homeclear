@@ -1,0 +1,29 @@
+/* Layers dock (layers.ts): presets, the all-layers popover and Hide UI. Colours come from frontend.css's tokens, with fallbacks for ?classic. */
+#layers { position: fixed; left: calc((100% - var(--scene-right, 0px)) / 2); bottom: 14px; transform: translateX(-50%); z-index: 25; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+#layers > * { pointer-events: auto; }
+#layers .lay-full { display: flex; align-items: center; gap: 8px; padding: 5px; background: var(--floating, rgba(20, 28, 35, .97)); border: 1px solid var(--line, #34424d); border-radius: 14px; color: var(--text, #eef4f7); box-shadow: 0 8px 35px #0003; }
+#layers .lay-full[hidden], #layers [hidden] { display: none !important; }
+#layers button { font: inherit; font-size: 13px; padding: 6px 11px; border-radius: 9px; border: 1px solid var(--line, #34424d); background: var(--btn, #22303a); color: inherit; cursor: pointer; white-space: nowrap; }
+#layers button:hover { background: var(--btn-hover, #30424e); border-color: var(--btn-hover-line, #72838f); }
+#layers button:focus-visible { outline: 2px solid var(--focus, #49d4c7); outline-offset: 2px; }
+#layers .lay-presets { display: flex; gap: 3px; padding: 3px; background: var(--well, #0d151c); border-radius: 10px; align-items: center; }
+#layers .lay-presets button { border-color: transparent; background: transparent; color: var(--soft, #acbdc9); }
+#layers .lay-presets button[aria-pressed="true"] { color: var(--pressed-fg, #d1fff9); background: var(--pressed-bg, #25433f); border-color: var(--pressed-line, #437a70); }
+#layers .lay-presets button[aria-pressed="true"]::before { content: "✓ "; }
+#layers .lay-custom { font-size: 12px; color: var(--muted, #a7b5c0); padding: 0 8px; }
+#layers kbd { font: inherit; font-size: 11px; opacity: .7; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+#layers #lay-pop { width: min(560px, calc(100vw - 32px)); max-height: 46vh; overflow: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 6px 18px; padding: 12px 14px; background: var(--floating, rgba(20, 28, 35, .97)); border: 1px solid var(--line, #34424d); border-radius: 14px; color: var(--text, #eef4f7); box-shadow: 0 8px 35px #0004; }
+#layers .lay-group h3 { margin: 0 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #a7b5c0); }
+#layers .lay-group label { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 13px; }
+#layers .lay-group select { margin-left: auto; font: inherit; font-size: 12px; background: var(--field, #1c2932); color: inherit; border: 1px solid var(--line, #34424d); border-radius: 6px; padding: 2px 4px; }
+#layers .lay-chip { opacity: .55; }
+#layers .lay-chip:hover, #layers .lay-chip:focus-visible { opacity: 1; }
+#layers .lay-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Hide UI: only the room (and the dock's own chip) stays. Hazard labels in the scene are part of the room. */
+body.clean #frontend, body.clean #left, body.clean #right, body.clean #hud { display: none !important; }
+
+@media (max-width: 760px) {
+  #layers { left: 50%; bottom: 8px; width: calc(100vw - 16px); }
+  #layers .lay-full { flex-wrap: wrap; justify-content: center; }
+}

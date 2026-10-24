@@ -41,6 +41,8 @@ import { MAX_EXTRA_LIGHTS, type PointLight } from './night.ts';
 import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } from './perf.ts';
 import QRCode from 'qrcode';
 import { mountFrontend, type FrontendAdapter } from './frontend.ts';
+import { mountLayers } from './layers.ts';
+import './layers.css';
 import { headingMismatch, nearestStandable, routeResume } from './navmode.ts';
 import { createFrontendXR } from './frontend-xr.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
@@ -2405,3 +2407,5 @@ if (PARAMS.has('classic')) { for (const [n, p, s] of homes) p.insertBefore(n, s)
 frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
 game.frontend = frontend;
 game.frontendXR = frontendVR;
+// ---------- layers (layers.ts): presets, the all-layers popover and Hide UI (V) over the existing toggles ----------
+game.layers = mountLayers({ busy: () => !!mk || editing || !!grabbing, perf: () => perfOn });

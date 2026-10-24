@@ -14,6 +14,7 @@
     "e2e:frontend": "node e2e/frontend.ts",
     "e2e:frontend:xr": "node e2e/frontend-xr.ts",
     "e2e:renovations": "node e2e/renovations.ts",
+    "e2e:layers": "node e2e/layers.ts",
     "quest:sweep": "node e2e/quest-sweep.ts"
   },
   "dependencies": {
