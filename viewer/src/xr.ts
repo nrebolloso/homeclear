@@ -35,7 +35,11 @@ export interface XrHost {
   startPose(): { x: number; y: number; yaw: number } | null;
   /** performance mode and in-headset labels: on entering and leaving */
   enter(tier: Tier): void; exit(): void;
+  /** big buttons on a card that follows you lazily: pressed like furniture is grabbed (point the wand, pinch) */
+  buttons?: XrButton[];
 }
+export interface XrButton { text(): string[]; press(): unknown; tone?(): 'go' | 'busy' | 'plain' }
+
 
 export async function setupXR(host: XrHost) {
   const { renderer, scene, camera, params, body, items } = host;
@@ -94,18 +98,20 @@ export async function setupXR(host: XrHost) {
     return wandRay.setFromXRController(c.group), wandRay.ray;
   }
   function wandDown(c: Ctl) {
+    if (btnHover >= 0) { btnPressed = btnHover; return; }
     if (hover < 0) { aiming = true; return; }
     const r = aim(c), f = floorHit(r.origin, r.direction), p = host.poses()[hover], at: XY = f ? [f.x, f.y] : [p.x, p.y];
     grab = { k: hover, off: [p.x - at[0], p.y - at[1]], start: at, drag: 0, t0: performance.now(), yaw0: p.yaw, q0: c.group.getWorldQuaternion(new THREE.Quaternion()) };
   }
   function wandUp() {
+    if (btnPressed >= 0) { const i = btnPressed; btnPressed = -1; if (btnHover === i) btns[i].b.press(); return; }
     if (grab) { const { k, valid } = grab; grab = null; if (valid) host.commit(k, valid); return; }
     if (aiming && tpRing.visible) { xrRig.x += tpRing.position.x - head.x; xrRig.y += tpRing.position.y - head.y; placeRig(); }
     aiming = false; tpRing.visible = false;
   }
   function dropWand() {   // wand lost mid-gesture (hand out of view): put a dragged object back where the layout has it
     if (grab) host.resync();
-    grab = null; aiming = false; tpRing.visible = false;
+    btnPressed = -1; grab = null; aiming = false; tpRing.visible = false;
   }
   function wandStep() {
     const c = ctls.find(isWand);
@@ -126,14 +132,16 @@ export async function setupXR(host: XrHost) {
         prog = holdProgress((performance.now() - grab.t0) / 1000, grab.drag);
         if (prog >= 1) { const k = grab.k; grab = null; host.remove(k); prog = -1; }
       } else {
+        const bh = dash.visible ? wandRay.intersectObjects(btns.map(x => x.mesh))[0] : undefined;   // buttons sit in front of the room
+        btnHover = bh ? btns.findIndex(x => x.mesh === bh.object) : -1;
         const poses = host.poses();
-        const hit = wandRay.intersectObjects(items.filter((_, k) => !poses[k].removed).map(i => i.proxy))[0];
+        const hit = bh ? undefined : wandRay.intersectObjects(items.filter((_, k) => !poses[k].removed).map(i => i.proxy))[0];
         hover = hit ? items.findIndex(i => i.proxy === hit.object) : -1;
-        if (hit) len = hit.distance;
-        if (hover < 0 && aiming && f && host.standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
+        if (bh) len = bh.distance; else if (hit) len = hit.distance;
+        if (!bh && hover < 0 && aiming && f && host.standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
       }
       c.ray.scale.z = len;
-    } else hover = -1;
+    } else { hover = -1; btnHover = -1; }
     items.forEach((it, k) => {   // blue = pointed at, yellow = held, turning red = about to be deleted
       const held = grab?.k === k, m = it.outline.material as THREE.LineBasicMaterial;
       it.outline.visible = held || (!grab && k === hover);
@@ -141,6 +149,53 @@ export async function setupXR(host: XrHost) {
       if (held && prog > 0) m.color.lerp(RED3, THREE.MathUtils.clamp((prog * DELETE_HOLD_S - DELETE_SHOW_S) / (DELETE_HOLD_S - DELETE_SHOW_S), 0, 1));
     });
   }
+
+  // ---------- buttons: a card at chest height, ahead and to the left; it stays put while you look around and catches up
+  // when you turn past 40 deg or walk off, so it's always one point-and-pinch away. Canvas text on a plane (a mesh, so the
+  // wand's ray hits it), drawn over the splats like the other overlays.
+  const BW = 0.42, BH = 0.13, GAP = 0.03;
+  const dash = new THREE.Group();
+  dash.visible = false;
+  scene.add(dash);
+  const btns = (host.buttons ?? []).map((b, i) => {
+    const cv = document.createElement('canvas');
+    cv.width = 640; cv.height = 200;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(BW, BH), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
+    mesh.renderOrder = 3;
+    mesh.position.set(0, 0, -i * (BH + GAP));   // stacked downward in the card's frame (z is up)
+    mesh.rotation.x = Math.PI / 2;               // the plane's face toward -y; the card's -y looks at you
+    dash.add(mesh);
+    return { b, mesh, cv, tex, key: '' };
+  });
+  const TONE = { go: '#2fbf71', busy: '#e0a33a', plain: '#7fa7c9' };
+  function drawButtons(hot: number) {
+    btns.forEach((x, i) => {
+      const lines = x.b.text(), tone = x.b.tone?.() ?? 'plain', key = `${lines.join('|')}|${tone}|${hot === i}`;
+      if (key === x.key) return;
+      x.key = key;
+      const c = x.cv.getContext('2d')!, W = x.cv.width, H = x.cv.height;
+      c.clearRect(0, 0, W, H);
+      c.fillStyle = 'rgba(14,20,28,0.88)'; c.strokeStyle = TONE[tone]; c.lineWidth = hot === i ? 14 : 6;
+      c.beginPath(); c.roundRect(8, 8, W - 16, H - 16, 36); c.fill(); c.stroke();
+      c.fillStyle = '#f2f7fb'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.font = `600 ${lines.length > 1 ? 56 : 64}px system-ui, sans-serif`;
+      c.fillText(lines[0], W / 2, lines.length > 1 ? H * 0.38 : H / 2, W - 48);
+      if (lines[1]) { c.font = '400 38px system-ui, sans-serif'; c.fillStyle = '#b9c7d3'; c.fillText(lines[1], W / 2, H * 0.72, W - 48); }
+      x.tex.needsUpdate = true;
+    });
+  }
+  const anchor = { x: 0, y: 0, yaw: 0, set: false };
+  function placeDash(yaw: number) {
+    const turned = Math.abs(Math.atan2(Math.sin(yaw - anchor.yaw), Math.cos(yaw - anchor.yaw))) > 0.7;
+    if (!anchor.set || turned || Math.hypot(head.x - anchor.x, head.y - anchor.y) > 0.6) Object.assign(anchor, { x: head.x, y: head.y, yaw, set: true });
+    const a = anchor.yaw + 0.45, d = 0.55;   // 0.55 m out, about 26 deg to the left of where you faced
+    dash.position.set(anchor.x + Math.cos(a) * d, anchor.y + Math.sin(a) * d, Math.max(0.6, head.z - 0.45));
+    dash.lookAt(head.x, head.y, dash.position.z);   // three's lookAt points +z; the card turns so its -y faces you
+    dash.rotateX(-Math.PI / 2);
+  }
+  let btnHover = -1, btnPressed = -1;
 
   // ---------- per frame ----------
   function step(dt: number) {
@@ -155,6 +210,7 @@ export async function setupXR(host: XrHost) {
     body.x = head.x; body.y = head.y;
     body.yaw += Math.atan2(Math.sin(yaw - body.yaw), Math.cos(yaw - body.yaw)) * Math.min(1, dt * 4);
     wandStep();
+    if (btns.length) { placeDash(yaw); drawButtons(btnHover); }
   }
   /** Put the head at floor-frame (x, y) looking along yaw by moving the rig: scripted viewpoints on a headset nobody wears. */
   function place(x: number, y: number, yaw: number) {
@@ -169,12 +225,13 @@ export async function setupXR(host: XrHost) {
     onEnterXr: () => {
       if (!host.standable(body.x, body.y)) { const p = host.startPose(); if (p) Object.assign(body, p); }
       Object.assign(xrRig, { x: body.x, y: body.y, yaw: body.yaw }); placeRig(); rig.add(camera);
+      anchor.set = false; dash.visible = btns.length > 0;
       host.enter(tier);
       // a lower refresh gives each frame more time (90 Hz = 11.1 ms, 72 Hz = 13.9 ms); the Quest 2 offers 60-120
       if (cfg.hz) renderer.xr.getSession()?.updateTargetFrameRate?.(cfg.hz).catch(() => {});
     },
     onExitXr: () => {
-      camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1;
+      camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1; btnHover = -1; dash.visible = false;
       for (const it of items) { it.outline.visible = false; (it.outline.material as THREE.LineBasicMaterial).color.setHex(0x66ccff); }
       host.exit();
     },
@@ -187,7 +244,9 @@ export async function setupXR(host: XrHost) {
     /** where the XR camera and the user camera in its rig are (floor frame), and what is tracked */
     pose: () => ({ xr: renderer.xr.isPresenting, head: w(renderer.xr.getCamera()), userCam: w(camera), rig: { ...xrRig },
       inputs: [...renderer.xr.getSession()?.inputSources ?? []].map(s => `${s.handedness}:${s.hand ? 'hand' : 'controller'}`), pinching: pinching.size }),
-    wand: () => ({ hover: hover >= 0 ? host.names[hover] : null, grab: grab ? host.names[grab.k] : null, aiming, teleport: tpRing.visible,
+    /** the button card: each button's text and where its centre is (floor frame), for scripted presses */
+    buttons: () => btns.map(x => ({ text: x.b.text(), at: dash.visible ? w(x.mesh) : null })),
+    wand: () => ({ hover: hover >= 0 ? host.names[hover] : null, button: btnHover, grab: grab ? host.names[grab.k] : null, aiming, teleport: tpRing.visible,
       drag: grab?.drag, valid: grab?.valid ?? null }),
   };
 }

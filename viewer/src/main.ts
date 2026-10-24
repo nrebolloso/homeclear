@@ -1428,6 +1428,31 @@ function step(dt: number, t: number) {
 const inGridXY = (x: number, y: number) => x >= g.origin_xy[0] && y >= g.origin_xy[1] && x < g.origin_xy[0] + nx * g.cell_m && y < g.origin_xy[1] + ny * g.cell_m;
 const standable = (x: number, y: number) => { const c = cellAt(x, y); return inGridXY(x, y) && !!L.floor[c] && !L.obst[c] && coverage[c] > 0; };
 let perfBeforeXR = perfOn;
+// "See a safer room": the reimagined room around you (game.reimagine, AGENTS.md). The first press searches for the
+// layout (10-30 s), then the room morphs into it; after that the button morphs between your room and the safer one.
+// Words for the patient and family, not the OT: no toe-contact numbers, just what changes.
+const reimVR = { goal: null as number | null, busy: false, ran: false, none: false };
+const reimButton = {
+  text() {
+    const n = game.reimagine.changes().length, sub = `${n} change${n === 1 ? '' : 's'}`;
+    if (reimVR.busy) return ['Finding a safer layout…', 'about half a minute'];
+    if (reimVR.none) return ['Your room is already safe', 'nothing to change'];
+    if (!reimVR.ran) return ['See a safer room'];
+    return game.reimagine.t() > 0.5 ? ['Back to my room', sub] : ['See the safer room', sub];
+  },
+  tone: () => (reimVR.busy ? 'busy' as const : reimVR.ran && game.reimagine.t() > 0.5 ? 'plain' as const : 'go' as const),
+  async press() {
+    if (reimVR.busy) return;
+    if (!reimVR.ran) {
+      reimVR.busy = true;
+      try { await game.reimagine.run(); } finally { reimVR.busy = false; }
+      reimVR.ran = true; reimVR.none = !game.reimagine.changes().length;
+      if (reimVR.none) return;
+      game.reimagine.setT(0);   // run() leaves the new layout in place: start the morph from your room
+    }
+    reimVR.goal = game.reimagine.t() > 0.5 ? 0 : 1;
+  },
+};
 const xr = await setupXR({
   renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses,
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
@@ -1443,6 +1468,7 @@ const xr = await setupXR({
     if (current) drawPlan(current);
   },
   exit() { inXR = false; game.xr = false; applyPerf(perfBeforeXR, false); if (current) drawPlan(current); },
+  buttons: [reimButton],
 });
 /** One headset frame: the monitor's world updates (walker, glow, the reimagined room, stairs, live checks), but no camera
  *  placement (the headset is the camera), no DOM labels and no post pass (it can't run per eye). Live physics follows
@@ -1453,6 +1479,11 @@ function xrFrame(dt: number, t: number) {
   walker.group.rotation.z = body.yaw;
   live?.frame(dt, body, false, walker.group);
   pulseSpots(t);
+  if (reimVR.goal !== null) {   // the morph both ways (play() only runs forward), 2.5 s end to end
+    const t0 = game.reimagine.t(), d = reimVR.goal - t0, stepT = dt / 2.5;
+    game.reimagine.setT(Math.abs(d) <= stepT ? reimVR.goal : t0 + Math.sign(d) * stepT);
+    if (Math.abs(d) <= stepT) reimVR.goal = null;
+  }
   reim.update(dt);
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
   liveChecks(t);
@@ -1481,7 +1512,7 @@ Object.assign(game, {
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
   debug: { renderer, scene, spark: sparkR, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup],
-    rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrTier: xr.tier },
+    rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrTier: xr.tier, xrButtons: xr.buttons },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); Object.assign(body, { x, y, yaw }); },

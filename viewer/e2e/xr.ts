@@ -156,6 +156,31 @@ try {
   check('hand pinch teleports like the trigger', inputs.includes('right:hand') && Math.hypot(t2[0] - tp2[0], t2[1] - tp2[1]) < 0.15,
     `inputs ${inputs.join(' ')}; landed ${f2(t2)} for target ${f2(tp2)}`);
 
+  // 8b. "See a safer room": the card floats ahead of you; point and pinch; the layout search runs, then the room morphs
+  // (through in-between steps, not a jump) and the button offers the way back; pressing again morphs back
+  const card0 = await G(p, 'const b = game.debug.xrButtons()[0], h = game.xrPose().head; return { ...b, d: b.at ? Math.hypot(b.at[0] - h[0], b.at[1] - h[1]) : null }');
+  const press = async (hand: string) => {
+    await G(p, `const b = game.debug.xrButtons()[0]; __xr.aim(__xr.hand('${hand}'), b.at)`);
+    await wait();
+    const hov = await G(p, 'return game.debug.wand().button');
+    await G(p, `__xr.hand('${hand}').updatePinchValue(1)`); await wait(150);
+    await G(p, `__xr.hand('${hand}').updatePinchValue(0)`);
+    return hov;
+  };
+  await G(p, 'window.__ts = []; window.__ti = setInterval(() => __ts.push(game.reimagine.t()), 100)');
+  const hov1 = await press('right');
+  await p.waitForFunction(() => { const g = (window as any).game, b = g.debug.xrButtons()[0]; return (b.text[0] === 'Back to my room' && g.reimagine.t() === 1) || b.text[0].startsWith('Your room'); }, null, { timeout: 120000 }).catch(() => {});
+  const r1 = await G(p, "return { text: game.debug.xrButtons()[0].text, t: game.reimagine.t(), n: game.reimagine.changes().length, mid: __ts.filter(v => v > 0.05 && v < 0.95).length }");
+  check('"See a safer room" finds a layout and morphs the room around you', card0.text[0] === 'See a safer room' && card0.d > 0.35 && card0.d < 0.8 && hov1 === 0 &&
+    r1.text[0] === 'Back to my room' && r1.t === 1 && r1.n > 0 && r1.mid >= 3,
+    `card "${card0.text[0]}" ${card0.d?.toFixed(2)} m away, pointed at=${hov1 === 0}; then "${r1.text.join(' / ')}", t=${r1.t}, ${r1.n} changes, ${r1.mid} in-between frames`);
+  await G(p, 'window.__ts = []');
+  await press('right');
+  await p.waitForFunction(() => (window as any).game.reimagine.t() === 0, null, { timeout: 10000 }).catch(() => {});
+  const r2 = await G(p, "clearInterval(__ti); return { text: game.debug.xrButtons()[0].text, t: game.reimagine.t(), mid: __ts.filter(v => v > 0.05 && v < 0.95).length }");
+  check('pressing again morphs back to your room', r2.t === 0 && r2.text[0] === 'See the safer room' && r2.mid >= 3,
+    `"${r2.text.join(' / ')}", t=${r2.t}, ${r2.mid} in-between frames`);
+
   // 9. leaving VR puts the monitor back: DOM labels, performance mode as it was before entering
   await G(p, 'await game.debug.renderer.xr.getSession().end()');
   await p.waitForFunction(() => !(window as any).game.xr, null, { timeout: 5000 }).catch(() => {});
