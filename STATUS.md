@@ -1,9 +1,9 @@
 # Status
 
 ## Demo push (2026-10-24)
-- **Done:** steps 1-4. Merged (not pushed); kitchen4_lighter default, route fridge -> entrance. Step 4: `tools/stage_demo_hazards.py` stages a 1.5 cm mat, a 5 mm cord (estimated) and chair8 pulled into the trash-can gap (1 cm/side) + hazards.json; contacts/month 1.21 as-is, 0.07 mat removed, 1.13 cord taped, 0 both; pushing the chair in gives 6.6 cm/side. 60 fps headless. Tag `demo-safe` + `proof/demo/backup_v2.mp4`; export copied to `../Homeclear-demo-safe/kitchen4_lighter_v2`.
-- **Next:** step 5, 200 ghost trips (baseline vs learned) + heatmap on the demo route.
-- **Risks:** rerun the staging tool after any stage 12 / lighter_clean re-export (it rebuilds from `*_scan` copies); the chair's scanned spot shows the pink "imagined" fill on the route (honest, may want it off in demo mode); autoplay fridge turn still happens before the first frame (step 7); e2e suite not rerun.
+- **Done:** steps 1-5. Step 4: `tools/stage_demo_hazards.py` stages a 1.5 cm mat, a 5 mm cord (estimated) and chair8 pulled into the trash-can gap (1 cm/side) + hazards.json. Step 5: 200 trips on the world model (patient), hand rule alongside as amber "Hand-rule footsteps" ghosts + a baseline line in the risk panel. Contacts/month world/hand: as-is 1.12/1.22, mat removed 0.065/0.066, cord taped 1.06/1.14, chair pushed in 1.10/1.20 (6.6 cm/side), mat+cord 0/0; replans ~0.6 s. Tag `demo-safe` @ 3560912; export copied to `../Homeclear-demo-safe/kitchen4_lighter_v3`.
+- **Next:** step 9 Cosmos job on hpg-b200 (worst-case night trip), then step 6 mannequin hero shot while it runs.
+- **Risks:** another session's ffmpeg holds load ~15: fps measured 2-6 headless (60 unloaded before), `proof/demo/backup_v3.mp4` choppy (re-record when load drops; v2 is the clean backup), optimize timing test 21.7 s vs 20 s limit; rerun the staging tool after any re-export; chair's scanned spot shows the pink "imagined" fill; e2e not rerun.
 
 Each result counts once it is reproduced here, with proof in `proof/`.
 
