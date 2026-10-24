@@ -85,8 +85,9 @@ try {
   await wait(500);
   const stick1 = await G(p, 'return game.xrPose()');
   await G(p, "__xr.ctl('left').updateAxes('thumbstick', 0, 0); __xr.ctl('right').updateAxes('thumbstick', 0, 0)");
-  check('thumbsticks neither walk nor snap-turn', Math.hypot(stick1.head[0] - stick0.head[0], stick1.head[1] - stick0.head[1]) < 0.01 && Math.abs(stick1.rig.yaw - stick0.rig.yaw) < 0.01,
-    `rig yaw ${stick0.rig.yaw.toFixed(2)} -> ${stick1.rig.yaw.toFixed(2)}`);
+  const sMoved = Math.hypot(stick1.head[0] - stick0.head[0], stick1.head[1] - stick0.head[1]), sTurn = stick1.rig.yaw - stick0.rig.yaw;
+  check('left stick walks, right stick snap-turns 30 deg once per flick', sMoved > 0.1 && Math.abs(sTurn + Math.PI / 6) < 0.01,
+    `walked ${sMoved.toFixed(2)} m, rig yaw ${stick0.rig.yaw.toFixed(2)} -> ${stick1.rig.yaw.toFixed(2)} (${(sTurn * 180 / Math.PI).toFixed(0)} deg)`);
   const w0 = await G(p, 'return game.xrPose().head');
   await G(p, "__xr.ctl('left').updateButtonValue('trigger', 1)");
   await wait(1000);

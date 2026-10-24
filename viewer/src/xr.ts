@@ -5,7 +5,8 @@
 // camera rides in a rig: +90 deg about x maps XR up (+y) to +z, then a turn about z by yaw - 90 deg points XR forward
 // (-z) along yaw.
 // Moving: walk for real (1:1). Holding a pinch or trigger on the non-wand hand glides forward where you look, only where
-// free walk could stand (walls, furniture and unfilmed floor stop it). Thumbstick movement and snap-turning are disabled.
+// free walk could stand (walls, furniture and unfilmed floor stop it). Left stick walks (same checks), right stick snap-turns
+// 30 deg about the head; a left-stick click is the planning shell's menu (frontend-xr.ts), not movement.
 // Wand (right hand or controller; ?wand=left): point at furniture and hold to drag it (twist the wrist to turn it), hold
 // still to delete it; point at filmed floor and release to teleport. A pinch and a trigger are the same WebXR "select".
 // Moves go through the host's placement check and re-plan, like a desktop drag.
@@ -99,6 +100,7 @@ export async function setupXR(host: XrHost) {
   scene.add(tpRing);
   let grab: { k: number; off: XY; start: XY; drag: number; t0: number; yaw0: number; q0: THREE.Quaternion; valid?: Pose } | null = null;
   let aiming = false, hover = -1;
+  let snapReady = true;   // one 30 deg turn per flick of the right stick
   const pinching = new Set<object>();   // non-wand hands/controllers holding select: glide
   const isWand = (c: Ctl) => c.source?.handedness === WAND;
   const ctls: Ctl[] = [0, 1].map(i => {
@@ -284,6 +286,22 @@ export async function setupXR(host: XrHost) {
       for (let i = 0; i < n && host.standable(head.x + dx / n, head.y + dy / n); i++) {
         xrRig.x += dx / n; xrRig.y += dy / n; head.x += dx / n; head.y += dy / n;
       }
+    }
+    if (!host.readOnly?.()) {   // thumbsticks: left walks (forward/back, sideways, relative to where you look), right snap-turns
+      const stick = (g?: Gamepad) => (g ? [g.axes[2] ?? 0, g.axes[3] ?? 0].map(a => (Math.abs(a) < 0.2 ? 0 : a)) : [0, 0]);
+      const [sx, sy] = stick(pads.left), [tx] = stick(pads.right);
+      if (sx || sy) {   // sub-steps of at most half a cell, as in free walk
+        const v = 0.6 * dt, dx = (-sy * Math.cos(yaw) + sx * Math.sin(yaw)) * v, dy = (-sy * Math.sin(yaw) - sx * Math.cos(yaw)) * v;
+        const n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / (host.cellM / 2)));
+        for (let i = 0; i < n && host.standable(head.x + dx / n, head.y + dy / n); i++) {
+          xrRig.x += dx / n; xrRig.y += dy / n; head.x += dx / n; head.y += dy / n;
+        }
+      }
+      if (Math.abs(tx) > 0.7 && snapReady) {   // turn the rig about the head, so turning doesn't also slide you sideways
+        const a = -Math.sign(tx) * Math.PI / 6, c = Math.cos(a), sn = Math.sin(a), rx = xrRig.x - head.x, ry = xrRig.y - head.y;
+        Object.assign(xrRig, { x: head.x + c * rx - sn * ry, y: head.y + sn * rx + c * ry, yaw: xrRig.yaw + a });
+        snapReady = false;
+      } else if (Math.abs(tx) < 0.3) snapReady = true;
     }
     placeRig();
     body.x = head.x; body.y = head.y;
