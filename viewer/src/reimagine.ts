@@ -83,6 +83,8 @@ export function undoChange(lay: Layout, original: Pose[], c: Change, interventio
   return { ...lay, poses, flattened, raised, added, ...(carved ? { carved } : {}), ...(placed ? { placed } : {}) };
 }
 
+/** how high a moved object is lifted at the middle of its glide: a chair is picked up and set down, not dragged */
+const CARRY_M = 0.06;
 const smooth = (t: number) => { const x = Math.min(1, Math.max(0, t)); return x * x * (3 - 2 * x); };
 /** Eased pose between two poses; yaw turns the short way. */
 export function poseAt(a: Pose, b: Pose, t: number): Pose {
@@ -261,7 +263,7 @@ export function createReimagine(D: ReimagineDeps) {
       const it = D.items[c.k], u = stagger(t, i, moving.length);
       if (c.kind === 'move') {
         const p = poseAt(c.from!, c.to!, u);
-        it.group.position.set(p.x, p.y, 0); it.group.rotation.z = p.yaw;
+        it.group.position.set(p.x, p.y, Math.sin(Math.PI * Math.min(1, Math.max(0, u))) * CARRY_M); it.group.rotation.z = p.yaw;   // carried, not slid: lifted a little mid-way
         it.group.visible = true; it.mesh.opacity = 1;
       } else {   // carried out: fades away
         it.group.position.set(c.from!.x, c.from!.y, 0); it.group.rotation.z = c.from!.yaw;

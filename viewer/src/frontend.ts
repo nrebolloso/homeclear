@@ -22,6 +22,8 @@ export interface FrontendAdapter {
   pause(): void; restart(): void; speed(value: number): void;
   compare(t: number): void; animate(): void; suggest(): Promise<OptionOut[]>; apply(index: number): Promise<unknown>;
   undo(change: Change): Promise<unknown>; select(k: number): void;
+  /** the previewed proposal is accepted ("Use this layout"): its additions stop being an x-ray and become part of the scan */
+  commit?(): void;
   path(on: boolean): void; highlights(on: boolean): void; improvements(on: boolean): void;
   /** "Light the path": nightlights where the route is dark (lights.ts); resolves to how many were added and the note to show */
   lightPath?(): Promise<{ added: number; note: string }>;
@@ -257,7 +259,7 @@ export function mountFrontend(api: FrontendAdapter) {
     const card = ({ option: o, index }: typeof options[number], recommended: boolean) => `<article class="proposal-card ${recommended ? 'recommended' : ''}"><span class="badge">${recommended ? 'Recommended by model' : 'Alternative'}</span><h2>${h(o.name)}</h2><p>${o.actions.length} change${o.actions.length === 1 ? '' : 's'} · ${o.checks_failed} checks flagged</p><ol>${o.actions.map(a => `<li>${h(a.label)}</li>`).join('')}</ol><div class="proposal-metrics"><span>${number(o.per_month)}/month<small>Simulated contacts · all routes</small></span><span>${number(o.per_month_lo)}–${number(o.per_month_hi)}<small>Likely range</small></span></div><p class="muted">Cost & installation estimates are reviewed in Changes after applying.</p><button class="${recommended ? 'primary' : ''} full" data-preview="${index}">Preview proposal</button><button class="full" data-use="${index}" ${chosenOption === index ? '' : 'disabled'}>Use this layout</button></article>`;
     $('proposal-cards').innerHTML = options.length ? card(options[0], true) + (options.length > 1 ? `<details><summary>Other options · ${options.length - 1}</summary>${options.slice(1).map(o => card(o, false)).join('')}</details>` : '<p class="muted">One distinct outcome found.</p>') : '<div class="empty-state"><span aria-hidden="true">✧</span><h3>Make room for a better route</h3><p>Explore rearrangements and configured fixes. Each proposal is evaluated by the existing model.</p></div>';
     $('proposal-cards').querySelectorAll<HTMLButtonElement>('[data-preview]').forEach(b => b.onclick = async () => { if (busy) return; busy = true; b.disabled = true; try { await api.apply(Number(b.dataset.preview)); chosenOption = Number(b.dataset.preview); previewedPlan = api.snapshot().planKey; api.navigate('explore'); nav = 'explore'; notify('Proposal loaded in the viewer. This is a simulation; the room has not physically changed.'); refresh(); } catch { notify('Proposal could not be loaded. Try generating again.'); } finally { busy = false; b.disabled = false; } });
-    $('proposal-cards').querySelectorAll<HTMLButtonElement>('[data-use]').forEach(b => b.onclick = () => { setTab('changes'); notify('This proposal is your current working plan. Review individual changes and estimates here.'); });
+    $('proposal-cards').querySelectorAll<HTMLButtonElement>('[data-use]').forEach(b => b.onclick = () => { api.commit?.(); setTab('changes'); notify('This proposal is your current working plan. Review individual changes and estimates here.'); });
   }
   $('light-path').hidden = !api.lightPath;
   $('light-path').onclick = async () => {

@@ -31,7 +31,8 @@ import { isMoved, movedText, resetPose } from './resets.ts';
 import { twistAngle, snapQuarter } from './wand.ts';
 import { createObjLabel } from './objlabel.ts';
 import { measureStair, stairFixes, stairFrame, stairYaml, mirrorRail, inRailBand, stepLights, withRails, pitchAt, parkedPose, walkerPlacement, SPLAT_STRIDE, type Stair, type Side } from './stairs.ts';
-import { createStairs3d } from './stairs3d.ts';
+import { createStairs3d, type Phase } from './stairs3d.ts';
+import { reducedMotion } from './designed.ts';
 import { doorFixes, doorYaml, needWidth, hingeSide, growOf, type Door } from './doors.ts';
 import { createDoors3d } from './doors3d.ts';
 import { startMarking, place, undo as undoMark, isComplete, prompt as markPrompt, placeError, preview, buildLevels, snapZ, checkAll,
@@ -645,6 +646,7 @@ $('planfixes').onclick = async () => {
   game.fixes = fixes;
 };
 function applyFix(id: string) {
+  commitProposal(false);   // a fix applied by hand is not a proposal: solid from the start
   layout = applyIntervention(objs, layout, interventions.find(i => i.id === id)!);
   applied.push(id);
   syncObjects();
@@ -778,9 +780,10 @@ function applyOption(n: number) {
 $('suggest').onclick = () => suggest();
 
 // ---------- reimagined room (reimagine.ts): the room morphing into the layout on screen, with what each change takes ----------
+let stairsSetT: ((t: number) => void) | null = null;   // stairs3d.ts, made below: its additions build up with the morph
 const reim = createReimagine({ scene, items, objs, original, interventions, sync: syncObjects,
   centre: [g.origin_xy[0] + (nx * g.cell_m) / 2, g.origin_xy[1] + (ny * g.cell_m) / 2],
-  camera, fillsOn: () => $<HTMLInputElement>('imagfill').checked, onT: t => { $<HTMLInputElement>('reimt').value = String(Math.round(t * 100)); } });
+  camera, fillsOn: () => $<HTMLInputElement>('imagfill').checked, onT: t => { $<HTMLInputElement>('reimt').value = String(Math.round(t * 100)); stairsSetT?.(t); } });
 let baseEvals: (Eval | undefined)[] = [];   // the room as filmed, per route: what the reimagined one is compared with
 /** after every re-plan: changes since the room as filmed, overlays, receipt */
 function refreshReimagine() {
@@ -806,6 +809,7 @@ function refreshReimagine() {
   drawStairs();   // added rails / lights / walker follow the layout
 }
 function undoReimagined(c: Change) {
+  commitProposal(false);
   layout = undoChange(layout, original, c, interventions);
   applied = applied.filter(id => id !== c.iv && !(id.startsWith('move:') && id.split(':')[1] === c.name));
   syncObjects();
@@ -869,8 +873,31 @@ function scanRail(st: Stair, side: Side): SplatMesh | null {
   railCopies.set(key, mesh);
   return mesh;
 }
+// committed fixtures (rail, brackets, grab bar, edge strips) baked into the scan (bake.ts): one splat mesh per distinct set, cached
+const bakeCache = new Map<string, SplatMesh>();
+function bakeFixtures(key: string, data: Float32Array): SplatMesh | null {
+  const hit = bakeCache.get(key);
+  if (hit) return hit;
+  if (!data.length) return null;
+  const c = new THREE.Vector3(), sc3 = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color();
+  const mesh = new SplatMesh({ worldModifier: night.modifier, constructSplats: ps => {
+    for (let i = 0; i < data.length; i += SPLAT_STRIDE)
+      ps.pushSplat(c.set(data[i], data[i + 1], data[i + 2]), sc3.set(data[i + 3], data[i + 4], data[i + 5]), q.set(data[i + 6], data[i + 7], data[i + 8], data[i + 9]), data[i + 10], col.setRGB(data[i + 11], data[i + 12], data[i + 13]));
+  } });
+  splats.push(mesh); bakeCache.set(key, mesh);
+  for (const [k, old] of bakeCache) {   // the newest few stay: a layout flipped back and forth re-bakes nothing
+    if (bakeCache.size <= 6) break;
+    bakeCache.delete(k); old.removeFromParent(); splats.splice(splats.indexOf(old), 1); old.dispose();
+  }
+  return mesh;
+}
 const parkedWalkerCfg = { ...personas.patient.walker, device: 'walker' as const };
-const stairs3d = createStairs3d(scene, () => buildDevice(parkedWalkerCfg).group, scanRail, () => buildDevice(WHEELCHAIR).group);
+const stairs3d = createStairs3d(scene, () => buildDevice(parkedWalkerCfg).group, scanRail, () => buildDevice(WHEELCHAIR).group, bakeFixtures);
+stairsSetT = stairs3d.setT;
+// A previewed proposal shows its additions as a see-through hologram; accepting it (Use this layout), inspecting it, or any
+// further change solidifies them into the scan (stairs3d.ts). Nothing else in the room waits on this: it is only how they look.
+let stairPhase: Phase = 'committed';
+function commitProposal(redraw = true) { if (stairPhase === 'proposed') { stairPhase = 'committed'; if (redraw) drawStairs(); } }
 const lights3d = createLights3d(scene), bath3d = createBathroom3d(scene);
 let pathLightKey = '';
 const doors3d = createDoors3d(scene, mainSplat);
@@ -933,7 +960,7 @@ function setupStairs() {
   markRefresh();
 }
 function drawStairs(lay = layout) {
-  stairs3d.build(stairs, lay.added ?? [], lay.placed ?? {});
+  stairs3d.build(stairs, lay.added ?? [], lay.placed ?? {}, stairPhase);
   const verdict = (d: Door) => current?.checks.find(c => c.id === `door:${d.name}`)?.verdict === 'ok';
   const change = (d: Door) => { const c = lay.carved?.find(x => x.target === d.name); return c ? { gain: c.by_m, grow: growOf(d, c.id.split(':')[0].slice('door_'.length)) } : { gain: 0, grow: 'both' as const }; };
   doors3d.build(doors, Object.fromEntries(doors.map(d => [d.name, change(d)])), Object.fromEntries(doors.map(d => [d.name, verdict(d)])));
@@ -1271,6 +1298,8 @@ function markStep() {
   lastAim = aim;
   markRay.setFromCamera(mouseAt, camera);
   if (parkDrag) return moveParked(markRay.ray);
+  const under = editing && !mk && !handleDrag ? markRay.intersectObjects(mk3d.pickables(), false)[0]?.object.userData.handle : null;
+  mk3d.setHover(under ? `${under.owner}:${under.key}` : null);   // the handle under the mouse brightens and says what dragging it does
   const h = markHit(markRay.ray, !shiftHeld);
   if (h) markHover = h; else if (!handleDrag) markHover = null;
   if (handleDrag && h) handleDrag.at = h.p;
@@ -2148,6 +2177,8 @@ function step(dt: number, t: number) {
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
   if (mode !== 'fly') live?.frame(dt, wb, mode === 'free' && !explore.on, walker.group);
   labelStep(); movementVisuals();
+  camTweenStep(dt);
+  mk3d.update(camera, t);
   if (mode === 'fly') {
     const c = Math.cos(body.pitch);
     camera.position.set(fly.x, fly.y, fly.z);
@@ -2357,6 +2388,22 @@ Object.assign(game, {
   exportForCosmos: (opts?: ExportOpts) => exportForCosmos(ctx, opts), layoutKey: () => layoutKey(objs, layout),
 });
 
+// Inspect glides to each change instead of jumping (under reduced motion it still jumps). Runs in step() while flying.
+type CamPose = { x: number; y: number; z: number; yaw: number; pitch: number };
+let camTween: { from: CamPose; to: CamPose; k: number; dur: number } | null = null;
+function tweenFly(to: CamPose) {
+  const from = { x: fly.x, y: fly.y, z: fly.z, yaw: body.yaw, pitch: body.pitch };
+  if (reducedMotion() || Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z) < 0.05) { camTween = null; Object.assign(fly, { x: to.x, y: to.y, z: to.z }); body.yaw = to.yaw; body.pitch = to.pitch; return; }
+  camTween = { from, to, k: 0, dur: 0.8 + Math.min(0.7, Math.hypot(to.x - from.x, to.y - from.y) * 0.12) };
+}
+function camTweenStep(dt: number) {
+  if (!camTween || mode !== 'fly') { camTween = null; return; }
+  camTween.k = Math.min(1, camTween.k + dt / camTween.dur);
+  const { from, to } = camTween, s = camTween.k * camTween.k * (3 - 2 * camTween.k), L = (a: number, b: number) => a + (b - a) * s;
+  fly.x = L(from.x, to.x); fly.y = L(from.y, to.y); fly.z = L(from.z, to.z); body.pitch = L(from.pitch, to.pitch);
+  body.yaw = from.yaw + Math.atan2(Math.sin(to.yaw - from.yaw), Math.cos(to.yaw - from.yaw)) * s;   // the short way round
+  if (camTween.k >= 1) camTween = null;
+}
 // ---------- frontend shell: existing data/actions, independent of backend and optimizer ownership ----------
 let inspectReturn: { body: typeof body; fly: typeof fly; mode: 'auto' | 'free' | 'fly'; rig: ReturnType<typeof xr.rigState> } | null = null;
 /** What the viewer is doing, for hints.ts: the desktop strip and pills, and the VR strip card. */
@@ -2373,7 +2420,7 @@ const frontendAdapter: FrontendAdapter = {
     changes: reim.changes(), spots: spotList, options: suggestions, selected, selectedName: objs[selected]?.name, mode, explore: explore.on, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
   navigate(m) {
     endTour(); select(-1);
-    if (m === 'inspect') { inspectReturn ??= { body: { ...body }, fly: { ...fly }, mode, rig: xr.rigState() }; setWalk(renderer.xr.isPresenting ? 'free' : 'fly'); }
+    if (m === 'inspect') { commitProposal(); inspectReturn ??= { body: { ...body }, fly: { ...fly }, mode, rig: xr.rigState() }; setWalk(renderer.xr.isPresenting ? 'free' : 'fly'); }   // inspecting a proposal shows it solid
     else if (m === 'route') { xrFollowRoute = renderer.xr.isPresenting; const at = mode === 'free' && !explore.on ? resumeS() : 0; if (mode !== 'auto') { setWalk('auto'); autoS = at; } routePaused = false; }
     else if (m === 'walk' || (m === 'fly' && renderer.xr.isPresenting)) { xrFollowRoute = false; goWalk(); routePaused = false; }
     else if (m === 'fly') { xrFollowRoute = false; setWalk('fly'); routePaused = false; }
@@ -2382,13 +2429,14 @@ const frontendAdapter: FrontendAdapter = {
   focus(item) {
     const p = vantage(item.at, current?.xy ?? [item.at], 1.2, 1.1);
     if (renderer.xr.isPresenting) { if (standable(p.x, p.y)) frontendVR?.transition(() => xr.moveHead(p.x, p.y)); }
-    else { setWalk('fly'); Object.assign(fly, p); body.yaw = p.yaw; body.pitch = p.pitch; }
+    else { setWalk('fly'); tweenFly(p); }
     reim.selectChange(item.object, item.change?.iv);
   },
   leaveInspect() { if (inspectReturn) { const back = inspectReturn; Object.assign(body, back.body); Object.assign(fly, back.fly); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.restoreRig(back.rig)); setWalk(back.mode); inspectReturn = null; } },
   pause() { routePaused = !routePaused; }, restart() { autoS = 0; autoPause = 0; routePaused = false; }, speed(v) { routeSpeed = v; },
   compare(t) { reim.setT(t); }, animate() { reim.play(); },
-  suggest, async apply(index) { await applyOption(index); setWalk('free'); reim.setT(1); },
+  suggest, async apply(index) { stairPhase = 'proposed'; await applyOption(index); setWalk('free'); reim.setT(1); },   // a previewed proposal: x-ray until accepted or inspected
+  commit() { commitProposal(); },
   undo: undoReimagined, select,
   path(on) { routeLine.visible = on; },
   async lightPath() { const r = await lightPath(); game.setNight(true); return r; },
