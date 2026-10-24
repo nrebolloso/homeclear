@@ -272,6 +272,44 @@ try {
   check('doorway: undo closes it and removes the edits', !!d2.err && d2.edits === 0, JSON.stringify(d2));
   check('doorway: no page errors', dn.errors.length === 0, dn.errors.join(' | ') || 'none');
   await dn.p.close();
+  // 12. reset: Z puts the picked object back, a blocked original refuses, Shift+Z / Reset all restore objects, removals and fixes
+  {
+  const rs = await open('game_synth');
+  const RS = (f: string) => G(rs.p, f);
+  await rs.p.waitForTimeout(1500);
+  const r0 = await RS("return { poses: game.layout().poses.map(q => ({ ...q })), pm: game.current().per_month }");
+  const bed = r0.poses[await RS("return game.items.indexOf('bed')")];
+  await RS("await game.moveObject('bed', 2.0, 1.0, 90); game.select('bed')");
+  await rs.p.waitForTimeout(300);
+  const lab = await RS("return { lines: game.label(), btn: !document.getElementById('resetobj').disabled }");
+  check('selecting a moved object names it and says how far it moved', lab.lines[0] === 'Bed' && /moved .* m/.test(lab.lines[1] ?? '') && lab.btn, JSON.stringify(lab));
+  await rs.p.keyboard.press('KeyZ');
+  await rs.p.waitForTimeout(500);
+  const z = await RS("const k = game.items.indexOf('bed'), q = game.layout().poses[k]; return { x: q.x, y: q.y, yaw: q.yaw, label: game.label() }");
+  check('Z puts the selected object back where it started', Math.hypot(z.x - bed.x, z.y - bed.y) < 0.01 && Math.abs(z.yaw - bed.yaw) < 0.01 && z.label.length === 1,
+    `bed at (${z.x.toFixed(2)}, ${z.y.toFixed(2)}) vs original (${bed.x.toFixed(2)}, ${bed.y.toFixed(2)}); label ${JSON.stringify(z.label)}`);
+  const bedAway = await RS("return (await game.moveObject('bed', 2.0, 1.0, 90)).ok");
+  const taken = await RS(`return (await game.moveObject('nightstand', ${bed.x}, ${bed.y}, 0)).ok`);
+  await RS("game.resetObject('bed')");
+  await rs.p.waitForTimeout(300);
+  const blocked = await RS("const q = game.layout().poses[game.items.indexOf('bed')]; return { x: q.x, y: q.y }");
+  check('reset refuses when something else has taken the original spot', bedAway === true && taken === true && Math.abs(blocked.x - 2.0) < 0.01 && Math.abs(blocked.y - 1.0) < 0.01,
+    `bed moved away=${bedAway}, nightstand moved onto its old spot=${taken}; bed stays at (${blocked.x.toFixed(2)}, ${blocked.y.toFixed(2)})`);
+  await RS("await game.resetAll()");
+  await RS("await game.moveObject('bed', 2.0, 1.0, 90); game.removeObject('rug')");
+  await rs.p.click('#planfixes');
+  const rf = await rs.p.waitForFunction(() => (window as any).game.fixes, null, { timeout: 20000 }).then(h => h.jsonValue());
+  await RS(`await game.applyFix('${rf[0].id}')`);
+  await rs.p.waitForTimeout(300);
+  await rs.p.keyboard.press('Shift+KeyZ');
+  await rs.p.waitForTimeout(800);
+  const all = await RS("const l = game.layout(); return { poses: l.poses, flat: l.flattened.length, gone: game.inventory(), reimt: game.reimagine.t(), changes: game.reimagine.changes().length, pm: game.current().per_month }");
+  const same = all.poses.every((q: any, n: number) => !q.removed && Math.hypot(q.x - r0.poses[n].x, q.y - r0.poses[n].y) < 0.01 && Math.abs(q.yaw - r0.poses[n].yaw) < 0.01);
+  check('Shift+Z restores every object, removal and fix', same && all.flat === 0 && all.gone.length === 0 && all.reimt === 1 && all.changes === 0 && Math.abs(all.pm - r0.pm) < 0.01,
+    `poses restored=${same}, taped strips=${all.flat}, removed=${all.gone.length}, reimagine changes=${all.changes}; ${r0.pm.toFixed(2)} -> ${all.pm.toFixed(2)}/month`);
+  check('reset: no page errors', rs.errors.length === 0, rs.errors.join(' | ') || 'none');
+  await rs.p.close();
+  }
 } finally {
   await browser.close();
   writeFileSync(new URL('results.json', import.meta.url), JSON.stringify(results, null, 1));

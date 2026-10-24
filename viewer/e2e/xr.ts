@@ -149,6 +149,33 @@ try {
   check('hand pinch teleports like the trigger', inputs.includes('right:hand') && Math.hypot(t2[0] - tp2[0], t2[1] - tp2[1]) < 0.15,
     `inputs ${inputs.join(' ')}; landed ${f2(t2)} for target ${f2(tp2)}`);
 
+  // 9. back to controllers: grip on the wand hand puts the pointed-at bed back; A removes it; both grips held reset everything
+  await G(p, "__xr.dev().primaryInputMode = 'controller'");
+  await wait(500);
+  await G(p, `__xr.aim(__xr.ctl('right'), ${JSON.stringify(await G(p, "return __xr.proxy('bed')"))})`);
+  await wait();
+  await G(p, "__xr.ctl('right').updateButtonValue('squeeze', 1)");
+  await wait();
+  await G(p, "__xr.ctl('right').updateButtonValue('squeeze', 0)");
+  await wait(500);
+  const bed2 = await G(p, "return game.layout().poses[game.items.indexOf('bed')]");
+  check('grip puts the pointed-at object back', Math.hypot(bed2.x - bed0.x, bed2.y - bed0.y) < 0.01 && Math.abs(bed2.yaw - bed0.yaw) < 0.01,
+    `bed (${bed2.x.toFixed(2)}, ${bed2.y.toFixed(2)}) vs original (${bed0.x.toFixed(2)}, ${bed0.y.toFixed(2)})`);
+  await G(p, `__xr.aim(__xr.ctl('right'), ${JSON.stringify(await G(p, "return __xr.proxy('bed')"))})`);
+  await wait();
+  await G(p, "__xr.ctl('right').updateButtonValue('a-button', 1)");
+  await wait();
+  await G(p, "__xr.ctl('right').updateButtonValue('a-button', 0)");
+  await wait(500);
+  const inv = await G(p, 'return game.inventory()');
+  check('A removes the pointed-at object', inv.includes('bed'), `removed: ${inv.join(', ')}`);
+  await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 1); __xr.ctl('right').updateButtonValue('squeeze', 1)");
+  await wait(1500);
+  await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 0); __xr.ctl('right').updateButtonValue('squeeze', 0)");
+  await wait(500);
+  const rest = await G(p, "return { gone: game.inventory(), bed: game.layout().poses[game.items.indexOf('bed')] }");
+  check('both grips held reset everything', rest.gone.length === 0 && Math.hypot(rest.bed.x - bed0.x, rest.bed.y - bed0.y) < 0.01, `removed: [${rest.gone.join(', ')}], bed (${rest.bed.x.toFixed(2)}, ${rest.bed.y.toFixed(2)})`);
+
   check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | ') || 'none');
 } finally {
   writeFileSync(new URL('xr-results.json', import.meta.url), JSON.stringify(results, null, 1));

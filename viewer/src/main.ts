@@ -19,6 +19,8 @@ import { summarize, drawPushChart, poseAt, pushColor, sampleText } from './physd
 import { cardState, encodeCard, type ActionOut, type ReportPayload } from './share.ts';
 import { createReimagine, undoChange, costText, card, type Change } from './reimagine.ts';
 import { moveCost, removeCost, sumCosts } from './movecost.ts';
+import { isMoved, movedText, resetPose, resetHoldProgress } from './resets.ts';
+import { createObjLabel } from './objlabel.ts';
 import { measureStair, stairFixes, stairFrame, stairYaml, mirrorRail, inRailBand, stepLights, withRails, SPLAT_STRIDE, type Stair, type Side } from './stairs.ts';
 import { createStairs3d } from './stairs3d.ts';
 import { doorFixes, doorYaml, needWidth, hingeSide, growOf, type Door } from './doors.ts';
@@ -1048,7 +1050,44 @@ async function openFixCard() {
 $('report').onclick = () => openReport();
 $('fixcard').onclick = () => openFixCard();
 $('closeqr').onclick = () => { $('qr').hidden = true; };
-$('reset').onclick = () => { layout = { poses: original.map(p => ({ ...p })), flattened: [] }; applied = []; $('fixes').innerHTML = ''; syncObjects(); replan(); };
+
+// ---------- reset: one object back where the scan had it, or the whole room (objects, removals, fixes) ----------
+function resetObject(k: number) {   // moved, turned or removed: back to the original spot, if it is still free
+  if (!isMoved(layout.poses[k], original[k])) return;
+  const poses = layout.poses.map((q, n) => (n === k ? resetPose(original[k]) : q));
+  if (!placementOk(g, placeBase, objs, poses, k, overlapOk[k])) return refused();
+  layout = { ...layout, poses };
+  syncObjects();
+  if (selected === k) lastValid = poseOf(k);
+  return replan();
+}
+function resetAll() {   // hand-marked stairs and doors are scan annotations, not renovations: they stay
+  select(-1);
+  layout = { poses: original.map(resetPose), flattened: [] }; applied = []; suggestions = [];
+  $('fixes').innerHTML = ''; $('options').innerHTML = '';
+  $<HTMLInputElement>('reimt').value = '100'; reim.setT(1);   // not left mid-morph
+  syncObjects();
+  return replan();
+}
+$('reset').onclick = resetAll;
+$('resetobj').onclick = () => { if (selected >= 0) resetObject(selected); };
+game.resetObject = (name: string) => resetObject(objs.findIndex(o => o.name === name));
+game.resetAll = resetAll;
+
+// the name pill over the picked object (desktop) or the pointed-at / held one (VR)
+const objLabel = createObjLabel(scene);
+let labelLines: string[] = [];
+function labelStep() {
+  const xr = renderer.xr.isPresenting, k = xr ? (grab?.k ?? hover) : selected;
+  const resetBtn = $<HTMLButtonElement>('resetobj'), canReset = !xr && selected >= 0 && isMoved(layout.poses[selected], original[selected]);
+  if (resetBtn.disabled === canReset) resetBtn.disabled = !canReset;
+  if (k < 0 || layout.poses[k].removed) { labelLines = []; return objLabel.set(null, [], false); }
+  const name = objs[k].name.replace(/_/g, ' '), moved = movedText(poseOf(k), original[k]);
+  labelLines = [name[0].toUpperCase() + name.slice(1), moved ? `${moved} · ${xr ? 'grip' : 'Z'} resets` : ''].filter(Boolean);
+  objLabel.set(items[k].proxy, labelLines, !xr || !!grab);
+  objLabel.update(camera);
+}
+game.label = () => labelLines;
 
 // ---------- night ----------
 function updateNight() {
@@ -1194,6 +1233,9 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyT') setMode('translate');
   if (e.code === 'KeyR') setMode('rotate');
   if (e.code === 'Escape') select(-1);
+  if (e.code === 'KeyZ' && !e.ctrlKey && !e.metaKey && !/^(INPUT|SELECT)$/.test((e.target as HTMLElement).tagName)) {   // Z: put the picked object back; Shift+Z: the whole room
+    if (e.shiftKey) resetAll(); else if (selected >= 0) resetObject(selected);
+  }
   if ((e.code === 'Delete' || e.code === 'Backspace') && selected >= 0) removeObject(selected);
   if (e.code === 'KeyF') setWalk(mode === 'fly' ? 'free' : 'fly');
   else if (/^(Key[WASD]|Arrow)/.test(e.code) && mode !== 'fly') setWalk('free');
@@ -1207,6 +1249,11 @@ renderer.domElement.addEventListener('pointerdown', e => {
   const hit = ray.intersectObjects(items.filter((_, k) => !layout.poses[k].removed).map(i => i.proxy))[0];
   if (hit) { select(items.findIndex(i => i.proxy === hit.object)); return; }
   look = { x: e.clientX, y: e.clientY, moved: 0 };
+});
+renderer.domElement.addEventListener('dblclick', e => {   // double-click an object: back where it started
+  ray.setFromCamera(new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
+  const hit = ray.intersectObjects(items.filter((_, k) => !layout.poses[k].removed).map(i => i.proxy))[0];
+  if (hit) resetObject(items.findIndex(i => i.proxy === hit.object));
 });
 addEventListener('pointermove', e => {
   if (!look) return;
@@ -1401,6 +1448,7 @@ function step(dt: number, t: number) {
   walker.group.position.set(body.x, body.y, 0);
   walker.group.rotation.z = body.yaw;
   if (mode !== 'fly') live?.frame(dt, body, mode === 'free', walker.group);
+  labelStep();
   if (renderer.xr.isPresenting) {
     liveChecks(t);
     renderer.render(scene, camera);   // CSS2D labels are DOM and the post pass can't run per eye: plain render in the headset
@@ -1477,7 +1525,28 @@ function xrStep(dt: number) {
   placeRig();
   body.x = head.x; body.y = head.y;
   body.yaw += Math.atan2(Math.sin(yaw - body.yaw), Math.cos(yaw - body.yaw)) * Math.min(1, dt * 4);
+  xrButtons(dt, pads);
   wandStep();
+}
+// Controller buttons (standard mapping: 1 = grip, 4 = A/X). Hands have no gamepad, so they only get the wand.
+// Grip on the wand hand puts back what it points at or holds; A removes what it points at; both grips held reset everything.
+let gripWas = false, aWas = false, bothHeld = 0, resetFired = false, ringN = 0, ringCard: THREE.Sprite | null = null;
+function xrButtons(dt: number, pads: Record<string, Gamepad>) {
+  const wp = pads[WAND], op = pads[WAND === 'left' ? 'right' : 'left'];
+  const grip = !!wp?.buttons[1]?.pressed, a = !!wp?.buttons[4]?.pressed, both = grip && !!op?.buttons[1]?.pressed;
+  if (grip && !gripWas) { const k = grab?.k ?? hover; if (k >= 0) { grab = null; syncObjects(); resetObject(k); } }   // sync first: drop the half-dragged pose
+  if (a && !aWas && !grab && hover >= 0) removeObject(hover);
+  gripWas = grip; aWas = a;
+  bothHeld = both ? bothHeld + dt : 0;
+  if (!both) resetFired = false;
+  const p = resetHoldProgress(bothHeld);
+  if (p >= 1 && !resetFired) { resetFired = true; resetAll(); }
+  const n = both && !resetFired ? Math.ceil(p * 5) : 0;   // five-step bar in front of the face while the hold fills
+  if (n !== ringN) {
+    ringN = n; ringCard?.removeFromParent(); ringCard?.material.dispose(); ringCard = null;
+    if (n) { ringCard = card(['Reset everything', '▮'.repeat(n) + '▯'.repeat(5 - n)], '#ffd84d'); scene.add(ringCard); }
+  }
+  ringCard?.position.copy(head).addScaledVector(headDir, 1).setZ(head.z - 0.15);
 }
 
 // ---------- VR wand: point at furniture and hold to drag it (twist the wrist to turn it), hold still to delete it;
