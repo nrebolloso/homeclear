@@ -4,7 +4,8 @@ import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { stamp, carvedPolys, placementOk, polyCells, worldFootprint, toCell, applyIntervention, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
-import { buildDevice, type WalkerCfg } from './walker.ts';
+import { buildDevice as deviceMesh, type WalkerCfg } from './walker.ts';
+import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
 import { nightShader } from './night.ts';
 import { createVision, PROFILES, type Profile } from './vision.ts';
 import { createHeatOverlay, nights, drawTimeline } from './heat.ts';
@@ -31,6 +32,8 @@ import { createMarker3d } from './marker3d.ts';
 import { MAX_EXTRA_LIGHTS, type PointLight } from './night.ts';
 import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } from './perf.ts';
 import QRCode from 'qrcode';
+import { mountFrontend, type FrontendAdapter } from './frontend.ts';
+import { createFrontendXR } from './frontend-xr.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
 import type { WorldModel } from './worldmodel.ts';
 import { setupXR, type XrEditor } from './xr.ts';
@@ -94,6 +97,9 @@ const sparkR = new SparkRenderer({ renderer });
 scene.add(sparkR);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 2.2);
 scene.add(hemi);
+const HEMI_ENV = 0.6;   // the hemisphere's share once the room's env map lights the meshes (ground.ts)
+const nightLamp = new THREE.PointLight(0xffb36b, 0, 1.5, 2);   // night: the nightlight on the meshes (updateNight)
+scene.add(nightLamp);
 const vision = createVision(renderer, scene, camera);
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
@@ -204,7 +210,7 @@ if (verification) {
 scene.add(verifyGroup);
 
 // ---------- grid overlays: route, hazards, ghosts, fog, taped strips ----------
-const routeLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x33ddff }));
+const routeLine = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0x55c7ef, size: 3, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
 // ghost walkers as one dot per step (WebGL lines are 1 px: trails hugging the route vanished); red = a toe contact
 const ghostDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ vertexColors: true, size: 5, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
 const hazardGroup = new THREE.Group(), tapeGroup = new THREE.Group();
@@ -232,6 +238,9 @@ scene.add(routeLine, ghostDots, hazardGroup, tapeGroup);
 }
 
 // ---------- walker + camera ----------
+// every device gets contact shadows under its legs (ground.ts): the patient's, the replay's, the one parked up the stairs
+const GROUND = !PARAMS.has('noground');   // ?noground: the old look, for before/after shots
+const buildDevice = (w: WalkerCfg) => { const d = deviceMesh(w); if (GROUND) groundDevice(d.group, w); return d; };
 let walker = buildDevice(walkerCfg);
 scene.add(walker.group);
 let centreOffset = walkerCfg.user_gap_m + walkerCfg.depth_m / 2;   // body centre -> walker frame centre (the planned path)
@@ -241,6 +250,7 @@ gapTag.visible = false;
 scene.add(gapTag);
 const body = { x: 0, y: 0, yaw: 0, pitch: -(+(PARAMS.get('pitch') ?? 28)) * Math.PI / 180 };   // ?pitch=<deg down>: more walker, less room
 let mode: 'auto' | 'free' | 'fly' = 'auto', autoS = 0, autoPause = 0;
+let routePaused = false, routeSpeed = 1, frontendVR: ReturnType<typeof createFrontendXR> | null = null, xrFollowRoute = false;
 
 // ---------- layout state + worker ----------
 let layout: Layout = { poses: original.map(p => ({ ...p })), flattened: [] };
@@ -1420,7 +1430,10 @@ function updateNight() {
   const on = $<HTMLInputElement>('night').checked;
   night.set(on, p && { x: p.x, y: p.y, r: objs[k].light_radius_m ?? 1.5 }, stepLightList);
   for (const s of splats) s.updateVersion();
-  hemi.intensity = on ? 0.25 : 2.2;
+  hemi.intensity = scene.environment ? (on ? 0.1 : HEMI_ENV) : on ? 0.25 : 2.2;
+  scene.environmentIntensity = on ? 0.07 : 1;   // the room's light, captured by day (ground.ts); night.ts scales the scan by 0.07
+  nightLamp.intensity = on && p ? 1.2 : 0;   // the nightlight lights the walker and mannequin too, not only the scan
+  if (p) { nightLamp.position.set(p.x, p.y, 0.15); nightLamp.distance = objs[k].light_radius_m ?? 1.5; }
   scene.background = new THREE.Color(on ? 0x050607 : 0x1d2126);
 }
 $('night').onchange = updateNight;
@@ -1648,6 +1661,7 @@ function worldStep(dt: number): boolean {
   return true;
 }
 function autoStep(dt: number) {
+  dt = routePaused ? 0 : dt * routeSpeed;
   if (!current || current.error || routeS.length < 2) return;
   if (persona.step_model === 'world' && worldStep(dt)) return;
   const Ls = routeS[routeS.length - 1];
@@ -1725,6 +1739,7 @@ function nearestS(x: number, y: number) {
 const mannequin = buildMannequin(persona.eye_height_m / 0.94);
 mannequin.group.visible = false;
 scene.add(mannequin.group);
+const manShadows = GROUND ? footShadows(mannequin.group) : null;
 let heroSteps: Step[] = [];
 /** The hero trip's footsteps, moved from the walker frame's centre line (where the simulation puts the route) back to
  *  the user's own feet, each with its arc length along the route. */
@@ -1768,6 +1783,7 @@ function frame(now: number) {
   }
 }
 function step(dt: number, t: number) {
+  frontendVR?.update();
   if (xr.presenting()) return xrFrame(dt, t);
   if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
   tourStep(dt);
@@ -1788,6 +1804,7 @@ function step(dt: number, t: number) {
   if (showMan) {
     const f = feetAt(heroSteps, autoS, persona.stride_m ?? 0.35), hy = walkerCfg.width_m / 2 - walkerCfg.leg_radius_m, gx = walkerCfg.user_gap_m + 0.05;
     mannequin.update(body, [f[1], f[0]], [[gx, hy], [gx, -hy]], walkerCfg.handle_height_m);   // sim side 1 = left
+    manShadows?.(body, [f[0].pos, f[1].pos]);
   }
   pulseSpots(t);
   replayStep(dt);
@@ -1887,6 +1904,11 @@ const xr = await setupXR({
   },
   exit() { comparison.endPreview(); inXR = false; game.xr = false; dangerVR.k = -1; tourSpot = -1; applyPerf(perfBeforeXR, false); if (current) drawPlan(current); say(); },
   buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton],   // the story for a family: what's risky, how night feels, the fix
+  shell: {   // the planning shell (frontend.ts) over the wand; frontendVR is created after the first frame, so look it up lazily
+    activate: c => !!frontendVR?.activate(c), release: c => !!frontendVR?.release(c), open: () => !!frontendVR?.isOpen(),
+    follow(dt) { if (!xrFollowRoute || mode !== 'auto') return false; autoStep(dt); return true; },
+    hover: k => reim.selectChange(k),
+  },
 });
 /** One headset frame: the monitor's world updates (walker, glow, the reimagined room, stairs, live checks), but no camera
  *  placement (the headset is the camera), no DOM labels and no post pass (it can't run per eye). Live physics follows
@@ -1909,6 +1931,16 @@ setWalk('auto');
 await replan();
 if ((current as Eval | null)?.error === undefined && current) Object.assign(body, routePose(0, 0, Infinity));
 else { const [sx, sy] = routes[selRoute].start; Object.assign(body, { x: sx - centreOffset, y: sy, yaw: 0 }); }
+// ---------- room light on the meshes (ground.ts) ----------
+// the splat rendered into an env map from the room's middle, 1 m up, before the loop (it sorts the splats for the cube
+// camera; the loop would re-sort them for the main one mid-capture). Capped wait: a slow load keeps the old flat light.
+if (GROUND) {
+  const ready = await Promise.race([Promise.all(splats.map(s => s.initialized)).then(() => true), new Promise<boolean>(r => setTimeout(() => r(false), 10000))]);
+  if (ready) {
+    await roomEnvironment(sparkR, scene, new THREE.Vector3(g.origin_xy[0] + (g.shape[0] * g.cell_m) / 2, g.origin_xy[1] + (g.shape[1] * g.cell_m) / 2, 1.0));
+    updateNight();
+  }
+}
 renderer.setAnimationLoop(frame);   // not requestAnimationFrame: in a headset session only the XR frame loop runs
 
 const ctx = { RUN, sc, objs, layout: () => layout, applied: () => applied, current: () => current, routePose, routeS: () => routeS,
@@ -1957,3 +1989,32 @@ Object.assign(game, {
   applyFix, select: (name: string) => select(objs.findIndex(o => o.name === name)),
   exportForCosmos: (opts?: ExportOpts) => exportForCosmos(ctx, opts), layoutKey: () => layoutKey(objs, layout),
 });
+
+// ---------- frontend shell: existing data/actions, independent of backend and optimizer ownership ----------
+let inspectReturn: { body: typeof body; fly: typeof fly; mode: 'auto' | 'free' | 'fly'; rig: ReturnType<typeof xr.rigState> } | null = null;
+const frontendAdapter: FrontendAdapter = {
+  snapshot: () => ({ room: RUN, patient: personaKey, route: routes[selRoute].name, current, baseline: baseEvals[selRoute] ?? null,
+    changes: reim.changes(), spots: spotList, options: suggestions, selected, selectedName: objs[selected]?.name, mode, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
+  navigate(m) {
+    endTour(); select(-1);
+    if (m === 'inspect') { inspectReturn ??= { body: { ...body }, fly: { ...fly }, mode, rig: xr.rigState() }; setWalk(renderer.xr.isPresenting ? 'free' : 'fly'); }
+    else { xrFollowRoute = renderer.xr.isPresenting && m === 'route'; setWalk(m === 'route' ? 'auto' : 'free'); routePaused = false; }
+  },
+  focus(item) {
+    const p = vantage(item.at, current?.xy ?? [item.at], 1.2, 1.1);
+    if (renderer.xr.isPresenting) { if (standable(p.x, p.y)) frontendVR?.transition(() => xr.moveHead(p.x, p.y)); }
+    else { setWalk('fly'); Object.assign(fly, p); body.yaw = p.yaw; body.pitch = p.pitch; }
+    reim.selectChange(item.object, item.change?.iv);
+  },
+  leaveInspect() { if (inspectReturn) { const back = inspectReturn; Object.assign(body, back.body); Object.assign(fly, back.fly); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.restoreRig(back.rig)); setWalk(back.mode); inspectReturn = null; } },
+  pause() { routePaused = !routePaused; }, restart() { autoS = 0; autoPause = 0; routePaused = false; }, speed(v) { routeSpeed = v; },
+  compare(t) { reim.setT(t); }, animate() { reim.play(); },
+  suggest, async apply(index) { await applyOption(index); setWalk('free'); reim.setT(1); },
+  undo: undoReimagined, select,
+  path(on) { routeLine.visible = on; },
+  highlights(on) { hazardGroup.visible = on; }, improvements(on) { reim.setParts({ rings: on, ringLabels: on }); },
+};
+const frontend = mountFrontend(frontendAdapter);
+frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
+game.frontend = frontend;
+game.frontendXR = frontendVR;
