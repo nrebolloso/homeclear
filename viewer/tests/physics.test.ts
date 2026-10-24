@@ -44,6 +44,18 @@ test('flat floor: reaches the goal, no snags, easy push', async () => {
   assert.equal(r.snags.length, 0);
 });
 
+test('flat floor, a planner-style route (a vertex every 2 cm, a corner): follows it round the corner, no snags', async () => {
+  await initPhysics();
+  const { bump, comps } = layer(() => 0), L: XY[] = [];
+  for (let x = 0.6; x <= 2.6 + 1e-9; x += 0.02) L.push([x, 0.5]);
+  for (let y = 0.52; y <= 1.5 + 1e-9; y += 0.02) L.push([2.6, y]);
+  const r = pushAlong(g, bump, comps, L, walker);
+  assert.ok(r.done);
+  assert.equal(r.snags.length, 0, JSON.stringify(r.snags));
+  // the corner walked, not cut: about 3 m at the walking speed (cutting it is 2.2 m)
+  assert.ok(r.sim_s > 0.9 * 3 / PHYSICS.speed_mps, `${r.sim_s.toFixed(1)} s`);
+});
+
 test('a 5 mm cord is crossed, a 1 cm edge takes a harder push, a 1.5 cm rug edge snags at the edge', async () => {
   await initPhysics();
   const cord = layer(i => (i === 100 ? 0.005 : 0)), rc = pushAlong(g, cord.bump, cord.comps, route, walker);

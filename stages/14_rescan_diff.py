@@ -75,7 +75,7 @@ def compare(cb, ca):
     pa = np.column_stack([pa[:, :2] @ R.T + t, pa[:, 2]])
     grid = json.loads((wb / "grid.json").read_text())
     lo, cell, shape = np.array(grid["origin_xy"]), grid["cell_m"], tuple(grid["shape"])
-    floor_a, obst_a, bumps_a, bump_a = occ.layers(pa, g, lo, shape)
+    floor_a, obst_a, bumps_a, bump_a, _ = occ.layers(pa, g, lo, shape)
     bumps_b = np.load(wb / "bumps.npy")
     path = json.loads((wb / "path.json").read_text())
     cells = np.array(path["cells"])

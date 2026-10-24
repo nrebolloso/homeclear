@@ -116,9 +116,12 @@ export function pushAlong(g: GridMeta, bump: Float32Array, comps: Int32Array, ro
     [p.x + Math.cos(yaw) * lx - Math.sin(yaw) * ly, p.y + Math.sin(yaw) * lx + Math.cos(yaw) * ly];
   const cellAt = (xy: XY) => { const [ci, cj] = toCell(g, xy); return ci * g.shape[1] + cj; };
   // arc length of the walker's closest point on the route, searched a little ahead of the last one (never backwards)
+  // (from u's own segment: `seg` is already past the steering look-ahead, and searching from there walks u away from the walker)
+  let pseg = 0;
   const project = (x: number, y: number) => {
+    while (pseg < route.length - 2 && s[pseg + 1] < u) pseg++;
     let best = u, bd = Infinity;
-    for (let k = Math.max(0, seg - 1); k < route.length - 1 && s[k] < u + 0.5; k++) {
+    for (let k = pseg; k < route.length - 1 && s[k] < u + 0.5; k++) {
       const [ax, ay] = route[k], dx = route[k + 1][0] - ax, dy = route[k + 1][1] - ay, l2 = dx * dx + dy * dy || 1e-12;
       const f = Math.min(1, Math.max(0, ((x - ax) * dx + (y - ay) * dy) / l2)), d = Math.hypot(ax + f * dx - x, ay + f * dy - y);
       if (d < bd) { bd = d; best = s[k] + f * Math.sqrt(l2); }
@@ -130,8 +133,8 @@ export function pushAlong(g: GridMeta, bump: Float32Array, comps: Int32Array, ro
     const yaw = Math.atan2(2 * (rot.w * rot.z + rot.x * rot.y), 1 - 2 * (rot.y * rot.y + rot.z * rot.z));
     u = project(p.x, p.y);
     if (u >= Ltot - 0.02) { out.done = true; out.sim_s = t; break; }
-    const [cx, cy] = at(u), [, , th] = at(Math.min(u + 0.15, Ltot));   // steer toward the route a little ahead
-    const ax = Math.cos(at(u)[2]), ay = Math.sin(at(u)[2]);
+    const [cx, cy, h0] = at(u), [, , th] = at(Math.min(u + 0.15, Ltot));   // steer toward the route a little ahead
+    const ax = Math.cos(h0), ay = Math.sin(h0);
     // the person: a steady push that builds up while the walker is slower than their walking speed (PI on speed),
     // capped at what they can give; sideways, they just keep it on the path (not counted against the push limit)
     const vAlong = v.x * ax + v.y * ay, err = P.speed_mps - vAlong;

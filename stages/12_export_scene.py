@@ -257,7 +257,7 @@ def main(cfg):
     assert route["start"] and route["goal"], "no start/goal: set plan.start/goal or run stage 7 first"
     # every route the patient walks, weighted by trips per night; night routes get the darkness multiplier.
     # Without game.routes: the one stage-7 route, at risk.trips_per_night, at night (as before)
-    routes = gm.get("routes") or [{"name": "bed to bathroom", **route, "trips_per_night": gm["risk"]["trips_per_night"], "night": True}]
+    routes = gm.get("routes") or [{"name": cfg["plan"].get("name", "main route"), **route, "trips_per_night": gm["risk"]["trips_per_night"], "night": True}]
     for r in routes:
         r.setdefault("night", True)
         r.setdefault("trips_per_night", gm["risk"]["trips_per_night"])
