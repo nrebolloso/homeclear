@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { stamp, placementOk, polyCells, worldFootprint, toCell, applyIntervention, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
+import { stamp, placementOk, polyCells, edt, worldFootprint, toCell, applyIntervention, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
 import { buildDevice, type WalkerCfg } from './walker.ts';
 import { nightShader } from './night.ts';
 import { createVision, PROFILES, type Profile } from './vision.ts';
@@ -104,6 +104,12 @@ const original: Pose[] = objs.map(o => ({ x: o.pivot[0], y: o.pivot[1], yaw: 0 }
 // drag that still overlaps that spot snaps back (the kitchen rug couldn't move at all otherwise)
 const placeBase: Layers = { ...base, floor: base.floor.slice(), obst: base.obst.slice() };
 objs.forEach((o, k) => { for (const c of polyCells(g, worldFootprint(o, original[k]))) { placeBase.floor[c] = 1; placeBase.obst[c] = 0; } });
+// free walk keeps to filmed floor, but the floor under the furniture was never filmed: once a piece is moved or removed
+// you can walk onto its spot (only where it is floor: a box on a cabinet doesn't open the cabinet top). Unfilmed seams
+// up to 12 cm wide (beside a chair leg, between two outlines) count as filmed too, else they stop you mid-room
+const seen = coverage.map(v => +(v > 0));
+objs.forEach((o, k) => { for (const c of polyCells(g, worldFootprint(o, original[k]))) if (base.floor[c]) seen[c] = 1; });
+const unseen = edt(seen, nx, ny).map(d => +(d * g.cell_m > 0.06));
 // objects filmed overlapping (a chair pushed in under the table) share floor cells but not space: they may keep overlapping
 // shortcut: 2D footprints, so once apart they may also be dropped into each other; a height-aware check would fix that
 const startCells = objs.map((o, k) => new Set(polyCells(g, worldFootprint(o, original[k]))));
@@ -975,7 +981,7 @@ const walkerPoint = (b: { x: number; y: number; yaw: number }, [px, py]: number[
 function canStand(b: { x: number; y: number; yaw: number }) {
   const c = cellAt(b.x, b.y);
   const S = live ? placeBase : L;   // with live physics the walker meets furniture as bodies, not as a wall on the grid
-  if (!S.floor[c] || S.obst[c] || coverage[c] === 0) return false;           // only where the capture actually saw floor
+  if (!S.floor[c] || S.obst[c] || unseen[c]) return false;           // only where the capture actually saw floor
   return walker.probes.every(p => { const k = cellAt(...walkerPoint(b, p)); return S.floor[k] && !S.obst[k]; });
 }
 /** Route point + heading at arc length s (the route is the walker frame's centre). */
