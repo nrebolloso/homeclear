@@ -144,8 +144,8 @@
   "default": "lama"
  },
  "box": {
-  "pixels": 1050,
-  "seen_around_pct": 18.7,
+  "pixels": 922,
+  "seen_around_pct": 18.4,
   "backends": [
    "lama",
    "median",
@@ -168,8 +168,8 @@
   "default": "lama"
  },
  "trash_can": {
-  "pixels": 2269,
-  "seen_around_pct": 41.0,
+  "pixels": 2080,
+  "seen_around_pct": 41.1,
   "backends": [
    "lama",
    "median",
@@ -180,8 +180,8 @@
   "default": "lama"
  },
  "box3": {
-  "pixels": 1235,
-  "seen_around_pct": 16.0,
+  "pixels": 834,
+  "seen_around_pct": 14.7,
   "backends": [
    "lama",
    "median",
@@ -192,8 +192,8 @@
   "default": "lama"
  },
  "box4": {
-  "pixels": 1228,
-  "seen_around_pct": 10.9,
+  "pixels": 950,
+  "seen_around_pct": 11.0,
   "backends": [
    "lama",
    "median",

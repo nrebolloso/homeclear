@@ -27,6 +27,7 @@ POINT_KINDS = {"switch", "phone", "outlet", "grab_bar_wall"}
 MEMBER_M = 0.03   # auto objects: a Gaussian belongs to the object of its nearest labelled point, if that is this close
 GROW_M = 0.10     # ... or this close when it is also inside that object's footprint and height band (faint Gaussians 6c never labelled)
 ON_TOP_M = 0.3    # unlabelled things in its footprint up to this far above it go with it (a cup on a removed table must not float)
+REACH_M = 0.05    # ... but none whose splat reaches this far past its box (a wall sheet centred inside it)
 STANDS_M = 0.3    # an object labelled from below this stands on the floor: its legs 6c missed go with it down to the floor
 
 
@@ -198,7 +199,16 @@ def room_walls(w, g):
     return _walls[str(w)]
 
 
-def object_parts(o, xyz, g, w, lo, cell, shape):
+def half_extent(v):
+    """Each Gaussian's 2-sigma reach from its centre along the world axes."""
+    from scipy.spatial.transform import Rotation
+    q = np.stack([v["rot_1"], v["rot_2"], v["rot_3"], v["rot_0"]], 1)
+    R = Rotation.from_quat(q / (np.linalg.norm(q, axis=1, keepdims=True) + 1e-12)).as_matrix()
+    s = np.exp(np.stack([v["scale_0"], v["scale_1"], v["scale_2"]], 1))
+    return 2 * np.sqrt(((R * s[:, None, :]) ** 2).sum(2))
+
+
+def object_parts(o, xyz, g, w, lo, cell, shape, v):
     """Gaussians that belong to config object o (its height-limited parts, with a cut margin). tools/lighter_clean.py reuses it."""
     in_xy = lambda q, cm: (near_poly(xyz[:, :2], np.array(q["poly_xy"], float), cm) if "poly_xy" in q else
                            (xyz[:, :2] >= np.min(q["box_xy"], 0) - cm).all(1) & (xyz[:, :2] <= np.max(q["box_xy"], 0) + cm).all(1))
@@ -227,6 +237,7 @@ def object_parts(o, xyz, g, w, lo, cell, shape):
         # points sit within 2 cm of the line (its back can be 2 cm off); above it nothing of it is within GROW_M of a wall
         mem = own & (d <= MEMBER_M)
         z1 = xyz[mem, 2].max() if mem.any() else z0
+        walled = False
         for wl in room_walls(w, g):
             a, b = np.array(wl["a"]), np.array(wl["b"])
             e = (b - a) / np.linalg.norm(b - a)
@@ -238,6 +249,16 @@ def object_parts(o, xyz, g, w, lo, cell, shape):
             if (sd[mem & on] < 0.02).mean() > 0.03:
                 continue
             sel &= ~(on & (sd < np.where(xyz[:, 2] > z1, GROW_M, 0.02)))
+            walled |= (sd[mem & on] < GROW_M).sum() >= 50   # it stands against this one
+        if not walled:
+            return sel
+        # nor a big wall splat centred inside it: the moved trash can kept white sheets beside its lid, Gaussians whose
+        # 2-sigma ellipsoid reaches REACH_M past its own box (1-99%). They stay in the room, where they were drawn. Only
+        # against a wall: a table's own blurry edge splats would stay as a halo where it stood
+        k = np.flatnonzero(sel)
+        box = np.percentile(xyz[k], [1, 99], 0)
+        h = half_extent(v[k])
+        sel[k[(np.maximum(box[0] - (xyz[k] - h), 0) + np.maximum(xyz[k] + h - box[1], 0)).max(1) > REACH_M]] = False
         return sel
     # parts: the object is only these height-limited boxes (a table = top slab + legs; chairs pushed in under it stay put)
     parts = o.get("parts") or [{"box_xy": o["box_xy"], "z": [g["bump_z"][0], o.get("z_max", 2.0)]}]
@@ -263,7 +284,7 @@ def main(cfg):
     for o in config_objects(gm, w):
         (x0, y0), (x1, y1) = np.sort(np.array(o["box_xy"], float), 0)
         inbox = lambda m: (xyz[:, 0] >= x0 - m) & (xyz[:, 0] <= x1 + m) & (xyz[:, 1] >= y0 - m) & (xyz[:, 1] <= y1 + m)
-        sel = ~taken & object_parts(o, xyz, g, w, lo, cell, shape)
+        sel = ~taken & object_parts(o, xyz, g, w, lo, cell, shape, v)
         assert (sel & solid).sum() > 10, f"object {o['name']}: no Gaussians in its box"
         taken |= sel
         pivot = np.array([(x0 + x1) / 2, (y0 + y1) / 2, 0.0])
@@ -391,4 +412,7 @@ def main(cfg):
 
 
 if __name__ == "__main__":
+    _v = np.zeros(1, [(k, "f4") for k in ("rot_0", "rot_1", "rot_2", "rot_3", "scale_0", "scale_1", "scale_2")])
+    _v["rot_0"], _v["rot_3"], _v["scale_0"], _v["scale_1"], _v["scale_2"] = np.cos(np.pi / 4), np.sin(np.pi / 4), np.log(0.1), np.log(0.01), np.log(0.01)
+    assert np.allclose(half_extent(_v), [[0.02, 0.2, 0.02]], atol=1e-6)   # self-check: a 10 cm x-splat turned 90 deg reaches along y
     run_stage("12_export_scene", main)

@@ -109,3 +109,10 @@ the object's labels lie wholly on one side of (5c finds 30 lines here, some runn
 everything on or past the line goes back to the room: within 2 cm up to the object's top, within 10 cm above it. Trash
 can 26977 -> 25687 Gaussians, height 0.768 -> 0.664 m; boxes lose 10-86 stray Gaussians from behind the wall; basket and
 all chairs/tables unchanged. Fills re-run (job 47413830). Not live-checked in the browser (extension disconnected).
+Sixth follow-up: the trash can still took some wall (user report). Moved into the room it carried white sheets beside its
+lid and down one side: big wall Gaussians centred inside the can, so the per-centre wall cut kept them. An object that
+stands against a wall (50+ labels within 10 cm of it) now also gives back every Gaussian whose 2-sigma ellipsoid reaches
+5 cm past its own box (1-99%). Trash can -466 (mostly grey/white), boxes -25 to -69; chairs, tables and the basket
+unchanged. (Applied to every object, the table and chairs gave back 3-5% as blurry edge splats that would stay as a halo
+where they stood, so it is limited to objects against a wall.) Checked in headless Chrome (playwright, fly camera): the
+moved can's white sheet is gone, and the wall behind the removed can is intact. Fills re-run (job 47419642).
