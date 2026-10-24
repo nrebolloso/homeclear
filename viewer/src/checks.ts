@@ -4,13 +4,15 @@
 // rules that are judgement calls (grab bars, the phone after a fall, the stretcher) are always marked for the OT.
 import { plan, worldFootprint, type GridMeta, type Layers, type Pose, type XY, type Footprinted, type PlanParams } from './grid.ts';
 
-export interface Fixture { name: string; kind: string; xyz?: number[] | null; surface_m?: number | null; measured: boolean; attach?: string; poly_xy?: XY[]; note?: string }
+export interface Fixture { name: string; kind: string; xyz?: number[] | null; surface_m?: number | null; measured: boolean; attach?: string; poly_xy?: XY[]; note?: string; side?: 'left' | 'right'; yaw?: number }
 export interface TransferRules { min_above_knee_m: number; max_above_knee_m: number; reach_height_m: [number, number] }
 export interface EmsRules { stretcher_width_m: number; phone_reach_m: number; entry?: XY | null }
 export interface BodyFacts { knee_height_m?: number; reach_m?: number; hip_precautions?: boolean }
 export type Verdict = 'ok' | 'fail' | 'borderline, OT to verify' | 'OT to verify';
 export interface CheckOut {
-  id: string; kind: 'transfer' | 'reach' | 'grab_bar' | 'ems' | 'phone'; label: string; verdict: Verdict; note: string;
+  /** Door checks: whether a planned route uses this opening. Off-route doors have no suggested renovation. */
+  on_route?: boolean;
+  id: string; kind: 'transfer' | 'reach' | 'grab_bar' | 'ems' | 'phone' | 'stairs' | 'door'; label: string; verdict: Verdict; note: string;
   value_m?: number; limit_m?: [number, number]; position?: XY;
 }
 type Obj = Footprinted & { name: string; kind: string; surface_m?: number | null };

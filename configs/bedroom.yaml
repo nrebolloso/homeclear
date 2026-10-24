@@ -56,7 +56,7 @@ grid:
   bump_link_cells: 3
 plan:
   # start/goal unset: stage 7 picks two far-apart cells of the largest walker-reachable region (no bed or bathroom in this scene)
-  walker_width_m: 0.66
+  walker_width_m: 0.61
   preferred_clearance_m: 0.3
   clearance_weight: 5.0
 hazards:
@@ -75,12 +75,12 @@ cluster:
   repo: $HPG_ROOT/Homeclear
   env: $HPG_ROOT/envs/homeclear
 game:
-  walker:
-    width_m: 0.66
-    depth_m: 0.5
-    handle_height_m: 0.85
+  walker:                       # Drive Medical 10210-1 (Amazon B001HOM4U2): manufacturer spec sheet, not taped
+    width_m: 0.61               # 24 in overall (keep = plan.walker_width_m)
+    depth_m: 0.445              # 17.5 in (retailer listing; the spec sheet gives none)
+    handle_height_m: 0.85       # adjusts 32-39 in (0.81-0.99 m): set to the patient
     user_gap_m: 0.25
-    leg_radius_m: 0.015
+    leg_radius_m: 0.0127        # 1 in aluminium tube
   persona:
     eye_height_m: 1.55
     gait_profile: older_adult_walker

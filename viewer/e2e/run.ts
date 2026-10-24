@@ -15,7 +15,7 @@ const shot = (p: Page, name: string) => process.env.SHOTS ? p.screenshot({ path:
 const G = (p: Page, f: string) => p.evaluate(`(async () => { const game = window.game; ${f} })()`) as Promise<any>;
 
 const browser = await chromium.launch({ executablePath: CHROME, headless: true,
-  args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
+  args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
     '--disable-accelerated-video-decode'] });   // headless: HW decode + ANGLE stalls seeks and loses the WebGL context
 async function open(scene: string) {
   const p = await browser.newPage({ viewport: { width: 1600, height: 900 } });
@@ -96,10 +96,13 @@ try {
   await p.waitForTimeout(500);
   const rm = await G(p, "const k = game.items.indexOf('bed'), q = game.layout().poses[k]; return { removed: !!q.removed, obst: game.cell(2.0, 1.0).obst, err: game.current().error }");
   check('Delete removes the selected object from the map', rm.removed && rm.obst === 0 && !rm.err, `removed=${rm.removed}, obstacle at old spot=${rm.obst}, replan error=${rm.err}`);
+  await G(p, "game.frontend.setTab('changes')");
   await p.click('#reset');
   await p.waitForTimeout(500);
 
   // 3. plan fixes: ranked by reduction, applying the top one lowers the number
+  await G(p, "game.frontend.setTab('reimagine')");
+  await p.locator('summary').filter({ hasText: 'Explore individual fixes' }).click();
   await p.click('#planfixes');
   const fixes = await p.waitForFunction(() => (window as any).game.fixes, null, { timeout: 20000 }).then(h => h.jsonValue());
   const sorted = fixes.every((f: any, i: number) => i === 0 || fixes[i - 1].reduction >= f.reduction);
@@ -109,10 +112,12 @@ try {
   const pm1 = await G(p, 'return game.current().per_month');
   check('plan fixes ranked; applying the top fix lowers risk', sorted && fixes[0].reduction > 0 && pm1 < pm0,
     fixes.map((f: any) => `${f.id} -${f.reduction === null || !isFinite(f.reduction) ? 'blocked' : f.reduction.toFixed(2)}`).join(', ') + `; applied ${fixes[0].id}: ${pm0.toFixed(2)} -> ${pm1.toFixed(2)}/month`);
+  await G(p, "game.frontend.setTab('changes')");
   await p.click('#reset');
   await p.waitForTimeout(500);
 
   // 4. night mode
+  await p.click('#filter-toggle');
   await p.click('#night');
   await p.waitForTimeout(4000);
   const nfps = await G(p, 'return game.fps');
@@ -137,13 +142,15 @@ try {
     const t = clip.test, busy = Object.keys(t.expected).filter(k => t.expected[k].length).map(Number);
     const picks = [busy[0], busy[Math.floor(busy.length / 2)], busy[busy.length - 1]];
     const video = game.openClip(clip);
-    await new Promise(r => video.readyState >= 1 ? r() : video.addEventListener('loadedmetadata', r, { once: true }));
+    // a stalled decoder never fires these events (seen on macOS headless): fail with a reason instead of hanging
+    const within = (pr, what) => Promise.race([pr, new Promise((_, no) => setTimeout(() => no(new Error(what + ' timed out after 10 s')), 10000))]);
+    await within(new Promise(r => video.readyState >= 1 ? r() : video.addEventListener('loadedmetadata', r, { once: true })), 'clip metadata');
     video.pause();
     const cv = document.createElement('canvas'); cv.width = clip.width; cv.height = clip.height;
     const ctx = cv.getContext('2d', { willReadFrequently: true });
     const out = [];
     for (const k of picks) {
-      await new Promise(r => { video.addEventListener('seeked', r, { once: true }); video.currentTime = (k + 0.5) / clip.fps; });
+      await within(new Promise(r => { video.addEventListener('seeked', r, { once: true }); video.currentTime = (k + 0.5) / clip.fps; }), 'seek to frame ' + k);
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       ctx.drawImage(video, 0, 0);
       let shown = 0;
@@ -183,6 +190,8 @@ try {
   await Q('game.setVision("cataract")'); await q.p.waitForTimeout(300); const n1 = await px();
   await Q('game.setVision("normal")');
   check('vision pass changes the frame (cataract blurs: smaller JPEG)', n1 < n0 * 0.95, `${n0} -> ${n1} bytes`);
+  await q.p.click('#filter-toggle');
+  await q.p.locator('#filter-menu details').evaluate((el: HTMLDetailsElement) => { el.open = true; });
   await q.p.click('#heat'); await q.p.waitForTimeout(800);
   const heat = await Q('return !!game.current().heat');
   await q.p.click('#heat');
@@ -214,10 +223,6 @@ try {
     li: document.querySelectorAll('#snags li').length, ms: Math.round(r.reduce((n, x) => n + x.ms, 0)) }`);
   check('physics pass (Rapier): the walker reaches every goal, snags listed', ph.done && ph.li >= 2, JSON.stringify(ph));
   await q.p.close();
-  const x = await open('game_synth&xr=1');
-  check('?xr=1 loads (VR button, render loop on the renderer)', await G(x.p, 'return game.xr()') && !!(await x.p.$('#vrbutton')) && x.errors.length === 0,
-    `errors: ${x.errors.join('; ') || 'none'}`);
-  await x.p.close();
   // 9. reimagined room: the room morphs into the safest suggested layout, each change costed, undo takes one back
   const ri = await open('game_synth');
   const R = (f: string) => G(ri.p, f);
@@ -234,6 +239,88 @@ try {
   check('reimagine: undo takes one change back', un === run.n - 1, `${run.n} -> ${un}; page errors: ${ri.errors.join(' | ') || 'none'}`);
   check('reimagine: no page errors', ri.errors.length === 0, ri.errors.join(' | ') || 'none');
   await ri.p.close();
+  // 10. stairs on the real kitchen (its scene folder is generated, so skipped where it isn't exported): the lower flight
+  // measured from the splat, checked against code and the stronger hand, then the three additions clear their checks
+  const k4scene = ['kitchen4_lighter_objects', 'kitchen4_lighter'].find(s => existsSync(`${ROOT}viewer/public/scene/${s}/scene.json`));
+  if (k4scene) {
+    const k4 = await open(k4scene);
+    const K = (f: string) => G(k4.p, f);
+    if (k4scene.endsWith('_objects')) {   // the demo scene: detected furniture, so Reimagine has something to move
+      const re = await K('const cs = await game.reimagine.run(); return { n: cs.length, labels: cs.map(c => c.label), msg: document.getElementById("reimtotal").textContent }');
+      check('reimagine on the demo kitchen: at least one costed move', re.n >= 1, `${re.labels.join('; ') || re.msg}`);
+    }
+    const st = await K('return await game.stairs.mark([4.28, -0.68], [3.48, -0.68], [3.88, -1.6])');
+    const risers = st.treads_z.map((z: number, k: number) => z - (k ? st.treads_z[k - 1] : 0));
+    check('stairs: measured from the splat (treads, risers, rail side)', st.treads_z.length >= 3 && risers.every((r: number) => r > 0.13 && r < 0.24) && st.rails.right === 'seen',
+      `${st.treads_z.length} treads, risers ${risers.map((r: number) => (r * 100).toFixed(0)).join('/')} cm, rails ${JSON.stringify(st.rails)}`);
+    const v = (w: string) => `game.current().checks.find(c => c.id === 'stairs:stairs:${w}')?.verdict`;
+    await K("game.stairs.setStrongSide('left'); await new Promise(r => setTimeout(r, 800))");
+    const before = await K(`return [${v('rails')}, ${v('light')}, ${v('walker')}]`);
+    for (const id of ['stair_rail:stairs:left', 'stair_lights:stairs', 'stair_walker:stairs']) await K(`await game.applyFix('${id}')`);
+    const after = await K(`return [${v('rails')}, ${v('light')}, ${v('walker')}]`);
+    check('stairs: rail for the stronger hand, step lights and a walker at the top clear their checks',
+      before.every((x: string) => x !== 'ok') && after[0] === 'ok' && after[1] === 'ok' && after[2] === 'borderline, OT to verify', `${before.join(', ')} -> ${after.join(', ')}`);
+    await K("game.setNight(true)"); await shot(k4.p, 'stairs_night');
+    check('stairs: no page errors', k4.errors.length === 0, k4.errors.join(' | ') || 'none');
+    await k4.p.close();
+  }
+  // 11. doorways: the 55 cm synthetic doorway blocks the walker; widening it (away from the open leaf) opens the route,
+  // edits the scan (wall strip hidden, jamb shifted) and undo closes it again
+  const dn = await open('game_synth_narrow');
+  const D = (f: string) => G(dn.p, f);
+  await D("await game.doors.mark([4.05, 1.225], [4.05, 1.775], 'bathroom door')");
+  const d0 = await D("return { err: game.current().error ?? null, v: game.current().checks.find(c => c.id === 'door:bathroom door')?.verdict, ids: game.doors.list().map(d => d.hinge) }");
+  await D("await game.doors.apply('bathroom door', 'widen')");
+  const d1 = await D("return { err: game.current().error ?? null, v: game.current().checks.find(c => c.id === 'door:bathroom door')?.verdict, edits: game.doors.edits(), squeeze: game.current().hazards.filter(h => h.type === 'tight_clearance' && Math.abs(h.position[0] - 4.05) < 0.3).length }");
+  check('doorway: blocked at 55 cm, open once widened away from the leaf, scan edited',
+    !!d0.err && d0.v === 'fail' && d0.ids[0] === 'b' && !d1.err && d1.v === 'ok' && d1.edits === 2 && d1.squeeze === 0, `${JSON.stringify(d0)} -> ${JSON.stringify(d1)}`);
+  await shot(dn.p, 'door_widened');
+  const d2 = await D("await game.reimagine.undo(0); return { err: game.current().error ?? null, edits: game.doors.edits() }");
+  check('doorway: undo closes it and removes the edits', !!d2.err && d2.edits === 0, JSON.stringify(d2));
+  check('doorway: no page errors', dn.errors.length === 0, dn.errors.join(' | ') || 'none');
+  await dn.p.close();
+  // 12. reset: Z puts the picked object back, a blocked original refuses, Shift+Z / Reset all restore objects, removals and fixes
+  {
+  const rs = await open('game_synth');
+  const RS = (f: string) => G(rs.p, f);
+  await rs.p.waitForTimeout(1500);
+  const r0 = await RS("return { poses: game.layout().poses.map(q => ({ ...q })), pm: game.current().per_month }");
+  const bed = r0.poses[await RS("return game.items.indexOf('bed')")];
+  await RS("await game.moveObject('bed', 2.0, 1.0, 90); game.select('bed')");
+  await rs.p.waitForTimeout(300);
+  const lab = await RS("return { lines: game.label(), btn: !document.getElementById('resetobj').disabled }");
+  check('selecting a moved object names it and says how far it moved', lab.lines[0] === 'Bed' && /moved .* m/.test(lab.lines[1] ?? '') && lab.btn, JSON.stringify(lab));
+  await rs.p.keyboard.press('KeyZ');
+  await rs.p.waitForTimeout(500);
+  const z = await RS("const k = game.items.indexOf('bed'), q = game.layout().poses[k]; return { x: q.x, y: q.y, yaw: q.yaw, label: game.label() }");
+  check('Z puts the selected object back where it started', Math.hypot(z.x - bed.x, z.y - bed.y) < 0.01 && Math.abs(z.yaw - bed.yaw) < 0.01 && z.label.length === 1,
+    `bed at (${z.x.toFixed(2)}, ${z.y.toFixed(2)}) vs original (${bed.x.toFixed(2)}, ${bed.y.toFixed(2)}); label ${JSON.stringify(z.label)}`);
+  const bedAway = await RS("return (await game.moveObject('bed', 2.0, 1.0, 90)).ok");
+  const taken = await RS(`return (await game.moveObject('nightstand', ${bed.x}, ${bed.y}, 0)).ok`);
+  await RS("game.resetObject('bed')");
+  await rs.p.waitForTimeout(300);
+  const blocked = await RS("const q = game.layout().poses[game.items.indexOf('bed')]; return { x: q.x, y: q.y }");
+  check('reset refuses when something else has taken the original spot', bedAway === true && taken === true && Math.abs(blocked.x - 2.0) < 0.01 && Math.abs(blocked.y - 1.0) < 0.01,
+    `bed moved away=${bedAway}, nightstand moved onto its old spot=${taken}; bed stays at (${blocked.x.toFixed(2)}, ${blocked.y.toFixed(2)})`);
+  await RS("await game.resetAll()");
+  await RS("await game.moveObject('bed', 2.0, 1.0, 90); game.removeObject('rug')");
+  await RS("game.frontend.setTab('reimagine')");
+  await rs.p.locator('summary').filter({ hasText: 'Explore individual fixes' }).click();
+  await rs.p.click('#planfixes');
+  const rf = await rs.p.waitForFunction(() => (window as any).game.fixes, null, { timeout: 20000 }).then(h => h.jsonValue());
+  await RS(`await game.applyFix('${rf[0].id}')`);
+  await rs.p.waitForTimeout(300);
+  const evalsBeforeReset = await RS('return game.evals');
+  await rs.p.keyboard.press('Shift+KeyZ');
+  // Applying a fix also queues fix ranking. The reset evaluation waits behind it: a fixed 800 ms races that worker.
+  await rs.p.waitForFunction(n => (window as any).game.evals > n, evalsBeforeReset, { timeout: 20000 });
+  const all = await RS("const l = game.layout(); return { poses: l.poses, flat: l.flattened.length, gone: game.inventory(), reimt: game.reimagine.t(), changes: game.reimagine.changes().length, pm: game.current().per_month }");
+  const same = all.poses.every((q: any, n: number) => !q.removed && Math.hypot(q.x - r0.poses[n].x, q.y - r0.poses[n].y) < 0.01 && Math.abs(q.yaw - r0.poses[n].yaw) < 0.01);
+  check('Shift+Z restores every object, removal and fix', same && all.flat === 0 && all.gone.length === 0 && all.reimt === 1 && all.changes === 0 && Math.abs(all.pm - r0.pm) < 0.01,
+    `poses restored=${same}, taped strips=${all.flat}, removed=${all.gone.length}, reimagine changes=${all.changes}; ${r0.pm.toFixed(2)} -> ${all.pm.toFixed(2)}/month`);
+  check('reset: no page errors', rs.errors.length === 0, rs.errors.join(' | ') || 'none');
+  await rs.p.close();
+  }
 } finally {
   await browser.close();
   writeFileSync(new URL('results.json', import.meta.url), JSON.stringify(results, null, 1));

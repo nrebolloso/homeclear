@@ -129,7 +129,7 @@ export function createWorld(I: WorldInit) {
     const p = I.poses[k], mat = o.kind === 'rug';
     let z5 = 0;
     if (!mat) { const zs: number[] = []; for (let i = 2; i < o.points.length; i += 3) zs.push(o.points[i]); zs.sort((a, b) => a - b); z5 = zs[Math.floor(zs.length * 0.05)] ?? 0; }
-    const fixed = !mat && z5 > 0.15;   // stands on a cabinet: out of the walker's reach, kept still
+    const fixed = !mat && (o.kind === 'door' || z5 > 0.15);   // a hinged leaf can't slide (swing not modelled), or stands on a cabinet out of reach: kept still
     const rb = world.createRigidBody((fixed ? RAPIER.RigidBodyDesc.fixed() : RAPIER.RigidBodyDesc.dynamic().setSleeping(true).setLinearDamping(0.2).setAngularDamping(0.5))
       .setTranslation(p.x, p.y, 0).setRotation(yawQ(p.yaw)).setEnabled(!p.removed));
     const s: Record<string, number> = {};
@@ -302,8 +302,10 @@ export function createWorld(I: WorldInit) {
         B.still = Math.hypot(lv.x, lv.y, lv.z) < 0.01 && Math.hypot(av.x, av.y, av.z) < 0.05 ? B.still + dt : 0;
         if ((B.still > 0.3 || B.rb.isSleeping()) && B.disturbed > 0) {   // came to rest after the walker touched it: where it ended up
           const pose = { x: tr.x, y: tr.y, yaw: yawOf(q) };
-          if (d > 0.02 || Math.abs(pose.yaw - B.rest.yaw) > 0.03) settled.push({ k: B.k, pose, moved_m: d, tipped: B.tipped });
-          B.rest = pose; B.disturbed = 0; B.announced = false;
+          const turn = Math.abs(Math.atan2(Math.sin(pose.yaw - B.rest.yaw), Math.cos(pose.yaw - B.rest.yaw)));
+          // a brush of a few cm is not a change to the room: the layout keeps the pose until nudges add up past 5 cm / 5°
+          if (d > 0.05 || turn > 0.087) { settled.push({ k: B.k, pose, moved_m: d, tipped: B.tipped }); B.rest = pose; }
+          B.disturbed = 0; B.announced = false;
         }
       }
       if (flap && !flap.folded && flapAngle() > Math.PI / 2) { flap.folded = true; out.push({ t, kind: 'corner_folded', object: flap.mat.o.name, k: flap.mat.k, value: flapAngle(), at: flap.corner }); }

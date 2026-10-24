@@ -20,7 +20,8 @@
  "walker": {
   "push_max_n": [25.0, 60.0],
   "glide_friction": [0.15, 0.45],
-  "frame_mass_kg": [2.5, 4.0],
+  "_frame_mass": "Drive Medical 10210-1 spec sheet: 7.5 lb (manufacturer, not weighed)",
+  "frame_mass_kg": [3.4, 3.4],
   "hand_load_n": [15.0, 45.0]
  }
 }

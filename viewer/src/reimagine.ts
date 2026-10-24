@@ -11,6 +11,8 @@ export interface Change {
   /** object index (-1: a fix with no object, e.g. taped cable) */
   k: number; name: string; kind: 'move' | 'remove' | 'fix'; label: string;
   from?: Pose; to?: Pose; dist_m: number; turn_deg: number; at: XY; cost: MoveCost;
+  /** height of an added fixture (a rail up the stairs), for its tag */
+  z?: number;
   /** the configured fix behind it, if any */
   iv?: string;
 }
@@ -38,7 +40,7 @@ export function diffLayouts(objs: Obj[], from: Layout, to: Layout, interventions
       from: a, to: b, dist_m: d, turn_deg: t, at: [b.x, b.y], cost: via?.cost ?? moveCost(o, a, b), iv: via?.iv });
   });
   // fixes with no object to move: taped strips, raised seats, added fixtures
-  const fixOnly = (iv: Intervention, at: XY) => out.push({ k: -1, name: iv.target ?? iv.id, kind: 'fix', label: iv.label, dist_m: 0, turn_deg: 0, at, cost: fixCost(iv), iv: iv.id });
+  const fixOnly = (iv: Intervention, at: XY) => out.push({ k: -1, name: iv.target ?? iv.id, kind: 'fix', label: iv.label, dist_m: 0, turn_deg: 0, at, z: iv.fixture?.xyz?.[2], cost: fixCost(iv), iv: iv.id });
   for (const box of to.flattened) {
     if (from.flattened.some(f => sameBox(f, box))) continue;
     const iv = interventions.find(i => i.kind === 'flatten' && i.box_xy && sameBox(i.box_xy, box));
@@ -52,8 +54,18 @@ export function diffLayouts(objs: Obj[], from: Layout, to: Layout, interventions
   }
   for (const id of to.added ?? []) {
     if (from.added?.includes(id)) continue;
-    const iv = interventions.find(i => i.id === id), k = objs.findIndex(x => x.name === iv?.fixture?.attach);
-    if (iv) fixOnly(iv, k >= 0 ? [to.poses[k].x, to.poses[k].y] : [0, 0]);
+    const iv = interventions.find(i => i.id === id), k = objs.findIndex(x => x.name === iv?.fixture?.attach), p = to.placed?.[id];
+    const xyz = p ? [p.x, p.y] : iv?.fixture?.xyz;
+    if (iv) {
+      fixOnly(iv, k >= 0 ? [to.poses[k].x, to.poses[k].y] : xyz ? [xyz[0], xyz[1]] : [0, 0]);
+      if (p && iv.fixture?.xyz) out[out.length - 1].label += `; parked ${Math.hypot(p.x - iv.fixture.xyz[0], p.y - iv.fixture.xyz[1]).toFixed(1)} m from its suggested spot`;
+    }
+  }
+  for (const c of to.carved ?? []) {   // a widened doorway: tag it at the opening, at head height
+    if (from.carved?.some(f => f.id === c.id)) continue;
+    const iv = interventions.find(i => i.id === c.id), P = c.poly;
+    if (iv) out.push({ k: -1, name: c.target, kind: 'fix', label: iv.label, dist_m: 0, turn_deg: 0, z: 1.6, iv: iv.id, cost: fixCost(iv),
+      at: [P.reduce((a, p) => a + p[0], 0) / P.length, P.reduce((a, p) => a + p[1], 0) / P.length] });
   }
   return out;
 }
@@ -66,7 +78,9 @@ export function undoChange(lay: Layout, original: Pose[], c: Change, interventio
   if (iv?.kind === 'flatten' && iv.box_xy) flattened = flattened.filter(b => !sameBox(b, iv.box_xy!));
   if (iv?.kind === 'raise' && raised) { raised = { ...raised }; delete raised[iv.target!]; }
   if (iv?.kind === 'add' && added) added = added.filter(id => id !== iv.id);
-  return { ...lay, poses, flattened, raised, added };
+  const carved = lay.carved?.filter(x => x.id !== c.iv);
+  const placed = lay.placed && iv?.kind === 'add' ? Object.fromEntries(Object.entries(lay.placed).filter(([id]) => id !== iv.id)) : lay.placed;   // taken off: put back, it starts at its default spot
+  return { ...lay, poses, flattened, raised, added, ...(carved ? { carved } : {}), ...(placed ? { placed } : {}) };
 }
 
 const smooth = (t: number) => { const x = Math.min(1, Math.max(0, t)); return x * x * (3 - 2 * x); };
@@ -97,8 +111,13 @@ export function costText(c: MoveCost): string {
 
 // ---------- three.js: the overlays and the morph ----------
 
+// card textures by content: every refresh redraws every tag, and most of them read the same as last time
+const cardCache = new Map<string, { tex: THREE.CanvasTexture; w: number; h: number }>();
 /** A text card as a sprite (world-sized, always on top): readable on a monitor and in the headset. */
-function card(lines: string[], color = '#e9f6ff', bg = 'rgba(14,20,28,0.82)', lineH = 0.075): THREE.Sprite {
+export function card(lines: string[], color = '#e9f6ff', bg = 'rgba(14,20,28,0.82)', lineH = 0.075): THREE.Sprite {
+  const key = [color, bg, ...lines].join('\n'), hit = cardCache.get(key);
+  if (hit) return cardSprite(hit, lines.length, lineH);
+  if (cardCache.size > 120) { for (const c of cardCache.values()) c.tex.dispose(); cardCache.clear(); }
   const px = 44, pad = 18, cv = document.createElement('canvas'), ctx = cv.getContext('2d')!;
   ctx.font = `600 ${px}px system-ui, sans-serif`;
   const w = Math.ceil(Math.max(...lines.map(l => ctx.measureText(l).width))) + pad * 2, h = lines.length * px * 1.25 + pad * 2;
@@ -109,9 +128,15 @@ function card(lines: string[], color = '#e9f6ff', bg = 'rgba(14,20,28,0.82)', li
   lines.forEach((l, n) => { ctx.fillStyle = n === 0 ? color : '#c9d3dc'; ctx.fillText(l, pad, pad + n * px * 1.25); });
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
+  const entry = { tex, w, h };
+  cardCache.set(key, entry);
+  return cardSprite(entry, lines.length, lineH);
+}
+function cardSprite({ tex, w, h }: { tex: THREE.CanvasTexture; w: number; h: number }, n: number, lineH: number): THREE.Sprite {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, transparent: true }));
-  const H = lineH * lines.length * 1.25 + 0.04;
+  const H = lineH * n * 1.25 + 0.04;
   s.scale.set((H * w) / h, H, 1);
+  s.userData.base = s.scale.clone();
   s.renderOrder = 3;
   return s;
 }
@@ -120,8 +145,9 @@ function dispose(grp: THREE.Object3D) {
     grp.remove(c);
     c.traverse(x => {
       const m = x as THREE.Mesh;
+      if (m.userData.shared) return;   // the rings' geometry and materials live as long as the room
       m.geometry?.dispose();
-      for (const mat of [m.material].flat() as THREE.Material[]) { (mat as THREE.SpriteMaterial)?.map?.dispose(); mat?.dispose(); }
+      for (const mat of [m.material].flat() as THREE.Material[]) mat?.dispose();   // card textures are cached, not owned
     });
   }
 }
@@ -136,22 +162,33 @@ export interface ReimagineDeps {
   /** may the imagined fill under a moved object show (the "imagined floor" toggle) */
   fillsOn: () => boolean;
   onT?: (t: number) => void;
+  /** to keep tags from swelling when you stand next to them */
+  camera?: THREE.Camera;
 }
+/** Which parts of the overlay are drawn. Tags are the per-change cost cards; 'selected' shows only the picked change's. */
+export interface Parts { ghosts: boolean; arrows: boolean; tags: 'all' | 'selected' | 'off'; receipt: boolean; rings: boolean; ringLabels: boolean }
+export const ALL_PARTS: Parts = { ghosts: true, arrows: true, tags: 'selected', receipt: true, rings: true, ringLabels: true };
 type Eh = Hz & { height_m?: number; min_side_clearance_m?: number };
 
 export function createReimagine(D: ReimagineDeps) {
-  const root = new THREE.Group(), ghosts = new THREE.Group(), tags = new THREE.Group(), marks = new THREE.Group();
-  root.add(ghosts, tags, marks);
+  const root = new THREE.Group(), ghosts = new THREE.Group(), arrows = new THREE.Group(), tags = new THREE.Group(), receipt = new THREE.Group(), marks = new THREE.Group();
+  root.add(ghosts, arrows, tags, receipt, marks);
+  const ringGeo = new THREE.RingGeometry(0.2, 0.27, 40);
+  const ringMat = { fixed: new THREE.MeshBasicMaterial({ color: 0x2fbf5f, transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide }),
+    new: new THREE.MeshBasicMaterial({ color: 0xff3b3b, transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide }) };
+  let parts: Parts = { ...ALL_PARTS }, picked = -1;
+  let pickedFix: string | undefined;
   root.renderOrder = 3;
   D.scene.add(root);
   let changes: Change[] = [], t = 1, anim: { dur: number } | null = null;
   let resolved: Eh[] = [], added: Eh[] = [];
+  let lastBA: [{ per_month: number; hazards: Eh[] } | null, { per_month: number; hazards: Eh[] } | null] | null = null;
 
   const hzText = (h: Eh) => h.type === 'floor_bump' ? `${h.name ?? 'bump'} ${h.height_m !== undefined ? `${(h.height_m * 100).toFixed(1)} cm` : ''}`
     : `squeeze ${h.min_side_clearance_m !== undefined ? `${(h.min_side_clearance_m * 100).toFixed(0)} cm/side` : ''}`;
 
   function build(before: { per_month: number; hazards: Eh[] } | null, after: { per_month: number; hazards: Eh[] } | null) {
-    dispose(ghosts); dispose(tags); dispose(marks);
+    dispose(ghosts); dispose(arrows); dispose(tags); dispose(receipt); dispose(marks);
     for (const c of changes) {
       const it = c.k >= 0 ? D.items[c.k] : null, o = c.k >= 0 ? D.objs[c.k] : null;
       if (it && c.from) {   // dashed outline where it stands now
@@ -170,22 +207,27 @@ export function createReimagine(D: ReimagineDeps) {
         const dir = new THREE.Vector3(c.to.x - c.from.x, c.to.y - c.from.y, 0);
         const arrow = new THREE.ArrowHelper(dir.clone().normalize(), new THREE.Vector3(c.from.x, c.from.y, 0.04), dir.length(), 0x5fd0ff, 0.14, 0.09);
         arrow.traverse(x => { const m = (x as THREE.Mesh).material as THREE.Material | undefined; if (m) { m.depthTest = false; m.transparent = true; } x.renderOrder = 3; });
-        ghosts.add(arrow);
+        arrows.add(arrow);
       }
-      const tag = card([c.label, costText(c.cost)], c.kind === 'remove' ? '#ffd27a' : '#8fe3ff', undefined, 0.055);
-      tag.position.set(c.at[0], c.at[1], Math.max(0.65, (o?.height_m ?? 0) + 0.35));   // above the hazard labels (0.15)
+      const tag = card([c.label, c.cost.source === 'placeholder' ? 'Cost & setup: pending estimate' : costText(c.cost)], c.kind === 'remove' ? '#ffd27a' : '#8fe3ff', undefined, 0.055);
+      tag.position.set(c.at[0], c.at[1], Math.max(0.65, (o?.height_m ?? 0) + 0.35, (c.z ?? 0) + 0.4));   // above the hazard labels (0.15)
+      tag.userData.k = c.k;
+      tag.userData.iv = c.iv;
       tags.add(tag);
     }
     resolved = []; added = [];
     if (before && after && changes.length) ({ resolved, added } = hazardDiff(before.hazards, after.hazards));
-    for (const [list, col, word] of [[resolved, 0x2fbf5f, 'fixed'], [added, 0xff3b3b, 'new']] as const)
+    for (const [list, word] of [[resolved, 'fixed'], [added, 'new']] as const)
       for (const h of list) {
-        const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.27, 40), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide }));
+        const ring = new THREE.Mesh(ringGeo, ringMat[word]);
         ring.position.set(h.position[0], h.position[1], 0.045);
         ring.renderOrder = 3;
-        const s = card([`${word}: ${hzText(h)}`], word === 'fixed' ? '#7dffa8' : '#ff9a9a', 'rgba(14,20,28,0.75)', 0.045);
-        s.position.set(0, 0, 0.15);
-        ring.add(s);
+        ring.userData.shared = true;
+        if (parts.ringLabels) {
+          const s = card([`${word}: ${hzText(h)}`], word === 'fixed' ? '#7dffa8' : '#ff9a9a', 'rgba(14,20,28,0.75)', 0.045);
+          s.position.set(0, 0, 0.15);
+          ring.add(s);
+        }
         ring.userData.word = word;
         marks.add(ring);
       }
@@ -197,8 +239,15 @@ export function createReimagine(D: ReimagineDeps) {
       if (changes.some(c => c.cost.source === 'placeholder')) lines.push('costs: placeholder estimates');
       const r = card(lines, '#ffffff', 'rgba(14,20,28,0.85)', 0.09);
       r.position.set(D.centre[0], D.centre[1], 1.9);
-      tags.add(r);
+      receipt.add(r);
     }
+    applyParts();
+  }
+
+  function applyParts() {
+    ghosts.visible = parts.ghosts; arrows.visible = parts.arrows; receipt.visible = parts.receipt; marks.visible = parts.rings;
+    tags.visible = parts.tags !== 'off';
+    for (const s of tags.children) s.visible = parts.tags === 'all' || (picked >= 0 && s.userData.k === picked) || (!!pickedFix && s.userData.iv === pickedFix);
   }
 
   /** 0 = the room as it is, 1 = reimagined. */
@@ -224,7 +273,7 @@ export function createReimagine(D: ReimagineDeps) {
       const u = stagger(t, i, moving.length);
       for (const gh of ghosts.children) if (gh.userData.change === c) gh.traverse(x => { const m = (x as THREE.LineSegments).material as THREE.Material; if (m) m.opacity = 0.9 * smooth(u * 2); });
     });
-    for (const m of marks.children) ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 0.85 * smooth((t - 0.6) / 0.4);
+    ringMat.fixed.opacity = ringMat.new.opacity = 0.85 * smooth((t - 0.6) / 0.4);
     D.onT?.(t);
   }
 
@@ -234,6 +283,7 @@ export function createReimagine(D: ReimagineDeps) {
     refresh(lay: Layout, applied: string[], before: { per_month: number; hazards: Eh[] } | null, after: { per_month: number; hazards: Eh[] } | null) {
       const from: Layout = { poses: D.original, flattened: [] };
       changes = diffLayouts(D.objs, from, lay, D.interventions, applied);
+      lastBA = [before, after];
       build(before, after);
       if (!anim) setT(1);
       return changes;
@@ -246,11 +296,24 @@ export function createReimagine(D: ReimagineDeps) {
     playing: () => !!anim,
     /** per frame */
     update(dt: number) {
+      if (D.camera && root.visible)
+        for (const grp of [tags, receipt]) if (grp.visible)
+          for (const s of grp.children as THREE.Sprite[]) if (s.visible && s.userData.base)   // shrink up close: a card at arm's length filled the view
+            s.scale.copy(s.userData.base).multiplyScalar(Math.min(1, Math.max(0.3, D.camera.position.distanceTo(s.position) / 2.5)));
       if (!anim) return;
       setT(t + dt / anim.dur);
       if (t >= 1) anim = null;
     },
     setVisible(on: boolean) { root.visible = on; },
+    /** show or hide parts of the overlay (the panel's checkboxes, performance mode) */
+    setParts(p: Partial<Parts>) {
+      const labels = parts.ringLabels;
+      parts = { ...parts, ...p };
+      if (parts.ringLabels !== labels) build(lastBA?.[0] ?? null, lastBA?.[1] ?? null); else applyParts();
+    },
+    parts: () => parts,
+    /** the object whose cost tag shows when tags are 'selected' (-1: none) */
+    selectChange(k: number, fixId?: string) { picked = k; pickedFix = fixId; applyParts(); },
   };
 }
 export type Reimagine = ReturnType<typeof createReimagine>;

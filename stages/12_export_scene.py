@@ -398,6 +398,11 @@ def main(cfg):
              # transfer / reach / emergency-access rules (checks.ts); persona carries knee height and reach
              "transfer": {"min_above_knee_m": 0.05, "max_above_knee_m": 0.20, "reach_height_m": [0.3, 1.3], **gm.get("transfer", {})},
              "ems": {"stretcher_width_m": 0.6, "phone_reach_m": 3.0, **gm.get("ems", {}), "entry": gm.get("entry")},
+             # stairs (viewer stairs.ts): tape-measured, or copied from the viewer's "Copy as config YAML"; an entry
+             # with only bottom/top is measured from the splat in the viewer
+             "stairs": gm.get("stairs", []),
+             # doorways (viewer doors.ts): {name, a, b} = the two jambs' inside faces; the viewer offers ways to widen them
+             "doors": gm.get("doors", []),
              "hazards": "hazards.json", "route": "route.json", "routes": "routes.json", "walker": "walker.json", "personas": "personas.json",
              "persona": "persona.json", "interventions": gm["interventions"], "risk": gm["risk"],
              "plan": {k: cfg["plan"][k] for k in ("preferred_clearance_m", "clearance_weight")},

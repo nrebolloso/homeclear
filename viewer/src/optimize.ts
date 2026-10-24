@@ -2,7 +2,7 @@
 // evaluate() as the live view (all routes, checks), and return three options from quick to full. Pure: runs in the
 // worker, tested in node. Every number in an option comes from a full re-evaluation of that exact layout.
 import { applyIntervention, polyCells, worldFootprint, toCell, type GridMeta, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
-import { evaluate, routeStart, type Init, type Eval } from './evaluate.ts';
+import { evaluate, availableInterventions, routeStart, type Init, type Eval } from './evaluate.ts';
 import { bedExit } from './checks.ts';
 import { rng } from './sim.ts';
 
@@ -142,8 +142,8 @@ export function score(S: Init, cfg: OptimizerCfg, r: Eval, lay: Layout, effort: 
 
 /** Every single change on the table: the configured fixes, plus moving each movable object to a wall slot. */
 export function actions(S: Init, cfg: OptimizerCfg, start: Layout): Action[] {
-  const A: Action[] = S.interventions.map((iv: Intervention) => ({
-    id: iv.id, key: iv.kind === 'raise' ? `raise:${iv.target}` : iv.kind === 'add' ? `add:${iv.id}` : iv.kind === 'flatten' ? `flat:${iv.id}` : `obj:${iv.object}`,
+  const A: Action[] = availableInterventions(S, evaluate(S, start, { ghosts: false })).map((iv: Intervention) => ({
+    id: iv.id, key: iv.kind === 'raise' ? `raise:${iv.target}` : iv.kind === 'carve' ? `carve:${iv.target}` : iv.kind === 'add' ? `add:${iv.id}` : iv.kind === 'flatten' ? `flat:${iv.id}` : `obj:${iv.object}`,
     label: iv.label, effort: iv.effort ?? 1, cost_usd: iv.cost_usd ?? 0, minutes: iv.minutes ?? 10, product: iv.product,
     apply: (l: Layout) => applyIntervention(S.objects, l, iv),
   }));

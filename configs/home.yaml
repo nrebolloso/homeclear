@@ -58,7 +58,7 @@ grid:
 plan:
   start: null                   # [x, y] metres in the floor frame: read off out/<run>/occupancy.png (1 m grid)
   goal: null                    # null = auto (two far-apart reachable points); or read off occupancy.png
-  walker_width_m: 0.66
+  walker_width_m: 0.61
   preferred_clearance_m: 0.30   # path prefers this much room on each side when it can
   clearance_weight: 5.0
 
@@ -87,12 +87,12 @@ cluster:
   env: $HPG_ROOT/envs/homeclear
 
 game:                           # walker game (viewer/) + stage 12 export. Coordinates: floor frame, metres (occupancy.png)
-  walker:                       # standard folding walker; measure the patient's own and edit
-    width_m: 0.66               # outer width (keep = plan.walker_width_m)
-    depth_m: 0.50               # front legs to rear legs
-    handle_height_m: 0.85
+  walker:                       # Drive Medical 10210-1 (Amazon B001HOM4U2): manufacturer spec sheet, not taped
+    width_m: 0.61               # 24 in overall (keep = plan.walker_width_m)
+    depth_m: 0.445              # 17.5 in (retailer listing; the spec sheet gives none)
+    handle_height_m: 0.85       # adjusts 32-39 in (0.81-0.99 m): set to the patient
     user_gap_m: 0.25            # user's body centre to the rear legs
-    leg_radius_m: 0.015
+    leg_radius_m: 0.0127        # 1 in aluminium tube
   persona:
     eye_height_m: 1.55
     gait_profile: older_adult_walker

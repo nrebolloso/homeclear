@@ -67,11 +67,15 @@ def make_ply(pts_metric):
 def make_cameras_and_images():
     (W / "images").mkdir(parents=True, exist_ok=True)
     K = np.array([[1200.0, 0, 800], [0, 1200, 600], [0, 0, 1]])
-    canvas = np.full((216, 216), 255, np.uint8)  # 180 px marker = 6 cells x 30 px exactly, in a 0.12 m canvas
-    canvas[18:198, 18:198] = cv2.aruco.generateImageMarker(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50), 0, 180)
+    canvases = []
+    for mid in (0, 1):  # 180 px marker = 6 cells x 30 px exactly, in a 0.12 m canvas
+        cv = np.full((216, 216), 255, np.uint8)
+        cv[18:198, 18:198] = cv2.aruco.generateImageMarker(cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50), mid, 180)
+        canvases.append(cv)
     c, L = np.array([4.99, 2.0, 0.75]), 0.12                        # 0.12 m canvas -> 0.10 m black square
     right, down = np.array([0, -1.0, 0]), np.array([0, 0, -1.0])
-    corners3d = np.array([c + (u - 0.5) * L * right + (v - 0.5) * L * down for u, v in [(0, 0), (1, 0), (1, 1), (0, 1)]])
+    quad = lambda ctr: np.array([ctr + (u - 0.5) * L * right + (v - 0.5) * L * down for u, v in [(0, 0), (1, 0), (1, 1), (0, 1)]])
+    markers = [(canvases[0], quad(c)), (canvases[1], quad(c + [0, 0.5, 0.3]))]   # id 1: second print, same size, used by the multi-id check
     cams = []
     for k in range(12):
         eye = np.array([2.8 + 0.1 * k, 0.8 + 0.2 * k, 1.2 + 0.03 * k])
@@ -84,10 +88,13 @@ def make_cameras_and_images():
         w2c[:3, 3] = -Rcw.T @ (S0 * R0.T @ t0 + eye)
         w2c[:3] /= S0                                               # rescale so R is a rotation (scene units = COLMAP)
         assert np.allclose(w2c[:3, :3] @ w2c[:3, :3].T, np.eye(3), atol=1e-9)
-        uv = (K @ (Rcw.T @ (corners3d - eye).T)).T
-        uv = uv[:, :2] / uv[:, 2:]
-        H = cv2.getPerspectiveTransform(np.float32([[0, 0], [216, 0], [216, 216], [0, 216]]), np.float32(uv))
-        img = cv2.warpPerspective(canvas, H, (1600, 1200), borderValue=128)
+        img = np.full((1200, 1600), 128, np.uint8)
+        for cv, corners3d in markers:
+            uv = (K @ (Rcw.T @ (corners3d - eye).T)).T
+            uv = uv[:, :2] / uv[:, 2:]
+            H = cv2.getPerspectiveTransform(np.float32([[0, 0], [216, 0], [216, 216], [0, 216]]), np.float32(uv))
+            inside = cv2.warpPerspective(np.full((216, 216), 255, np.uint8), H, (1600, 1200)) > 0
+            img[inside] = cv2.warpPerspective(cv, H, (1600, 1200))[inside]
         name = f"{k:05d}.jpg"
         cv2.imwrite(str(W / "images" / name), img)
         cams.append({"name": name, "K": K.tolist(), "w2c": w2c.tolist(), "width": 1600, "height": 1200})
@@ -112,6 +119,20 @@ if __name__ == "__main__":
 
     r4 = run("04_scale", cfg_path)
     assert r4["status"] == "PASS" and abs(r4["metrics"]["scale"] - S0) / S0 < 0.01, r4
+    # several ids: each gives its own scale, the median is applied, an absent id is reported, not fatal
+    cfg["scale"]["marker_id"] = [0, 1, 7]
+    cfg_path.write_text(yaml.safe_dump(cfg))
+    rm = run("04_scale", cfg_path)
+    ids = rm["metrics"]["marker_ids"]
+    assert rm["status"] == "PASS" and abs(rm["metrics"]["scale"] - S0) / S0 < 0.01 and ids["7"] == "not found" \
+        and ids["1"]["frames"] >= 2 and rm["metrics"]["marker_scale_spread_pct"] < 1, rm
+    cfg["scale"]["marker_size_m"] *= 1.1   # a wrong print size moves every id together: the spread misses it, the tape check catches it
+    cfg_path.write_text(yaml.safe_dump(cfg))
+    assert run("04_scale", cfg_path)["status"] == "FAIL"
+    cfg["scale"]["marker_size_m"] /= 1.1
+    cfg["scale"]["marker_id"] = 0
+    cfg_path.write_text(yaml.safe_dump(cfg))
+    r4 = run("04_scale", cfg_path)
     r5 = run("05_floor", cfg_path)
     assert r5["status"] == "PASS", r5
     r6 = run("06_occupancy", cfg_path)

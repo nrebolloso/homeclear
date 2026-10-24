@@ -9,6 +9,8 @@
 </head>
 <body>
   <div id="view"></div>
+  <div id="markhud" role="status" aria-live="polite" hidden></div>
+  <div id="markcross" aria-hidden="true" hidden>+</div>
   <aside id="left" class="panel">
     <h1>Cleared</h1>
     <div class="row">
@@ -23,6 +25,7 @@
       <label><input type="checkbox" id="shell" /> Room shell</label>
       <label><input type="checkbox" id="verify" /> Re-scan check</label>
       <label title="autoplay from behind: a mannequin walks on the simulated footsteps"><input type="checkbox" id="third" /> Third person</label>
+      <label title="fewer overlays, lower resolution, smaller splats: for the headset and slow laptops. Numbers and checks do not change; on by default in the headset"><input type="checkbox" id="perf" /> Performance mode</label>
     </div>
     <p class="hint">Free walk: WASD / arrows, drag to look. Fly (F): WASD, Q/E down/up, Shift fast, no walls. Click furniture to move it: drag the gizmo or use the arrow keys (5 cm steps), T move, R rotate, Esc deselect.</p>
     <label>Who <select id="persona"></select></label>
@@ -59,7 +62,8 @@
     <h2>Fixes</h2>
     <button id="planfixes">Plan fixes</button>
     <button id="remove" disabled title="or press Delete">Remove selected</button>
-    <button id="reset">Reset layout</button>
+    <button id="resetobj" disabled title="put the picked object back: press Z or double-click it">Reset selected</button>
+    <button id="reset" title="every object, removal and fix back to the scan: Shift+Z">Reset all</button>
     <button id="report" title="printable report for the occupational therapist">OT report</button>
     <button id="fixcard" title="QR code: the family's checklist on a phone">Fix card (QR)</button>
     <ol id="fixes"></ol>
@@ -74,8 +78,35 @@
     <button id="reimplay" title="replay the room changing">Play</button>
     <label title="visual only: the numbers are always the layout on screen">as is <input type="range" id="reimt" min="0" max="100" value="100" /> reimagined</label>
     <label><input type="checkbox" id="reimshow" checked /> ghosts, arrows and cost tags in the room</label>
+    <div class="row">
+      <label><input type="checkbox" id="reimghosts" checked /> old spots</label>
+      <label><input type="checkbox" id="reimarrows" checked /> arrows</label>
+      <label><input type="checkbox" id="reimreceipt" checked /> receipt</label>
+      <label title="the cost card of each change: only the one you picked, all of them, or none">cost tags <select id="reimtags"><option value="selected">picked only</option><option value="all">all</option><option value="off">off</option></select></label>
+    </div>
     <div id="reimtotal" class="status"></div>
     <ol id="receipt"></ol>
+    <h2>Stairs</h2>
+    <button id="markstairs" title="three clicks on the splat: both ends of the bottom step's front edge, then the top step">Mark stairs</button>
+    <button id="viewstairs" title="fly to a clear view of the first stair">View stairs</button>
+    <button id="clearstairs" title="forget the stairs marked in this browser">Clear marked</button>
+    <button id="copystairs" title="keep them: paste into config.&lt;scene&gt;.yaml under game:">Copy as config YAML</button>
+    <button id="editstairs">Edit marks</button>
+    <label>Device at the top <select id="topdevice"><option value="walker">Walker</option><option value="rollator">Rollator with seat</option></select></label>
+    <label title="a rail for the stronger hand is needed going up AND coming down">Stronger hand <select id="strongside"><option value="">unknown</option><option value="left">left</option><option value="right">right</option></select></label>
+    <div class="row" title="what the scan saw at each side can be another flight's railing or a wall: say what is really there">
+      <label>Left rail <select id="railleft"><option value="">as scanned</option><option value="seen">rail</option><option value="none">none</option></select></label>
+      <label>Right rail <select id="railright"><option value="">as scanned</option><option value="seen">rail</option><option value="none">none</option></select></label>
+    </div>
+    <div id="stairstatus" class="status"></div>
+    <h2>Doorways</h2>
+    <button id="markdoor" title="two clicks on the splat: the inside face of each jamb">Mark doorway</button>
+    <button id="cleardoors" title="forget the doorways marked in this browser">Clear marked</button>
+    <button id="copydoors" title="keep them: paste into config.&lt;scene&gt;.yaml under game:">Copy as config YAML</button>
+    <button id="editdoors">Edit marks</button>
+    <p class="hint">Click to mark, drag to look. Right click / Backspace: undo; Esc: cancel. Shift: no snapping; Space: aim at centre. After marking, drag a handle or click a rail side; Enter: done.</p>
+    <p class="hint">VR: off-hand X/A marks a doorway, Y/B marks stairs. Wand B/Y edits saved marks. Trigger places or drags; B/Y undoes; grip cancels or finishes. Off-hand grip disables snapping; off-hand X/A while editing changes the top device. Twist the parked walker to turn it.</p>
+    <div id="doorstatus" class="status"></div>
     <h2>Cosmos clips <span class="imagined">imagined</span></h2>
     <ul id="clips"></ul>
     <label>Prompt <textarea id="prompt" rows="3">The same home at 3 AM, lights off, lit only by a small warm nightlight near the floor; an older adult pushing a walker slowly along the route; realistic home interior.</textarea></label>

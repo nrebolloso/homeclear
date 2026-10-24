@@ -3,7 +3,7 @@ import { chromium } from 'playwright-core';
 const [out, ...scenes] = process.argv.slice(2);
 // floor-frame [x, y, z, yaw, pitch] per view, e.g. capture cameras stepped 1 m back along their view (off the filmed path)
 const poses = JSON.parse(process.env.POSES);
-const b = await chromium.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', headless: true, args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const b = await chromium.launch({ executablePath: process.env.CHROME ?? '/usr/bin/google-chrome', headless: true, args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 for (const s of scenes) {
   const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
   p.on('pageerror', e => console.error(s, 'pageerror', e.message));

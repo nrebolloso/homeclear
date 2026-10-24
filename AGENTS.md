@@ -34,6 +34,29 @@ Fill in the names.
   reimagined), `play(seconds)`, `run()`, `refresh()`, `changes()`. Bind a controller button or thumbstick to these;
   don't reach into `reimagine.ts`.
 - **In-headset UI is scene objects** (sprites, meshes), never DOM or `CSS2DObject`: those don't render in WebXR.
+- **Guided marking** (`viewer/src/marker.ts`, `marker3d.ts`, Juan): `game.marker.begin('stairs' | 'door')`,
+  `place([x,y,z])`, `undo()`, `cancel()`, `edit(on)`, `done()`, `state()`, `dragHandle(owner,key,xyz)`,
+  `toggleRail(name,side)`, `moveWalker(name,poseOrNull)`, `setTopDevice('walker' | 'rollator')`. Await changes that
+  remeasure/replan. Desktop and the VR wand use this shared state. `Layout.placed[interventionId]` overrides an added
+  fixture's x/y/yaw; its z remains the landing height. See `HANDOFF_RENOVATIONS.md` for controls and verification.
+  VR tracking/input stays in `xr.ts`; marking connects through its `XrEditor` contract. `xrcompare.ts` separates real
+  layout restore/recalculation from visual preview. See `MERGE_VR_REVIEW.md` for the merged controls and decisions.
+- **Stairs** (`viewer/src/stairs.ts`): `scene.json` `stairs` (additive; from config `game.stairs` via stage 12) is a list of
+  `{ name, bottom: [[x,y],[x,y]], top: [x,y], top_z?, treads_z?, tread_fronts_m?, tread_depth_m?, width_m?, rails?: {left, right}, measured: 'tape' | 'splat' }`.
+  An entry with only `bottom`/`top` is measured from the splat in the viewer; "Copy as config YAML" in the Stairs panel
+  writes this shape. The persona's optional `strong_side: left | right` drives the rail check. Finding stairs
+  automatically (6c) is the detection lane's; it should emit this shape. `window.game.stairs` exposes `mark(a, b, top)`,
+  `list()`, `clear()`, `setStrongSide(side)`, `setRail(side, 'seen' | 'none' | null)`, `view()`, `copyYaml()`.
+  `rails_set: {left?, right?}` (from the panel or config) overrides what the scan saw at each side.
+- **Doorways** (`viewer/src/doors.ts`): `scene.json` `doors` (additive; config `game.doors` via stage 12) is a list of
+  `{ name, a: [x,y], b: [x,y], hinge?: 'a' | 'b', measured: 'tape' | 'clicks' }` (a, b = the jambs' inside faces). The
+  options are `carve` interventions (one per door at a time; layout `carved`), so the floor map opens wall cells and
+  `doors3d.ts` edits the scan (hide the wall strip, shift the jamb) to match. A door-leaf object next to a jamb marks the
+  hinge; widening grows the other way. `window.game.doors` exposes `mark(a, b, name)`, `apply(name, 'offset' |
+  'remove' | 'widen')`, `list()`, `clear()`, `copyYaml()`.
+- **Changing the world, not adding assets:** scan edits (`SplatEdit` under the room splat), copied scan points (the
+  mirrored rail) and the night shader's step lights are visual only and tinted/labelled "designed, not built". Nothing is
+  measured from them: measurements read the stored splat data, and the floor map gets its own edit (`carve`).
 
 ## Avoiding merge conflicts
 

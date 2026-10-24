@@ -59,9 +59,11 @@ export function polyCells(g: GridMeta, poly: XY[]): number[] {
   return out;
 }
 
-/** Base layers (movables cut out) + movables stamped at their current poses + flattened boxes. */
-export function stamp(g: GridMeta, base: Layers, objs: Footprinted[], poses: Pose[], flattened: [XY, XY][] = []): Layers {
+/** Base layers (movables cut out), wall carved where a doorway is widened, + movables stamped at their current poses +
+ *  flattened boxes. Carving comes first: it opens the wall, not furniture standing in the new opening. */
+export function stamp(g: GridMeta, base: Layers, objs: Footprinted[], poses: Pose[], flattened: [XY, XY][] = [], carved: XY[][] = []): Layers {
   const L = { floor: base.floor.slice(), obst: base.obst.slice(), bump: base.bump.slice() };
+  for (const poly of carved) for (const c of polyCells(g, poly)) { L.obst[c] = 0; L.floor[c] = 1; }   // designed, not measured: doors.ts
   objs.forEach((o, k) => {
     if (poses[k].removed || o.layer === 'none') return;
     for (const c of polyCells(g, worldFootprint(o, poses[k]))) {
@@ -290,11 +292,13 @@ export function routeHazards(g: GridMeta, L: Layers, P: Plan, walkerWidth: numbe
 }
 
 export interface Intervention {
-  id: string; label: string; kind: 'remove' | 'move' | 'flatten' | 'raise' | 'add'; object?: string; to?: number[]; box_xy?: [XY, XY];
+  id: string; label: string; kind: 'remove' | 'move' | 'flatten' | 'raise' | 'add' | 'carve'; object?: string; to?: number[]; box_xy?: [XY, XY];
+  /** carve: wall cells in poly_xy become floor (a widened doorway, doors.ts); one carve per target (the door's name) */
+  poly_xy?: XY[];
   /** raise: a seat/bed/toilet surface (object or fixture name) goes up by by_m (raised toilet seat, bed risers) */
   target?: string; by_m?: number;
   /** add: a new fixture (a touch lamp on the nightstand = a switch within reach); checks treat it like a marked one */
-  fixture?: { name: string; kind: string; attach?: string; xyz?: number[] };
+  fixture?: { name: string; kind: string; attach?: string; xyz?: number[]; side?: 'left' | 'right'; yaw?: number; surface_m?: number };
   /** what it takes (fix card, optimizer effort): dollars, minutes, 1 (anyone) .. 5 (two people, heavy furniture) */
   cost_usd?: number; minutes?: number; effort?: number; product?: string;
 }
@@ -302,16 +306,30 @@ export interface Layout {
   poses: Pose[]; flattened: [XY, XY][];
   /** surface raises by object/fixture name (m), and ids of 'add' fixes in place: no footprint, checks only */
   raised?: Record<string, number>; added?: string[];
+  /** carve fixes in place: which fix, on which door (target), the wall it opens, and how much wider the opening gets */
+  carved?: { id: string; target: string; poly: XY[]; by_m: number }[];
+  /** added fixtures moved by hand (the second walker on the landing), by fix id; else they stand where the fix puts them */
+  placed?: Record<string, Pose>;
 }
+/** The added fixtures in place, each at its hand-placed pose if it has one (x, y, yaw; z stays the fix's). */
+export function placedFixtures(ivs: Intervention[], lay: Layout) {
+  return ivs.filter(iv => iv.kind === 'add' && lay.added?.includes(iv.id)).map(iv => {
+    const f = { ...iv.fixture!, note: iv.label }, p = lay.placed?.[iv.id];
+    return p ? { ...f, xyz: [p.x, p.y, f.xyz?.[2] ?? 0], yaw: p.yaw } : f;
+  });
+}
+export const carvedPolys = (lay: Layout): XY[][] => (lay.carved ?? []).map(c => c.poly);
 
 /** A fix applied to a layout (new object, the input is untouched). Move targets are [x, y, yaw_deg]. */
 export function applyIntervention(objs: { name: string }[], lay: Layout, iv: Intervention): Layout {
   const poses = lay.poses.map(p => ({ ...p })), flattened = [...lay.flattened], raised = { ...lay.raised }, added = [...(lay.added ?? [])];
+  let carved = [...(lay.carved ?? [])];
   const k = objs.findIndex(o => o.name === iv.object);
   if (iv.kind === 'remove') poses[k].removed = true;
   else if (iv.kind === 'move') poses[k] = { x: iv.to![0], y: iv.to![1], yaw: (iv.to![2] * Math.PI) / 180 };
   else if (iv.kind === 'raise') raised[iv.target!] = (raised[iv.target!] ?? 0) + iv.by_m!;
   else if (iv.kind === 'add') { if (!added.includes(iv.id)) added.push(iv.id); }
+  else if (iv.kind === 'carve') carved = [...carved.filter(c => c.target !== iv.target), { id: iv.id, target: iv.target!, poly: iv.poly_xy!, by_m: iv.by_m ?? 0 }];   // a door gets one option at a time
   else flattened.push(iv.box_xy!);
-  return { poses, flattened, raised, added };
+  return { poses, flattened, raised, added, ...(carved.length ? { carved } : {}), ...(lay.placed ? { placed: { ...lay.placed } } : {}) };
 }
