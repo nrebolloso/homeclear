@@ -78,6 +78,21 @@ def triangulate(Ps, uvs):
     return X[:3] / X[3]
 
 
+def triangulate_robust(Ps, uvs, thresh_px=3.0, iters=400, seed=0):
+    """DLT on the largest set of views that agree within thresh_px (pairs as RANSAC samples), plus that inlier mask: a few false or
+    mis-posed detections no longer drag the point (newell_stair2: ~55% of marker sightings were off by > 3 px)."""
+    Ps, uvs = np.asarray(Ps, float), np.asarray(uvs, float)
+    rng, best = np.random.default_rng(seed), np.zeros(len(Ps), bool)
+    for _ in range(iters if len(Ps) > 2 else 0):
+        x = Ps @ np.append(triangulate(Ps[(ab := rng.choice(len(Ps), 2, replace=False))], uvs[ab]), 1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            inl = (x[:, 2] > 0) & (np.linalg.norm(x[:, :2] / x[:, 2:] - uvs, axis=1) < thresh_px)
+        if inl.sum() > best.sum():
+            best = inl
+    best = best if best.sum() >= 2 else np.ones(len(Ps), bool)
+    return triangulate(Ps[best], uvs[best]), best
+
+
 def triangulate_picks(cams, picks):
     """Hand-picked points, each {image name: [u, v]} in >= 2 images -> 3-D points in the cameras.json frame + worst reprojection (px)."""
     by = {c["name"]: c for c in cams}
@@ -166,4 +181,13 @@ def fit_floor(pts, centers, cams, fc):
     n, d, inl = fit_plane_ransac(pts, camera_up(cams), iters=fc["ransac_iters"], thresh=fc["inlier_m"])
     if np.median(centers @ n + d) < 0:  # floor normal must point toward the cameras
         n, d = -n, -d
+    # a handheld camera is 1-2 m above the floor: a plane under 1 m below it is a bed or table top (bedroom2: the bed, 0.74 m
+    # above the markers on the floor), so take a well-supported parallel plane further down that puts the cameras 1-2 m up
+    low = pts[pts @ n + d < -0.15]
+    if np.median(centers @ n + d) < 1.0 and len(low) > 1000:
+        n2, d2, _ = fit_plane_ransac(low, n, iters=fc["ransac_iters"], thresh=fc["inlier_m"], max_angle_deg=10)
+        n2, d2 = (n2, d2) if np.median(centers @ n2 + d2) > 0 else (-n2, -d2)
+        inl2 = np.abs(pts @ n2 + d2) < fc["inlier_m"]
+        if 1.0 <= np.median(centers @ n2 + d2) <= 2.0 and inl2.sum() > 0.2 * inl.sum():
+            n, d, inl = n2, d2, inl2
     return n, d, inl, pts

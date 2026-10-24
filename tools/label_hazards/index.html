@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Label hazards (answer key)</title>
+<style>
+  :root { --bg: #14171b; --panel: #1d2127; --fg: #e8e6e1; --dim: #9aa0a6; --line: #fff2; --acc: #4cc2a8; --geo: #ffb14a; --key: #ff5d73; }
+  @media (prefers-color-scheme: light) { :root { --bg: #f4f2ee; --panel: #fff; --fg: #1d2127; --dim: #5d646b; --line: #0002; --acc: #0a8f76; --geo: #b86a00; --key: #d6264a; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; padding: 12px; min-height: 100vh; }
+  @media (max-width: 860px) { body { grid-template-columns: 1fr; } }
+  main, aside { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  h1 { font-size: 15px; margin: 0 0 4px; } p { margin: 4px 0; color: var(--dim); }
+  #wrap { overflow: auto; max-height: calc(100vh - 110px); border: 1px solid var(--line); border-radius: 6px; margin-top: 8px; }
+  canvas { display: block; image-rendering: pixelated; cursor: crosshair; }
+  label, button, select, input { font: inherit; color: inherit; }
+  select, input, button { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+  button { cursor: pointer; } button:hover { border-color: var(--acc); }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 6px 0; }
+  ol { margin: 6px 0; padding-left: 22px; max-height: 38vh; overflow: auto; } li { margin: 2px 0; } li button { padding: 0 6px; margin-left: 6px; }
+  textarea { width: 100%; height: 150px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; font: 12px ui-monospace, monospace; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  #err { color: var(--key); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Hazard answer key</h1>
+  <p>Click the map where a hazard is (floor frame, metres). Pick its kind first. <span class="sw" style="background:var(--geo)"></span>orange rings are what the geometry already flagged (labelling them is still right: the key says what is really there);
+     <span class="sw" style="background:var(--key)"></span>red dots are your labels. Label from the capture photos or by walking the route in the viewer, not from the rings.</p>
+  <div class="row"><span id="hover">x, y: -</span> <label><input type="checkbox" id="fog" checked> dim thinly seen floor</label> <label><input type="checkbox" id="geo" checked> geometry rings</label> <label>zoom <input type="range" id="zoom" min="1" max="8" value="3"></label></div>
+  <div id="err"></div>
+  <div id="wrap"><canvas id="c"></canvas></div>
+</main>
+<aside>
+  <div class="row"><label>Kind <select id="kind"></select></label></div>
+  <div class="row"><label style="flex:1">Note <input id="note" style="width:100%" placeholder="e.g. raised rug edge by the bed"></label></div>
+  <div class="row"><button id="undo">Undo last</button><button id="clear">Clear all</button><button id="copy">Copy YAML</button><button id="save">Download</button></div>
+  <p><b id="n">0</b> labelled. Aim for the 30-50 items the plan asks for, across the route.</p>
+  <ol id="list"></ol>
+  <textarea id="yaml" readonly spellcheck="false"></textarea>
+</aside>
+<script>
+// usage: serve the repo (python -m http.server) and open tools/label_hazards/index.html?dir=/viewer/public/scene/<run>
+// reads <dir>/maps/occupancy.png + .json + coverage.png + .json, route.json, hazards.json (stage 12's exports)
+const KINDS = ['floor_bump', 'rug', 'cable', 'threshold', 'clutter', 'tight_clearance', 'grab_bar', 'slippery', 'lighting', 'handrail', 'other'];
+const q = new URLSearchParams(location.search), dir = (q.get('dir') || '/viewer/public/scene/game_synth').replace(/\/$/, '');
+const $ = id => document.getElementById(id), cv = $('c'), g = cv.getContext('2d');
+let meta, occ, cov, covMeta, geo = [], route = null, items = [];
+const storeKey = 'hazard-key:' + dir;
+const load = () => { try { items = JSON.parse(localStorage.getItem(storeKey) || '[]'); } catch { items = []; } };
+const save = () => { try { localStorage.setItem(storeKey, JSON.stringify(items)); } catch { /* private window: labels live until reload */ } };
+$('kind').innerHTML = KINDS.map(k => `<option>${k}</option>`).join('');
+
+const img = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('cannot load ' + src)); i.src = src; });
+const js = async f => { const r = await fetch(dir + '/' + f); if (!r.ok) throw new Error(`${dir}/${f}: ${r.status}`); return r.json(); };
+const scale = () => +$('zoom').value;
+// world <-> canvas pixels: column = i (x right), row = ny - 1 - j (y up), cell centres at +0.5
+const toPx = ([x, y]) => [((x - meta.origin_xy[0]) / meta.cell_m) * scale(), (meta.shape[1] - (y - meta.origin_xy[1]) / meta.cell_m) * scale()];
+const toXY = (px, py) => [meta.origin_xy[0] + (px / scale()) * meta.cell_m, meta.origin_xy[1] + (meta.shape[1] - py / scale()) * meta.cell_m];
+
+function draw() {
+  if (!meta) return;
+  const s = scale(), [nx, ny] = meta.shape;
+  cv.width = nx * s; cv.height = ny * s;
+  g.imageSmoothingEnabled = false;
+  g.drawImage(occ, 0, 0, cv.width, cv.height);
+  if ($('fog').checked && cov) {   // cells fewer cameras saw than coverage.json's good_min_views: where a label is less certain
+    const t = document.createElement('canvas'); t.width = nx; t.height = ny;
+    const c = t.getContext('2d'); c.drawImage(cov, 0, 0); const d = c.getImageData(0, 0, nx, ny);
+    for (let k = 0; k < nx * ny; k++) { const thin = d.data[k * 4] < covMeta.good_min_views; d.data[k * 4] = 20; d.data[k * 4 + 1] = 20; d.data[k * 4 + 2] = 30; d.data[k * 4 + 3] = thin ? 150 : 0; }
+    c.putImageData(d, 0, 0); g.drawImage(t, 0, 0, cv.width, cv.height);
+  }
+  if (route) for (const [p, c, t] of [[route.start, '#4cc2a8', 'start'], [route.goal, '#4c8ec2', 'goal']]) { const [x, y] = toPx(p); g.fillStyle = c; g.fillRect(x - 5, y - 5, 10, 10); g.fillStyle = '#fff'; g.font = '11px sans-serif'; g.fillText(t, x + 8, y + 4); }
+  if ($('geo').checked) for (const h of geo) { const [x, y] = toPx(h.pos); g.strokeStyle = '#ffb14a'; g.lineWidth = 2; g.beginPath(); g.arc(x, y, 9, 0, 7); g.stroke(); g.fillStyle = '#ffb14a'; g.font = '11px sans-serif'; g.fillText(h.type, x + 11, y - 8); }
+  items.forEach((it, n) => { const [x, y] = toPx(it.xy); g.fillStyle = '#ff5d73'; g.beginPath(); g.arc(x, y, 5, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = '11px sans-serif'; g.fillText(`${n + 1} ${it.kind}`, x + 8, y + 4); });
+}
+const yaml = () => `# hand-labelled hazards for ${dir.split('/').pop()}: floor frame, metres (tools/label_hazards)\nitems:\n` +
+  items.map(it => `  - {kind: ${it.kind}, xy: [${it.xy[0].toFixed(2)}, ${it.xy[1].toFixed(2)}], note: ${JSON.stringify(it.note || '')}}`).join('\n') + (items.length ? '\n' : '');
+function refresh() {
+  $('n').textContent = items.length; $('yaml').value = yaml();
+  $('list').innerHTML = items.map((it, n) => `<li>${it.kind} (${it.xy[0].toFixed(2)}, ${it.xy[1].toFixed(2)}) ${it.note ? '- ' + it.note.replace(/</g, '&lt;') : ''}<button data-n="${n}" title="remove">x</button></li>`).join('');
+  draw(); save();
+}
+cv.addEventListener('click', e => {
+  const r = cv.getBoundingClientRect(), [x, y] = toXY((e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height);
+  items.push({ kind: $('kind').value, xy: [Math.round(x * 100) / 100, Math.round(y * 100) / 100], note: $('note').value.trim() });
+  $('note').value = ''; refresh();
+});
+cv.addEventListener('mousemove', e => { if (!meta) return; const r = cv.getBoundingClientRect(), [x, y] = toXY((e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height); $('hover').textContent = `x, y: ${x.toFixed(2)}, ${y.toFixed(2)} m`; });
+$('list').addEventListener('click', e => { const n = e.target.dataset?.n; if (n !== undefined) { items.splice(+n, 1); refresh(); } });
+$('undo').onclick = () => { items.pop(); refresh(); };
+$('clear').onclick = () => { if (!items.length || confirm('Remove all labels?')) { items = []; refresh(); } };
+$('copy').onclick = () => navigator.clipboard?.writeText(yaml()).then(() => { $('copy').textContent = 'Copied'; setTimeout(() => $('copy').textContent = 'Copy YAML', 1200); }, () => $('yaml').select());
+$('save').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([yaml()], { type: 'text/yaml' })); a.download = `answer_key_${dir.split('/').pop()}.yaml`; a.click(); };
+for (const id of ['fog', 'geo', 'zoom']) $(id).oninput = draw;
+(async () => {
+  try {
+    load();
+    [meta, occ, route] = [await js('maps/occupancy.json'), await img(dir + '/maps/occupancy.png'), await js('route.json').catch(() => null)];
+    covMeta = await js('maps/coverage.json').catch(() => null); cov = covMeta ? await img(dir + '/maps/coverage.png').catch(() => null) : null;
+    geo = (await js('hazards.json').catch(() => ({ hazards: [] }))).hazards.filter(h => (h.source || 'geometry') === 'geometry' && h.pos);
+    refresh();
+  } catch (e) { $('err').textContent = `${e.message}. Open with ?dir=/path/to/scene (stage 12 export with maps/).`; }
+})();
+</script>
+</body>
+</html>
