@@ -6,6 +6,7 @@ import { rollouts, type Persona, type Risk, type Heat, type Ghost } from './sim.
 import type { StepModel } from './stepmodel.ts';
 import type { WorldModel } from './worldmodel.ts';
 import { runChecks, type Fixture, type TransferRules, type EmsRules, type BodyFacts, type CheckOut } from './checks.ts';
+import { stairChecks, type Stair, type Side } from './stairs.ts';
 
 /** One walk the patient makes: night trips get the darkness multiplier, daytime ones don't. start_with: the start
  *  rides on that object (the bed): move the bed and the patient gets up from the same spot beside it. */
@@ -34,6 +35,8 @@ export interface Init {
   fixtures?: Fixture[]; transfer?: TransferRules; ems?: EmsRules; interventions: Intervention[]; stepModel?: StepModel; worldModel?: WorldModel;
   plan: { walker_width_m: number; preferred_clearance_m: number; clearance_weight: number };
   rules: { clearance_margin_m: number; bump_min_m: number; bump_link_cells?: number; bump_limit_m: number; margin_m: { width: number; height: number } };
+  /** stairs (stairs.ts): marked in the viewer or config game.stairs; the stronger hand (viewer override, else persona) and the device */
+  stairs?: Stair[]; strong_side?: Side | null; device?: string;
 }
 export interface HazardOut extends RouteHazard { name: string; per_month: number; ot_check: boolean; estimated: boolean }
 export interface RouteSummary {
@@ -93,6 +96,8 @@ export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: nu
   out.checks = S.transfer && S.ems ? runChecks({ g, L, objects: O, poses: lay.poses, fixtures: [...(S.fixtures ?? []), ...added], raised: lay.raised ?? {}, body: S.persona,
     transfer: S.transfer, ems: S.ems, routeStart: routeStart(S.routes[0], O, lay.poses), plan: S.plan, margin: S.rules.margin_m,
     hazards: out.hazards.map(h => ({ position: h.position, name: h.name })) }) : [];
+  for (const st of S.stairs ?? []) out.checks.push(...stairChecks(st, { g, L, fixtures: [...(S.fixtures ?? []), ...added], margin: S.rules.margin_m,
+    strong_side: S.strong_side !== undefined ? S.strong_side : (S.persona as { strong_side?: Side }).strong_side ?? null, device: S.device ?? 'walker' }));
   // a route this walker can't make at all is the error to show, whichever route is selected
   const blocked = out.routes.find(r => r.error);
   if (blocked && !out.error) out.error = `${blocked.name}: ${blocked.error}`;
