@@ -90,7 +90,7 @@ test('a slippery mat slides under the glides; a grippy one stays', async () => {
   assert.ok(grip.far > 2.5, 'the walker crosses a mat that stays put');
 });
 
-test('a curled corner is found in the bump layer, held at its curl, and folded by a wheel running into it', async () => {
+test('a curled corner is found in the mat splat points, held at its curl, and folded by a wheel running into it', async () => {
   await initPhysics();
   const bump = new Float32Array(g.shape[0] * ny);
   const at: XY = [2.5, 1.5], h = 0.3;
@@ -101,8 +101,11 @@ test('a curled corner is found in the bump layer, held at its curl, and folded b
     const d = Math.hypot(x - (at[0] - h), y - (at[1] + h));
     bump[i * ny + j] = 0.006 + Math.max(0, 0.03 * (1 - d / 0.12));
   }
-  const m = obj('mat', 'rug', at, new Float32Array(0), h, 0.006);
-  const c = curledCorner(g, bump, m.footprint.map(([x, y]) => [x + at[0], y + at[1]] as XY), 0.008);
+  // the same surface as the mat's points (pivot-local, 2 cm spacing)
+  const pts: number[] = [];
+  for (let x = -h; x <= h + 1e-9; x += 0.02) for (let y = -h; y <= h + 1e-9; y += 0.02) pts.push(x, y, 0.006 + Math.max(0, 0.03 * (1 - Math.hypot(x + h, y - h) / 0.12)));
+  const m = obj('mat', 'rug', at, new Float32Array(pts), h, 0.006);
+  const c = curledCorner(m.points, m.footprint, 0.008);
   assert.ok(c && c.corner === 3 && c.lift_m > 0.015, `curl ${JSON.stringify(c)}`);
   // standing still: the flap holds its curl (stiffness springs it back to the measured lift)
   const still = drive([m], ranges(), bump, { x0: 0.3, v: 0, secs: 2 });

@@ -1,0 +1,112 @@
+[
+ {
+  "check": "enter VR on filmed floor, walker at your feet",
+  "pass": true,
+  "detail": "head (1.97, 2.98, 1.60), cell floor=1 cov=6, walker (1.97, 2.98, 0.00), inputs left:controller right:controller"
+ },
+ {
+  "check": "headset labels are scene cards, performance mode on",
+  "pass": true,
+  "detail": "labels card card card, perf=true, tier=quest, maxStdDev=2"
+ },
+ {
+  "check": "physical step is 1:1 along your heading",
+  "pass": true,
+  "detail": "moved 0.500 m at -42 deg, heading -42 deg"
+ },
+ {
+  "check": "looking left turns the walker",
+  "pass": true,
+  "detail": "walker yaw 48 deg, expected 48"
+ },
+ {
+  "check": "thumbsticks neither walk nor snap-turn",
+  "pass": true,
+  "detail": "rig yaw -0.73 -> -0.73"
+ },
+ {
+  "check": "left trigger walks forward on filmed floor",
+  "pass": true,
+  "detail": "walked 0.61 m to (2.80, 2.25, 1.60)"
+ },
+ {
+  "check": "teleport lands where the wand points",
+  "pass": true,
+  "detail": "ring shown=true, landed (2.60, 0.50, 1.60) for target (2.60, 0.50, 0.00)"
+ },
+ {
+  "check": "wand hovers, grabs, drags and turns the bed; the route re-plans",
+  "pass": true,
+  "detail": "hover=bed grab=bed; bed (0.90, 2.92, 0) -> (2.00, 1.00, 90 deg), route 3.91 -> 4.14 m"
+ },
+ {
+  "check": "hold still on furniture deletes it (outline reddens first)",
+  "pass": true,
+  "detail": "at 1.0 s outline rgb (1.00, 0.32, 0.05), removed then=false; after 1.9 s removed=true"
+ },
+ {
+  "check": "hand pinch teleports like the trigger",
+  "pass": true,
+  "detail": "inputs left:hand right:hand; landed (3.60, 1.50, 1.60) for target (3.60, 1.50, 0.00)"
+ },
+ {
+  "check": "\"Show me the dangers\" stands you in front of each hazard",
+  "pass": true,
+  "detail": "\"1 of 3: Tight squeeze, 3 cm each side\" 1.20 m, -0 deg off; \"2 of 3: Rug, 1.5 cm\" 1.20 m, 0 deg off; \"3 of 3: Cable: a cord on the floor\" 0.90 m, -0 deg off -> \"Show me the dangers\""
+ },
+ {
+  "check": "\"Night walk\" turns the lights down and back up",
+  "pass": true,
+  "detail": "pressed: night=true \"Turn the lights back on / a nightlight is on\"; again: night=false \"Night walk\""
+ },
+ {
+  "check": "\"See a safer room\" applies a layout and morphs the room around you",
+  "pass": true,
+  "detail": "7 changes, 27 in-between frames"
+ },
+ {
+  "check": "comparison previews the prior room while explicitly keeping safer-layout checks",
+  "pass": true,
+  "detail": "Preview: prior room / press to return to the active room / Checks and walking: safer layout"
+ },
+ {
+  "check": "Restore my room restores the prior layout, receipts, routes and recalculated numbers",
+  "pass": true,
+  "detail": "contacts/month 0.00 -> 2.53, evaluations 4 -> 5"
+ },
+ {
+  "check": "comparison can show the safer room while the prior layout stays active",
+  "pass": true,
+  "detail": "Preview: safer room / press to return to the active room / Checks and walking: prior layout"
+ },
+ {
+  "check": "Use safer layout restores its saved poses and recalculates its checks",
+  "pass": true,
+  "detail": "saved safer snapshot"
+ },
+ {
+  "check": "grip puts the pointed-at object back",
+  "pass": true,
+  "detail": "bed (0.90, 2.92) vs original (0.90, 2.92)"
+ },
+ {
+  "check": "A removes the pointed-at object",
+  "pass": true,
+  "detail": "removed: bed, nightstand"
+ },
+ {
+  "check": "both grips held reset everything",
+  "pass": true,
+  "detail": "removed: [], bed (0.90, 2.92)"
+ },
+ {
+  "check": "leaving VR restores DOM labels and performance mode",
+  "pass": true,
+  "detail": "xr=false, labels dom dom dom, perf=false (before VR: false)"
+ },
+ {
+  "check": "no page errors",
+  "pass": true,
+  "detail": "none"
+ }
+]

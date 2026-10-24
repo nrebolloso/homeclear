@@ -1,0 +1,38 @@
+PASS  fps (autoplay, 1600x900): 134.0 fps on ANGLE (ATI Technologies Inc., AMD Radeon 780M Graphics, OpenGL 4.5.0)
+PASS  rug bump flashes the leg with the measured height: leg at (2.39, 1.61) h=1.50 cm, label "1.5 cm bump"
+PASS  cable classified as thin, height shown as estimated: leg at (3.60, 0.81), label "cable ~0.6 cm (estimated)"; hazard list mentions ESTIMATED: true
+PASS  frame turns red below the clearance margin (doorway): gap 2.5 cm (margin 10 cm), red=true, label "2 cm gap"
+PASS  free walk stays on covered floor (walls, unseen floor): toward wall y=4.0: stopped at y=3.23 (front legs need 0.75 m); toward unseen x>6.2: stopped at x=5.75 (coverage 4 views)
+PASS  fill appears only after the object moves: bed fill before=false, after=true; unmoved rug fill=false
+PASS  moving the bed updates route and numbers within ~1 s: replan 75 ms; route 3.91 -> 4.12 m; contacts/month 2.93 -> 2.54
+PASS  placement into a wall is blocked: moveObject(bed, 4.0, 2.6) -> ok=false
+PASS  Delete removes the selected object from the map: removed=true, obstacle at old spot=0, replan error=undefined
+PASS  plan fixes ranked; applying the top fix lowers risk: remove_rug -2.81, add_nightlight -0.38, move_nightstand -0.00, raised_toilet_seat -0.00, bed_risers -0.00, touch_lamp -0.00, tape_cable --0.00, remove_door --0.02, offset_hinges --0.04, move_bed --0.42; applied remove_rug: 2.93 -> 0.11/month
+PASS  night mode toggles without errors: 59.3 fps at night; page errors: none
+PASS  export for Cosmos: game_synth_20261024T062018: 186 frames, 2 chunks, 186 walker depth PNGs, walker covers 3.9% of frame 0
+PASS  clip overlay markers align at known frames: frame 0: video shows 0, overlay 0, max err 0.01 px, on dot true; frame 43: video shows 43, overlay 43, max err 0.00 px, on dot true; frame 86: video shows 86, overlay 86, max err 0.00 px, on dot true
+PASS  doorway narrower than the walker blocks the route: status: "No route: no path: start and goal not connected for this walker width"
+PASS  risk range, routes and checks: {"pm":2.927909035382589,"lo":2.7923406490808684,"hi":3.0473587052019155,"routes":2,"checks":7}
+PASS  persona switch re-plans (Parkinson's > patient): 5.35 vs 2.93
+PASS  vision pass changes the frame (cataract blurs: smaller JPEG): 42607 -> 22275 bytes
+PASS  heatmap: rollouts return per-cell counts when on: true
+PASS  suggest layouts, apply the full option, walkable: Quick fixes 0.11, Moderate 0.00, Full re-layout 0.08 in 23.3 s; now 0.08 (bed:1.00,3.05,0|door:4.50,1.95,0|nightlight:3.90,0.95,90|rai)
+PASS  OT report renders the live layout: 3795 chars
+PASS  fix card opens from the QR link with numbered fixes: 6 items, url 788 chars
+PASS  third person: mannequin walks the simulated footsteps: visible with footsteps
+PASS  physics pass (Rapier): the walker reaches every goal, snags listed: {"done":true,"snags":0,"li":3,"ms":4416}
+PASS  reimagine: morphs into the safest layout, every change costed in the receipt: {"n":6,"m":{"from":{"x":0.9,"y":2.925,"yaw":0},"to":{"x":0.9999999999999999,"y":3.0700000000000016,"yaw":0},"name":"bed"},"at0":{"x":0.9,"y":2.925,"yaw":0,"visible":true},"at1":{"x":0.9999999999999999,"y":3.0700000000000016,"yaw":0,"visible":true},"costed":true,"li":6,"total":"6 changes · $92 · 129 
+PASS  reimagine: undo takes one change back: 6 -> 5; page errors: none
+PASS  reimagine: no page errors: none
+PASS  reimagine on the demo kitchen: at least one costed move: Move the chair8 1.8 m
+PASS  stairs: measured from the splat (treads, risers, rail side): 3 treads, risers 15/20/22 cm, rails {"left":"wall","right":"seen","height_m":{"right":0.849},"peak_m":{"left":0.725,"right":0.825}}
+PASS  stairs: rail for the stronger hand, step lights and a walker at the top clear their checks: borderline, OT to verify, borderline, OT to verify, fail -> ok, ok, borderline, OT to verify
+PASS  stairs: no page errors: none
+PASS  doorway: blocked at 55 cm, open once widened away from the leaf, scan edited: {"err":"no path: start and goal not connected for this walker width","v":"fail","ids":["b"]} -> {"err":null,"v":"ok","edits":2,"squeeze":0}
+PASS  doorway: undo closes it and removes the edits: {"err":"no path: start and goal not connected for this walker width","edits":0}
+PASS  doorway: no page errors: none
+PASS  selecting a moved object names it and says how far it moved: {"lines":["Bed","moved 2.2 m · turned 90° · Z resets"],"btn":true}
+PASS  Z puts the selected object back where it started: bed at (0.90, 2.92) vs original (0.90, 2.92); label ["Bed"]
+PASS  reset refuses when something else has taken the original spot: bed moved away=true, nightstand moved onto its old spot=true; bed stays at (2.00, 1.00)
+FAIL  Shift+Z restores every object, removal and fix: poses restored=true, taped strips=0, removed=0, reimagine changes=3; 2.93 -> 0.00/month
+PASS  reset: no page errors: none

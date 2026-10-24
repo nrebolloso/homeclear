@@ -11,7 +11,7 @@ const cloud = new Map<string, Float32Array>();   // splat -> points, so a resamp
 async function build(I: PhysInit) {
   await initPhysics();
   const objects = await Promise.all(I.objects.map(async o => {
-    if (!cloud.has(o.splat)) cloud.set(o.splat, o.kind === 'rug' ? new Float32Array(0) : plyPoints(await (await fetch(I.base + o.splat)).arrayBuffer()));
+    if (!cloud.has(o.splat)) cloud.set(o.splat, plyPoints(await (await fetch(I.base + o.splat)).arrayBuffer()));
     return { ...o, points: cloud.get(o.splat)! };
   }));
   W?.free();

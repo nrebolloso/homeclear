@@ -12,7 +12,7 @@ export type Verdict = 'ok' | 'fail' | 'borderline, OT to verify' | 'OT to verify
 export interface CheckOut {
   /** Door checks: whether a planned route uses this opening. Off-route doors have no suggested renovation. */
   on_route?: boolean;
-  id: string; kind: 'transfer' | 'reach' | 'grab_bar' | 'ems' | 'phone' | 'stairs' | 'door'; label: string; verdict: Verdict; note: string;
+  id: string; kind: 'transfer' | 'reach' | 'grab_bar' | 'ems' | 'phone' | 'stairs' | 'door' | 'wheelchair'; label: string; verdict: Verdict; note: string;
   value_m?: number; limit_m?: [number, number]; position?: XY;
 }
 type Obj = Footprinted & { name: string; kind: string; surface_m?: number | null };

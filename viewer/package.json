@@ -11,6 +11,8 @@
     "test": "node --test tests/*.test.ts",
     "e2e": "node e2e/run.ts",
     "e2e:xr": "node e2e/xr.ts",
+    "e2e:frontend": "node e2e/frontend.ts",
+    "e2e:frontend:xr": "node e2e/frontend-xr.ts",
     "e2e:renovations": "node e2e/renovations.ts",
     "quest:sweep": "node e2e/quest-sweep.ts"
   },

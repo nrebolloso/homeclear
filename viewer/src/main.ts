@@ -4,7 +4,9 @@ import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { stamp, carvedPolys, placementOk, polyCells, worldFootprint, toCell, applyIntervention, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
-import { buildDevice, type WalkerCfg } from './walker.ts';
+import { buildDevice as deviceMesh, type WalkerCfg } from './walker.ts';
+import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
+import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z } from './wheelchair.ts';
 import { nightShader } from './night.ts';
 import { createVision, PROFILES, type Profile } from './vision.ts';
 import { createHeatOverlay, nights, drawTimeline } from './heat.ts';
@@ -31,6 +33,8 @@ import { createMarker3d } from './marker3d.ts';
 import { MAX_EXTRA_LIGHTS, type PointLight } from './night.ts';
 import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } from './perf.ts';
 import QRCode from 'qrcode';
+import { mountFrontend, type FrontendAdapter } from './frontend.ts';
+import { createFrontendXR } from './frontend-xr.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
 import type { WorldModel } from './worldmodel.ts';
 import { setupXR, type XrEditor } from './xr.ts';
@@ -55,6 +59,9 @@ persona.step_model = STEP ?? persona.step_model ?? 'hand';
 const personas: Record<string, { label: string; walker: WalkerCfg; gait: any; plan: any; vision?: string }> = sc.personas ? await json(sc.personas)
   : { patient: { label: 'This patient', walker: walkerCfg, gait: persona, plan: {}, vision: persona.vision } };
 let personaKey = 'patient';
+// ---------- wheelchair (wheelchair.ts): one more comparison persona in every scene; a chair has no fall model, so its
+// contact table is all zeros and the ADA checks (turning space, level changes, door width, stairs) carry the result
+if (!personas.wheelchair) personas.wheelchair = wheelchairPersona(personas.patient);
 const stepModel = persona.step_model === 'learned' ? await fetch('models/step_model.json').then(r => r.json()) : undefined;
 const worldModel: WorldModel | undefined = persona.step_model === 'world' ? await fetch('models/world_model.json').then(r => r.json()) : undefined;
 if (worldModel) worldModel.shift = walkerCfg.user_gap_m + walkerCfg.depth_m / 2 - worldModel.mean_gap_m;   // learned.py Learned.shift
@@ -67,6 +74,7 @@ const est = sc.grid.bump_estimated ? new Uint8Array(await bin(sc.grid.bump_estim
 const objs: any[] = sc.objects;
 const interventions: Intervention[] = sc.interventions;
 const risk = sc.risk;
+risk.contact_table.wheelchair ??= ZERO_CONTACTS;
 // every walk the patient makes (stage 12 routes.json); older exports have only route.json: one night route
 const routes: RouteDef[] = sc.routes ? await json(sc.routes) : [{ name: 'route', ...route, trips_per_night: risk.trips_per_night, night: true }];
 let selRoute = 0;
@@ -94,6 +102,9 @@ const sparkR = new SparkRenderer({ renderer });
 scene.add(sparkR);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 2.2);
 scene.add(hemi);
+const HEMI_ENV = 0.6;   // the hemisphere's share once the room's env map lights the meshes (ground.ts)
+const nightLamp = new THREE.PointLight(0xffb36b, 0, 1.5, 2);   // night: the nightlight on the meshes (updateNight)
+scene.add(nightLamp);
 const vision = createVision(renderer, scene, camera);
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
@@ -204,7 +215,7 @@ if (verification) {
 scene.add(verifyGroup);
 
 // ---------- grid overlays: route, hazards, ghosts, fog, taped strips ----------
-const routeLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x33ddff }));
+const routeLine = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0x55c7ef, size: 3, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
 // ghost walkers as one dot per step (WebGL lines are 1 px: trails hugging the route vanished); red = a toe contact
 const ghostDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ vertexColors: true, size: 5, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
 const hazardGroup = new THREE.Group(), tapeGroup = new THREE.Group();
@@ -232,6 +243,9 @@ scene.add(routeLine, ghostDots, hazardGroup, tapeGroup);
 }
 
 // ---------- walker + camera ----------
+// every device gets contact shadows under its legs (ground.ts): the patient's, the replay's, the one parked up the stairs
+const GROUND = !PARAMS.has('noground');   // ?noground: the old look, for before/after shots
+const buildDevice = (w: WalkerCfg) => { const d = deviceMesh(w); if (GROUND) groundDevice(d.group, w); return d; };
 let walker = buildDevice(walkerCfg);
 scene.add(walker.group);
 let centreOffset = walkerCfg.user_gap_m + walkerCfg.depth_m / 2;   // body centre -> walker frame centre (the planned path)
@@ -240,7 +254,13 @@ const gapTag = label('', 'red');
 gapTag.visible = false;
 scene.add(gapTag);
 const body = { x: 0, y: 0, yaw: 0, pitch: -(+(PARAMS.get('pitch') ?? 28)) * Math.PI / 180 };   // ?pitch=<deg down>: more walker, less room
+// Explore (the toolbar button) is for looking around, not for testing the walker: the walker stays parked where you
+// left it and nothing collides with you (walls, furniture, live physics), so the camera can't snag or shove a chair.
+// Free walk (keys / game.setFree) keeps the walker on you and stays fenced; that's what the physics and e2e checks use.
+const explore = { on: false, parked: null as null | { x: number; y: number; yaw: number } };
+function setExplore(on: boolean) { explore.on = on; explore.parked = on ? { x: body.x, y: body.y, yaw: body.yaw } : null; }
 let mode: 'auto' | 'free' | 'fly' = 'auto', autoS = 0, autoPause = 0;
+let routePaused = false, routeSpeed = 1, frontendVR: ReturnType<typeof createFrontendXR> | null = null, xrFollowRoute = false;
 
 // ---------- layout state + worker ----------
 let layout: Layout = { poses: original.map(p => ({ ...p })), flattened: [] };
@@ -645,7 +665,7 @@ $('replay').onclick = () => (replay.on ? stopReplay() : startReplay());
 
 async function physicsPass() {
   clearGroup(snagGroup);
-  if (walkerCfg.device === 'cane') { $('snags').innerHTML = '<li>walker only (this persona uses a cane)</li>'; game.physics = null; showPhysics(); return null; }
+  if (walkerCfg.device === 'cane' || walkerCfg.device === 'wheelchair') { $('snags').innerHTML = `<li>walker only (this persona uses a ${walkerCfg.device})</li>`; game.physics = null; showPhysics(); return null; }
   $('snags').innerHTML = '<li>pushing the walker along each route…</li>';
   const { routes: res } = await ask({ type: 'physics', layout, walker: walkerCfg, cfg: game.physicsCfg });   // game.physicsCfg = { push_max_n: 60, ... } to try other people
   const ot = '<span class="ot">estimate, OT to verify</span>';
@@ -804,7 +824,7 @@ function scanRail(st: Stair, side: Side): SplatMesh | null {
   return mesh;
 }
 const parkedWalkerCfg = { ...personas.patient.walker, device: 'walker' as const };
-const stairs3d = createStairs3d(scene, () => buildDevice(parkedWalkerCfg).group, scanRail);
+const stairs3d = createStairs3d(scene, () => buildDevice(parkedWalkerCfg).group, scanRail, () => buildDevice(WHEELCHAIR).group);
 const doors3d = createDoors3d(scene, mainSplat);
 const STAIR_KEY = `homeclear:stairs:${RUN}`, DOOR_KEY = `homeclear:doors:${RUN}`, baseIvCount = interventions.length;
 let stairs: Stair[] = [], marked: Stair[] = [];
@@ -845,7 +865,7 @@ function setupStairs() {
   // a door-leaf object next to a jamb marks the hinge side (widening grows the other way) and brings its own fixes
   const leaves = objs.flatMap((o, k) => (o.kind === 'door' ? [worldFootprint(o, original[k])] : []));
   doors = [...cfgDoors.filter(c => !markedDoors.some(m => m.name === c.name)), ...markedDoors].map(d => ({ ...d, hinge: d.hinge ?? hingeSide(d, leaves) }));
-  const need = needWidth(walkerCfg.width_m, init.rules.clearance_margin_m);
+  const need = Math.max(needWidth(walkerCfg.width_m, init.rules.clearance_margin_m), walkerCfg.device === 'wheelchair' ? ADA.door_clear_m : 0);
   interventions.splice(baseIvCount, Infinity, ...stairs.flatMap(stairFixes), ...doors.flatMap(d => doorFixes(d, need, { leafObject: hingeSide(d, leaves) !== null })));
   const ids = new Set(interventions.map(i => i.id)), keep = (id: string) => !/^(stair|door)_/.test(id) || ids.has(id);
   applied = applied.filter(keep);
@@ -1420,7 +1440,10 @@ function updateNight() {
   const on = $<HTMLInputElement>('night').checked;
   night.set(on, p && { x: p.x, y: p.y, r: objs[k].light_radius_m ?? 1.5 }, stepLightList);
   for (const s of splats) s.updateVersion();
-  hemi.intensity = on ? 0.25 : 2.2;
+  hemi.intensity = scene.environment ? (on ? 0.1 : HEMI_ENV) : on ? 0.25 : 2.2;
+  scene.environmentIntensity = on ? 0.07 : 1;   // the room's light, captured by day (ground.ts); night.ts scales the scan by 0.07
+  nightLamp.intensity = on && p ? 1.2 : 0;   // the nightlight lights the walker and mannequin too, not only the scan
+  if (p) { nightLamp.position.set(p.x, p.y, 0.15); nightLamp.distance = objs[k].light_radius_m ?? 1.5; }
   scene.background = new THREE.Color(on ? 0x050607 : 0x1d2126);
 }
 $('night').onchange = updateNight;
@@ -1459,10 +1482,11 @@ async function setPersona(key: string) {
   centreOffset = walkerCfg.user_gap_m + walkerCfg.depth_m / 2;
   if (worldModel) worldModel.shift = centreOffset - worldModel.mean_gap_m;   // learned.py Learned.shift, for this walker
   init = { ...init, persona, plan: { ...sc.plan, ...p.plan, walker_width_m: walkerCfg.width_m }, device: walkerCfg.device };
-  worker.postMessage({ type: 'init', init });
+  setupStairs();   // posts init; door fixes widen to this device's need (ADA 815 mm for a wheelchair)
   baselinePerMonth = null; baseEvals = [];
   if (p.vision) game.setVision(p.vision);
-  $('personanote').textContent = key === 'patient' ? '' : 'comparison: gait and planner numbers for this persona are assumptions, not this patient';
+  $('personanote').textContent = key === 'patient' ? '' : walkerCfg.device === 'wheelchair' ? 'comparison: a typical chair (assumed size); no trip model for a wheelchair, so trips read zero: see the ADA checks'
+    : 'comparison: gait and planner numbers for this persona are assumptions, not this patient';
   const ms = await replan();
   if (!current?.error) Object.assign(body, routePose(0, 0, Infinity));
   return ms;
@@ -1594,7 +1618,7 @@ function setWalk(m: 'auto' | 'free' | 'fly') {
   if (m !== 'fly') body.pitch = THREE.MathUtils.clamp(body.pitch, -1.2, 0.6);
   mode = m;
   $('autoplay').classList.toggle('on', m === 'auto'); $('free').classList.toggle('on', m === 'free'); $('fly').classList.toggle('on', m === 'fly');
-  if (m === 'auto') { autoS = 0; autoPause = 0; }
+  if (m === 'auto') { autoS = 0; autoPause = 0; setExplore(false); }
 }
 $('autoplay').onclick = () => setWalk('auto');
 $('free').onclick = () => setWalk('free');
@@ -1648,6 +1672,7 @@ function worldStep(dt: number): boolean {
   return true;
 }
 function autoStep(dt: number) {
+  dt = routePaused ? 0 : dt * routeSpeed;
   if (!current || current.error || routeS.length < 2) return;
   if (persona.step_model === 'world' && worldStep(dt)) return;
   const Ls = routeS[routeS.length - 1];
@@ -1668,6 +1693,12 @@ function freeStep(dt: number) {
   const k = (c: string) => keys.has(c);
   const turn = (+(k('KeyA') || k('ArrowLeft')) - +(k('KeyD') || k('ArrowRight'))) * 1.1 * dt;
   const fwd = (+(k('KeyW') || k('ArrowUp')) - +(k('KeyS') || k('ArrowDown'))) * 0.5 * dt;
+  if (explore.on) {   // no fence: through walls and furniture, kept inside the scanned grid
+    const [x0, y0] = g.origin_xy, x1 = x0 + g.shape[0] * g.cell_m, y1 = y0 + g.shape[1] * g.cell_m;
+    body.yaw += turn;
+    body.x = THREE.MathUtils.clamp(body.x + Math.cos(body.yaw) * fwd, x0, x1); body.y = THREE.MathUtils.clamp(body.y + Math.sin(body.yaw) * fwd, y0, y1);
+    return;
+  }
   // sub-steps of at most half a cell, so a slow frame can't step over a one-cell-thin wall
   const n = Math.max(1, Math.ceil(Math.abs(fwd) / (g.cell_m / 2)));
   for (let i = 0; i < n; i++) {
@@ -1687,10 +1718,11 @@ function flyStep(dt: number) {
 
 const state = { legs: [] as { x: number; y: number; h: number; flash: boolean; est: boolean }[], gap: Infinity, red: false };
 function liveChecks(t: number) {
+  const wb = explore.parked ?? body;   // the walker, wherever it stands (parked while exploring)
   // measured, per frame: bump under each leg, frame clearance from the obstacle distance field
   legTags.forEach((t, n) => { if (n >= walkerCfg.legs.length) t.visible = false; });
   state.legs = walkerCfg.legs.map((p, n) => {
-    const [x, y] = walkerPoint(body, p), c = cellAt(x, y), h = L.bump[c] || 0, e = !!est[c] && h > 0, flash = h >= risk.leg_flash_m || e;
+    const [x, y] = walkerPoint(wb, p), c = cellAt(x, y), h = L.bump[c] || 0, e = !!est[c] && h > 0, flash = h >= risk.leg_flash_m || e;
     walker.setLegRed(n, flash && Math.floor(t * 6) % 2 === 0);
     legTags[n].visible = flash;
     if (flash) { legTags[n].position.set(x, y, 0.25); legTags[n].element.textContent = e ? `cable ~${(h * 100).toFixed(1)} cm (estimated)` : `${(h * 100).toFixed(1)} cm bump`; legTags[n].element.className = 'label3d red'; }
@@ -1698,7 +1730,7 @@ function liveChecks(t: number) {
   });
   let gap = Infinity, at: XY = [0, 0];
   if (current?.dist_m) for (const p of walker.probes) {
-    const q = walkerPoint(body, p), d = current.dist_m[cellAt(...q)] - walkerCfg.leg_radius_m;
+    const q = walkerPoint(wb, p), d = current.dist_m[cellAt(...q)] - walkerCfg.leg_radius_m;
     if (d < gap) { gap = d; at = q; }
   }
   state.gap = gap; state.red = gap < sc.hazard_rules.clearance_margin_m;
@@ -1706,7 +1738,7 @@ function liveChecks(t: number) {
   gapTag.visible = state.red;
   if (state.red) { gapTag.position.set(at[0], at[1], walkerCfg.handle_height_m + 0.1); gapTag.element.textContent = `${Math.max(0, gap * 100).toFixed(0)} cm gap`; }
   // upcoming hazards (next 2.5 m of the route) glow
-  const sNow = mode === 'auto' ? autoS : nearestS(...walkerPoint(body, [centreOffset, 0]));
+  const sNow = mode === 'auto' ? autoS : nearestS(...walkerPoint(wb, [centreOffset, 0]));
   for (const ring of hazardGroup.children as THREE.Mesh[]) {
     const ahead = ring.userData.s - sNow, mat = ring.material as THREE.MeshBasicMaterial;
     const glow = ahead > -0.3 && ahead < 2.5;
@@ -1725,6 +1757,7 @@ function nearestS(x: number, y: number) {
 const mannequin = buildMannequin(persona.eye_height_m / 0.94);
 mannequin.group.visible = false;
 scene.add(mannequin.group);
+const manShadows = GROUND ? footShadows(mannequin.group) : null;
 let heroSteps: Step[] = [];
 /** The hero trip's footsteps, moved from the walker frame's centre line (where the simulation puts the route) back to
  *  the user's own feet, each with its arc length along the route. */
@@ -1768,14 +1801,16 @@ function frame(now: number) {
   }
 }
 function step(dt: number, t: number) {
+  frontendVR?.update();
   if (xr.presenting()) return xrFrame(dt, t);
   if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
   tourStep(dt);
-  walker.group.position.set(body.x, body.y, 0);
-  walker.group.rotation.z = body.yaw;
+  const wb = explore.parked ?? body;
+  walker.group.position.set(wb.x, wb.y, 0);
+  walker.group.rotation.z = wb.yaw;
   reim.update(dt);
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
-  if (mode !== 'fly') live?.frame(dt, body, mode === 'free', walker.group);
+  if (mode !== 'fly') live?.frame(dt, wb, mode === 'free' && !explore.on, walker.group);
   labelStep();
   if (mode === 'fly') {
     const c = Math.cos(body.pitch);
@@ -1787,7 +1822,11 @@ function step(dt: number, t: number) {
   mannequin.group.visible = showMan;
   if (showMan) {
     const f = feetAt(heroSteps, autoS, persona.stride_m ?? 0.35), hy = walkerCfg.width_m / 2 - walkerCfg.leg_radius_m, gx = walkerCfg.user_gap_m + 0.05;
-    mannequin.update(body, [f[1], f[0]], [[gx, hy], [gx, -hy]], walkerCfg.handle_height_m);   // sim side 1 = left
+    if (walkerCfg.device === 'wheelchair') { mannequin.seated(body, SEAT_Z, walkerCfg.legs[0][1] + 0.025); manShadows?.hide(); }   // the chair's own blobs ground it
+    else {
+      mannequin.update(body, [f[1], f[0]], [[gx, hy], [gx, -hy]], walkerCfg.handle_height_m);   // sim side 1 = left
+      manShadows?.(body, [f[0].pos, f[1].pos]);
+    }
   }
   pulseSpots(t);
   replayStep(dt);
@@ -1891,15 +1930,21 @@ const xr = await setupXR({
   },
   exit() { comparison.endPreview(); inXR = false; game.xr = false; dangerVR.k = -1; tourSpot = -1; applyPerf(perfBeforeXR, false); if (current) drawPlan(current); say(); },
   buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton],   // the story for a family: what's risky, how night feels, the fix
+  shell: {   // the planning shell (frontend.ts) over the wand; frontendVR is created after the first frame, so look it up lazily
+    activate: c => !!frontendVR?.activate(c), release: c => !!frontendVR?.release(c), open: () => !!frontendVR?.isOpen(),
+    follow(dt) { if (!xrFollowRoute || mode !== 'auto') return false; autoStep(dt); return true; },
+    hover: k => reim.selectChange(k),
+  },
 });
 /** One headset frame: the monitor's world updates (walker, glow, the reimagined room, stairs, live checks), but no camera
  *  placement (the headset is the camera), no DOM labels and no post pass (it can't run per eye). Live physics follows
  *  without holding the body back: in VR the body is wherever the person physically stands. */
 function xrFrame(dt: number, t: number) {
   xr.step(dt);
-  walker.group.position.set(body.x, body.y, 0);
-  walker.group.rotation.z = body.yaw;
-  if (!comparison.previewing()) live?.frame(dt, body, false, walker.group);
+  const wb = explore.parked ?? body;
+  walker.group.position.set(wb.x, wb.y, 0);
+  walker.group.rotation.z = wb.yaw;
+  if (!comparison.previewing()) live?.frame(dt, wb, false, walker.group);
   pulseSpots(t);
   reim.update(dt);
   comparison.step(dt);
@@ -1913,6 +1958,16 @@ setWalk('auto');
 await replan();
 if ((current as Eval | null)?.error === undefined && current) Object.assign(body, routePose(0, 0, Infinity));
 else { const [sx, sy] = routes[selRoute].start; Object.assign(body, { x: sx - centreOffset, y: sy, yaw: 0 }); }
+// ---------- room light on the meshes (ground.ts) ----------
+// the splat rendered into an env map from the room's middle, 1 m up, before the loop (it sorts the splats for the cube
+// camera; the loop would re-sort them for the main one mid-capture). Capped wait: a slow load keeps the old flat light.
+if (GROUND) {
+  const ready = await Promise.race([Promise.all(splats.map(s => s.initialized)).then(() => true), new Promise<boolean>(r => setTimeout(() => r(false), 10000))]);
+  if (ready) {
+    await roomEnvironment(sparkR, scene, new THREE.Vector3(g.origin_xy[0] + (g.shape[0] * g.cell_m) / 2, g.origin_xy[1] + (g.shape[1] * g.cell_m) / 2, 1.0));
+    updateNight();
+  }
+}
 renderer.setAnimationLoop(frame);   // not requestAnimationFrame: in a headset session only the XR frame loop runs
 
 const ctx = { RUN, sc, objs, layout: () => layout, applied: () => applied, current: () => current, routePose, routeS: () => routeS,
@@ -1933,7 +1988,8 @@ Object.assign(game, {
     rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrTier: xr.tier, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
-  setFree(x: number, y: number, yaw: number) { setWalk('free'); Object.assign(body, { x, y, yaw }); },
+  setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); Object.assign(body, { x, y, yaw }); },
+  explore: () => ({ on: explore.on, parked: explore.parked && { ...explore.parked } }),
   layout: () => layout, current: () => current, routes,
   spots: () => spotList, startTour, endTour, tourState: () => ({ ...tour }), replayState: () => ({ on: replay.on, t: replay.t }), startReplay, stopReplay, showPhysics,
   setPersona, physicsPass, personas: () => Object.keys(personas), persona: () => personaKey, suggest, applyOption, setFillBackend,
@@ -1961,3 +2017,32 @@ Object.assign(game, {
   applyFix, select: (name: string) => select(objs.findIndex(o => o.name === name)),
   exportForCosmos: (opts?: ExportOpts) => exportForCosmos(ctx, opts), layoutKey: () => layoutKey(objs, layout),
 });
+
+// ---------- frontend shell: existing data/actions, independent of backend and optimizer ownership ----------
+let inspectReturn: { body: typeof body; fly: typeof fly; mode: 'auto' | 'free' | 'fly'; rig: ReturnType<typeof xr.rigState> } | null = null;
+const frontendAdapter: FrontendAdapter = {
+  snapshot: () => ({ room: RUN, patient: personaKey, route: routes[selRoute].name, current, baseline: baseEvals[selRoute] ?? null,
+    changes: reim.changes(), spots: spotList, options: suggestions, selected, selectedName: objs[selected]?.name, mode, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
+  navigate(m) {
+    endTour(); select(-1);
+    if (m === 'inspect') { inspectReturn ??= { body: { ...body }, fly: { ...fly }, mode, rig: xr.rigState() }; setWalk(renderer.xr.isPresenting ? 'free' : 'fly'); }
+    else { xrFollowRoute = renderer.xr.isPresenting && m === 'route'; setWalk(m === 'route' ? 'auto' : 'free'); routePaused = false; if (m === 'explore' && !explore.on) setExplore(true); }
+  },
+  focus(item) {
+    const p = vantage(item.at, current?.xy ?? [item.at], 1.2, 1.1);
+    if (renderer.xr.isPresenting) { if (standable(p.x, p.y)) frontendVR?.transition(() => xr.moveHead(p.x, p.y)); }
+    else { setWalk('fly'); Object.assign(fly, p); body.yaw = p.yaw; body.pitch = p.pitch; }
+    reim.selectChange(item.object, item.change?.iv);
+  },
+  leaveInspect() { if (inspectReturn) { const back = inspectReturn; Object.assign(body, back.body); Object.assign(fly, back.fly); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.restoreRig(back.rig)); setWalk(back.mode); inspectReturn = null; } },
+  pause() { routePaused = !routePaused; }, restart() { autoS = 0; autoPause = 0; routePaused = false; }, speed(v) { routeSpeed = v; },
+  compare(t) { reim.setT(t); }, animate() { reim.play(); },
+  suggest, async apply(index) { await applyOption(index); setWalk('free'); reim.setT(1); },
+  undo: undoReimagined, select,
+  path(on) { routeLine.visible = on; },
+  highlights(on) { hazardGroup.visible = on; }, improvements(on) { reim.setParts({ rings: on, ringLabels: on }); },
+};
+const frontend = mountFrontend(frontendAdapter);
+frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
+game.frontend = frontend;
+game.frontendXR = frontendVR;
