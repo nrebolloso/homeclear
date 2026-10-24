@@ -194,8 +194,11 @@ def object_parts(o, xyz, g, w, lo, cell, shape):
         z0 = g["bump_z"][0] if z0 < STANDS_M else z0
         zone = in_parts([{**q, "z": [z0, q["z"][1] + ON_TOP_M]} for q in o["parts"]], 0.02)
         own = np.isin(inst, ids)
+        # what is nearest to its own points also goes up to GROW_M past its outline, above the floor: a chair back's
+        # far side 6c never labelled sits 5-12 cm behind the outline and stayed against the wall as a pale chair back
+        near = in_parts([{**q, "z": [max(z0, STANDS_M), q["z"][1] + ON_TOP_M]} for q in o["parts"]], GROW_M)
         # its own labelled points go even below the floor band: a chair's runners lie flat on the floor
-        return (own & (d <= MEMBER_M)) | (zone & (own | (inst == -1)) & (xyz[:, 2] >= g["bump_z"][0]))
+        return (own & (d <= MEMBER_M)) | (near & own) | (zone & (own | (inst == -1)) & (xyz[:, 2] >= g["bump_z"][0]))
     # parts: the object is only these height-limited boxes (a table = top slab + legs; chairs pushed in under it stay put)
     parts = o.get("parts") or [{"box_xy": o["box_xy"], "z": [g["bump_z"][0], o.get("z_max", 2.0)]}]
     if o.get("kind") == "rug":   # a rug lies at an angle: its box takes bare floor too, so cut the measured bump patch instead

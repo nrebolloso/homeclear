@@ -77,3 +77,15 @@ of unlabelled Gaussians still starts at it). Yellow Gaussians on the floor insid
 (`kitchen4_lighter_chair8_removed.png`). Still left: ~60 runner Gaussians shared by the chair4 / chair7 footprints,
 more than 10 cm from any label and at floor height (a short yellow bar under the table). Fills re-run (job 47391130).
 The Removed list is now icon tiles (an icon per kind, name under it); click a tile to put it back.
+
+## chair7 back left against the wall (fixed), and every object checked
+User screenshot: a pale chair back stayed against the wall behind the table after removing chair7. ~360 grey Gaussians
+(the backrest's back face, which 6c never labelled) were nearest to chair7's labels but 5-12 cm away and outside its
+slanted outline, so neither rule took them. An object now also takes what is nearest to its own labels up to 10 cm past
+its outline, above 30 cm (so floor and runners of other objects stay put). Room Gaussians left in chair7's old box:
+468 -> 177 (opacity sum 36 -> 15); from the user's camera the wall shows plain. Fills re-run (job 47397124, 17 LaMa fills).
+Live check of all 17 objects on `kitchen4_lighter`, removed one at a time: no object parts left behind. What remains is
+room, not object: the counter under the basket (never filmed, a blur), and a dark smudge on the wall corner behind the
+trash can (every Gaussian there is 15-33 cm from any trash-can label: the unseen wall behind it). Close up (< 1 m) the
+table top and seats render patchy and see-through with or without removals; from normal distance they are solid.
+`npm test` 74 / 74, `tests/run_py.sh` all OK.
