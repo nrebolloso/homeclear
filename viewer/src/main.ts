@@ -35,6 +35,7 @@ import QRCode from 'qrcode';
 import { mountFrontend, type FrontendAdapter } from './frontend.ts';
 import { createFrontendXR } from './frontend-xr.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
+import type { Ghost } from './sim.ts';
 import type { WorldModel } from './worldmodel.ts';
 import { setupXR, type XrEditor } from './xr.ts';
 import { plainSpot, tourStand } from './xrtour.ts';
@@ -224,8 +225,11 @@ const routeLine = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsM
 const ghostDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ vertexColors: true, size: 5, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
 const hazardGroup = new THREE.Group(), tapeGroup = new THREE.Group();
 // overlays draw after the splats: splats don't write depth, so drawn first they'd be painted over (rings, ghosts, fog would vanish)
-for (const o of [routeLine, ghostDots, hazardGroup, tapeGroup]) o.renderOrder = 1;
-scene.add(routeLine, ghostDots, hazardGroup, tapeGroup);
+// the hand-rule baseline's ghosts (when a learned model walks): amber, toggled apart, to show where the two disagree
+const handDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ vertexColors: true, size: 4, sizeAttenuation: false, transparent: true, opacity: 0.7, depthWrite: false }));
+handDots.visible = false;
+for (const o of [routeLine, ghostDots, handDots, hazardGroup, tapeGroup]) o.renderOrder = 1;
+scene.add(routeLine, ghostDots, handDots, hazardGroup, tapeGroup);
 { // fog where the capture saw a cell from fewer than coverage_good cameras: we don't trust the splat there
   const cv = document.createElement('canvas');
   cv.width = nx; cv.height = ny;
@@ -316,15 +320,19 @@ async function replan(): Promise<number> {
 function drawPlan(r: Eval) {
   routeLine.geometry.dispose();
   routeLine.geometry = new THREE.BufferGeometry().setFromPoints(r.xy.map(p => new THREE.Vector3(p[0], p[1], 0.035)));
-  const pos: number[] = [], col: number[] = [];
-  r.ghosts.forEach((gh, n) => {
-    const z = 0.04 + n * 0.0004;
-    gh.pts.forEach((q, k) => { pos.push(q[0], q[1], z); col.push(...(gh.hit[k] ? [1, 0.15, 0.15] : [0.45, 0.7, 1])); });
-  });
-  ghostDots.geometry.dispose();
-  ghostDots.geometry = new THREE.BufferGeometry();
-  ghostDots.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  ghostDots.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const dots = (pts: THREE.Points, ghosts: Ghost[], rgb: number[]) => {
+    const pos: number[] = [], col: number[] = [];
+    ghosts.forEach((gh, n) => {
+      const z = 0.04 + n * 0.0004;
+      gh.pts.forEach((q, k) => { pos.push(q[0], q[1], z); col.push(...(gh.hit[k] ? [1, 0.15, 0.15] : rgb)); });
+    });
+    pts.geometry.dispose();
+    pts.geometry = new THREE.BufferGeometry();
+    pts.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    pts.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  };
+  dots(ghostDots, r.ghosts, [0.45, 0.7, 1]);
+  dots(handDots, r.hand?.ghosts ?? [], [1, 0.72, 0.3]);
   for (const c of [...hazardGroup.children]) {
     hazardGroup.remove(c);
     c.traverse(x => {
@@ -356,6 +364,7 @@ function renderPanels() {
     `<div class="big measured">${fmt(r.per_month)}</div><div class="range">likely ${fmt(r.per_month_lo)}–${fmt(r.per_month_hi)}</div>` +
     `expected toe contacts / month, all routes (${risk.rollouts} simulated trips per route; steps: ${persona.step_model === 'world' ? 'world model (heels + walker)' : persona.step_model === 'learned' ? 'learned model' : 'hand rule'}; ` +
     `range = measured height error ±${(100 * sc.hazard_rules.margin_m.height).toFixed(1)} cm + simulation noise)` +
+    (r.hand ? `<div class="range">hand-rule baseline on the same route: ${fmt(r.hand.per_month)}</div>` : '') +
     `<ul class="routes">${perRoute}</ul>` +
     `original layout: ${fmt(baselinePerMonth!)} → now ${fmt(r.per_month)} <span class="${d <= 0 ? 'delta-good' : 'delta-bad'}">(${d <= 0 ? '' : '+'}${fmt(d)})</span>`;
   const geo = r.hazards.map(h => `<li><span class="measured">${h.type === 'floor_bump' ? (h.estimated ? `${h.name}: thin cable/cord, ~${(h.height_m! * 100).toFixed(1)} cm ESTIMATED (classified, not measured)` : `${h.name}: ${(h.height_m! * 100).toFixed(1)} cm bump`) : `tight passage: ${(h.min_side_clearance_m! * 100).toFixed(0)} cm each side`}</span>` +
@@ -1537,6 +1546,7 @@ async function setFillBackend(b: string) {
   return b;
 }
 $('ghosts').onchange = () => { ghostDots.visible = $<HTMLInputElement>('ghosts').checked; };
+$('handghosts').onchange = () => { handDots.visible = $<HTMLInputElement>('handghosts').checked; };
 
 // ---------- performance mode (perf.ts) ----------
 // One switch thins what is drawn: no ghost walkers, heatmap, imagined ceiling, bump heights or fog, fewer splat pixels, a
@@ -1971,6 +1981,7 @@ Object.assign(game, {
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); Object.assign(body, { x, y, yaw }); },
+  setFly(x: number, y: number, z: number, yawDeg: number, pitchDeg: number) { setWalk('fly'); Object.assign(fly, { x, y, z }); body.yaw = (yawDeg * Math.PI) / 180; body.pitch = (pitchDeg * Math.PI) / 180; },
   layout: () => layout, current: () => current, routes,
   spots: () => spotList, startTour, endTour, tourState: () => ({ ...tour }), replayState: () => ({ on: replay.on, t: replay.t }), startReplay, stopReplay, showPhysics,
   setPersona, physicsPass, personas: () => Object.keys(personas), persona: () => personaKey, suggest, applyOption, setFillBackend,

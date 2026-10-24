@@ -62,6 +62,8 @@ export interface Eval {
   checks: CheckOut[];
   /** simulated object events per route: mat slides, chair tips (objrisk.ts, from the offline physics batch) */
   objects: ObjEvent[];
+  /** the same trips stepped by the hand rule, when a learned / world model drives the main ones (worker.ts) */
+  hand?: { per_month: number; ghosts: Ghost[] };
 }
 
 

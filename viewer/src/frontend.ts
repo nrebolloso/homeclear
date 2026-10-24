@@ -70,7 +70,7 @@ export function mountFrontend(api: FrontendAdapter) {
   $<HTMLSelectElement>('reimtags').options[0].textContent = 'Selected item';
   $<HTMLSelectElement>('reimtags').options[1].textContent = 'All changed items';
   $<HTMLSelectElement>('reimtags').options[2].textContent = 'Off';
-  move('ghosts', 'filter-navigation', 'Simulated footsteps'); move('third', 'filter-navigation', 'Third-person view');
+  move('ghosts', 'filter-navigation', 'Simulated footsteps'); move('handghosts', 'filter-navigation', 'Hand-rule footsteps (baseline)'); move('third', 'filter-navigation', 'Third-person view');
   move('spot', 'filter-findings', 'Hazard highlights'); move('heights', 'filter-findings', 'Measured bump heights');
   move('reimghosts', 'filter-changes', 'Original object positions'); move('reimtags', 'filter-changes', 'Cost labels');
   ['imagfill', 'fillsel', 'imagceil', 'heat', 'shell', 'verify', 'perf'].forEach(id => move(id, 'filter-advanced'));

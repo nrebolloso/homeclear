@@ -4,8 +4,9 @@ Their heights are set here; everything on screen about them (contacts/month, cle
 
   .venv/bin/python tools/stage_demo_hazards.py [viewer/public/scene/kitchen4_lighter]
 
-Idempotent: the first run keeps the export as *_scan copies (scene.json, main.ply, bump.f32, bump_estimated.u8,
-hazards.json) and every run rebuilds from those. Rerun after stage 12 / lighter_clean rewrite the export.
+Also sets the demo's 200 trips and the world model for the patient. Idempotent: the first run keeps the export as
+*_scan copies (scene.json, main.ply, bump.f32, bump_estimated.u8, hazards.json, persona.json, personas.json) and every
+run rebuilds from those. Rerun after stage 12 / lighter_clean rewrite the export.
 """
 import json, shutil, sys
 from pathlib import Path
@@ -105,7 +106,15 @@ sc["interventions"] = [
     {"id": "push_in_chair", "label": "Push the chair back under the table", "kind": "move", "object": CHAIR,
      "to": [chair["pivot"][0], chair["pivot"][1], 0], "cost_usd": 0, "minutes": 1, "effort": 1},
 ]
+sc["risk"].update(rollouts=200, ghosts=200)        # the storyboard's 200 trips, every one drawn as a ghost
 (D / "scene.json").write_text(json.dumps(sc, indent=1))
+
+# the patient walks on the world model (held-out heel error 3.63 cm vs 10.73 cm for the hand rule, which runs alongside
+# as the baseline); the comparison personas keep their assumed gait
+persona = json.loads(scan_copy("persona.json").read_text()); persona["step_model"] = "world"
+(D / "persona.json").write_text(json.dumps(persona, indent=1))
+personas = json.loads(scan_copy("personas.json").read_text()); personas["patient"]["gait"]["step_model"] = "world"
+(D / "personas.json").write_text(json.dumps(personas, indent=1))
 
 # hazards.json in the stage 8 shape, source "placed"; per-month numbers are left to the viewer's simulation
 hz = json.loads(scan_copy("hazards.json").read_text())
