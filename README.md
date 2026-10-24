@@ -98,6 +98,7 @@ VR (Quest 2/3 over USB): enable developer mode, plug in, allow USB debugging, th
 `http://localhost:5179/?scene=<name>` in the Quest Browser (the headset needs some Wi-Fi or it shows "no internet") and
 press ENTER VR. Walk for real (1:1, floor at your floor); left stick or a held pinch walks where you look, right stick
 snap-turns. Labels are flat-view only for now.
+Full-detail scenes from a Windows PC over Quest Link / Air Link: `VR_WINDOWS.md`.
 
 ## Image-edit backend (stage 9)
 

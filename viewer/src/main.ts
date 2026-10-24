@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { SparkRenderer, SparkXr, SplatMesh } from '@sparkjsdev/spark';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 import { stamp, placementOk, polyCells, worldFootprint, toCell, applyIntervention, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
 import { buildWalker, type WalkerCfg } from './walker.ts';
 import { nightShader } from './night.ts';
@@ -43,7 +44,8 @@ document.body.appendChild(css.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1d2126);
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 60);
-scene.add(new SparkRenderer({ renderer }));
+const spark = new SparkRenderer({ renderer });
+scene.add(spark);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 2.2);
 scene.add(hemi);
 addEventListener('resize', () => {
@@ -583,6 +585,16 @@ const ctls: Ctl[] = [0, 1].map(i => {
   group.addEventListener('selectend', () => (isWand(c) ? wandUp() : pinching.delete(c)));
   return c;
 });
+// tracked hands drawn in the rig like the controllers; models served locally (models/hands/, webxr-input-profiles, MIT)
+const handModels = new XRHandModelFactory().setPath('models/hands/');
+for (const i of [0, 1]) { const hand = renderer.xr.getHand(i); hand.add(handModels.createHandModel(hand, 'mesh')); rig.add(hand); }
+
+// The headset GPU is fill-bound: a splat's soft tail and huge near-eye splats cost the most for the least. In VR only,
+// trim splats to ?stddev= standard deviations (Spark default sqrt 8) and cap them at ?maxpx= pixels (default 512).
+// Quest 2, kitchen 120K at 72 Hz: 36 fps with Spark's defaults, 72 with 2.0 and 128.
+const XR_SPLAT = { maxStdDev: +(PARAMS.get('stddev') ?? 2.0), maxPixelRadius: +(PARAMS.get('maxpx') ?? 128) };
+const DESK_SPLAT = { maxStdDev: spark.maxStdDev, maxPixelRadius: spark.maxPixelRadius };
+
 function aim(c: Ctl) {   // the controller's pose is rig-local (reference space): refresh its world matrix through the rig
   c.group.updateWorldMatrix(true, false);
   return wandRay.setFromXRController(c.group), wandRay.ray;
@@ -645,13 +657,20 @@ new SparkXr({   // adds the Enter VR button; "VR not supported" where WebXR isn'
   frameBufferScaleFactor: PARAMS.has('xrscale') ? +PARAMS.get('xrscale')! : undefined,
   fixedFoveation: PARAMS.has('foveation') ? +PARAMS.get('foveation')! : undefined,
   onEnterXr: () => {
+    // a route can start at the edge of the scan (kitchen4: a doorway outside the grid): start at the first point along
+    // it with filmed floor, or the headset begins inside a wall's splats (slow, and you see the room through the wall)
+    if (!standable(body.x, body.y) && current && !current.error) {
+      for (let s = 0; s < routeS[routeS.length - 1]; s += 0.05) { const p = routePose(s, body.yaw, Infinity); if (standable(p.x, p.y)) { Object.assign(body, p); break; } }
+    }
     Object.assign(xrRig, { x: body.x, y: body.y, yaw: body.yaw }); placeRig(); rig.add(camera); snapReady = true; game.xr = true;
     select(-1);   // the desktop gizmo has no place in the headset
+    Object.assign(spark, XR_SPLAT);
     // ?hz=72: a lower refresh gives each frame more time (90 Hz = 11.1 ms, 72 Hz = 13.9 ms); the Quest 2 offers 60-120
     if (PARAMS.has('hz')) renderer.xr.getSession()?.updateTargetFrameRate?.(+PARAMS.get('hz')!).catch(() => {});
   },
   onExitXr: () => {
     camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1; game.xr = false;
+    Object.assign(spark, DESK_SPLAT);
     for (const it of items) { it.outline.visible = false; (it.outline.material as THREE.LineBasicMaterial).color.setHex(0x66ccff); }
   },
 });
@@ -675,7 +694,7 @@ Object.assign(game, {
   resume() { game.manual = false; last = performance.now(); },   // the animation loop never stopped: frame() was skipping
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
-  debug: { renderer, scene, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup] },
+  debug: { renderer, scene, spark, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup] },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose() {
     const w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3));
