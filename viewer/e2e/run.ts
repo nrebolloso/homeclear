@@ -117,7 +117,7 @@ try {
   await p.waitForTimeout(500);
 
   // 4. night mode
-  await p.click('#filter-toggle');
+  await p.click('#tab-view');
   await p.click('#night');
   await p.waitForTimeout(4000);
   const nfps = await G(p, 'return game.fps');
@@ -190,7 +190,7 @@ try {
   await Q('game.setVision("cataract")'); await q.p.waitForTimeout(300); const n1 = await px();
   await Q('game.setVision("normal")');
   check('vision pass changes the frame (cataract blurs: smaller JPEG)', n1 < n0 * 0.95, `${n0} -> ${n1} bytes`);
-  await q.p.click('#filter-toggle');
+  await q.p.click('#tab-view');
   await q.p.locator('#filter-menu details').evaluate((el: HTMLDetailsElement) => { el.open = true; });
   await q.p.click('#heat'); await q.p.waitForTimeout(800);
   const heat = await Q('return !!game.current().heat');

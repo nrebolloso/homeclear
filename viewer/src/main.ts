@@ -9,6 +9,7 @@ import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
 import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z } from './wheelchair.ts';
 import { chairGeometry, clearOf, driveStep, spinBy, type Chair } from './drive.ts';
 import { keyIntent, createHistory, createKeyOverlay } from './controls.ts';
+import { controlHints, hintLines, type HintCtx } from './hints.ts';
 import { pathLights, createLights3d } from './lights.ts';
 import { strokePersona } from './stroke.ts';
 import { bathroomFixes, createBathroom3d } from './bathroom.ts';
@@ -2188,7 +2189,7 @@ const xr = await setupXR({
   renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses,
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
   commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m,
-  resetObject, resetAll, editor: markerXR, readOnly: comparison.previewing, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
+  resetObject, resetAll, editor: markerXR, readOnly: comparison.previewing, hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { lines: hintLines(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
   startPose() {   // stay if this floor is seen as well as the route's median spot; else the first such point along the route
     if (!current || current.error) return null;
     const poses: { x: number; y: number; yaw: number }[] = [];
@@ -2261,7 +2262,7 @@ Object.assign(game, {
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
   debug: { renderer, scene, camera, marker: mk3d.root, stairs: stairs3d.root, spark: sparkR, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup],
-    rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrTier: xr.tier, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
+    rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); headTurn.yaw = 0; chairVel.v = chairVel.w = 0; Object.assign(body, { x, y, yaw }); },
@@ -2298,7 +2299,15 @@ Object.assign(game, {
 
 // ---------- frontend shell: existing data/actions, independent of backend and optimizer ownership ----------
 let inspectReturn: { body: typeof body; fly: typeof fly; mode: 'auto' | 'free' | 'fly'; rig: ReturnType<typeof xr.rigState> } | null = null;
+/** What the viewer is doing, for hints.ts: the desktop strip and pills, and the VR strip card. */
+function hintBase(device: 'desktop' | 'vr'): Omit<HintCtx, 'inspect'> {
+  const w = device === 'vr' ? xr.wand() : null, total = mk?.kind === 'stairs' ? 3 : 2;
+  return { device, persona: personaKey, nav: mode, marking: mk ? { kind: mk.kind, step: Math.min(mk.pts.length + 1, total), total } : null, editingMarks: editing && !mk,
+    grabbing: device === 'vr' ? !!w?.grab : !!grabbing, selected: device === 'vr' ? w?.hover != null : selected >= 0,
+    locked: document.pointerLockElement === renderer.domElement, mounted: device === 'vr' && !!xr.mount().hand };
+}
 const frontendAdapter: FrontendAdapter = {
+  hintContext: () => ({ ...hintBase('desktop'), thirdPerson: view.third, personaLabel: personas[personaKey]?.label ?? personaKey }),   // the controls strip and status pills (hints.ts)
   snapshot: () => ({ room: RUN, patient: personaKey, route: routes[selRoute].name, current, baseline: baseEvals[selRoute] ?? null,
     changes: reim.changes(), spots: spotList, options: suggestions, selected, selectedName: objs[selected]?.name, mode, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
   navigate(m) {
