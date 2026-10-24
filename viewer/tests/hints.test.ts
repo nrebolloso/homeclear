@@ -48,8 +48,17 @@ test('hint lines: label, then chips on one line', () => {
 });
 test('status pills: persona, view, mode, and the marking step first', () => {
   const p = statusPills({ ...ctx(), thirdPerson: false, personaLabel: 'Walker', proposed: false });
-  assert.deepEqual(p.map(x => x.text), ['Walker', 'First person', 'Free walk', 'Original']);
+  assert.deepEqual(p.map(x => x.text), ['Walker', 'First person', 'Walk', 'Original']);
   const q = statusPills({ ...ctx({ marking: { kind: 'door', step: 1, total: 2 } }), thirdPerson: true, personaLabel: 'Wheelchair', proposed: null });
   assert.equal(q[0].text, 'Marking doorway · 1/2'); assert.equal(q[0].tone, 'mark');
   assert.ok(q.some(x => x.text === 'Third person') && !q.some(x => /Original|Proposed/.test(x.text)));
+});
+test('look around: parked walker has its own mode, pill and chips; a head turn adds the C chip to walking', () => {
+  assert.equal(hintMode(ctx({ parked: true })), 'explore');
+  assert.equal(controlHints(ctx({ parked: true })).label, 'Looking around · walker parked');
+  assert.equal(statusPills({ ...ctx({ parked: true }), thirdPerson: false, personaLabel: 'Walker', proposed: null })[2].text, 'Look around');
+  assert.equal(hintMode(ctx({ parked: true, device: 'vr' })), 'free');
+  assert.equal(controlHints(ctx({ mismatch: true })).chips[0].keys[0], 'C');
+  assert.ok(controlHints(ctx({ mismatch: true })).chips.length <= MAX_CHIPS);
+  assert.equal(statusPills({ ...ctx({ nav: 'fly' }), thirdPerson: false, personaLabel: 'Walker', proposed: null })[2].text, 'Fly · noclip');
 });

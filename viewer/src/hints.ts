@@ -3,7 +3,7 @@
 // F1 (controls.ts); this is only the handful that apply in the current state, at most MAX_CHIPS.
 
 export type Tone = 'move' | 'edit' | 'mark' | 'spectate' | 'view';
-export type HintMode = 'marking' | 'editing' | 'grabbing' | 'selected' | 'inspect' | 'route' | 'fly' | 'free';
+export type HintMode = 'marking' | 'editing' | 'grabbing' | 'selected' | 'inspect' | 'route' | 'fly' | 'free' | 'explore';
 export interface HintCtx {
   device: 'desktop' | 'vr';
   persona: string;                       // 'patient' | 'wheelchair' | 'stroke' | ...
@@ -15,16 +15,18 @@ export interface HintCtx {
   selected: boolean;                     // desktop: an object is picked; VR: the wand points at one
   locked: boolean;                       // desktop: mouse locked
   mounted: boolean;                      // VR: controller strapped to a walker
+  parked?: boolean;                      // desktop: Look around (the walker stays where it was, nothing collides)
+  mismatch?: boolean;                    // desktop: the head is turned away from the walker's heading
 }
 export interface Chip { keys: string[]; text: string }
 export interface Hints { mode: HintMode; label: string; tone: Tone; chips: Chip[] }
 export const MAX_CHIPS = 5;
 
 const c = (text: string, ...keys: string[]): Chip => ({ keys, text });
-const TONE: Record<HintMode, Tone> = { marking: 'mark', editing: 'mark', grabbing: 'edit', selected: 'edit', inspect: 'view', route: 'move', fly: 'spectate', free: 'move' };
+const TONE: Record<HintMode, Tone> = { marking: 'mark', editing: 'mark', grabbing: 'edit', selected: 'edit', inspect: 'view', route: 'move', fly: 'spectate', free: 'move', explore: 'view' };
 
 export function hintMode(x: HintCtx): HintMode {
-  return x.marking ? 'marking' : x.editingMarks ? 'editing' : x.grabbing ? 'grabbing' : x.selected ? 'selected' : x.inspect ? 'inspect' : x.nav === 'auto' ? 'route' : x.nav === 'fly' ? 'fly' : 'free';
+  return x.marking ? 'marking' : x.editingMarks ? 'editing' : x.grabbing ? 'grabbing' : x.selected ? 'selected' : x.inspect ? 'inspect' : x.nav === 'auto' ? 'route' : x.nav === 'fly' ? 'fly' : x.parked && x.device === 'desktop' ? 'explore' : 'free';
 }
 
 export function controlHints(x: HintCtx): Hints {
@@ -62,8 +64,12 @@ export function controlHints(x: HintCtx): Hints {
         : [c('look', 'Mouse'), c('take over', 'W', 'A', 'S', 'D'), c('mark', 'M'), c('all keys', 'F1')];
       break;
     case 'fly':
-      label = 'Fly · spectator';
+      label = 'Fly · spectator · walker stays put';
       chips = [c('fly', 'W', 'A', 'S', 'D'), c('down / up', 'Q', 'E'), c('fast', 'Shift'), c('look', 'Mouse'), c('back', 'F')];
+      break;
+    case 'explore':
+      label = 'Looking around · walker parked';
+      chips = [c('move', 'W', 'A', 'S', 'D'), c('look', 'Mouse'), c('scroll', 'Wheel'), c('walk again', '2'), c('fly', 'F')];
       break;
     default:   // free walk
       label = chair ? 'Driving' : 'Walking';
@@ -71,6 +77,7 @@ export function controlHints(x: HintCtx): Hints {
           : [c('walk', 'Left stick'), c('turn', 'Right stick'), c('teleport', 'Trigger'), c('doorway', 'X'), c('stairs', 'Y')])
         : x.locked ? [c('look', 'Mouse'), ...wasd, c('act at dot', 'Click'), c('unlock', 'Esc')].slice(0, MAX_CHIPS)
         : chair ? [...wasd, c('look', 'Mouse'), c('mark', 'M', '1/2')]
+        : x.mismatch ? [c('walker ≠ view', 'C'), ...wasd, c('look', 'Mouse'), c('mark', 'M', '1/2')]   // the amber arrow is on: C turns the walker to face the view
         : [...wasd, c('look', 'Mouse'), c('recenter', 'C'), c('mark', 'M', '1/2')];
   }
   return { mode, label, tone: TONE[mode], chips: chips.slice(0, MAX_CHIPS) };
@@ -86,7 +93,7 @@ export interface Pill { text: string; tone: Tone; go?: 'view' | 'compare' }   //
 export function statusPills(x: HintCtx & { thirdPerson: boolean; personaLabel: string; proposed: boolean | null }): Pill[] {
   const mode = hintMode(x);
   const pills: Pill[] = [{ text: x.personaLabel, tone: 'view', go: 'view' }, { text: x.thirdPerson ? 'Third person' : 'First person', tone: 'view', go: 'view' }];
-  pills.push({ text: x.nav === 'auto' ? 'Route' : x.nav === 'fly' ? 'Fly' : 'Free walk', tone: x.nav === 'fly' ? 'spectate' : 'move' });
+  pills.push({ text: x.nav === 'auto' ? 'Route' : x.nav === 'fly' ? 'Fly · noclip' : x.parked && x.device === 'desktop' ? 'Look around' : 'Walk', tone: x.nav === 'fly' ? 'spectate' : x.parked && x.device === 'desktop' ? 'view' : 'move' });
   if (x.proposed !== null) pills.push({ text: x.proposed ? 'Proposed' : 'Original', tone: 'view', go: 'compare' });
   if (mode === 'marking' || mode === 'editing') pills.unshift({ text: controlHints(x).label, tone: 'mark' });
   return pills;

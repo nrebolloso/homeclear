@@ -134,7 +134,7 @@
 .frontend td small { display: block; color: var(--muted); }
 #frontend canvas { background: var(--canvas); border-radius: 4px; }
 #viewer-toolbar { position: absolute; bottom: 30px; left: calc((100% - var(--scene-right)) / 2); transform: translateX(-50%); padding: 6px; }
-#viewer-toolbar nav button { padding: 10px 16px; }
+#viewer-toolbar nav button { padding: 10px 12px; }
 #viewer-toolbar nav span { margin-right: 5px; font-size: calc(1.125rem * var(--fs)); }
 #route-playback { justify-content: center; padding: 6px 0 0; }
 #route-playback button, #route-playback select { min-height: 30px; padding: 4px 10px; font-size: calc(0.75rem * var(--fs)); }
@@ -191,7 +191,7 @@
 .frontend { --tone-move: #6fd08c; --tone-edit: #49d4c7; --tone-mark: #ffc857; --tone-spectate: #c9a3ff; --tone-view: #8fb8ff; }
 .frontend[data-theme="light"] #frontend { --tone-move: #0a6b32; --tone-edit: #0b6b63; --tone-mark: #8a5a00; --tone-spectate: #5a2aa0; --tone-view: #1a4fa0; }
 .frontend[data-theme="contrast"] #frontend { --tone-move: #fff; --tone-edit: #fff; --tone-mark: #ffe14d; --tone-spectate: #ffb3ff; --tone-view: #fff; }
-#controls-strip { --tone: var(--tone-move); position: absolute; bottom: 46px; left: 20px; display: flex; flex-direction: column; gap: 6px; padding: 9px 12px 10px; border-left: 4px solid var(--tone); width: max-content; max-width: max(230px, calc((100% - var(--scene-right)) / 2 - 215px)); pointer-events: none; }
+#controls-strip { --tone: var(--tone-move); position: absolute; bottom: 46px; left: 20px; display: flex; flex-direction: column; gap: 6px; padding: 9px 12px 10px; border-left: 4px solid var(--tone); width: max-content; max-width: max(230px, calc((100% - var(--scene-right)) / 2 - 285px)); pointer-events: none; }
 #controls-strip[data-tone="edit"] { --tone: var(--tone-edit); } #controls-strip[data-tone="mark"] { --tone: var(--tone-mark); }
 #controls-strip[data-tone="spectate"] { --tone: var(--tone-spectate); } #controls-strip[data-tone="view"] { --tone: var(--tone-view); }
 #strip-mode { font-size: calc(0.75rem * var(--fs)); font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--tone); }

@@ -38,7 +38,10 @@ test('M then 1 or 2 picks the tool; any other key drops the choice', () => {
   assert.equal(keyIntent(k('Digit2'), ctx({ choosing: true })), 'mark-door');
   assert.equal(keyIntent(k('KeyW'), ctx({ choosing: true })), 'choose-cancel');
   assert.equal(keyIntent(k('Escape'), ctx({ choosing: true })), 'choose-cancel');
-  assert.equal(keyIntent(k('Digit1'), ctx()), null);
+  assert.equal(keyIntent(k('Digit1'), ctx()), 'nav-route');
+  assert.equal(keyIntent(k('Digit4'), ctx()), 'nav-fly');
+  assert.equal(keyIntent(k('Digit2'), ctx({ typing: true })), null);
+  assert.equal(keyIntent(k('Digit2'), ctx({ grabbing: true })), null);
 });
 test('while grabbing: Enter or G drops, Esc cancels, R turns, movement keys pass through', () => {
   const c = ctx({ grabbing: true });
