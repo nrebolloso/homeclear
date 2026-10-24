@@ -4,6 +4,7 @@
 // Needs the synthetic scene (tests/make_game_scene.py). Floor frame: metres, +z up; IWER poses are the headset's own
 // y-up space, so targets go through the viewer's rig (game.debug.rig) like the real head and hands do.
 import { chromium, type Page } from 'playwright-core';
+import { CHROME } from './env.ts';
 import { writeFileSync } from 'node:fs';
 
 const BASE = process.argv[2] ?? 'http://localhost:5179';
@@ -34,7 +35,7 @@ window.__xr = {
   proxy(name) { const it = game.debug.items[game.items.indexOf(name)], V = game.debug.rig.position.constructor; return it.proxy.getWorldPosition(new V()).toArray(); },
 };`;
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true,
+const browser = await chromium.launch({ executablePath: CHROME, headless: true,
   args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 try {
   const p = await browser.newPage({ viewport: { width: 1280, height: 720 } });
@@ -47,6 +48,7 @@ try {
   const wait = (ms = 250) => p.waitForTimeout(ms);
 
   // 1. ENTER VR: the session starts, you stand on filmed floor, the walker is at your feet
+  const s0perf = await G(p, 'return game.perf.on()');
   await p.getByText('ENTER VR', { exact: true }).click();
   await p.waitForFunction(() => (window as any).game.xr, null, { timeout: 10000 });
   await wait(500);
@@ -54,6 +56,11 @@ try {
   check('enter VR on filmed floor, walker at your feet', s0.xr && s0.cell.floor && !s0.cell.obst && s0.cell.cov > 0 &&
     Math.hypot(s0.walker[0] - s0.head[0], s0.walker[1] - s0.head[1]) < 0.01,
     `head ${f2(s0.head)}, cell floor=${s0.cell.floor} cov=${s0.cell.cov}, walker ${f2(s0.walker)}, inputs ${s0.inputs.join(' ')}`);
+
+  // 1b. in the headset hazard labels are scene cards (DOM labels don't render in WebXR); a standalone Quest is in performance mode
+  const inVR = await G(p, "const lbl = () => game.debug.overlays[2].children.map(r => r.children[0]).filter(Boolean).map(o => o.isSprite ? 'card' : o.isCSS2DObject ? 'dom' : '?'); return { labels: lbl(), perf: game.perf.on(), tier: game.debug.xrTier, std: game.debug.spark.maxStdDev }");
+  check('headset labels are scene cards, performance mode on', inVR.labels.length > 0 && inVR.labels.every((l: string) => l === 'card') && inVR.perf && inVR.tier === 'quest',
+    `labels ${inVR.labels.join(' ')}, perf=${inVR.perf}, tier=${inVR.tier}, maxStdDev=${inVR.std}`);
 
   // 2. a real step: 0.5 m forward in the headset's space moves you 0.5 m along your heading
   await G(p, 'const d = __xr.dev(); d.position.set(d.position.x, d.position.y, d.position.z - 0.5)');
@@ -148,6 +155,14 @@ try {
   const t2 = await G(p, 'return game.xrPose().head');
   check('hand pinch teleports like the trigger', inputs.includes('right:hand') && Math.hypot(t2[0] - tp2[0], t2[1] - tp2[1]) < 0.15,
     `inputs ${inputs.join(' ')}; landed ${f2(t2)} for target ${f2(tp2)}`);
+
+  // 9. leaving VR puts the monitor back: DOM labels, performance mode as it was before entering
+  await G(p, 'await game.debug.renderer.xr.getSession().end()');
+  await p.waitForFunction(() => !(window as any).game.xr, null, { timeout: 5000 }).catch(() => {});
+  await wait(300);
+  const out = await G(p, "const lbl = () => game.debug.overlays[2].children.map(r => r.children[0]).filter(Boolean).map(o => o.isSprite ? 'card' : o.isCSS2DObject ? 'dom' : '?'); return { xr: game.xr, labels: lbl(), perf: game.perf.on() }");
+  check('leaving VR restores DOM labels and performance mode', !out.xr && out.labels.length > 0 && out.labels.every((l: string) => l === 'dom') && out.perf === s0perf,
+    `xr=${out.xr}, labels ${out.labels.join(' ')}, perf=${out.perf} (before VR: ${s0perf})`);
 
   check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | ') || 'none');
 } finally {

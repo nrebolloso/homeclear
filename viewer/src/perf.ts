@@ -47,12 +47,13 @@ export interface XrCfg {
   /** target refresh rate to request, 0 = leave it (Link takes its rate from the Link app, so `hz` does nothing there) */
   hz: number;
 }
-/** Headset settings: a standalone Quest gets a little less resolution, full foveation and 72 Hz; Link and the monitor keep
+/** Headset settings: a standalone Quest gets half resolution (Spark's default, which every Quest 2 measurement used; the
+ *  GPU is fill-bound and 0.85 draws 2.9x the pixels), full foveation and 72 Hz; Link and the monitor keep
  *  full resolution and no foveation, since the PC can afford it. `?xrscale=`, `?foveation=` and `?hz=` override. */
 export function xrCfg(search: string, tier: Tier): XrCfg {
   const q = new URLSearchParams(search), quest = tier === 'quest';
   const num = (k: string, d: number) => { const v = Number(q.get(k)); return q.has(k) && Number.isFinite(v) && v >= 0 ? v : d; };
-  return { scale: Math.max(0.25, num('xrscale', quest ? 0.85 : 1)), foveation: Math.min(1, num('foveation', quest ? 1 : 0)), hz: num('hz', quest ? 72 : 0) };
+  return { scale: Math.max(0.25, num('xrscale', quest ? 0.5 : 1)), foveation: Math.min(1, num('foveation', quest ? 1 : 0)), hz: num('hz', quest ? 72 : 0) };
 }
 
 export interface HzIn { type: string; name?: string; position: XY; height_m?: number; min_side_clearance_m?: number; estimated?: boolean }
