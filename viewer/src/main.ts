@@ -7,6 +7,7 @@ import { stamp, carvedPolys, placementOk, polyCells, worldFootprint, toCell, app
 import { buildDevice as deviceMesh, type WalkerCfg } from './walker.ts';
 import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
 import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z } from './wheelchair.ts';
+import { keyIntent, createHistory, createKeyOverlay } from './controls.ts';
 import { pathLights, createLights3d } from './lights.ts';
 import { strokePersona } from './stroke.ts';
 import { bathroomFixes, createBathroom3d } from './bathroom.ts';
@@ -488,6 +489,7 @@ const setMode = (m: 'translate' | 'rotate') => { tc.setMode(m); tc.showX = tc.sh
 setMode('translate');
 scene.add(tc.getHelper());
 let selected = -1, lastValid: Pose | null = null;
+let grabbing: { k: number; off: XY; yaw: number; start: Pose } | null = null;   // G: the picked object follows the mouse (hotkeys block, below)
 const poseOf = (k: number): Pose => ({ x: items[k].group.position.x, y: items[k].group.position.y, yaw: items[k].group.rotation.z });
 let onSelect: ((k: number) => void) | null = null;   // the reimagined room shows the picked object's cost tag
 function select(k: number) {
@@ -560,20 +562,30 @@ const ICONS: Record<string, string> = {   // line drawings for the Removed list,
 };
 const iconOf = (o: { name: string; kind: string }) =>
   ICONS[o.kind] ?? ICONS[Object.keys(ICONS).find(n => o.name.startsWith(n)) ?? 'other'];
+// Ctrl+Z / Ctrl+Shift+Z over object edits (controls.ts): a snapshot of the layout before and after each one
+const snap = () => ({ layout, applied });
+const editHist = createHistory<ReturnType<typeof snap>>(s => s.layout);
+const nameOf = (k: number) => objs[k].name.replace(/_/g, ' ');
 function restoreObject(k: number) {   // back where it stood when removed, if that spot is still free
   const poses = layout.poses.map((q, n) => (n === k ? { ...q, removed: false } : q));
   if (!placementOk(g, placeBase, objs, poses, k, overlapOk[k])) return refused();
+  const was = snap();
   layout = { ...layout, poses };
+  editHist.record(`put back ${nameOf(k)}`, was, snap());
   syncObjects();
   return replan();
 }
 function commitPose(k: number, p: Pose) {
-  layout = { ...layout, poses: layout.poses.map((q, n) => (n === k ? { x: p.x, y: p.y, yaw: Math.round(p.yaw / (Math.PI / 2)) * (Math.PI / 2) } : q)) };
+  const was = snap(), q = layout.poses[k], np = { x: p.x, y: p.y, yaw: Math.round(p.yaw / (Math.PI / 2)) * (Math.PI / 2) };
+  layout = { ...layout, poses: layout.poses.map((o, n) => (n === k ? np : o)) };
+  if (Math.hypot(np.x - q.x, np.y - q.y) > 1e-4 || Math.abs(Math.atan2(Math.sin(np.yaw - q.yaw), Math.cos(np.yaw - q.yaw))) > 1e-4) editHist.record(`moved ${nameOf(k)}`, was, snap());
   syncObjects();
   return replan();
 }
 function removeObject(k: number) {   // take it out of the room: no footprint, no splat; the spot it covered shows the imagined fill
+  const was = snap();
   layout = { ...layout, poses: layout.poses.map((q, n) => (n === k ? { ...q, removed: true } : q)) };
+  editHist.record(`removed ${nameOf(k)}`, was, snap());
   select(-1);
   syncObjects();
   return replan();
@@ -1183,18 +1195,20 @@ async function resetParked(id: string) {
   drawStairs();
   await replan();
 }
-const ndc = (e: { clientX: number; clientY: number }) => new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+const ndc = (e: { clientX: number; clientY: number }) => document.pointerLockElement === renderer.domElement ? new THREE.Vector2() : new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);   // locked mouse: the crosshair
 renderer.domElement.addEventListener('pointerdown', e => {   // capture: before furniture picking and the gizmo
   if (renderer.xr.isPresenting) return;
+  if (grabbing) { e.stopImmediatePropagation(); if (e.button === 0) dropGrab(); else if (e.button === 2) cancelGrab(); return; }   // G: click drops, right click cancels
   markRay.setFromCamera(ndc(e), camera);
   const w = mk ? null : markRay.intersectObjects(stairs3d.walkers(), false)[0];
-  if (w) {   // the parked walker: drag it on its landing; right click: back to where the fix puts it
+  if (w) {   // the parked walker: drag it on its landing; right click (no drag): back to where the fix puts it
     e.stopImmediatePropagation();
-    if (e.button === 2) resetParked(w.object.userData.parked); else if (e.button === 0) { select(-1); startParkDrag(w.object.userData.parked, markRay.ray); mouseAt = ndc(e); lastAim = ''; }
+    if (e.button === 2) look = { x: e.clientX, y: e.clientY, moved: 0, right: true, act: () => resetParked(w.object.userData.parked) };
+    else if (e.button === 0) { select(-1); startParkDrag(w.object.userData.parked, markRay.ray); mouseAt = ndc(e); lastAim = ''; }
     return;
   }
   if (!mk && !editing) return;
-  if (e.button === 2) { e.stopImmediatePropagation(); undoPoint(); return; }
+  if (e.button === 2) { e.stopImmediatePropagation(); look = { x: e.clientX, y: e.clientY, moved: 0, right: true, act: undoPoint }; return; }   // a right click undoes a point, a right drag looks
   if (e.button !== 0) return;
   const pk = mk ? null : markRay.intersectObjects(mk3d.pickables(), false)[0];
   if (pk?.object.userData.handle) { e.stopImmediatePropagation(); const { owner, key } = pk.object.userData.handle; handleDrag = { owner, key, at: handleList.find(h => h.owner === owner && h.key === key)!.at }; return; }
@@ -1212,7 +1226,7 @@ addEventListener('pointerup', e => {
   const p = press; press = null;
   if (p && mk && e.button === 0 && p.moved < 5) { markRay.setFromCamera(ndc(e), camera); markPlace(markHit(markRay.ray, !e.shiftKey)?.p ?? null); }
 });
-renderer.domElement.addEventListener('contextmenu', e => { if (mk || editing || parkDrag || stairs3d.walkers().length) e.preventDefault(); });
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());   // the right button looks or undoes: never a browser menu
 addEventListener('keydown', e => {
   if ((!mk && !editing && !parkDrag) || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) return;
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { shiftHeld = true; lastAim = ''; return; }
@@ -1320,7 +1334,7 @@ const markerXR: XrEditor = {
 // ---------- live object physics (livephys.ts, Rapier in its own worker): objects the walker pushes, slides, tips ----------
 const live: LivePhys | null = PARAMS.has('nophys') ? null : createLivePhys({ base: BASE, g, objs, items, scene, renderer, obst: placeBase.obst, bump: base.bump,
   walker: () => walkerCfg, layout: () => layout, overlap: overlapOk.flatMap((s, k) => [...s].filter(n => n > k).map(n => [k, n] as [number, number])),
-  hold: k => reim.t() < 1 || ((tc as any).dragging && k === selected), log: $('physevents'), sampledEl: $('physsampled'),
+  hold: k => reim.t() < 1 || ((tc as any).dragging && k === selected) || grabbing?.k === k, log: $('physevents'), sampledEl: $('physsampled'),
   settled: moves => {   // the layout follows where the walker left things (no yaw snap: it lies as it fell)
     layout = { ...layout, poses: layout.poses.map((q, n) => { const m = moves.find(v => v.k === n); return m ? { ...m.pose, removed: q.removed } : q; }) };
     syncObjects(); replan();
@@ -1415,14 +1429,18 @@ function resetObject(k: number) {   // moved, turned or removed: back to the ori
   if (!isMoved(layout.poses[k], original[k])) return;
   const poses = layout.poses.map((q, n) => (n === k ? resetPose(original[k]) : q));
   if (!placementOk(g, placeBase, objs, poses, k, overlapOk[k])) return refused();
+  const was = snap();
   layout = { ...layout, poses };
+  editHist.record(`reset ${nameOf(k)}`, was, snap());
   syncObjects();
   if (selected === k) lastValid = poseOf(k);
   return replan();
 }
 function resetAll() {   // hand-marked stairs and doors are scan annotations, not renovations: they stay
   select(-1);
+  const was = snap();
   layout = { poses: original.map(resetPose), flattened: [] }; applied = []; suggestions = [];
+  editHist.record('reset the whole room', was, snap());
   $('fixes').innerHTML = ''; $('options').innerHTML = '';
   $<HTMLInputElement>('reimt').value = '100'; reim.setT(1);   // not left mid-morph
   syncObjects();
@@ -1615,6 +1633,97 @@ $('perf').onchange = () => applyPerf($<HTMLInputElement>('perf').checked);
 applyPerf(perfOn, false);
 game.perf = { set: (on: boolean) => applyPerf(on), on: () => perfOn, tier };   // for the VR team: bind a controller button to it
 
+// ---------- desktop hotkeys (controls.ts) ----------
+// M then 1/2 starts marking, G grabs the picked object (it follows the mouse), X removes it, L locks the mouse to look,
+// Ctrl+Z / Ctrl+Shift+Z undo and redo object edits, F1 lists them. Registered before the general key handler below, which
+// they pre-empt (R while grabbing turns the object instead of switching the gizmo).
+const keyHelp = createKeyOverlay();
+let choosing = false;   // M was pressed: 1 or 2 picks stairs or a doorway
+function startGrab() {
+  if (mk || editing || parkDrag || handleDrag) return;
+  let k = selected;
+  const m = mouseAt ?? new THREE.Vector2();
+  if (k < 0) {   // nothing picked: take the object under the mouse
+    markRay.setFromCamera(m, camera);
+    const hit = markRay.intersectObjects(items.filter((_, n) => !layout.poses[n].removed).map(i => i.proxy))[0];
+    if (hit) k = items.findIndex(i => i.proxy === hit.object);
+  }
+  if (k < 0) return keyHelp.toast('Click an object (or point at one), then press G');
+  select(k); tc.detach();
+  markRay.setFromCamera(m, camera);
+  const p = poseOf(k), at = rayAtZ(markRay.ray, 0) ?? [p.x, p.y];
+  grabbing = { k, off: [p.x - at[0], p.y - at[1]], yaw: p.yaw, start: p };
+  keyHelp.toast(`Moving ${nameOf(k)}: click or Enter drops, R turns, Esc cancels`, 4000);
+}
+/** per frame: the grabbed object stands under the pointer, or stays at its last valid spot (walls, furniture, unfilmed floor) */
+function grabStep() {
+  if (!grabbing) return;
+  const { k, off, yaw } = grabbing;
+  markRay.setFromCamera(mouseAt ?? new THREE.Vector2(), camera);
+  const at = rayAtZ(markRay.ray, 0); if (!at) return;
+  const p = { x: at[0] + off[0], y: at[1] + off[1], yaw };
+  if (!placementOk(g, placeBase, objs, layout.poses.map((o, n) => (n === k ? p : o)), k, overlapOk[k])) return;
+  items[k].group.position.set(p.x, p.y, 0); items[k].group.rotation.z = yaw; lastValid = p;
+}
+function endGrab() { const k = grabbing!.k; grabbing = null; if (!layout.poses[k].removed) tc.attach(items[k].group); }
+let droppedAt = 0;   // a click that drops must not become half of a double-click (which resets the object)
+function dropGrab() { const k = grabbing!.k, p = poseOf(k); droppedAt = performance.now(); endGrab(); lastValid = p; commitPose(k, p); }
+function cancelGrab() {
+  const { k, start } = grabbing!;
+  items[k].group.position.set(start.x, start.y, 0); items[k].group.rotation.z = start.yaw; lastValid = start;
+  endGrab(); keyHelp.toast('Cancelled');
+}
+function turnGrab() {
+  const { k } = grabbing!, yaw = grabbing!.yaw + Math.PI / 2, p = poseOf(k);
+  if (!placementOk(g, placeBase, objs, layout.poses.map((o, n) => (n === k ? { ...p, yaw } : o)), k, overlapOk[k])) return keyHelp.toast('No room to turn it here');
+  grabbing!.yaw = yaw; grabStep();
+}
+/** Undo or redo the last object edit; resolves to what happened, in one line (also shown as a toast and, in VR, a card). */
+async function stepHistory(dir: 'undo' | 'redo'): Promise<string> {
+  const r = editHist[dir](snap());
+  const tell = (m: string) => (keyHelp.toast(m), m);
+  if (!r) return tell(dir === 'undo' ? 'Nothing to undo' : 'Nothing to redo');
+  if (r === 'stale') return tell("Can't " + dir + ': the room changed another way since');
+  layout = r.to.layout; applied = r.to.applied;
+  if (selected >= 0 && layout.poses[selected].removed) select(-1);
+  syncObjects(); if (selected >= 0) lastValid = poseOf(selected);
+  const m = tell(`${dir === 'undo' ? 'Undid' : 'Redid'}: ${r.label}`);
+  await replan();
+  return m;
+}
+function toggleLock() {
+  const c = renderer.domElement;
+  if (document.pointerLockElement === c) return document.exitPointerLock();
+  Promise.resolve(c.requestPointerLock()).catch(() => keyHelp.toast('The browser would not lock the mouse'));
+}
+document.addEventListener('pointerlockchange', () => {
+  const on = document.pointerLockElement === renderer.domElement;
+  keyHelp.setLocked(on); look = null; lastAim = '';
+  mouseAt = on ? new THREE.Vector2() : mouseAt;
+  if (on) keyHelp.toast('Mouse locked: move to look, click acts at the dot, Esc lets go', 3500);
+});
+addEventListener('keydown', e => {
+  if (renderer.xr.isPresenting) return;
+  const el = e.target as HTMLElement, typing = /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable;
+  const it = keyIntent(e, { typing, grabbing: !!grabbing, choosing });
+  if (it === 'choose-cancel') { choosing = false; return; }   // the key still does its own job
+  if (!it || (keyHelp.isOpen() && it !== 'help')) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  choosing = false;
+  if (it === 'help') keyHelp.toggle();
+  else if (it === 'undo') { if (grabbing) cancelGrab(); else if (mk) undoPoint(); else stepHistory('undo'); }
+  else if (it === 'redo') { if (!mk && !grabbing) stepHistory('redo'); }
+  else if (it === 'mark') { if (mk) { cancelMark(); keyHelp.toast('Marking cancelled'); } else { choosing = true; keyHelp.toast('Mark: 1 stairs · 2 doorway', 4000); } }
+  else if (it === 'mark-stairs') beginMark('stairs');
+  else if (it === 'mark-door') beginMark('door');
+  else if (it === 'remove') { if (selected >= 0 && !mk) { const n = nameOf(selected); removeObject(selected); keyHelp.toast(`Removed ${n} · Ctrl+Z puts it back`); } }
+  else if (it === 'grab') startGrab();
+  else if (it === 'grab-drop') dropGrab();
+  else if (it === 'grab-cancel') cancelGrab();
+  else if (it === 'grab-turn') turnGrab();
+  else if (it === 'lock') toggleLock();
+});
+
 // ---------- input ----------
 const keys = new Set<string>();
 addEventListener('keydown', e => {
@@ -1633,29 +1742,65 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => { keys.delete(e.code); shiftHeld = e.shiftKey; });
 const ray = new THREE.Raycaster();
-let look: { x: number; y: number; moved: number } | null = null;
+// a drag with the left or right button looks; `right` + `act`: a right click that didn't move runs act (undo a mark point...)
+let look: { x: number; y: number; moved: number; right?: boolean; act?: () => unknown } | null = null;
 renderer.domElement.addEventListener('pointerdown', e => {
-  if (e.button !== 0 || renderer.xr.isPresenting || handleDrag || parkDrag || tc.dragging || (tc as any).axis) return;
+  if ((e.button !== 0 && e.button !== 2) || renderer.xr.isPresenting || handleDrag || parkDrag || tc.dragging || (tc as any).axis) return;
+  if (e.button === 2) { look = { x: e.clientX, y: e.clientY, moved: 0, right: true }; return; }
   if (mk || editing) { look = { x: e.clientX, y: e.clientY, moved: 0 }; return; }
-  ray.setFromCamera(new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
+  ray.setFromCamera(ndc(e), camera);
   const hit = ray.intersectObjects(items.filter((_, k) => !layout.poses[k].removed).map(i => i.proxy))[0];
   if (hit) { select(items.findIndex(i => i.proxy === hit.object)); return; }
   look = { x: e.clientX, y: e.clientY, moved: 0 };
 });
 renderer.domElement.addEventListener('dblclick', e => {   // double-click an object: back where it started
-  if (mk || editing || parkDrag || renderer.xr.isPresenting) return;
-  ray.setFromCamera(new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
+  if (mk || editing || parkDrag || renderer.xr.isPresenting || performance.now() - droppedAt < 600) return;
+  ray.setFromCamera(ndc(e), camera);
   const hit = ray.intersectObjects(items.filter((_, k) => !layout.poses[k].removed).map(i => i.proxy))[0];
   if (hit) resetObject(items.findIndex(i => i.proxy === hit.object));
 });
+function lookBy(dx: number, dy: number) {
+  body.yaw -= dx * 0.004; body.pitch = THREE.MathUtils.clamp(body.pitch - dy * 0.004, mode === 'fly' ? -1.5 : -1.2, mode === 'fly' ? 1.5 : 0.6);
+}
 addEventListener('pointermove', e => {
+  if (document.pointerLockElement === renderer.domElement) {   // L: the locked mouse looks without a button held
+    if (e.movementX || e.movementY) { if (mode === 'auto') setWalk('free'); lookBy(e.movementX, e.movementY); }
+    return;
+  }
   if (!look) return;
   const dx = e.clientX - look.x, dy = e.clientY - look.y;
-  look = { x: e.clientX, y: e.clientY, moved: look.moved + Math.abs(dx) + Math.abs(dy) };
-  body.yaw -= dx * 0.004; body.pitch = THREE.MathUtils.clamp(body.pitch - dy * 0.004, mode === 'fly' ? -1.5 : -1.2, mode === 'fly' ? 1.5 : 0.6);
+  look.x = e.clientX; look.y = e.clientY; look.moved += Math.abs(dx) + Math.abs(dy);
+  lookBy(dx, dy);
   if (mode === 'auto' && look.moved > 4) setWalk('free');
 });
-addEventListener('pointerup', () => { if (look && look.moved < 3) select(-1); look = null; });
+addEventListener('pointerup', () => {
+  if (look && (look.right ? look.moved < 4 && look.act : look.moved < 3)) { if (look.right) look.act!(); else select(-1); }
+  look = null;
+});
+/** Scroll, two-finger scroll and pinch walk forward and back where free walk could stand; sideways scroll turns. */
+function dolly(d: number) {
+  if (mode === 'auto') setWalk('free');
+  const cy = Math.cos(body.yaw), sy = Math.sin(body.yaw);
+  if (mode === 'fly') { const c = Math.cos(body.pitch); fly.x += d * c * cy; fly.y += d * c * sy; fly.z += d * Math.sin(body.pitch); return; }
+  if (explore.on) {
+    const [x0, y0] = g.origin_xy, x1 = x0 + g.shape[0] * g.cell_m, y1 = y0 + g.shape[1] * g.cell_m;
+    body.x = THREE.MathUtils.clamp(body.x + cy * d, x0, x1); body.y = THREE.MathUtils.clamp(body.y + sy * d, y0, y1);
+    return;
+  }
+  const n = Math.max(1, Math.ceil(Math.abs(d) / (g.cell_m / 2)));
+  for (let i = 0; i < n; i++) {
+    const next = { x: body.x + cy * d / n, y: body.y + sy * d / n, yaw: body.yaw };
+    if (!canStand(next)) break;
+    Object.assign(body, next);
+  }
+}
+renderer.domElement.addEventListener('wheel', e => {
+  if (renderer.xr.isPresenting || tour.on) return;
+  e.preventDefault();   // also stops a pinch (ctrl + wheel) from zooming the page
+  const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;   // lines and pages to pixels
+  if (e.deltaX) { if (mode === 'auto') setWalk('free'); body.yaw -= e.deltaX * unit * 0.002; }
+  if (e.deltaY) dolly(-e.deltaY * unit * (e.ctrlKey ? 0.01 : 0.0015));   // a pinch sends small deltas: more gain
+}, { passive: false });
 function setWalk(m: 'auto' | 'free' | 'fly') {
   if (m === 'fly' && mode !== 'fly') Object.assign(fly, camera.position);
   if (m !== 'fly') body.pitch = THREE.MathUtils.clamp(body.pitch, -1.2, 0.6);
@@ -1860,7 +2005,7 @@ function step(dt: number, t: number) {
     camera.position.set(fly.x, fly.y, fly.z);
     camera.lookAt(fly.x + Math.cos(body.yaw) * c, fly.y + Math.sin(body.yaw) * c, fly.z + Math.sin(body.pitch));
   } else placeCamera(camera, body);
-  markStep();
+  markStep(); grabStep();
   const showMan = view.third && mode === 'auto' && heroSteps.length > 0;
   mannequin.group.visible = showMan;
   if (showMan) {
@@ -1955,7 +2100,7 @@ const xr = await setupXR({
   renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses,
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
   commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m,
-  resetObject, resetAll, editor: markerXR, readOnly: comparison.previewing,
+  resetObject, resetAll, editor: markerXR, readOnly: comparison.previewing, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
   startPose() {   // stay if this floor is seen as well as the route's median spot; else the first such point along the route
     if (!current || current.error) return null;
     const poses: { x: number; y: number; yaw: number }[] = [];

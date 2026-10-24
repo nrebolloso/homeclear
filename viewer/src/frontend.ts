@@ -42,7 +42,7 @@ export function mountFrontend(api: FrontendAdapter) {
         <button id="a11y-reset">Reset display settings</button>
       </details>
       <details><summary>Scan setup & advanced tools</summary><div id="advanced-controls"></div></details>
-      <details><summary>Help & keyboard controls</summary><div id="help-controls"></div><p>In VR, click the left thumbstick to open the spatial menu. Point and trigger to choose.</p></details>
+      <details><summary>Help & keyboard controls</summary><div id="help-controls"></div><p>In VR, hold the left thumbstick click to open the spatial menu (click again to close). Click the wand thumbstick to undo the last object edit; hold the off-hand grip as well to redo. Point and trigger to choose.</p></details>
       <div id="share-controls" class="button-row"></div>
     </section>
     <div id="comparison" class="floating" role="group" aria-label="Layout comparison" hidden><div class="segmented"><button id="show-original" aria-pressed="false">Original</button><button id="show-proposed" aria-pressed="true">Proposed</button></div><button id="animate-changes"><span aria-hidden="true">▷</span> Animate changes</button></div>

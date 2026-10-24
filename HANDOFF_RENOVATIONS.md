@@ -30,9 +30,10 @@ Continuation of the October 24 session transcript in the parent directory. Work 
 
 ## Controls
 
-Desktop: **Mark stairs** / **Mark doorway** starts a guided annotation. Click releases place points; dragging looks
-around. Right click or Backspace undoes one point; Escape cancels. Shift disables snapping; Space places at screen
-centre. **Edit marks** shows saved handles and clickable rail sides. Enter/Escape ends editing. Drag a parked device,
+Desktop: **Mark stairs** / **Mark doorway** (or **M**, then **1** stairs / **2** doorway) starts a guided annotation.
+Click releases place points; dragging with either button looks around. A right click that doesn't move, Backspace or
+Ctrl+Z undoes one point; Escape cancels. Shift disables snapping; Space places at screen centre. The full desktop key
+list (look, G grab, X remove, Z reset, Ctrl+Z undo, L lock mouse) is on F1 in the viewer; it lives in `controls.ts`. **Edit marks** shows saved handles and clickable rail sides. Enter/Escape ends editing. Drag a parked device,
 press R to turn it by 90 degrees, and right click its body to restore the suggested position.
 
 VR uses the configured wand hand (`?wand=left` switches it):
@@ -47,6 +48,7 @@ VR uses the configured wand hand (`?wand=left` switches it):
 | Wand grip | Cancel marking/drag, or finish editing |
 | Wand A/X, editing | Finish editing |
 | Off-hand grip | Temporarily disable snapping |
+| Wand stick click (not marking) | Undo the last object edit (move, remove, reset); with the off-hand grip held: redo |
 | Off-hand A/X, editing | Switch the first stair's top device between walker and rollator |
 | Wrist twist, holding parked device | Turn the device in 90-degree steps |
 
