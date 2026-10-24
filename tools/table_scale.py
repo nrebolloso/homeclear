@@ -16,6 +16,8 @@ from scipy import ndimage
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import read_ply, ply_xyz, solid_mask
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from table_loo import loo
 
 CELL = 0.01   # m in the splat's current units
 
@@ -89,6 +91,9 @@ def main():
            "check_width_m": {"tape": a.width, "splat": round(t["width"] * c, 4), "err_pct": round(100 * (t["width"] * c / a.width - 1), 2)},
            "check_height_m": {"tape": a.height, "splat": round(t["height"] * c, 4), "err_pct": round(100 * (t["height"] * c / a.height - 1), 2)},
            "check_aspect": {"tape": round(a.length / a.width, 4), "splat": round(t["length"] / t["width"], 4)}}
+    tape = {"length": a.length, "width": a.width, "height": a.height}
+    res["tape_m"] = tape
+    res["leave_one_out"] = loo(tape, {k: t[k] for k in ("length", "width", "height")})   # SPEC 4.3: scale from two, predict the third
     (w / "table_scale.json").write_text(json.dumps(res, indent=1))
     print(json.dumps(res, indent=1))
 
