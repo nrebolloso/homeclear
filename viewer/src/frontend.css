@@ -88,7 +88,6 @@
 #a11y-settings small { flex-basis: 100%; color: var(--muted); font-size: calc(0.75rem * var(--fs)); }
 #comparison { position: absolute; left: calc((100% - var(--scene-right)) / 2); transform: translateX(-50%); top: 20px; display: flex; align-items: center; gap: 8px; padding: 5px; }
 #comparison button { white-space: nowrap; }
-#active-filters { position: absolute; top: 92px; left: 20px; }
 .status-pill { padding: 6px 12px; font-size: calc(0.75rem * var(--fs)); color: var(--text-2); border-radius: 20px; }
 #planning-panel { position: absolute; right: 16px; top: 16px; bottom: 16px; width: var(--drawer); display: flex; flex-direction: column; overflow: hidden; }
 .panel-top { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px 0 20px; }
@@ -134,13 +133,12 @@
 .frontend th, .frontend td { text-align: left; padding: 10px 6px; border-bottom: 1px solid var(--line); }
 .frontend td small { display: block; color: var(--muted); }
 #frontend canvas { background: var(--canvas); border-radius: 4px; }
-#viewer-toolbar { position: absolute; bottom: 30px; left: calc((100% - var(--scene-right)) / 2); transform: translateX(-50%); padding: 6px; }
-#viewer-toolbar nav button { padding: 10px 16px; }
+#viewer-toolbar { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); padding: 6px; }   /* centred on the screen; beside a wide planning panel it centres on the scene instead (below) */
+@media (max-width: 1400px) { #viewer-toolbar { left: calc((100% - var(--scene-right)) / 2); } }
+#viewer-toolbar nav button { padding: 10px 12px; }
 #viewer-toolbar nav span { margin-right: 5px; font-size: calc(1.125rem * var(--fs)); }
 #route-playback { justify-content: center; padding: 6px 0 0; }
 #route-playback button, #route-playback select { min-height: 30px; padding: 4px 10px; font-size: calc(0.75rem * var(--fs)); }
-#filter-toggle { position: absolute; bottom: 30px; left: 20px; padding: 12px 14px; }
-#filter-menu { position: absolute; bottom: 88px; left: 20px; z-index: 10; }
 #filter-menu h3 { color: var(--muted); font-size: calc(0.75rem * var(--fs)); text-transform: uppercase; letter-spacing: 1.4px; margin: 20px 0 10px; }
 #filter-menu label { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0; font-size: calc(0.75rem * var(--fs)); }
 #filter-menu label:has(input) { flex-direction: row-reverse; }
@@ -165,16 +163,12 @@
   .frontend { --drawer: 330px; --scene-right: 358px; }
   #comparison { top: 100px; }
   #viewer-toolbar nav button { padding: 8px 10px; font-size: calc(0.75rem * var(--fs)); }
-  #filter-toggle { bottom: 145px; }
-  #filter-menu { bottom: 195px; }
   #active-filters { top: 155px; }
 }
 @media (max-width: 720px) {
   .frontend { --drawer: min(370px, calc(100vw - 24px)); --scene-right: 0px; }
   #planning-panel { right: 12px; top: 95px; bottom: 155px; }
   #viewer-toolbar { bottom: 25px; left: 50%; width: max-content; }
-  #filter-toggle { bottom: 150px; left: 12px; }
-  #filter-menu { bottom: 200px; left: 12px; z-index: 12; }
   #workspace-toggle { top: 12px; left: 12px; }
   #comparison { top: 12px; left: auto; right: 12px; transform: none; }
   #comparison > button { display: none; }
@@ -182,7 +176,8 @@
   #workspace-toggle small { max-width: 100px; }
   #view-caption { max-width: calc(100vw - 50px); }
   #inspect-card { bottom: 205px; left: 12px; width: calc(100vw - 64px); max-height: 38dvh; z-index: 8; }
-  #active-filters { top: 78px; left: 12px; }
+  #status-pills { top: 78px; left: 12px; right: 12px; }
+  #controls-strip { bottom: 150px; left: 12px; max-width: calc(100vw - 24px); }
   .pane { padding: 18px; }
   .panel-footer { display: none; }
 }
@@ -192,3 +187,45 @@
   .frontend .segmented button[aria-pressed="true"], .frontend .panel-tabs button[aria-selected="true"] { border: 2px solid Highlight; }
   .frontend :focus-visible { outline-color: Highlight; }
 }
+
+/* ---------- controls strip, status pills, persona cards (hints.ts) ---------- */
+.frontend { --tone-move: #6fd08c; --tone-edit: #49d4c7; --tone-mark: #ffc857; --tone-spectate: #c9a3ff; --tone-view: #8fb8ff; }
+.frontend[data-theme="light"] #frontend { --tone-move: #0a6b32; --tone-edit: #0b6b63; --tone-mark: #8a5a00; --tone-spectate: #5a2aa0; --tone-view: #1a4fa0; }
+.frontend[data-theme="contrast"] #frontend { --tone-move: #fff; --tone-edit: #fff; --tone-mark: #ffe14d; --tone-spectate: #ffb3ff; --tone-view: #fff; }
+#controls-strip { --tone: var(--tone-move); position: absolute; bottom: 46px; left: 20px; display: flex; flex-direction: column; gap: 6px; padding: 9px 12px 10px; border-left: 4px solid var(--tone); width: max-content; max-width: max(230px, calc(50% - 320px)); pointer-events: none; }
+#controls-strip[data-tone="edit"] { --tone: var(--tone-edit); } #controls-strip[data-tone="mark"] { --tone: var(--tone-mark); }
+#controls-strip[data-tone="spectate"] { --tone: var(--tone-spectate); } #controls-strip[data-tone="view"] { --tone: var(--tone-view); }
+#strip-mode { font-size: calc(0.75rem * var(--fs)); font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--tone); }
+#strip-chips { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+#strip-chips .chip { display: inline-flex; align-items: center; gap: 4px; font-size: calc(0.75rem * var(--fs)); color: var(--text-2); white-space: nowrap; }
+.frontend kbd { display: inline-block; min-width: 1.5em; padding: 1px 6px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px; background: var(--btn); color: var(--text); font: 600 calc(0.75rem * var(--fs)) ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; }
+#status-pills { position: absolute; top: 88px; left: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: calc(100% - var(--scene-right) - 40px); }
+#pills { display: contents; }
+.pill { display: inline-block; border: 1px solid var(--line-strong); border-left: 3px solid var(--tone-view); border-radius: 999px; padding: 3px 11px; background: var(--floating); color: var(--text); font-size: calc(0.75rem * var(--fs)); line-height: 1.5; min-height: 0; }
+.pill[data-tone="move"] { border-left-color: var(--tone-move); } .pill[data-tone="mark"] { border-left-color: var(--tone-mark); color: var(--tone-mark); font-weight: 700; }
+.pill[data-tone="spectate"] { border-left-color: var(--tone-spectate); } .pill[data-tone="edit"] { border-left-color: var(--tone-edit); }
+button.pill { cursor: pointer; } button.pill:hover { border-color: var(--btn-hover-line); }
+#active-filters.status-pill { border-radius: 999px; padding: 3px 11px; font-size: calc(0.75rem * var(--fs)); }
+#persona-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+#persona-cards label { display: none; }
+.persona-card { min-height: 52px; padding: 8px 10px; text-align: left; }
+.persona-card[aria-checked="true"] { color: var(--pressed-fg); background: var(--pressed-bg); border-color: var(--pressed-line); font-weight: 700; }
+#pane-view #filter-menu label { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0; font-size: calc(0.75rem * var(--fs)); }
+#mark-controls { margin: 10px 0 16px; padding: 12px; border: 1px solid var(--line); border-left: 4px solid var(--tone-mark); border-radius: 10px; }
+#mark-controls h2 { margin-top: 0; } #mark-buttons button { flex: 1 1 auto; }
+body.demo #controls-strip, body.demo #status-pills { display: none; }
+#status-pills .pill { min-height: 0; padding: 3px 11px; border-radius: 999px; }
+.frontend #keyhelp-chip { display: none; }   /* F1 · keys is the button in the controls strip (bottom left) */
+#strip-keys { align-self: flex-start; pointer-events: auto; min-height: 0; padding: 3px 10px; font-size: calc(0.75rem * var(--fs)); }
+
+/* ---------- drag-to-widen planning panel (panel-size.ts) ---------- */
+#panel-resize { position: absolute; left: 0; top: 0; bottom: 0; width: 12px; cursor: col-resize; z-index: 3; touch-action: none; }
+#panel-resize::after { content: ""; position: absolute; left: 4px; top: 50%; width: 4px; height: 44px; margin-top: -22px; border-radius: 2px; background: var(--line-strong); }
+#panel-resize:hover::after, #panel-resize:focus-visible::after, #planning-panel.resizing #panel-resize::after { background: var(--accent); }
+#panel-pin { margin-left: auto; min-height: 0; padding: 4px 10px; font-size: calc(0.75rem * var(--fs)); }
+#panel-pin[aria-pressed="true"] { color: var(--pressed-fg); background: var(--pressed-bg); border-color: var(--pressed-line); }
+body[data-motion="full"] #planning-panel:not(.resizing) { transition: width .18s ease; }
+@media (max-width: 760px) { #panel-resize, #panel-pin { display: none; } }
+
+/* narrower screens: the controls strip sits above the toolbar instead of beside it (the 720px rules below it win on phones) */
+@media (min-width: 721px) and (max-width: 1400px) { #controls-strip { bottom: 175px; } #inspect-card { bottom: 310px; } }

@@ -3,7 +3,7 @@
 // The pure parts (keyIntent, createHistory) touch no DOM so tests/controls.test.ts can run them.
 
 export type Intent = 'help' | 'undo' | 'redo' | 'mark' | 'mark-stairs' | 'mark-door' | 'choose-cancel' | 'remove' | 'grab'
-  | 'grab-drop' | 'grab-cancel' | 'grab-turn' | 'lock' | 'recenter' | 'persona' | null;
+  | 'grab-drop' | 'grab-cancel' | 'grab-turn' | 'lock' | 'recenter' | 'persona' | 'nav-route' | 'nav-walk' | 'nav-explore' | 'nav-fly' | null;
 export interface KeyLike { code: string; key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }
 /** typing: focus is in a text field; grabbing: G is carrying an object; choosing: M was pressed and 1/2 is awaited */
 export interface KeyCtx { typing: boolean; grabbing: boolean; choosing: boolean }
@@ -25,6 +25,8 @@ export function keyIntent(e: KeyLike, c: KeyCtx): Intent {
   }
   if (c.grabbing) return e.code === 'Escape' ? 'grab-cancel' : e.code === 'Enter' || e.code === 'KeyG' ? 'grab-drop' : e.code === 'KeyR' ? 'grab-turn' : null;
   if (e.shiftKey) return null;
+  const digit = ({ Digit1: 'nav-route', Digit2: 'nav-walk', Digit3: 'nav-explore', Digit4: 'nav-fly' } as Record<string, Intent>)[e.code];   // 1-4: the toolbar modes (M then 1/2 is the mark chooser above)
+  if (digit) return digit;
   return ({ KeyM: 'mark', KeyX: 'remove', KeyG: 'grab', KeyL: 'lock', KeyC: 'recenter', KeyP: 'persona' } as Record<string, Intent>)[e.code] ?? null;
 }
 
@@ -68,6 +70,7 @@ export const MENU_HOLD_S = 0.4;
 
 const GROUPS: [string, [string, string][]][] = [
   ['Move and look', [
+    ['1 / 2 / 3 / 4', 'Follow route / Walk / Look around (walker parked, nothing collides) / Fly'],
     ['W / S, A / D', 'push the walker forward and back, turn it (arrows too)'],
     ['Drag, left or right button', 'look around'],
     ['Scroll / two-finger scroll / pinch', 'walk forward and back (sideways scroll turns)'],
@@ -76,7 +79,7 @@ const GROUPS: [string, [string, string][]][] = [
     ['P', 'switch who is walking (cycles the Who list: patient, walker, wheelchair...)'],
     ['C', 'turn the walker (or chair) to face where you are looking'],
     ['L', 'lock the mouse to look freely; Esc lets go'],
-    ['F', 'fly (spectator): Q / E down and up, Shift fast'],
+    ['F', 'fly (spectator): Q / E down and up, Shift fast; the walker stays where it was'],
   ]],
   ['Edit furniture', [
     ['Click', 'select · T / R switch move and rotate · arrows nudge 5 cm'],

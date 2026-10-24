@@ -20,11 +20,11 @@ try {
   await page.click('#mode-route'); await page.click('#route-pause');
   const before = await game('return game.autoS()'); await page.waitForTimeout(400); const after = await game('return game.autoS()');
   assert.ok(Math.abs(after - before) < .001); await page.selectOption('#route-speed', '1.5'); await page.click('#route-pause'); check('route pause and speed controls');
-  await page.click('#filter-toggle'); await page.check('#night'); await page.selectOption('#vision', { index: 1 });
+  await page.click('#tab-view'); await page.check('#night'); await page.selectOption('#vision', { index: 1 });
   await page.uncheck('#particle-path'); assert.equal(await game('return game.debug.overlays[0].visible'), false);
   await page.keyboard.press('Escape'); await page.click('#mode-explore');
   assert.equal(await page.isChecked('#night'), true); assert.equal(await page.locator('#active-filters').isVisible(), true); check('visual filters persist across modes and control particle path');
-  await page.click('#filter-toggle'); await page.click('#filter-reset'); assert.equal(await page.isChecked('#night'), false); await page.keyboard.press('Escape');
+  await page.click('#tab-view'); await page.click('#filter-reset'); assert.equal(await page.isChecked('#night'), false); await page.keyboard.press('Escape');
   await game("await game.applyFix('remove_rug')");
   await page.click('#tab-changes'); await page.waitForFunction(() => document.querySelector('#change-count')?.textContent === '1');
   assert.match(await page.locator('#change-summary').innerText(), /Pending/); assert.match(await page.locator('#change-list').innerText(), /Placeholder model/);

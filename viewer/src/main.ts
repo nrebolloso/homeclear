@@ -9,6 +9,7 @@ import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
 import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z, WHEEL_R } from './wheelchair.ts';
 import { chairGeometry, clearOf, driveStep, spinBy, type Chair } from './drive.ts';
 import { keyIntent, createHistory, createKeyOverlay } from './controls.ts';
+import { controlHints, hintLines, type HintCtx } from './hints.ts';
 import { pathLights, createLights3d } from './lights.ts';
 import { strokePersona } from './stroke.ts';
 import { bathroomFixes, createBathroom3d } from './bathroom.ts';
@@ -40,6 +41,7 @@ import { MAX_EXTRA_LIGHTS, type PointLight } from './night.ts';
 import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } from './perf.ts';
 import QRCode from 'qrcode';
 import { mountFrontend, type FrontendAdapter } from './frontend.ts';
+import { headingMismatch, nearestStandable, routeResume } from './navmode.ts';
 import { createFrontendXR } from './frontend-xr.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
 import type { Ghost } from './sim.ts';
@@ -1766,6 +1768,7 @@ addEventListener('keydown', e => {
   else if (it === 'grab-turn') turnGrab();
   else if (it === 'lock') toggleLock();
   else if (it === 'persona') cyclePersona();
+  else if (it.startsWith('nav-')) { if (!mk && !editing && !grabbing) frontend.setNavigation(({ 'nav-route': 'route', 'nav-walk': 'walk', 'nav-explore': 'explore', 'nav-fly': 'fly' } as const)[it as 'nav-route']); }
   else if (it === 'recenter' && isChair()) { if (mode === 'free') { headTurn.yaw -= spinBy(body, headTurn.yaw, chairOf(), chairOk()); keyHelp.toast(Math.abs(headTurn.yaw) < 0.01 ? 'Chair turned to face your view' : 'No room to turn the chair further'); } }
   else if (it === 'recenter') { if (mode === 'free') { const was = body.yaw; body.yaw = viewYaw(); if (!canStand(body)) body.yaw = was; else headTurn.yaw = 0; keyHelp.toast('Walker turned to face your view'); } }
 });
@@ -1783,7 +1786,7 @@ addEventListener('keydown', e => {
     if (e.shiftKey) resetAll(); else if (selected >= 0) resetObject(selected);
   }
   if ((e.code === 'Delete' || e.code === 'Backspace') && selected >= 0) removeObject(selected);
-  if (e.code === 'KeyF') setWalk(mode === 'fly' ? 'free' : 'fly');
+  if (e.code === 'KeyF') { if (mode === 'fly') goWalk(); else setWalk('fly'); }
   else if (/^(Key[WASD]|Arrow)/.test(e.code) && mode !== 'fly') setWalk('free');
 });
 addEventListener('keyup', e => { keys.delete(e.code); shiftHeld = e.shiftKey; });
@@ -1853,7 +1856,8 @@ renderer.domElement.addEventListener('wheel', e => {
   if (e.deltaY) dolly(-e.deltaY * unit * (e.ctrlKey ? 0.01 : 0.0015));   // a pinch sends small deltas: more gain
 }, { passive: false });
 function setWalk(m: 'auto' | 'free' | 'fly') {
-  if (m === 'fly' && mode !== 'fly') Object.assign(fly, camera.position);
+  if (m === 'fly' && mode !== 'fly') { Object.assign(fly, camera.position); flyHold = { x: body.x, y: body.y, yaw: body.yaw }; body.yaw = viewYaw(); }   // body.yaw is the fly view now; the walker keeps its own pose
+  if (m !== 'fly' && mode === 'fly' && flyHold) { Object.assign(body, flyHold); flyHold = null; }
   if (m !== 'fly') body.pitch = THREE.MathUtils.clamp(body.pitch, -1.2, 0.6);
   mode = m;
   $('autoplay').classList.toggle('on', m === 'auto'); $('free').classList.toggle('on', m === 'free'); $('fly').classList.toggle('on', m === 'fly');
@@ -1863,6 +1867,53 @@ function setWalk(m: 'auto' | 'free' | 'fly') {
 $('autoplay').onclick = () => setWalk('auto');
 $('free').onclick = () => setWalk('free');
 $('fly').onclick = () => setWalk('fly');
+
+// ---------- movement modes (navmode.ts): Follow route / Walk / Look around / Fly, and how you move between them ----------
+// While flying, body.yaw/pitch are the camera's; the walker stays at flyHold (Look around parks it in explore.parked).
+let flyHold: { x: number; y: number; yaw: number } | null = null;
+const walkerPose = () => explore.parked ?? flyHold ?? body;
+const canPlace = (p: { x: number; y: number; yaw: number }) => (isChair() ? chairOk()(p) : canStand(p));
+/** Walk: from Fly the walker lands where you were flying (nearest floor, facing your view); from Look around it is
+ *  where you left it; from Follow route it is already under you. */
+function goWalk() {
+  const was = mode, view = { x: fly.x, y: fly.y, yaw: body.yaw }, parked = explore.on ? explore.parked : null;
+  setWalk('free'); setExplore(false); headTurn.yaw = 0; chairVel.v = chairVel.w = 0;
+  if (was === 'fly') {
+    const at = nearestStandable(view.x, view.y, (x, y) => canPlace({ x, y, yaw: view.yaw }), 1.5, g.cell_m / 2);
+    if (at) { Object.assign(body, { x: at[0], y: at[1], yaw: view.yaw }); keyHelp.toast('Walker placed where you were flying'); return; }
+    if (!parked) { keyHelp.toast('No floor under the flying camera: the walker stayed where it was'); return; }
+  }
+  if (parked && canPlace(parked)) { Object.assign(body, parked); keyHelp.toast('Walker is back where you left it'); }
+}
+/** Follow route resumes where the walker is on the route (the world-model playback counts its own poses). */
+function resumeS(): number {
+  if (!current || routeS.length < 2) return 0;
+  const gw = current.ghosts[0]?.walker, useWorld = persona.step_model === 'world' && gw && gw.length > 1;
+  const playLen = useWorld ? gw.slice(1).reduce((a, q, k) => a + Math.hypot(q[0] - gw[k][0], q[1] - gw[k][1]), 0) : undefined;
+  return routeResume(nearestS(...walkerPoint(body, [centreOffset, 0])), routeS[routeS.length - 1], playLen);
+}
+const headMismatched = () => mode === 'free' && !explore.on && !COUPLED && headingMismatch(headTurn.yaw);
+// a faint arrow on the floor shows where W/S push; amber while your head is turned away from it
+const headArrow = (() => {
+  const sh = new THREE.Shape(); sh.moveTo(0.34, 0); sh.lineTo(0.14, 0.13); sh.lineTo(0.14, 0.05); sh.lineTo(0, 0.05); sh.lineTo(0, -0.05); sh.lineTo(0.14, -0.05); sh.lineTo(0.14, -0.13); sh.closePath();
+  const m = new THREE.Mesh(new THREE.ShapeGeometry(sh), new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.5, depthWrite: false, depthTest: false, side: THREE.DoubleSide }));
+  m.renderOrder = 3; m.visible = false; scene.add(m); return m;
+})();
+const parkedTag = label('walker stays here');
+parkedTag.visible = false;
+scene.add(parkedTag);
+function movementVisuals() {
+  const wb = walkerPose(), walking = mode === 'free' && !explore.on && !renderer.xr.isPresenting && !tour.on, parkedNow = (explore.on || mode === 'fly') && !renderer.xr.isPresenting;
+  const mis = headMismatched();
+  headArrow.visible = walking;
+  if (walking) {
+    const a = centreOffset + walkerCfg.depth_m / 2 + 0.12;
+    headArrow.position.set(wb.x + Math.cos(wb.yaw) * a, wb.y + Math.sin(wb.yaw) * a, 0.03); headArrow.rotation.z = wb.yaw;
+    const mat = headArrow.material as THREE.MeshBasicMaterial; mat.color.setHex(mis ? 0xffb347 : 0x9fd8ff); mat.opacity = mis ? 0.95 : 0.5;
+  }
+  parkedTag.visible = parkedNow;
+  if (parkedNow) parkedTag.position.set(wb.x, wb.y, walkerCfg.handle_height_m + 0.1);
+}
 
 // ---------- motion + live checks ----------
 const cellAt = (x: number, y: number) => { const [i, j] = toCell(g, [x, y]); return i * ny + j; };
@@ -1975,7 +2026,7 @@ function flyStep(dt: number) {
 
 const state = { legs: [] as { x: number; y: number; h: number; flash: boolean; est: boolean }[], gap: Infinity, red: false };
 function liveChecks(t: number) {
-  const wb = explore.parked ?? body;   // the walker, wherever it stands (parked while exploring)
+  const wb = walkerPose();   // the walker, wherever it stands (parked while exploring or flying)
   // measured, per frame: bump under each leg, frame clearance from the obstacle distance field
   legTags.forEach((t, n) => { if (n >= walkerCfg.legs.length) t.visible = false; });
   state.legs = walkerCfg.legs.map((p, n) => {
@@ -2082,7 +2133,7 @@ function frame(now: number) {
   frames++;
   if (now - fpsT > 1000) {
     game.fps = (frames * 1000) / (now - fpsT); frames = 0; fpsT = now;
-    $('hud').textContent = `${game.fps.toFixed(0)} fps · ${mode === 'auto' ? 'autoplay' : mode === 'fly' ? 'fly (noclip)' : isChair() ? 'drive' : 'free walk'} · ${RUN}${sc.scale_note ? ` · ${sc.scale_note}` : ""}`;
+    $('hud').textContent = `${game.fps.toFixed(0)} fps · ${mode === 'auto' ? 'autoplay' : mode === 'fly' ? 'fly (noclip)' : explore.on ? 'look around' : isChair() ? 'drive' : 'walk'} · ${RUN}${sc.scale_note ? ` · ${sc.scale_note}` : ""}`;
   }
 }
 function step(dt: number, t: number) {
@@ -2090,13 +2141,13 @@ function step(dt: number, t: number) {
   if (xr.presenting()) return xrFrame(dt, t);
   if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
   tourStep(dt);
-  const wb = explore.parked ?? body;
+  const wb = walkerPose();
   walker.group.position.set(wb.x, wb.y, 0);
   walker.group.rotation.z = wb.yaw;
   reim.update(dt);
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
   if (mode !== 'fly') live?.frame(dt, wb, mode === 'free' && !explore.on, walker.group);
-  labelStep();
+  labelStep(); movementVisuals();
   if (mode === 'fly') {
     const c = Math.cos(body.pitch);
     camera.position.set(fly.x, fly.y, fly.z);
@@ -2198,7 +2249,7 @@ const xr = await setupXR({
   renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses,
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
   commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m,
-  resetObject, resetAll, editor: markerXR, readOnly: comparison.previewing, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
+  resetObject, resetAll, editor: markerXR, readOnly: comparison.previewing, hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { lines: hintLines(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
   startPose() {   // stay if this floor is seen as well as the route's median spot; else the first such point along the route
     if (!current || current.error) return null;
     const poses: { x: number; y: number; yaw: number }[] = [];
@@ -2271,7 +2322,7 @@ Object.assign(game, {
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
   debug: { renderer, scene, camera, marker: mk3d.root, stairs: stairs3d.root, spark: sparkR, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup],
-    rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrTier: xr.tier, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
+    rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); headTurn.yaw = 0; chairVel.v = chairVel.w = 0; Object.assign(body, { x, y, yaw }); },
@@ -2308,13 +2359,25 @@ Object.assign(game, {
 
 // ---------- frontend shell: existing data/actions, independent of backend and optimizer ownership ----------
 let inspectReturn: { body: typeof body; fly: typeof fly; mode: 'auto' | 'free' | 'fly'; rig: ReturnType<typeof xr.rigState> } | null = null;
+/** What the viewer is doing, for hints.ts: the desktop strip and pills, and the VR strip card. */
+function hintBase(device: 'desktop' | 'vr'): Omit<HintCtx, 'inspect'> {
+  const w = device === 'vr' ? xr.wand() : null, total = mk?.kind === 'stairs' ? 3 : 2;
+  return { device, persona: personaKey, nav: mode, marking: mk ? { kind: mk.kind, step: Math.min(mk.pts.length + 1, total), total } : null, editingMarks: editing && !mk,
+    grabbing: device === 'vr' ? !!w?.grab : !!grabbing, selected: device === 'vr' ? w?.hover != null : selected >= 0,
+    locked: document.pointerLockElement === renderer.domElement, mounted: device === 'vr' && !!xr.mount().hand,
+    parked: device === 'desktop' && mode === 'free' && explore.on, mismatch: device === 'desktop' && headMismatched() };
+}
 const frontendAdapter: FrontendAdapter = {
+  hintContext: () => ({ ...hintBase('desktop'), thirdPerson: view.third, personaLabel: personas[personaKey]?.label ?? personaKey }),   // the controls strip and status pills (hints.ts)
   snapshot: () => ({ room: RUN, patient: personaKey, route: routes[selRoute].name, current, baseline: baseEvals[selRoute] ?? null,
-    changes: reim.changes(), spots: spotList, options: suggestions, selected, selectedName: objs[selected]?.name, mode, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
+    changes: reim.changes(), spots: spotList, options: suggestions, selected, selectedName: objs[selected]?.name, mode, explore: explore.on, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
   navigate(m) {
     endTour(); select(-1);
     if (m === 'inspect') { inspectReturn ??= { body: { ...body }, fly: { ...fly }, mode, rig: xr.rigState() }; setWalk(renderer.xr.isPresenting ? 'free' : 'fly'); }
-    else { xrFollowRoute = renderer.xr.isPresenting && m === 'route'; setWalk(m === 'route' ? 'auto' : 'free'); routePaused = false; if (m === 'explore' && !explore.on && !isChair()) setExplore(true); }   // the chair drives fenced here: the noclip camera would hide "no room to turn" (Fly, F, is still noclip)
+    else if (m === 'route') { xrFollowRoute = renderer.xr.isPresenting; const at = mode === 'free' && !explore.on ? resumeS() : 0; if (mode !== 'auto') { setWalk('auto'); autoS = at; } routePaused = false; }
+    else if (m === 'walk' || (m === 'fly' && renderer.xr.isPresenting)) { xrFollowRoute = false; goWalk(); routePaused = false; }
+    else if (m === 'fly') { xrFollowRoute = false; setWalk('fly'); routePaused = false; }
+    else { xrFollowRoute = false; const view = mode === 'fly' ? { x: fly.x, y: fly.y, yaw: body.yaw } : null; setWalk('free'); routePaused = false; if (!explore.on && !isChair()) setExplore(true); if (view && explore.on) Object.assign(body, view); }   // from Fly: the walker parks where it was, the camera stays where you flew   // the chair drives fenced here: the noclip camera would hide "no room to turn" (Fly, F, is still noclip)
   },
   focus(item) {
     const p = vantage(item.at, current?.xy ?? [item.at], 1.2, 1.1);

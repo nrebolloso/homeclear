@@ -251,6 +251,8 @@ try {
   await wait(500);
   const inv = await G(p, 'return game.inventory()');
   check('A removes the pointed-at object', inv.includes('bed'), `removed: ${inv.join(', ')}`);
+  const stripNow = await G(p, 'return game.debug.xrStrip()');
+  check('the off-hand strip card shows the current mode and keys', stripNow.visible && /Trigger|stick/i.test(stripNow.key), JSON.stringify(stripNow));
   await G(p, "__xr.ctl('right').updateButtonValue('thumbstick', 1)");
   await wait();
   await G(p, "__xr.ctl('right').updateButtonValue('thumbstick', 0)");

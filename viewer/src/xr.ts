@@ -44,6 +44,8 @@ export interface XrHost {
   /** big buttons on a card that follows you lazily: pressed like furniture is grabbed (point the wand, pinch) */
   buttons?: XrButton[];
   resetObject(k: number): unknown; resetAll(): unknown;
+  /** what the controls are for right now (hints.ts): a label and one line of keys, drawn as a strip card on the off-hand controller */
+  hints?(): { lines: string[]; tone: string };
   /** undo / redo the last object edit (move, remove, reset); resolves to a line to show, e.g. "Undid: removed rug" */
   history?: { undo(): Promise<string>; redo(): Promise<string> };
   /** The annotation lane owns marking state; XR owns controller tracking and routes each gesture exactly once. */
@@ -159,10 +161,25 @@ export async function setupXR(host: XrHost) {
     toolHeld = false; host.editor?.cancelDrag();
   }
   let toolHeld = false;
+  // the strip: the current mode and its keys, on the off-hand controller; rebuilt only when the words change
+  const STRIP_TONE: Record<string, string> = { move: '#9be8b0', edit: '#7fe7de', mark: '#ffd27a', spectate: '#d8bcff', view: '#a9c8ff' };
+  let strip: THREE.Sprite | null = null, stripKey = '';
+  function stripStep(other?: Ctl) {
+    const h = host.hints?.();
+    if (!h || !other?.source?.gamepad || host.readOnly?.() || host.shell?.open()) { if (strip) strip.visible = false; return; }
+    const key = h.tone + h.lines.join('|');
+    if (!strip || key !== stripKey) {
+      stripKey = key; strip?.removeFromParent(); strip?.material.dispose();
+      strip = card(h.lines, STRIP_TONE[h.tone] ?? '#e9f6ff', undefined, 0.014); strip.position.set(0, 0.12, -0.15); strip.renderOrder = 4;
+    }
+    if (strip.parent !== other.group) other.group.add(strip);
+    strip.visible = true;
+  }
   function wandStep() {
     const c = ctls.find(isWand);
     const other = ctls.find(o => o.source && !isWand(o)), hint = host.editor?.hint;
-    if (hint) {
+    if (host.hints) { if (hint) hint.visible = false; stripStep(other); }
+    else if (hint) {
       if (other && hint.parent !== other.group) other.group.add(hint);
       hint.visible = !!other?.source?.gamepad && !host.editor?.active() && !host.readOnly?.();
     }
@@ -398,6 +415,8 @@ export async function setupXR(host: XrHost) {
     buttons: () => btns.map(x => ({ text: x.b.text(), at: dash.visible ? w(x.mesh) : null })),
     /** press a card button as a pinch on it would (scripted checks on a headset nobody wears) */
     press: (i: number) => btns[i]?.b.press(),
+    /** the strip card on the off-hand controller: its words and whether it shows */
+    strip: () => ({ key: stripKey, visible: !!strip?.visible }),
     wand: () => ({ hover: hover >= 0 ? host.names[hover] : null, button: btnHover, grab: grab ? host.names[grab.k] : null, aiming, teleport: tpRing.visible,
       drag: grab?.drag, valid: grab?.valid ?? null }),
   };
