@@ -2140,14 +2140,14 @@ const frontendAdapter: FrontendAdapter = {
   async lightPath() { const r = await lightPath(); game.setNight(true); return r; },
   highlights(on) { hazardGroup.visible = on; }, improvements(on) { reim.setParts({ rings: on, ringLabels: on }); },
 };
-// classic two-panel UI by default (?planning keeps the drawer): the shell still mounts for VR, then every control it reparented goes home
+// classic two-panel UI with ?classic (the planning drawer is the default): the shell still mounts for VR, then every control it reparented goes home
 const homes = [...document.querySelectorAll('#left *, #right *')].map(n => [n, n.parentNode!, n.nextSibling] as const).reverse();
 const frontend = mountFrontend(frontendAdapter);
 // demo mode (?demo=1, H toggles; shot.ts records with it): debug rows, ranges and the fps line hidden (style.css .demo)
 document.body.classList.toggle('demo', PARAMS.get('demo') === '1');
 addEventListener('keydown', e => { if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) document.body.classList.toggle('demo'); });
 game.setDemo = (on: boolean) => document.body.classList.toggle('demo', on);
-if (!PARAMS.has('planning')) { for (const [n, p, s] of homes) p.insertBefore(n, s); document.body.classList.remove('frontend'); document.getElementById('frontend')!.hidden = true; document.getElementById('left')!.hidden = document.getElementById('right')!.hidden = false; }
+if (PARAMS.has('classic')) { for (const [n, p, s] of homes) p.insertBefore(n, s); document.body.classList.remove('frontend'); document.getElementById('frontend')!.hidden = true; document.getElementById('left')!.hidden = document.getElementById('right')!.hidden = false; }
 frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
 game.frontend = frontend;
 game.frontendXR = frontendVR;

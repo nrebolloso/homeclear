@@ -22,7 +22,7 @@ async function open(scene: string) {
   const errors: string[] = [];
   p.on('pageerror', e => errors.push(String(e)));
   p.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-  await p.goto(`${BASE}/?scene=${scene}&planning`);   // the checks drive the planning drawer; the classic panels are the default view
+  await p.goto(`${BASE}/?scene=${scene}`);
   await p.waitForFunction(() => (window as any).game?.ready, null, { timeout: 60000 });
   return { p, errors };
 }
