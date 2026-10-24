@@ -87,7 +87,16 @@
     <button id="clearstairs" title="forget the stairs marked in this browser">Clear marked</button>
     <button id="copystairs" title="keep them: paste into config.&lt;scene&gt;.yaml under game:">Copy as config YAML</button>
     <label title="a rail for the stronger hand is needed going up AND coming down">Stronger hand <select id="strongside"><option value="">unknown</option><option value="left">left</option><option value="right">right</option></select></label>
+    <div class="row" title="what the scan saw at each side can be another flight's railing or a wall: say what is really there">
+      <label>Left rail <select id="railleft"><option value="">as scanned</option><option value="seen">rail</option><option value="none">none</option></select></label>
+      <label>Right rail <select id="railright"><option value="">as scanned</option><option value="seen">rail</option><option value="none">none</option></select></label>
+    </div>
     <div id="stairstatus" class="status"></div>
+    <h2>Doorways</h2>
+    <button id="markdoor" title="two clicks on the splat: the inside face of each jamb">Mark doorway</button>
+    <button id="cleardoors" title="forget the doorways marked in this browser">Clear marked</button>
+    <button id="copydoors" title="keep them: paste into config.&lt;scene&gt;.yaml under game:">Copy as config YAML</button>
+    <div id="doorstatus" class="status"></div>
     <h2>Cosmos clips <span class="imagined">imagined</span></h2>
     <ul id="clips"></ul>
     <label>Prompt <textarea id="prompt" rows="3">The same home at 3 AM, lights off, lit only by a small warm nightlight near the floor; an older adult pushing a walker slowly along the route; realistic home interior.</textarea></label>

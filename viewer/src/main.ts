@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { stamp, placementOk, polyCells, worldFootprint, toCell, applyIntervention, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
+import { stamp, carvedPolys, placementOk, polyCells, worldFootprint, toCell, applyIntervention, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
 import { buildDevice, type WalkerCfg } from './walker.ts';
 import { nightShader } from './night.ts';
 import { createVision, PROFILES, type Profile } from './vision.ts';
@@ -18,8 +18,11 @@ import { summarize, drawPushChart, poseAt, pushColor, sampleText } from './physd
 import { cardState, encodeCard, type ActionOut, type ReportPayload } from './share.ts';
 import { createReimagine, undoChange, costText, card, type Change } from './reimagine.ts';
 import { moveCost, removeCost, sumCosts } from './movecost.ts';
-import { measureStair, stairFixes, stairFrame, stairYaml, type Stair, type Side } from './stairs.ts';
+import { measureStair, stairFixes, stairFrame, stairYaml, mirrorRail, inRailBand, stepLights, withRails, SPLAT_STRIDE, type Stair, type Side } from './stairs.ts';
 import { createStairs3d } from './stairs3d.ts';
+import { doorFixes, doorYaml, needWidth, hingeSide, growOf, type Door } from './doors.ts';
+import { createDoors3d } from './doors3d.ts';
+import { MAX_EXTRA_LIGHTS, type PointLight } from './night.ts';
 import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } from './perf.ts';
 import QRCode from 'qrcode';
 import type { Eval, Init, RouteDef } from './worker.ts';
@@ -256,7 +259,7 @@ function replanRoute(k: number) {
 }
 async function replan(): Promise<number> {
   const t = performance.now();
-  L = stamp(g, base, objs, layout.poses, layout.flattened);
+  L = stamp(g, base, objs, layout.poses, layout.flattened, carvedPolys(layout));
   updateHeights();
   const id = seq + 1;
   latestEval = id;
@@ -735,10 +738,37 @@ game.reimagine = { run: reimagineRoom, setT: reim.setT, t: reim.t, play: reim.pl
 // From config game.stairs (stage 12) and/or marked here with three clicks and measured from the splat (kept per scene in
 // this browser; "Copy as config YAML" makes it permanent). Their fixes are interventions like any other.
 const mainSplat = splats[0];
-const stairs3d = createStairs3d(scene, () => buildDevice(walkerCfg).group);
-const STAIR_KEY = `homeclear:stairs:${RUN}`, baseIvCount = interventions.length;
+// the second rail: the scanned rail on the other side, mirrored (stairs.ts mirrorRail), as its own tinted splat; cached
+const railCopies = new Map<string, SplatMesh | null>();
+function scanRail(st: Stair, side: Side): SplatMesh | null {
+  const from: Side = side === 'left' ? 'right' : 'left', key = `${JSON.stringify([st.bottom, st.top, st.treads_z, st.rails])}:${side}`;
+  if (st.rails?.[from] !== 'seen') return null;
+  if (railCopies.has(key)) return railCopies.get(key)!;
+  const band = inRailBand(st, from), src: number[] = [];
+  mainSplat.forEachSplat((_, c, s, q, op, col) => { if (op >= 0.2 && band(c.x, c.y, c.z)) src.push(c.x, c.y, c.z, s.x, s.y, s.z, q.x, q.y, q.z, q.w, op, col.r, col.g, col.b); });
+  let mesh: SplatMesh | null = null;
+  if (src.length >= 30 * SPLAT_STRIDE) {   // too few points is a gap in the scan, not a rail: draw the tube instead
+    const m = mirrorRail(new Float32Array(src), st, from), c = new THREE.Vector3(), sc3 = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color();
+    mesh = new SplatMesh({ worldModifier: night.modifier, constructSplats: ps => {
+      for (let i = 0; i < m.length; i += SPLAT_STRIDE)
+        ps.pushSplat(c.set(m[i], m[i + 1], m[i + 2]), sc3.set(m[i + 3], m[i + 4], m[i + 5]), q.set(m[i + 6], m[i + 7], m[i + 8], m[i + 9]), m[i + 10], col.setRGB(m[i + 11], m[i + 12], m[i + 13]));
+    } });
+    mesh.recolor = new THREE.Color(0.82, 1, 0.97);   // designed, not built: a light tint, like the imagined fills
+    mesh.userData.count = m.length / SPLAT_STRIDE;
+    splats.push(mesh);
+  }
+  railCopies.set(key, mesh);
+  return mesh;
+}
+const stairs3d = createStairs3d(scene, () => buildDevice(walkerCfg).group, scanRail);
+const doors3d = createDoors3d(scene, mainSplat);
+const STAIR_KEY = `homeclear:stairs:${RUN}`, DOOR_KEY = `homeclear:doors:${RUN}`, baseIvCount = interventions.length;
 const stairRay = new THREE.Raycaster();
 let stairs: Stair[] = [], marked: Stair[] = [];
+let doors: Door[] = [], markedDoors: Door[] = [];
+const cfgDoors: Door[] = sc.doors ?? [];
+try { markedDoors = JSON.parse(localStorage.getItem(DOOR_KEY) ?? '[]'); } catch { markedDoors = []; }
+let stepLightList: PointLight[] = [];
 let strongSide: Side | null = persona.strong_side ?? null;
 /** splat centres + |normal z| (the shortest axis) around a stair, for measureStair */
 function splatPoints(st: Stair): Float32Array {
@@ -756,21 +786,33 @@ function splatPoints(st: Stair): Float32Array {
 const measured = (st: Stair): Stair => { const { flat_points: _, ...m } = measureStair(splatPoints(st), st); return m; };
 const cfgStairs: Stair[] = (sc.stairs ?? []).map((st: Stair) => (st.treads_z ? st : measured(st)));
 try { marked = JSON.parse(localStorage.getItem(STAIR_KEY) ?? '[]'); } catch { marked = []; }
-/** stairs -> their fixes in the intervention list, the worker's init, the drawing; no re-plan (callers do it) */
+/** stairs and doors -> their fixes in the intervention list, the worker's init, the drawing; no re-plan (callers do it) */
 function setupStairs() {
-  stairs = [...cfgStairs, ...marked];
-  interventions.splice(baseIvCount, Infinity, ...stairs.flatMap(stairFixes));
-  const ids = new Set(interventions.map(i => i.id)), keep = (id: string) => !id.startsWith('stair_') || ids.has(id);
+  stairs = [...cfgStairs, ...marked].map(withRails);
+  // a door-leaf object next to a jamb marks the hinge side (widening grows the other way) and brings its own fixes
+  const leaves = objs.flatMap((o, k) => (o.kind === 'door' ? [worldFootprint(o, original[k])] : []));
+  doors = [...cfgDoors, ...markedDoors].map(d => ({ ...d, hinge: d.hinge ?? hingeSide(d, leaves) }));
+  const need = needWidth(walkerCfg.width_m, init.rules.clearance_margin_m);
+  interventions.splice(baseIvCount, Infinity, ...stairs.flatMap(stairFixes), ...doors.flatMap(d => doorFixes(d, need, { leafObject: hingeSide(d, leaves) !== null })));
+  const ids = new Set(interventions.map(i => i.id)), keep = (id: string) => !/^(stair|door)_/.test(id) || ids.has(id);
   applied = applied.filter(keep);
-  layout = { ...layout, added: layout.added?.filter(keep) };
-  init = { ...init, interventions, stairs, strong_side: strongSide, device: walkerCfg.device };
+  layout = { ...layout, added: layout.added?.filter(keep), ...(layout.carved ? { carved: layout.carved.filter(c => ids.has(c.id)) } : {}) };
+  init = { ...init, interventions, stairs, doors, strong_side: strongSide, device: walkerCfg.device };
   worker.postMessage({ type: 'init', init });
   suggestions = [];   // searched without these stairs
   drawStairs();
   $('stairstatus').textContent = stairs.length ? stairs.map(st => `${st.name}: ${st.treads_z?.length ?? 0} treads ${st.measured === 'tape' ? 'tape-measured' : 'seen in the scan'}`).join(' · ') +
     ' · checks under "Transfers, reach, emergencies", additions under Plan fixes' : 'no stairs marked: Fly (F) to see them, then Mark stairs';
 }
-function drawStairs() { stairs3d.build(stairs, layout.added ?? []); }
+function drawStairs() {
+  stairs3d.build(stairs, layout.added ?? []);
+  const verdict = (d: Door) => current?.checks.find(c => c.id === `door:${d.name}`)?.verdict === 'ok';
+  const change = (d: Door) => { const c = layout.carved?.find(x => x.target === d.name); return c ? { gain: c.by_m, grow: growOf(d, c.id.split(':')[0].slice('door_'.length)) } : { gain: 0, grow: 'both' as const }; };
+  doors3d.build(doors, Object.fromEntries(doors.map(d => [d.name, change(d)])), Object.fromEntries(doors.map(d => [d.name, verdict(d)])));
+  // motion step lights light the scan itself at night (night.ts); only re-light when they change: it regenerates every splat
+  const L = stairs.filter(st => layout.added?.includes(`stair_lights:${st.name}`)).flatMap(st => stepLights(st).map(p => ({ ...p, r: 0.7 }))).slice(0, MAX_EXTRA_LIGHTS);
+  if (JSON.stringify(L) !== JSON.stringify(stepLightList)) { stepLightList = L; updateNight(); }
+}
 function saveMarked() { try { localStorage.setItem(STAIR_KEY, JSON.stringify(marked)); } catch { /* private window: kept for this visit only */ } }
 async function markStair(a: XY, b: XY, top: XY, topZ: number | null = null) {
   const n = cfgStairs.length + marked.length, st = measured({ name: n ? `stairs ${n + 1}` : 'stairs', bottom: [a, b], top, top_z: topZ });
@@ -828,9 +870,64 @@ $('copystairs').onclick = () => copyStairsYaml();
   sel.value = strongSide ?? '';
   sel.onchange = () => { strongSide = (sel.value || null) as Side | null; init = { ...init, strong_side: strongSide }; worker.postMessage({ type: 'init', init }); replan(); };
 }
+/** What is really at each side of the first stair, set by hand over what the scan saw (kept with the stair). */
+function setRail(side: Side, v: 'seen' | 'none' | null) {
+  const name = stairs[0]?.name, src = marked.find(st => st.name === name) ?? cfgStairs.find(st => st.name === name);
+  if (!src) return null;
+  src.rails_set = { ...src.rails_set, [side]: v ?? undefined };
+  saveMarked(); setupStairs();
+  $<HTMLSelectElement>(side === 'left' ? 'railleft' : 'railright').value = v ?? '';
+  return replan();
+}
+$('railleft').onchange = () => setRail('left', ($<HTMLSelectElement>('railleft').value || null) as 'seen' | 'none' | null);
+$('railright').onchange = () => setRail('right', ($<HTMLSelectElement>('railright').value || null) as 'seen' | 'none' | null);
 setupStairs();
+for (const side of ['left', 'right'] as Side[]) $<HTMLSelectElement>(side === 'left' ? 'railleft' : 'railright').value = (marked.find(st => st.name === stairs[0]?.name) ?? cfgStairs[0])?.rails_set?.[side] ?? '';
 game.stairs = { mark: markStair, list: () => stairs, clear: () => $('clearstairs').click(), copyYaml: copyStairsYaml, view: viewStairs,
+  railCopies: () => [...railCopies.values()].filter((m): m is SplatMesh => !!m), setRail,
   measure: (st: Stair) => measureStair(splatPoints(st), st), setStrongSide: (s: Side | null) => { $<HTMLSelectElement>('strongside').value = s ?? ''; $('strongside').onchange!(new Event('change')); } };
+
+// ---------- doorways (doors.ts, doors3d.ts): clear width against code and this walker; hinges, door off, a wider opening ----------
+// Marked here with two clicks on the jambs (kept per scene in this browser) and/or config game.doors. The options are
+// carve fixes like any other (Plan fixes, Reimagine, receipt); applying one widens the floor map and the scan.
+function saveDoors() { try { localStorage.setItem(DOOR_KEY, JSON.stringify(markedDoors)); } catch { /* private window: kept for this visit only */ } }
+function doorStatus() {
+  $('doorstatus').textContent = doors.length ? doors.map(d => `${d.name}: ${(Math.hypot(d.b[0] - d.a[0], d.b[1] - d.a[1]) * 100).toFixed(0)} cm between the jambs`).join(' · ') +
+    ' · the options are under Plan fixes' : 'no doorways marked: Mark doorway, then click the inside face of each jamb';
+}
+async function markDoor(a: XY, b: XY, name?: string) {
+  const n = cfgDoors.length + markedDoors.length, d: Door = { name: name ?? (n ? `doorway ${n + 1}` : 'doorway'), a, b, measured: 'clicks' };
+  markedDoors.push(d);
+  saveDoors(); setupStairs(); doorStatus(); await replan();
+  return d;
+}
+let doorMarking: XY[] | null = null;
+$('markdoor').onclick = () => { marking = null; doorMarking = []; $('doorstatus').textContent = 'Marking (Esc cancels): click the inside face of one jamb, near the floor'; };
+renderer.domElement.addEventListener('pointerdown', e => {   // capture, as for the stairs: while marking, clicks measure
+  if (!doorMarking) return;
+  e.stopImmediatePropagation();
+  stairRay.setFromCamera(new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
+  const hit = stairRay.intersectObject(mainSplat, false)[0];
+  if (!hit) { $('doorstatus').textContent = 'Nothing there: click on the jamb'; return; }
+  doorMarking.push([hit.point.x, hit.point.y]);
+  if (doorMarking.length < 2) { $('doorstatus').textContent = 'Marking: now the inside face of the other jamb'; return; }
+  const [a, b] = doorMarking;
+  doorMarking = null;
+  markDoor(a, b);
+}, { capture: true });
+addEventListener('keydown', e => { if (e.code === 'Escape' && doorMarking) { doorMarking = null; doorStatus(); } });
+$('cleardoors').onclick = () => { markedDoors = []; saveDoors(); setupStairs(); doorStatus(); replan(); };
+async function copyDoorsYaml() {
+  const yaml = `  doors:\n${doors.map(d => doorYaml(d).replace(/^/gm, '  ')).join('\n')}\n`;
+  try { await navigator.clipboard.writeText(yaml); $('doorstatus').textContent = 'copied: paste under game: in config.<scene>.yaml'; }
+  catch { $('doorstatus').textContent = yaml; }
+  return yaml;
+}
+$('copydoors').onclick = () => copyDoorsYaml();
+doorStatus();
+game.doors = { mark: markDoor, list: () => doors, clear: () => $('cleardoors').click(), copyYaml: copyDoorsYaml, edits: () => doors3d.edits().length,
+  /** apply one option by key: 'offset' | 'remove' | 'widen' (same path as Plan fixes' Apply) */
+  apply: (name: string, key: 'offset' | 'remove' | 'widen') => applyFix(`door_${key}:${name}`) };
 
 // ---------- what leaves the game: OT report, family fix card ----------
 /** Every change in the layout on screen, in order, with what it takes and where (for the card's numbered pins). */
@@ -847,6 +944,7 @@ function describeChanges(): ActionOut[] {
     if (iv) {
       const at = iv.kind === 'flatten' ? [(iv.box_xy![0][0] + iv.box_xy![1][0]) / 2, (iv.box_xy![0][1] + iv.box_xy![1][1]) / 2] as XY
         : iv.kind === 'raise' ? (sc.fixtures?.find((f: any) => f.name === iv.target)?.xyz?.slice(0, 2) as XY | undefined) ?? poseOf(iv.target!)
+        : iv.kind === 'carve' ? [iv.poly_xy!.reduce((a, p) => a + p[0], 0) / iv.poly_xy!.length, iv.poly_xy!.reduce((a, p) => a + p[1], 0) / iv.poly_xy!.length] as XY
         : iv.kind === 'add' ? poseOf(iv.fixture?.attach ?? '') ?? (iv.fixture?.xyz?.slice(0, 2) as XY | undefined) : poseOf(iv.object!);
       out.push({ label: iv.label, cost_usd: iv.cost_usd, minutes: iv.minutes, product: iv.product, at });
       if (iv.object) covered.add(iv.object);
@@ -916,7 +1014,7 @@ function updateNight() {
   const k = objs.findIndex(o => o.kind === 'nightlight');
   const p = k >= 0 && !layout.poses[k].removed ? layout.poses[k] : null;
   const on = $<HTMLInputElement>('night').checked;
-  night.set(on, p && { x: p.x, y: p.y, r: objs[k].light_radius_m ?? 1.5 });
+  night.set(on, p && { x: p.x, y: p.y, r: objs[k].light_radius_m ?? 1.5 }, stepLightList);
   for (const s of splats) s.updateVersion();
   hemi.intensity = on ? 0.25 : 2.2;
   scene.background = new THREE.Color(on ? 0x050607 : 0x1d2126);

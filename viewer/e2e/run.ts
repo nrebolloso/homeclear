@@ -259,6 +259,21 @@ try {
     check('stairs: no page errors', k4.errors.length === 0, k4.errors.join(' | ') || 'none');
     await k4.p.close();
   }
+  // 11. doorways: the 55 cm synthetic doorway blocks the walker; widening it (away from the open leaf) opens the route,
+  // edits the scan (wall strip hidden, jamb shifted) and undo closes it again
+  const dn = await open('game_synth_narrow');
+  const D = (f: string) => G(dn.p, f);
+  await D("await game.doors.mark([4.05, 1.225], [4.05, 1.775], 'bathroom door')");
+  const d0 = await D("return { err: game.current().error ?? null, v: game.current().checks.find(c => c.id === 'door:bathroom door')?.verdict, ids: game.doors.list().map(d => d.hinge) }");
+  await D("await game.doors.apply('bathroom door', 'widen')");
+  const d1 = await D("return { err: game.current().error ?? null, v: game.current().checks.find(c => c.id === 'door:bathroom door')?.verdict, edits: game.doors.edits(), squeeze: game.current().hazards.filter(h => h.type === 'tight_clearance' && Math.abs(h.position[0] - 4.05) < 0.3).length }");
+  check('doorway: blocked at 55 cm, open once widened away from the leaf, scan edited',
+    !!d0.err && d0.v === 'fail' && d0.ids[0] === 'b' && !d1.err && d1.v === 'ok' && d1.edits === 2 && d1.squeeze === 0, `${JSON.stringify(d0)} -> ${JSON.stringify(d1)}`);
+  await shot(dn.p, 'door_widened');
+  const d2 = await D("await game.reimagine.undo(0); return { err: game.current().error ?? null, edits: game.doors.edits() }");
+  check('doorway: undo closes it and removes the edits', !!d2.err && d2.edits === 0, JSON.stringify(d2));
+  check('doorway: no page errors', dn.errors.length === 0, dn.errors.join(' | ') || 'none');
+  await dn.p.close();
 } finally {
   await browser.close();
   writeFileSync(new URL('results.json', import.meta.url), JSON.stringify(results, null, 1));
