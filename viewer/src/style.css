@@ -25,9 +25,9 @@ textarea { width: 100%; box-sizing: border-box; background: #1b1f24; color: var(
 #player { position: fixed; inset: 40px 320px; background: #000; border: 2px dashed var(--imag); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; }
 #player[hidden] { display: none; }
 #player .wrap { position: relative; flex: 1; min-height: 0; }
-#player video { width: 100%; height: 100%; object-fit: contain; filter: sepia(.25) hue-rotate(250deg) saturate(1.2); }
+#player video { width: 100%; height: 100%; object-fit: contain; }   /* no tint: Cosmos clips carry their own "generated, not measured" banner and magenta fills */
 #player canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-#player .tag { position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,.6); padding: 2px 6px; }
+#player .tag { position: absolute; bottom: 6px; left: 6px; background: rgba(0,0,0,.6); padding: 2px 6px; }
 @media (max-width: 700px) { .panel { width: calc(50% - 12px); font-size: 11px; } #player { inset: 8px; } }
 .range { color: var(--dim); margin-bottom: 2px; }
 ul.routes { padding-left: 16px; } ul.routes li.sel { color: var(--fg); font-weight: 600; } ul.routes li { color: var(--dim); }

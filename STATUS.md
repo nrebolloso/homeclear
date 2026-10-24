@@ -1,9 +1,9 @@
 # Status
 
 ## Demo push (2026-10-24)
-- **Done:** steps 1-5. Step 4: `tools/stage_demo_hazards.py` stages a 1.5 cm mat, a 5 mm cord (estimated) and chair8 pulled into the trash-can gap (1 cm/side) + hazards.json. Step 5: 200 trips on the world model (patient), hand rule alongside as amber "Hand-rule footsteps" ghosts + a baseline line in the risk panel. Contacts/month world/hand: as-is 1.12/1.22, mat removed 0.065/0.066, cord taped 1.06/1.14, chair pushed in 1.10/1.20 (6.6 cm/side), mat+cord 0/0; replans ~0.6 s. Tag `demo-safe` @ 3560912; export copied to `../Homeclear-demo-safe/kitchen4_lighter_v3`.
-- **Next:** step 9 Cosmos job on hpg-b200 (worst-case night trip), then step 6 mannequin hero shot while it runs.
-- **Risks:** another session's ffmpeg holds load ~15: fps measured 2-6 headless (60 unloaded before), `proof/demo/backup_v3.mp4` choppy (re-record when load drops; v2 is the clean backup), optimize timing test 21.7 s vs 20 s limit; rerun the staging tool after any re-export; chair's scanned spot shows the pink "imagined" fill; e2e not rerun.
+- **Done:** steps 1-6 and 9. Step 6: third-person mannequin with the next-step cloud (step k of all 200 trips) and its next 6 footsteps; `proof/demo/shot2_hero.mp4` via frame-stepped `e2e/shot.ts`. Step 9: Cosmos night worst-case hero chunk (job 47431437, 6.5 min on B200) fetched; player tint removed so the night clip keeps its colours; `proof/demo/shot5_cosmos.mp4`. npm test 131/131 at load 1.5. Steps 1-5: Step 4: `tools/stage_demo_hazards.py` stages a 1.5 cm mat, a 5 mm cord (estimated) and chair8 pulled into the trash-can gap (1 cm/side) + hazards.json. Step 5: 200 trips on the world model (patient), hand rule alongside as amber "Hand-rule footsteps" ghosts + a baseline line in the risk panel. Contacts/month world/hand: as-is 1.12/1.22, mat removed 0.065/0.066, cord taped 1.06/1.14, chair pushed in 1.10/1.20 (6.6 cm/side), mat+cord 0/0; replans ~0.6 s. Tag `demo-safe` @ 3560912; export copied to `../Homeclear-demo-safe/kitchen4_lighter_v3`.
+- **Next:** step 7 polish (scripted camera paths, night + nightlight, demo mode, ghost/heat colours), storyboard shots 1/3/4/6, then step 10 OT report; step 8 VR handed to the VR team.
+- **Risks:** Cosmos clip shows the pre-render's chair as magenta "imagined" fill and lists as "other scenario" (layout key differs from the live as-is layout); e2e not rerun since step 5; backup_v3 choppy (re-record now load is ~1.5).
 
 Each result counts once it is reproduced here, with proof in `proof/`.
 
