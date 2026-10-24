@@ -79,3 +79,56 @@ def test_learned_prunes_glitches_and_stays_stable():
     assert (L.predict(s, np.array([[0.25, 0], [0.5, 0], [1.0, 0]])).w >= 0.02).all()
     r, *_ = run(D, tempfile.mkdtemp(), "learned", nights=10)
     assert r["sanity"]["impossible_step_len_pct"] < 2 and r["sanity"]["final_feet_in_obstacle_pct"] < 0.1
+
+
+def test_tripnoise_keeps_marginal_and_sets_lag1():
+    from worldmodel.models import TripNoise
+    rng = np.random.default_rng(3)
+    for rho in (0.6, -0.4):
+        n = TripNoise(rho)
+        Z = np.array([n.next(rng) for _ in range(60000)])
+        assert np.allclose(Z.mean(0), 0, atol=0.03) and np.allclose(Z.std(0), 1, atol=0.03)
+        assert np.allclose([np.corrcoef(Z[:-1, c], Z[1:, c])[0, 1] for c in (0, 1)], rho, atol=0.03)
+        assert abs(np.corrcoef(Z[:, 0], Z[:, 1])[0, 1]) < 0.03
+
+
+def test_stepdist_given_z_is_deterministic_gaussian_draw():
+    u = np.array([np.cos(0.7), np.sin(0.7)])
+    R = np.stack([u, [-u[1], u[0]]], 1)
+    d = StepDist([1.0], [[1.0, 2.0]], [[0.1, 0.05]], [R])
+    x = d.sample(np.random.default_rng(0), z=[1.0, -2.0])
+    assert np.allclose(x, [1.0, 2.0] + R @ [0.1 * 1.0, 0.05 * -2.0])
+
+
+def test_step_corr_zero_changes_nothing_and_raises_persistence():
+    def lag1(S):
+        a, b = S[:-1, 10], S[1:, 10]
+        same = (S[:-1, 1] == S[1:, 1]) & (S[:-1, 0] == S[1:, 0])        # same night and trip
+        return np.corrcoef(a[same], b[same])[0, 1]
+    out = []
+    for c in (None, 0.0, 0.8):
+        d = tempfile.mkdtemp()
+        s, *_ = run(D, d, "baseline", nights=20, step_corr=c)
+        out.append((np.load(f"{d}/rollout.npz")["steps"], s))
+    assert np.array_equal(out[0][0], out[1][0])                          # 0 = the old independent draws, bit for bit
+    assert out[2][1]["sanity"]["final_feet_in_obstacle_pct"] == 0 and out[2][1]["step_corr"] == 0.8
+    assert lag1(out[2][0]) > lag1(out[1][0]) + 0.1
+
+
+def test_trip_corr_recovers_rho_and_zscores():
+    from worldmodel.models import TripNoise
+    from worldmodel.trip_corr import component_zscores, lag_corr
+    u = np.array([np.cos(0.7), np.sin(0.7)])
+    R = np.stack([u, [-u[1], u[0]]], 1)
+    d = StepDist([0.5, 0.5], [[0, 0], [3, 3]], [[0.1, 0.05], [0.1, 0.05]], [R, R])
+    assert np.allclose(component_zscores(d, np.array([3, 3]) + R @ [0.2, -0.1]), [2.0, -2.0])   # nearer component, in its own frame
+    rng, trial, step, z = np.random.default_rng(5), [], [], []
+    for t in range(40):                                              # 40 trials x 60 steps of AR(1) noise
+        n = TripNoise(0.5)
+        for s in range(60):
+            z.append(n.next(rng)); trial.append(f"t{t}"); step.append(s)
+    r = lag_corr(np.array(z), trial, np.array(step), 1)
+    assert r["pairs"] == 40 * 59 and r["trials"] == 40
+    for ax in ("along", "across"):
+        assert r[ax]["ci90"][0] < 0.5 < r[ax]["ci90"][1] and abs(r[ax]["rho"] - 0.5) < 0.08
+    assert abs(lag_corr(np.array(z), trial, np.array(step), 2)["along"]["rho"] - 0.25) < 0.08       # rho^2 at lag 2

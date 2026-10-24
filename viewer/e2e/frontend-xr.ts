@@ -20,9 +20,10 @@ try {
     const m = new rig.matrix.constructor().lookAt(lo, lt, new V(0, 1, 0)), q = new Q().setFromRotationMatrix(m);
     const ctl = game.debug.xrDevice.controllers.right; ctl.position.set(lo.x, lo.y, lo.z); ctl.quaternion.set(q.x,q.y,q.z,q.w);
   };`);
-  const stick = async () => { await G("game.debug.xrDevice.controllers.left.updateButtonValue('thumbstick', 1)"); await wait(); await G("game.debug.xrDevice.controllers.left.updateButtonValue('thumbstick', 0)"); await wait(); };
+  const stick = async (ms = 700) => { await G("game.debug.xrDevice.controllers.left.updateButtonValue('thumbstick', 1)"); await page.waitForTimeout(ms); await G("game.debug.xrDevice.controllers.left.updateButtonValue('thumbstick', 0)"); await wait(); };
   const select = async (label: string) => { await G(`__aimUI(${JSON.stringify(label)})`); await wait(); await G("game.debug.xrDevice.controllers.right.updateButtonValue('trigger', 1)"); await wait(); await G("game.debug.xrDevice.controllers.right.updateButtonValue('trigger', 0)"); await wait(); };
-  assert.equal(await G('return game.frontendXR.isOpen()'), false); await stick(); assert.equal(await G('return game.frontendXR.isOpen()'), true);
+  assert.equal(await G('return game.frontendXR.isOpen()'), false); await stick(150); assert.equal(await G('return game.frontendXR.isOpen()'), false); console.log('PASS a stick tap does not open the menu');
+  await stick(); assert.equal(await G('return game.frontendXR.isOpen()'), true);
   assert.equal(await page.locator('#frontend').isVisible(), false); console.log('PASS controller opens spatial menu; desktop DOM is hidden');
   const before = await G('return JSON.stringify(game.layout())');
   await select('View filters'); await select('Off · Night view'); assert.equal(await page.isChecked('#night'), true);

@@ -6,7 +6,8 @@
 // (-z) along yaw.
 // Moving: walk for real (1:1). Holding a pinch or trigger on the non-wand hand glides forward where you look, only where
 // free walk could stand (walls, furniture and unfilmed floor stop it). Left stick walks (same checks), right stick snap-turns
-// 30 deg about the head; a left-stick click is the planning shell's menu (frontend-xr.ts), not movement.
+// 30 deg about the head; a held left-stick click is the planning shell's menu (frontend-xr.ts), not movement. A wand-stick
+// click undoes the last object edit (with the off-hand grip held: redoes).
 // Wand (right hand or controller; ?wand=left): point at furniture and hold to drag it (twist the wrist to turn it), hold
 // still to delete it; point at filmed floor and release to teleport. A pinch and a trigger are the same WebXR "select".
 // Moves go through the host's placement check and re-plan, like a desktop drag.
@@ -18,6 +19,7 @@ import { floorHit, twistAngle, snapQuarter, holdProgress, DELETE_HOLD_S, DELETE_
 import { tierAtLoad, xrCfg, type Tier } from './perf.ts';
 import { resetHoldProgress } from './resets.ts';
 import { card } from './reimagine.ts';
+import { pulse } from './controls.ts';
 
 export interface XrItem { proxy: THREE.Object3D; group: THREE.Object3D; outline: THREE.LineSegments }
 export interface XrHost {
@@ -42,6 +44,10 @@ export interface XrHost {
   /** big buttons on a card that follows you lazily: pressed like furniture is grabbed (point the wand, pinch) */
   buttons?: XrButton[];
   resetObject(k: number): unknown; resetAll(): unknown;
+  /** what the controls are for right now (hints.ts): a label and one line of keys, drawn as a strip card on the off-hand controller */
+  hints?(): { lines: string[]; tone: string };
+  /** undo / redo the last object edit (move, remove, reset); resolves to a line to show, e.g. "Undid: removed rug" */
+  history?: { undo(): Promise<string>; redo(): Promise<string> };
   /** The annotation lane owns marking state; XR owns controller tracking and routes each gesture exactly once. */
   editor?: XrEditor;
   /** A visual comparison is read-only; only the story-card buttons remain interactive. */
@@ -155,10 +161,25 @@ export async function setupXR(host: XrHost) {
     toolHeld = false; host.editor?.cancelDrag();
   }
   let toolHeld = false;
+  // the strip: the current mode and its keys, on the off-hand controller; rebuilt only when the words change
+  const STRIP_TONE: Record<string, string> = { move: '#9be8b0', edit: '#7fe7de', mark: '#ffd27a', spectate: '#d8bcff', view: '#a9c8ff' };
+  let strip: THREE.Sprite | null = null, stripKey = '';
+  function stripStep(other?: Ctl) {
+    const h = host.hints?.();
+    if (!h || !other?.source?.gamepad || host.readOnly?.() || host.shell?.open()) { if (strip) strip.visible = false; return; }
+    const key = h.tone + h.lines.join('|');
+    if (!strip || key !== stripKey) {
+      stripKey = key; strip?.removeFromParent(); strip?.material.dispose();
+      strip = card(h.lines, STRIP_TONE[h.tone] ?? '#e9f6ff', undefined, 0.014); strip.position.set(0, 0.12, -0.15); strip.renderOrder = 4;
+    }
+    if (strip.parent !== other.group) other.group.add(strip);
+    strip.visible = true;
+  }
   function wandStep() {
     const c = ctls.find(isWand);
     const other = ctls.find(o => o.source && !isWand(o)), hint = host.editor?.hint;
-    if (hint) {
+    if (host.hints) { if (hint) hint.visible = false; stripStep(other); }
+    else if (hint) {
       if (other && hint.parent !== other.group) other.group.add(hint);
       hint.visible = !!other?.source?.gamepad && !host.editor?.active() && !host.readOnly?.();
     }
@@ -256,20 +277,32 @@ export async function setupXR(host: XrHost) {
   let btnHover = -1, btnPressed = -1;
 
   // Controller shortcuts share the same priority as the wand: annotation gestures consume input before furniture.
+  let clickWas = false, toastCard: THREE.Sprite | null = null, toastUntil = 0;
   let gripWas = false, aWas = false, bothHeld = 0, resetFired = false, ringN = 0, ringCard: THREE.Sprite | null = null;
   function controllerButtons(dt: number, pads: Record<string, Gamepad>) {
     const wp = pads[WAND], op = pads[WAND === 'left' ? 'right' : 'left'];
-    const grip = !!wp?.buttons[1]?.pressed, a = !!wp?.buttons[4]?.pressed, both = grip && !!op?.buttons[1]?.pressed;
+    const grip = !!wp?.buttons[1]?.pressed, a = !!wp?.buttons[4]?.pressed, click = !!wp?.buttons[3]?.pressed, both = grip && !!op?.buttons[1]?.pressed;
     const consumed = host.readOnly?.() || (host.editor?.buttons(pads, WAND) ?? false);
     if (consumed) {
       if (grab) host.resync();
       grab = null; aiming = false;
       if (!host.readOnly?.()) btnPressed = -1;   // comparison mode still needs the card's press/release gesture
     } else {
-      if (grip && !gripWas) { const k = grab?.k ?? hover; if (k >= 0) { grab = null; host.resync(); host.resetObject(k); } }
-      if (a && !aWas && !grab && hover >= 0) host.remove(hover);
+      if (grip && !gripWas) { const k = grab?.k ?? hover; if (k >= 0) { grab = null; host.resync(); host.resetObject(k); pulse(wp, 0.5, 40); } }
+      if (a && !aWas && !grab && hover >= 0) { host.remove(hover); pulse(wp, 0.5, 40); }
+      // wand stick click undoes the last object edit; with the off-hand grip held it redoes (marking has its own undo on B/Y)
+      if (click && !clickWas && !grab && host.history) {
+        pulse(wp, 0.4, 30);
+        host.history[op?.buttons[1]?.pressed ? 'redo' : 'undo']().then(text => {
+          toastCard?.removeFromParent(); toastCard?.material.dispose(); toastCard = card([text], '#9be8b0'); scene.add(toastCard); toastUntil = performance.now() + 1800;
+        });
+      }
     }
-    gripWas = grip; aWas = a;
+    gripWas = grip; aWas = a; clickWas = click;
+    if (toastCard) {
+      if (performance.now() > toastUntil) { toastCard.removeFromParent(); toastCard.material.dispose(); toastCard = null; }
+      else toastCard.position.copy(head).addScaledVector(headDir, 1).setZ(head.z - 0.3);
+    }
     bothHeld = both && !consumed ? bothHeld + dt : 0;
     if (consumed && both) resetFired = true;   // cancelling an edit cannot turn into a global reset before both grips are released
     if (!both) resetFired = false;
@@ -364,7 +397,8 @@ export async function setupXR(host: XrHost) {
     },
     onExitXr: () => {
       camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1; btnHover = -1; dash.visible = false;
-      ringCard?.removeFromParent(); ringCard?.material.dispose(); ringCard = null; ringN = 0; bothHeld = 0; gripWas = false; aWas = false;
+      ringCard?.removeFromParent(); ringCard?.material.dispose(); ringCard = null; ringN = 0; bothHeld = 0; gripWas = false; aWas = false; clickWas = false;
+      toastCard?.removeFromParent(); toastCard?.material.dispose(); toastCard = null;
       for (const it of items) { it.outline.visible = false; (it.outline.material as THREE.LineBasicMaterial).color.setHex(0x66ccff); }
       host.exit();
     },
@@ -381,6 +415,8 @@ export async function setupXR(host: XrHost) {
     buttons: () => btns.map(x => ({ text: x.b.text(), at: dash.visible ? w(x.mesh) : null })),
     /** press a card button as a pinch on it would (scripted checks on a headset nobody wears) */
     press: (i: number) => btns[i]?.b.press(),
+    /** the strip card on the off-hand controller: its words and whether it shows */
+    strip: () => ({ key: stripKey, visible: !!strip?.visible }),
     wand: () => ({ hover: hover >= 0 ? host.names[hover] : null, button: btnHover, grab: grab ? host.names[grab.k] : null, aiming, teleport: tpRing.visible,
       drag: grab?.drag, valid: grab?.valid ?? null }),
   };
