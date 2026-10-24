@@ -22,7 +22,7 @@ splat:
 
 scale:
   manual_factor: null           # set a number to skip marker detection
-  assume_camera_height_m: null  # last resort if no marker shows up: e.g. 1.2 (ASSUMED, stage reports SKIP)
+  assume_camera_height_m: 1.68  # ASSUMED, no marker in the footage: Juan says the phone was held at 5 ft 6 in (1.676 m), from memory, not measured; stage 4 reports SKIP
   marker_dict: DICT_4X4_50
   marker_id: 0
   # python marker/make_marker.py --print -> marker/aruco_print_letter.pdf, printed at 100% ("Actual size"): the black square
@@ -48,20 +48,23 @@ clean:                          # stage 5b: visual cleanup before the maps and t
 
 floor:
   ransac_iters: 2000
-  inlier_m: 0.02
+  inlier_m: 0.05               # this splat's floor is a fuzzy +-5 cm slab (16 dB PSNR): 2 cm found only ~700 inliers and a plane 0.3 m off the floor peak
+  min_opacity: 0.05             # the MCMC splat keeps only ~3.7k Gaussians above 0.3, 27k above 0.05
+  near_cameras_m: 2.0
 
 grid:
   cell_m: 0.02
-  floor_band_m: 0.015           # |z| below this counts as floor
-  floor_close_cells: 5          # fill small holes in the observed floor
-  obstacle_z: [0.05, 1.8]
-  bump_z: [0.004, 0.05]         # rugs, thresholds, cables: height above the LOCAL floor
+  min_opacity: 0.3              # the 2DGS splat (10.9M Gaussians, 5M above 0.3) is dense: the loose 3DGS settings marked 83% of the room as obstacle
+  floor_band_m: 0.04            # |z| below this counts as floor: shag carpet (1.5 cm left only patches of floor)
+  floor_close_cells: 10         # fill small holes in the observed floor (20 cm)
+  obstacle_z: [0.08, 1.8]       # above the carpet pile
+  bump_z: [0.04, 0.08]          # carpet pile is ~4 cm here: bumps below that are not resolved
   floor_local_m: 1.0            # local floor block for bump heights: 0.3 m blocks inside a big rug took the rug top as floor (rug 15 mm read 6.5 mm)
   thin:                         # bumps no wider than this are cables/cords: classified, height ESTIMATED, not measured
     max_width_m: 0.08            # as mapped: a 1 cm cord spreads over ~4 cells of 2 cm in the splat
     min_length_m: 0.3
     typical_height_m: 0.006     # ASSUMED typical lamp/charger cord; OT to verify
-  min_count: 2                  # Gaussians per cell to mark it
+  min_count: 20                 # Gaussians per cell to mark it: ~15x the default, scaled to this splat's density (kitchen splats ~0.3M Gaussians)
 
 plan:
   start: null                   # [x, y] metres in the floor frame: read off out/<run>/occupancy.png (1 m grid)

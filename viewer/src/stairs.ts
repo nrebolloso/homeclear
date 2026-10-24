@@ -37,6 +37,11 @@ export interface ParkPose { x: number; y: number; yaw: number }
 /** IRC R311.7 (riser max 7 3/4 in, variation 3/8 in, tread min 10 in, width 36 in, rail 34-38 in); check local code */
 export const CODE = { riser_max_m: 0.197, riser_var_m: 0.0095, tread_min_m: 0.254, width_min_m: 0.91, rail_m: [0.86, 0.97] as [number, number] };
 const DEFAULT_PITCH = 0.18 / 0.27;
+/** A straight-rail stairlift, typical spec sheet values (ASSUMED until a model is picked): folded depth from the wall
+ *  side, the narrowest flight makers fit, and the installed price range. */
+export const STAIRLIFT = { folded_m: 0.33, min_flight_m: 0.7, usd: [2000, 5000] as [number, number] };
+/** The wall side a stairlift rail runs on: away from the one seen handrail, so that rail stays free for others. */
+export const liftSide = (st: Stair): Side => (st.rails?.left === 'seen' && st.rails?.right !== 'seen' ? 'right' : 'left');
 
 const sub = (a: XY, b: XY): XY => [a[0] - b[0], a[1] - b[1]];
 const dot = (a: XY, b: XY) => a[0] * b[0] + a[1] * b[1];
@@ -260,6 +265,14 @@ export function stairChecks(st: Stair, c: StairCtx): CheckOut[] {
       add('walker', r.label, r.verdict, r.note, { value_m: r.reach_m, limit_m: [0, PARK_REACH_M] });
     }
   }
+  // 8b. a wheelchair can't climb at all: a stairlift (with a second chair waiting at the top), or one-floor living
+  if (c.device === 'wheelchair') {
+    const lift = mine.find(f => f.kind === 'stair_lift'), left = w - STAIRLIFT.folded_m;
+    if (!lift) add('chair', `${st.name}: a wheelchair can't use these stairs`, 'fail', 'a stairlift with a second wheelchair at the top, or a bedroom and bathroom on this floor');
+    else if (w < STAIRLIFT.min_flight_m - ew) add('chair', `${st.name}: ${cm(w)} wide, too narrow for a typical stairlift (${cm(STAIRLIFT.min_flight_m)})`, 'fail', 'a narrow-rail model or a platform lift: ask a fitter to measure');
+    else add('chair', `${st.name}: stairlift, ${cm(left)} of the ${cm(w)} flight left beside it folded`, 'borderline, OT to verify',
+      `the patient must transfer from the chair to the lift seat and back at the top: OT to check the transfer (folded depth ${cm(STAIRLIFT.folded_m)} is a typical spec value)`, { value_m: w, limit_m: [STAIRLIFT.min_flight_m, 9] });
+  }
   // 9. the top: between letting go of the rail and the walker (or the landing floor), something to hold
   const grab = mine.some(f => f.kind === 'grab_bar'), ext = mine.some(f => f.kind === 'rail_extension'), drawn = mine.some(f => f.kind === 'handrail' && !f.surface_m);
   if (has('left') || has('right'))
@@ -308,6 +321,10 @@ export function stairFixes(st: Stair): Intervention[] {
   if ((st.treads_z?.length ?? 0) >= 2) out.push({ id: `stair_nosing:${st.name}`, kind: 'add', label: `Contrasting non-slip strip on each step edge of the ${st.name}`,
     fixture: { name: `${st.name} edge strips`, kind: 'nosing_strip', attach: st.name, xyz: at(mid, 0, pitch(mid)) },
     cost_usd: 40, minutes: 30, effort: 1, product: 'contrasting anti-slip stair nosing tape' });
+  const ls = liftSide(st);
+  out.push({ id: `stair_lift:${st.name}`, kind: 'add', label: `Stairlift on the ${ls} of the ${st.name}, a second wheelchair at the top`,
+    fixture: { name: `${st.name} stairlift`, kind: 'stair_lift', attach: st.name, side: ls, xyz: at(mid, (ls === 'left' ? 1 : -1) * (F.width / 2 - 0.2), pitch(mid) + 0.5) },
+    cost_usd: 3500, minutes: 240, effort: 4, product: `straight-rail stairlift (typical $${STAIRLIFT.usd[0]}–${STAIRLIFT.usd[1]} installed) and a second wheelchair kept upstairs` });
   return out;
 }
 

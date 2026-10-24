@@ -1,15 +1,16 @@
 // The walker, built from primitives at walker.json's exact dimensions (x forward from the user's body centre, y left).
 import * as THREE from 'three';
+import { buildWheelchair } from './wheelchair.ts';
 
 export interface WalkerCfg {
   width_m: number; depth_m: number; handle_height_m: number; user_gap_m: number; leg_radius_m: number; legs: [number, number][];
-  device?: 'walker' | 'cane';
+  device?: 'walker' | 'cane' | 'wheelchair';
 }
 
 const METAL = 0xb8bec6, RED = 0xff3030;
 
-/** The mobility aid for a persona: the walker frame, or a cane (tip = its one "leg"). Same interface either way. */
-export function buildDevice(w: WalkerCfg) { return w.device === 'cane' ? buildCane(w) : buildWalker(w); }
+/** The mobility aid for a persona: the walker frame, a cane (tip = its one "leg") or a wheelchair (wheels = legs). Same interface. */
+export function buildDevice(w: WalkerCfg) { return w.device === 'cane' ? buildCane(w) : w.device === 'wheelchair' ? buildWheelchair(w) : buildWalker(w); }
 
 /** A cane: one shaft from the hand to the tip (walker.json legs[0]). Clearance probes ring the body (width_m across),
  *  since with a cane the person's own shoulders and hips are what brushes the door frame. */

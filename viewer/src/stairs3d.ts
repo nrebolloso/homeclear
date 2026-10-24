@@ -2,7 +2,7 @@
 // additions once applied (a handrail, motion step lights, a second walker at the top). Scene objects only, so they show
 // in the headset. Additions are DESIGNED, not built: teal, labelled, never measured.
 import * as THREE from 'three';
-import { stairFrame, pitchAt, parkedPose, grabSide, CODE, type Stair, type Side, type ParkPose } from './stairs.ts';
+import { stairFrame, pitchAt, parkedPose, grabSide, CODE, STAIRLIFT, type Stair, type Side, type ParkPose } from './stairs.ts';
 import { card } from './reimagine.ts';
 
 const DESIGNED = 0x2fd6c8;
@@ -24,15 +24,18 @@ const lineMat = (color: number, opacity = 0.9) => new THREE.LineBasicMaterial({ 
 /** `device()` builds the patient's walking aid (walker.ts buildDevice) for the one parked at the top. `scanRail(st, side)`
  *  gives the rail for that side copied from the scanned one (stairs.ts mirrorRail), or null where nothing was scanned to
  *  copy: then a drawn tube stands in. The step lights are thin fixtures here; the light itself is the night shader's. */
-export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, scanRail: (st: Stair, side: Side) => THREE.Object3D | null = () => null) {
+export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, scanRail: (st: Stair, side: Side) => THREE.Object3D | null = () => null,
+  chair: () => THREE.Group = device) {
   const root = new THREE.Group(), measured = new THREE.Group(), fixes = new THREE.Group();
   root.add(measured, fixes);
   scene.add(root);
   const lights: THREE.Mesh[] = [], pick: THREE.Mesh[] = [];
+  /** stairlift carriages: ride up and down their rail (update) so the lift reads as one */
+  const carriages: { grp: THREE.Group; place: (s: number) => void; run: number }[] = [];
 
   /** placed: the parked walker moved by hand, by fix id (layout.placed) */
   function build(stairs: Stair[], added: string[], placed: Record<string, ParkPose> = {}) {
-    dispose(measured); dispose(fixes); lights.length = 0; pick.length = 0;
+    dispose(measured); dispose(fixes); lights.length = 0; pick.length = 0; carriages.length = 0;
     for (const st of stairs) {
       const F = stairFrame(st), pitch = pitchAt(st), half = F.width / 2, z = st.treads_z ?? [];
       const P = (s: number, t: number, h: number) => { const [x, y] = F.world(s, t); return new THREE.Vector3(x, y, h); };
@@ -145,6 +148,36 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
         strip.rotation.z = Math.atan2(F.u[1], F.u[0]);
         fixes.add(strip);
       });
+      if (added.includes(`stair_lift:${st.name}`)) {   // rail on the treads by the wall, a seat that rides it, a chair waiting upstairs
+        const side: Side = st.rails?.left === 'seen' && st.rails?.right !== 'seen' ? 'right' : 'left', sg = side === 'left' ? 1 : -1, tw = sg * (half - 0.06);
+        const mat = new THREE.MeshStandardMaterial({ color: DESIGNED, roughness: 0.5 }), seatMat = new THREE.MeshStandardMaterial({ color: 0x1d6b66, roughness: 0.9 });
+        const path = new THREE.LineCurve3(P(-0.25, tw, pitch(0) + 0.12), P(F.run + 0.15, tw, top + 0.12));
+        fixes.add(new THREE.Mesh(new THREE.TubeGeometry(path, 8, 0.035, 8, false), mat));
+        const grp = new THREE.Group(), box = (w: number, d: number, h: number, x: number, y: number, z: number, m = mat) => {
+          const b = new THREE.Mesh(new THREE.BoxGeometry(w, d, h), m); b.position.set(x, y, z); grp.add(b); return b;
+        };
+        // carriage frame: x along the flight, y toward the middle of the stair, z up; the seat faces across the flight
+        const depth = STAIRLIFT.folded_m;
+        box(0.3, 0.12, 0.5, 0, 0.06, 0.4);                  // carriage on the rail
+        box(0.42, 0.42, 0.07, 0, depth, 0.52, seatMat);     // seat (unfolded)
+        box(0.42, 0.06, 0.45, 0, 0.1, 0.8, seatMat);        // back, against the wall side
+        box(0.06, 0.3, 0.05, 0.2, depth, 0.68); box(0.06, 0.3, 0.05, -0.2, depth, 0.68);   // armrests
+        box(0.3, 0.22, 0.03, 0, depth + 0.22, 0.12);        // footplate
+        grp.rotation.z = Math.atan2(F.u[1], F.u[0]);
+        grp.scale.set(1, -sg, 1);   // local y runs from the wall side into the stair (three flips the faces for the mirror)
+        const place = (sc: number) => grp.position.copy(P(sc, tw, pitch(sc)));   // the seat stays level as it rides
+        place(0);
+        fixes.add(grp);
+        carriages.push({ grp, place, run: F.run });
+        const up = chair(), cp = F.world(F.run + 0.55, tw - sg * 0.35);
+        up.position.set(cp[0], cp[1], top);
+        up.rotation.z = Math.atan2(-F.u[1], -F.u[0]);   // facing back toward the lift, to roll up to its seat
+        up.traverse(m => { const mm = (m as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined; if (mm?.color && !m.userData.shadow) { m.userData.mat = mm.clone(); (m as THREE.Mesh).material = m.userData.mat; m.userData.mat.color.setHex(DESIGNED); } });
+        fixes.add(up);
+        const tag = card(['designed, not built', `stairlift (typical size, folds to ${cm(depth)})`, 'second wheelchair waits upstairs'], '#7ff5e8', 'rgba(14,20,28,0.75)', 0.04);
+        tag.position.copy(P(F.run * 0.5, tw - sg * 0.3, pitch(F.run * 0.5) + 1.3));
+        fixes.add(tag);
+      }
       const wid = `stair_walker:${st.name}`;
       if (added.includes(wid)) {
         const w = device(), p = placed[wid] ?? parkedPose(st);   // the device's origin is the user's body: frame ahead, on the landing
@@ -179,6 +212,7 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
     /** per frame: the strips themselves are lit at night, dim by day (the light on the steps is the night shader's,
      *  steady: changing it would regenerate every splat) */
     update(_t: number, night: boolean) {
+      for (const c of carriages) c.place(c.run * (0.5 - 0.5 * Math.cos((2 * Math.PI * _t) / 16)));   // up and back down every 16 s
       for (const s of lights) ((s.material) as THREE.MeshBasicMaterial).color.setHex(night ? 0xfff4d6 : 0xd8d2c4);
     },
     setVisible(on: boolean) { root.visible = on; },
