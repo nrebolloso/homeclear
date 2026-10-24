@@ -222,11 +222,14 @@ scene.add(verifyGroup);
 // ---------- grid overlays: route, hazards, ghosts, fog, taped strips ----------
 const routeLine = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0x55c7ef, size: 3, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
 // ghost walkers as one dot per step (WebGL lines are 1 px: trails hugging the route vanished); red = a toe contact
-const ghostDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ vertexColors: true, size: 5, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
+// one palette: cyan = footsteps (ghosts, heatmap, next-step cloud), orange -> red = bumps and contacts (rings, heat, leg flash), white = hand-rule baseline
+const DOT = (() => { const c = document.createElement('canvas'); c.width = c.height = 32; const x = c.getContext('2d')!; const g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, '#fff'); g.addColorStop(0.6, '#fffd'); g.addColorStop(1, '#fff0'); x.fillStyle = g; x.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(c); })();   // round soft dots, not square pixels
+const ghostDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: DOT, vertexColors: true, size: 5, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
 const hazardGroup = new THREE.Group(), tapeGroup = new THREE.Group();
 // overlays draw after the splats: splats don't write depth, so drawn first they'd be painted over (rings, ghosts, fog would vanish)
-// the hand-rule baseline's ghosts (when a learned model walks): amber, toggled apart, to show where the two disagree
-const handDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ vertexColors: true, size: 4, sizeAttenuation: false, transparent: true, opacity: 0.7, depthWrite: false }));
+// the hand-rule baseline's ghosts (when a learned model walks): white, toggled apart, to show where the two disagree
+const handDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: DOT, vertexColors: true, size: 4, sizeAttenuation: false, transparent: true, opacity: 0.7, depthWrite: false }));
 handDots.visible = false;
 for (const o of [routeLine, ghostDots, handDots, hazardGroup, tapeGroup]) o.renderOrder = 1;
 scene.add(routeLine, ghostDots, handDots, hazardGroup, tapeGroup);
@@ -324,15 +327,15 @@ function drawPlan(r: Eval) {
     const pos: number[] = [], col: number[] = [];
     ghosts.forEach((gh, n) => {
       const z = 0.04 + n * 0.0004;
-      gh.pts.forEach((q, k) => { pos.push(q[0], q[1], z); col.push(...(gh.hit[k] ? [1, 0.15, 0.15] : rgb)); });
+      gh.pts.forEach((q, k) => { pos.push(q[0], q[1], z); col.push(...(gh.hit[k] ? [1, 0.19, 0.19] : rgb)); });
     });
     pts.geometry.dispose();
     pts.geometry = new THREE.BufferGeometry();
     pts.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     pts.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   };
-  dots(ghostDots, r.ghosts, [0.45, 0.7, 1]);
-  dots(handDots, r.hand?.ghosts ?? [], [1, 0.72, 0.3]);
+  dots(ghostDots, r.ghosts, [0.3, 0.79, 0.94]);
+  dots(handDots, r.hand?.ghosts ?? [], [0.92, 0.92, 0.96]);
   for (const c of [...hazardGroup.children]) {
     hazardGroup.remove(c);
     c.traverse(x => {
@@ -1787,8 +1790,8 @@ function setHeroSteps(steps: { xy: XY; side: number; hit: boolean }[], walker?: 
   });
 }
 // ---------- next-step cloud + future trail (third person): where the 200 trips put the mannequin's next step, and its own next steps ----------
-const stepCloud = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0xffe08a, size: 5, sizeAttenuation: false, transparent: true, opacity: 0.6, depthWrite: false, depthTest: false }));
-const futureSteps = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0x3ee6b0, size: 12, sizeAttenuation: false, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false }));
+const stepCloud = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: DOT, color: 0x4cc9f0, size: 6, sizeAttenuation: false, transparent: true, opacity: 0.6, depthWrite: false, depthTest: false }));
+const futureSteps = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: DOT, color: 0x9ff0ff, size: 14, sizeAttenuation: false, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false }));
 stepCloud.renderOrder = futureSteps.renderOrder = 2;   // over the mannequin: the steps it is about to take sit under its body
 scene.add(stepCloud, futureSteps);
 let cloudK = -1, cloudFor: unknown = null;
