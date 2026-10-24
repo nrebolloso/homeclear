@@ -1,76 +1,80 @@
 # Walker mount: Quest 2 controllers on a real walker
 
-The patient pushes their own walker through the scanned home in VR. One controller rides on the walker, so the virtual
-walker (and its leg checks over rugs and cords) goes exactly where the real one does; the other controller is a wand they
-pick up to edit the room and put back to walk. No thumbsticks: hands stay on the walker.
+The patient stands at their own walker, hands on the grips, in the scanned home in VR. There is usually no room to walk
+the home for real, so the **left controller is strapped next to the left grip** and its thumbstick moves them: up/down
+walks along the walker's heading, left/right snap-turns 30 deg. Because it is fixed to the walker, the virtual walker (and
+its leg checks over rugs and cords) points wherever the real one does. The right controller is a wand they lift out of a
+cup holder to edit the room and press the card buttons.
 
-Walker: **Drive Medical 10210-1** (two-button folding walker, 5 in wheels). From the manufacturer's spec sheet (now in
-every config and `physics_ranges.json`): 24 in (0.61 m) wide, **1 in (25.4 mm) aluminium tubes**, 5 in front wheels,
-rear glide caps, 7.5 lb, handles 32-39 in. Depth 17.5 in (0.445 m) is a retailer figure, not on the spec sheet.
+Walker: **Drive Medical 10210-1** (two-button folding walker, 5 in wheels). From the manufacturer's spec sheet (in every
+config and `physics_ranges.json`): 24 in (0.61 m) wide, **1 in (25.4 mm) aluminium tubes**, 5 in front wheels, rear glide
+caps, 7.5 lb, handles 32-39 in, 17 in between the grips, base depth 17.5 in (0.445 m).
 
 ## The layout
 
 | Controller | Where | Job |
 |---|---|---|
-| **Left: the walker controller** | Fixed at the **centre of the top front bar** (the cross-brace between the two sides), ring facing **up**, handle along the bar | Tracks the real walker. Nobody presses anything on it. |
-| **Right: the wand** | In a **bottle cage / cup holder** on the frame, within reach of the right hand | Lifted out: point, pinch/trigger to drag, delete, teleport, press the card buttons. Docked: walk. |
+| **Left: the walker controller** | On the **left upper side bar** (the short silver bar from the left grip toward the front leg), just in front of the grip; handle along the bar pointing forward, **thumbstick and buttons up** within reach of the left thumb | Its stick moves the patient; its tracking turns the virtual walker. Its trigger is ignored. |
+| **Right: the wand** | In a **cup holder** clamped on the right upper side bar, just in front of the right grip | Lifted out: point, pinch/trigger to drag, delete, teleport, press the card buttons. |
 
-Left-handed patient: swap them (`?wand=left`, mount the right controller).
+**Keep the grey front bar clear**: it carries the two red fold buttons and the hinge.
 
-Why the centre of the front bar: a person on a walker looks slightly down and ahead, which is where the headset's
-cameras see the front bar, so tracking holds; the hands stay clear of it (a hand on a handle would cover the ring); and on
-the centre line the walker's middle is straight behind the controller, so calibration is a push forward and a fixed
-offset (off-centre also needs a sideways offset, and a small angle error grows with the distance).
+Left-handed patient: swap them (`?mount=right&wand=left`, strap the right controller by the right grip).
 
-## Parts
-
-Check every clamp's listed tube range includes **25.4 mm (1 in)** before buying.
+## Parts (ordered 2026-10-24)
 
 | Part | For | Notes |
 |---|---|---|
-| 2 reusable hook-and-loop (Velcro) cable straps, about 20-30 cm | Walker controller, today | Two straps around the controller handle and the bar |
-| Rubber pad / shelf liner, a few cm square | Under the controller | Grip, so it can't rotate on the round tube |
-| Bike bottle cage + a handlebar clamp adapter (or two more Velcro straps) | The wand's dock | Wand goes in handle-down; foam or tape inside so it doesn't rattle |
-| Optional: handlebar phone/accessory clamp + a Quest controller adapter (golf-club style), or a **3D-printed clamp** | Walker controller, later | No wobble and the same spot every time, so calibration lasts. Search Printables / Thingiverse for "Quest 2 controller holder" first |
-| 2 AA batteries | One per controller | The battery door is in the handle: the straps must come off without cutting (no zip ties) |
+| Zip ties, the **12 in / 48 lb** ones (LOCKLOCK assorted pack) | Walker controller | Two per fitting. Not releasable: snip them to change the battery, and fit fresh ones |
+| **Adhesive rubber grip tape**, 1 in x 20 ft | Under the walker controller, on the bar only | Wipe the bar with rubbing alcohol first; 2-3 turns. Never on the controller |
+| **Walker cup holder** with clamp for 0.55-1.7 in tubes | The wand's dock | Silicone grips inside hold the handle; angle the phone holder out of the way |
+| AA batteries | One per controller | Spares: with stay-awake on the controllers drain faster |
+| Flush cutters (optional) | Trimming zip-tie tails smooth | So no sharp edge against the hand |
 
 ## Fitting it
 
-1. Fold and unfold the walker once with nothing mounted, and note where the **two fold buttons** and the hinge move.
-   Nothing may block them or ride on a moving part.
-2. Put the rubber pad on the centre of the top front bar. Lay the left controller on it, **ring facing up**, handle along
-   the bar, and strap it at two points. Push it with a finger: it must not rock or turn. Any play shows up as the
-   virtual walker shaking and the leg checks flickering (2 deg of rock moves the far legs about 1 cm, the scale this
-   project measures at).
-3. Fit the bottle cage where the right hand reaches it from the handle without letting go of the walker with the left,
-   and where it can't touch a leg when the walker folds.
-4. Fold and unfold again with everything on, and walk 10 m: nothing slips, rattles or catches a wheel.
+1. Fold and unfold the walker once with nothing mounted, and note where the fold buttons and the hinge move.
+2. Clean the left upper side bar and wrap 2-3 turns of grip tape where the controller will sit.
+3. Lay the left controller on it, handle forward along the bar, **thumbstick up**, close enough that the left thumb
+   reaches the stick without letting go of the grip.
+4. Two zip ties around handle and bar: one near the bottom of the handle, one just below the ring. Firm, not crushing.
+   **Not over the trigger or the grip button, not over the battery door, and the ring uncovered.** Snip the tails flush.
+5. Push it with a finger: it must not rock or turn. Play shows up as the virtual walker shaking and the leg checks
+   flickering (2 deg of rock moves the far legs about 1 cm, the scale this project measures at).
+6. Clamp the cup holder on the right upper side bar in front of the right grip, where it can't touch a leg when folding.
+7. Fold and unfold again with everything on.
 
 ## Headset settings (once)
 
-- **Turn off auto-switching from controllers to hands** (Settings, then the hands / controllers section under movement
-  tracking; names vary by system version). When both controllers sit still, a pause with the wand docked for example,
-  the Quest otherwise switches to hand tracking after a few seconds and the walker controller drops out.
-- Battery: on a long session the controllers drain in hours, not minutes; start with fresh AAs.
+- **Turn off auto-switching from controllers to hands** (Settings, the hands / controllers section under movement
+  tracking; names vary by system version). When both controllers sit still, the Quest otherwise switches to hand tracking
+  after a few seconds and the walker controller drops out.
+- Fresh AAs at the start of a session.
+
+## Using it
+
+Open the viewer with **`?mount=left`** (e.g. `http://localhost:5179/?scene=k4_150k&hz=90&mount=left`).
+
+1. **Stand behind the walker, facing the way it points, and press ENTER VR.** The app takes that moment to line the
+   controller up with the walker: the strap never holds it exactly straight.
+2. Left stick **up/down** walks forward/back along the walker's heading (you can look around while you push); **left/right**
+   snap-turns 30 deg once per flick. You can also turn the real walker: the virtual one turns with it.
+3. If the virtual walker ever points off from the real one (the controller shifted on the bar), stand behind it facing
+   its way and press the card's **Line up the walker** button with the wand.
 
 ## Software: what exists and what doesn't
 
 | Piece | Status |
 |---|---|
-| Wand: point, drag, twist, hold-to-delete, teleport; card buttons (dangers tour, night walk, safer room) | Built, `viewer/src/xr.ts` (tested in `npm run e2e:xr`) |
+| `?mount=left`: stick walks along the walker, snap-turns; virtual walker follows the real one; line-up at entry and on the card; mounted trigger ignored | Built, `viewer/src/xr.ts` (`npm run e2e:xr`, emulated) |
+| Wand: point, drag, twist, hold-to-delete, teleport; card buttons (dangers tour, night walk, safer room, compare) | Built |
 | Hand pinch as a stand-in for the trigger | Built |
-| **Virtual walker follows the walker controller** | **Not built.** Today the virtual walker follows the head. |
-| **Calibration**: push the walker straight forward ~1 m; heading from the push, the controller's height and its offset to the walker's centre from the frame size | **Not built** |
-| **Dock detection**: wand still at a fixed spot relative to the walker controller = walk mode, lifted = edit mode | **Not built** |
-
-All three can be written and tested now with IWER's emulated controllers (`?emulate=quest2`): script the left controller
-as a pushed walker and the right one into and out of a dock pose. They wait on Juan's port of the VR marking onto
-`xr.ts`, so the two don't collide. The feel test needs the real walker and charged controllers.
+| Juan's planning menu opens on a **left-stick click** | Easy to press by accident on a mounted stick: worth moving to a button |
+| Dock detection (wand in its holder = walk mode, lifted = edit mode) | Not built |
+| The feel on the real walker | Needs the parts and charged controllers |
 
 ## Still to measure (tape)
 
-- Front-to-rear leg depth (the 17.5 in is retailer-only)
 - Rear glide cap diameter
 - Handle height, set for this patient
-- After fitting: the controller's position on the bar (height above the floor, distance behind the front legs) as a
-  check on the calibration
+- After fitting: where the controller sits (height, distance behind the grip), as a check on the virtual walker's placement
