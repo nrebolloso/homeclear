@@ -1,4 +1,4 @@
-// Record the planner / personalization proof videos (proof/demo/): node e2e/record_planner.ts <planner|planner_vs_judge|personalization> <out.mp4> [url]
+// Record the planner / personalization proof videos (proof/demo/): node e2e/record_planner.ts <planner|planner_vs_judge|personalization|ghosts_kitchen> <out.mp4> [url]
 // Needs `npm run dev` (5179), ffmpeg, and the published planner search + persona (planner/publish.sh, worldmodel/persona.py).
 import { CHROME } from './env.ts';
 import { chromium } from 'playwright-core';
@@ -15,6 +15,12 @@ const SHOTS: Record<string, { panel: string; run: string }> = {
   // a held-out PhysioNet walker as "the user": the embedding is fitted live from walker + head, then "Re-plan for me"
   personalization: { panel: 'gaitfitpanel', run: `await game.gait.play(8); document.getElementById('planfixpanel').scrollIntoView();
     await game.gait.replan(); await new Promise(r => setTimeout(r, 6000))` },
+  // the world model life-size (demo mode: pass ...&demo=1): two gait styles from the fridge, a swap, the futures fan near the
+  // mat, then a month of trips as scanned and after the planner's fixes
+  ghosts_kitchen: { panel: 'wmghostpanel', run: `const W = game.wmghosts, wait = ms => new Promise(r => setTimeout(r, ms));
+    await W.twoStyles('P07 (training)'); await wait(11000); await W.twoStyles('P10 (training)'); await wait(3000);
+    await W.twoStyles('P10 (training)'); game.setFly(-0.9, -0.6, 1.7, 54, -40); await wait(8000);
+    await W.month('before'); await wait(21000); await W.month('after'); await wait(21000); W.stop(); await game.planfix.goto(game.planfix.layouts().scan)` },
 };
 const S = SHOTS[shot];
 if (!S || !out) { console.error(`usage: record_planner.ts <${Object.keys(SHOTS).join('|')}> <out.mp4> [url]`); process.exit(2); }

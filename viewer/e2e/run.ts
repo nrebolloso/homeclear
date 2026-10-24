@@ -339,6 +339,24 @@ try {
     check('planner + gait: no page errors', pk.errors.length === 0, pk.errors.join(' | ') || 'none');
     await pk.p.close();
   }
+  // 14. the world model life-size in the kitchen (wmghosts.ts): two gait styles walk differently, the futures fan has 30
+  // labelled futures, a month before fixes has more incidents than after
+  if (existsSync(`${ROOT}viewer/public/gait/styles.json`) && existsSync(`${ROOT}viewer/public/planner/kitchen4_lighter/search.json`)) {
+    const wg = await open('kitchen4_lighter');
+    const W = (f: string) => G(wg.p, f);
+    const two = await W("await game.planfix.ready; await game.wmghosts.twoStyles('P07 (training)'); await new Promise(r => setTimeout(r, 7000)); const s = game.wmghosts.state(); " +
+      "const [a, b] = s.actors; const n = Math.min(a.heels.length, b.heels.length); let d = 0; for (let k = 0; k < n; k++) d += Math.hypot(a.heels[k][0] - b.heels[k][0], a.heels[k][1] - b.heels[k][1]) / n; " +
+      "return { steps: [a.steps, b.steps], d, caught: [a.caught.length, b.caught.length], fan: s.fan, fps: game.fps }");
+    check('world model ghosts: two gait styles place their feet differently and flash on what they catch', two.d > 0.05 && two.caught[0] + two.caught[1] > 0,
+      `steps ${two.steps.join(' vs ')}, mean heel gap ${(two.d * 100).toFixed(1)} cm, caught ${two.caught.join(' / ')}; ${two.fps.toFixed(1)} fps`);
+    check('world model ghosts: futures fan of 30 labelled futures at each heel strike', two.fan.n === 30, JSON.stringify(two.fan));
+    const mo = await W("const run = async w => { await game.wmghosts.month(w); await new Promise(r => setTimeout(r, 22000)); const m = game.wmghosts.state().month; " +
+      "return { n: m.trips, inc: Object.values(m.counts).reduce((a, b) => a + b, 0), risk: m.expected.risk }; }; const b = await run('before'), a = await run('after'); game.wmghosts.stop(); return { b, a }");
+    check('world model ghosts: a month of 60 trips, fewer incidents after the fixes', mo.b.n === 60 && mo.a.n === 60 && mo.a.inc < mo.b.inc,
+      `before ${mo.b.inc} incidents (evaluator ${mo.b.risk.toFixed(1)}/month) -> after ${mo.a.inc} (${mo.a.risk.toFixed(1)})`);
+    check('world model ghosts: no page errors', wg.errors.length === 0, wg.errors.join(' | ') || 'none');
+    await wg.p.close();
+  }
 } finally {
   await browser.close();
   writeFileSync(new URL('results.json', import.meta.url), JSON.stringify(results, null, 1));

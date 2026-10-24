@@ -77,7 +77,7 @@ export function fitSteps(m: Persona, obs: { x: number[]; y: number[] }[], e: num
   return e;
 }
 
-export interface GaitDeps { scene: THREE.Scene; walker: () => { width_m: number; depth_m: number; user_gap_m: number }; replan: (wm: WorldModel, label: string) => Promise<unknown> }
+export interface GaitDeps { scene: THREE.Scene; walker: () => { width_m: number; depth_m: number; user_gap_m: number }; replan: (wm: WorldModel, label: string, popWm: WorldModel) => Promise<unknown> }
 const $ = (id: string) => document.getElementById(id)!;
 
 export function createGaitFit(D: GaitDeps) {
@@ -204,7 +204,7 @@ export function createGaitFit(D: GaitDeps) {
   }
   const shift = () => { const w = D.walker(); return w.user_gap_m + w.depth_m / 2 - M!.mean_gap_m; };
   /** the planner rerun with this person's world model (and, for comparison, the same network at the population mean) */
-  const replan = () => (M ? D.replan(toWorldModel(M, e, shift()), who || 'you') : Promise.resolve(null));
+  const replan = () => (M ? D.replan(toWorldModel(M, e, shift()), who || 'you', toWorldModel(M, M.e_pop, shift())) : Promise.resolve(null));
   const state = () => {
     const tail = hist.slice(-10), m = (k: 'pop' | 'fit', q: 'heel' | 'head' | 'walker') => tail.reduce((a, h) => a + h[k][q], 0) / (tail.length || 1);
     return { loaded: !!M, playing, steps: hist.length, seconds: tsec, e: [...e], map: trail[trail.length - 1],

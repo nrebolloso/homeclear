@@ -48,8 +48,15 @@ fitted from walker + head only, and every later step is scored.
 
 Personalization learns what the headset sees (head and walker) and does not improve heel placement. Even an oracle fit
 that is shown the heels doesn't help (3.81 vs 3.82 cm median), so heel style is not identifiable from this data.
-Closed-loop rollouts are about neutral (heel lateral error 2.80 vs 2.94 cm). Re-plans with a fitted embedding change
-the fix ranking through the walker and head, not the feet.
+Closed-loop rollouts are about neutral (heel lateral error 2.80 vs 2.94 cm).
+
+Does a style change the kitchen plan? No (`planner/persona_effect.py`, 15 embeddings, 2,000 common-seed trips each):
+- Foot placement does move: step length runs 34.5–42.1 cm, and heels land up to 22 cm from the mean's.
+- Contacts barely move (1.09–1.18/month vs 1.12 for the mean re-seeded). Snags don't move at all.
+- The best option and the fix order are the same for 15/15 people.
+- "Re-plan for me" is therefore hidden in demo mode. It compares the same network at the mean vs the fitted embedding.
+
+The life-size ghosts (`game.wmghosts`: `twoStyles(name)`, `month('before' | 'after')`, `stop()`, `state()`) are scene objects; see BLOCKERS 12.
 
 ## Our own walker videos
 

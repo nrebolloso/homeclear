@@ -5,7 +5,7 @@
 // thousands of layouts seeded with theirs and the top 5 are confirmed with real rollouts (planworker.ts).
 import * as THREE from 'three';
 import { fromLayout, toLayout, changed, cost, type PlanLayout, type PlannerCfg } from './planner.ts';
-import { poseAt } from './reimagine.ts';
+import { card, poseAt } from './reimagine.ts';
 import type { Init } from './evaluate.ts';
 import type { WorldModel } from './worldmodel.ts';
 import type { Layout, Pose } from './grid.ts';
@@ -89,16 +89,19 @@ export function createPlanFix(D: PlanFixDeps) {
 
   // ---- fan of futures: the frame's 12 imagined trips, footsteps joined, contacts red
   function showFan(gs: { pts: number[][]; hit: boolean[] }[]) {
-    for (const o of [...fan.children]) { fan.remove(o); (o as THREE.Line).geometry.dispose(); }
+    for (const o of [...fan.children]) { fan.remove(o); if (o instanceof THREE.Sprite) o.material.dispose(); else (o as THREE.Line).geometry.dispose(); }
+    // life-size in the kitchen, not only the side chart: each imagined trip's heel strikes, green clean / red if it caught a toe
     gs.forEach((g, n) => {
-      const z = 0.05 + n * 0.0005;
-      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(g.pts.map(p => new THREE.Vector3(p[0], p[1], z))),
-        new THREE.LineBasicMaterial({ color: 0x4dc9f0, transparent: true, opacity: 0.45, depthTest: false }));
-      fan.add(line);
-      const hits = g.pts.filter((_, k) => g.hit[k]);
-      if (hits.length) fan.add(new THREE.Points(new THREE.BufferGeometry().setFromPoints(hits.map(p => new THREE.Vector3(p[0], p[1], z + 0.002))),
-        new THREE.PointsMaterial({ color: 0xff3030, size: 0.05, depthTest: false })));
+      const z = 0.03 + n * 0.0005, bad = g.hit.some(h => h), col = bad ? 0xff3030 : 0x3ddc84;
+      const v = g.pts.map(p => new THREE.Vector3(p[0], p[1], z));
+      fan.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(v), new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.7, depthTest: false })));
+      fan.add(new THREE.Points(new THREE.BufferGeometry().setFromPoints(v), new THREE.PointsMaterial({ color: col, size: bad ? 0.07 : 0.045, transparent: true, opacity: 0.85, depthTest: false })));
     });
+    const mid = gs[0]?.pts[Math.floor(gs[0].pts.length / 2)];
+    if (mid) {
+      const n = gs.filter(g => g.hit.some(h => h)).length, tag = card([`imagined (world model): ${gs.length} trips in this layout`, `${n} caught a toe · green = clean`], '#bff3d4');
+      tag.position.set(mid[0], mid[1], 1.9); tag.renderOrder = 4; fan.add(tag);
+    }
   }
 
   /** glide the room's objects from one planner layout to the next (visual only; no re-plan until the end) */
@@ -187,15 +190,15 @@ export function createPlanFix(D: PlanFixDeps) {
 
   /** "Re-plan for me": the room as it is now (usually the planner's choice) re-run with one person's world model, then the
    *  same critic search from it, confirmed with that model. Shows which fixes change for them. */
-  async function replanFor(wm: WorldModel, who: string, n = 3000) {
+  async function replanFor(wm: WorldModel, who: string, n = 3000, popWm?: WorldModel) {
     await ready;
     if (!data || !critic) return null;
-    workers.me?.terminate(); delete workers.me;
+    workers.me?.terminate(); delete workers.me; workers.mepop?.terminate(); delete workers.mepop;
     const cur = fromLayout(S(), cfg(), D.base, D.layout());
     $('pfresult').textContent = `re-planning with ${who}'s gait…`;
-    const [{ scores: [pop] }, r] = await Promise.all([ask({ type: 'score', pls: [cur] }), ask({ type: 'live', judge: cur, scan: data.scanned.layout, n }, 'me', wm)]);
+    const [{ scores: [pop] }, r] = await Promise.all([(popWm ? ask({ type: 'score', pls: [cur] }, 'mepop', popWm) : ask({ type: 'score', pls: [cur] })), ask({ type: 'live', judge: cur, scan: data.scanned.layout, n }, 'me', wm)]);
     const diff = changed(cfg(), cur, r.best.pl), same = !diff.length;
-    $('pfresult').innerHTML = `<b>Re-planned for ${who}</b><br>current layout: ${range(pop)}/month for the average walker, <b>${range(r.judge.s)}</b> with this gait<br>` +
+    $('pfresult').innerHTML = `<b>Re-planned for ${who}</b><br>current layout: ${range(pop)}/month for the average walker${popWm ? ' (same network, mean embedding)' : ''}, <b>${range(r.judge.s)}</b> with this gait<br>` +
       (same ? 'No layout beat the current one for this gait: the fixes stay the same.' :
         `for this gait: <b class="delta-good">${range(r.best.s)}</b>/month after changing <b>${diff.join(', ')}</b>`) +
       `<br><small>critic (trained on the average walker) proposes; ${r.searched.toLocaleString('en-US')} layouts, its top 5 re-run with this person's world model</small>`;
@@ -228,5 +231,11 @@ export function createPlanFix(D: PlanFixDeps) {
         clearance_gain_m: 0, cost_usd: it?.usd, minutes: it?.minutes, effort: it?.effort };
     }).sort((a, b) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction));
   }
-  return { ready, play, apply, improve, replanFor, rankedFixes, stop: () => { playing = false; }, state, score: (pls: PlanLayout[]) => ask({ type: 'score', pls }).then(r => r.scores) };
+  /** wmghosts.ts: the room as it is now / the scan / the chosen option, the evaluator's trips with one world model, and a
+   *  glide + commit to a planner layout (before / after) */
+  const layouts = () => (data ? { now: fromLayout(S(), cfg(), D.base, D.layout()), scan: data.scanned.layout, chosen: data.pareto[data.options[0].k].layout } : null);
+  const imagine = (pl: PlanLayout, wm: WorldModel, n: number, nf = 0) => ready.then(() => ask({ type: 'imagine', pl, wm, n, nf }));
+  async function goto(pl: PlanLayout) { await glide(fromLayout(S(), cfg(), D.base, D.layout()), pl, 900); await D.commit(toLayout(S(), cfg(), D.base, pl), fixesOf(pl)); }
+  return { ready, play, apply, improve, replanFor, rankedFixes, stop: () => { playing = false; }, state, score: (pls: PlanLayout[]) => ask({ type: 'score', pls }).then(r => r.scores),
+    layouts, imagine, goto };
 }

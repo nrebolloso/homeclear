@@ -6,6 +6,7 @@ import { check, cost, score, type PlanLayout, type PlannerCfg } from './planner.
 import { rng } from './sim.ts';
 import type { Init } from './evaluate.ts';
 import { worldFootprint, type Pose } from './grid.ts';
+import { imagine } from './imagine.ts';
 
 export interface Critic { spec: { chairs: string[]; mat: string[]; cord: string[]; nightlight: string[] }; x_mean: number[]; x_std: number[]; x_min: number[]; x_max: number[]; y_mean: number; y_std: number; y_range: [number, number];
   layers: { w: number[][]; b: number[] }[] }
@@ -91,4 +92,5 @@ self.onmessage = (e: MessageEvent) => {
   if (m.type === 'init') ({ init: S, cfg, base, walker, critic } = m);
   else if (m.type === 'score') postMessage({ id: m.id, scores: m.pls.map((pl: PlanLayout) => ({ check: check(S, cfg, base, pl), ...slim(pl) })) });
   else if (m.type === 'live') postMessage({ id: m.id, ...live(m.judge, m.scan, m.n ?? 4000, m.lam ?? cfg.search?.live_effort_weight ?? 2) });
+  else if (m.type === 'imagine') postMessage({ id: m.id, ...imagine(S, cfg, base, m.pl, walker, m.wm, m.n, m.nf, m.ahead) });   // wmghosts.ts
 };

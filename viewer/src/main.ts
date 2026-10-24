@@ -46,6 +46,7 @@ import { plainSpot, tourStand } from './xrtour.ts';
 import { createXRComparison } from './xrcompare.ts';
 import { createPlanFix } from './planfix.ts';
 import { createGaitFit } from './gaitfit.ts';
+import { createWmGhosts } from './wmghosts.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 // model and scene text (Cosmos Reason notes, hazard details) goes into innerHTML escaped; same as report.ts's, which can't
@@ -835,10 +836,17 @@ $('pfplay').onclick = () => planfix.play();
 $('pflive').onclick = () => planfix.improve();
 game.planfix = planfix;
 // ---------- gait personalization (gaitfit.ts): a per-person gait embedding fitted from walker + head; "Re-plan for me" ----------
-const gait = createGaitFit({ scene, walker: () => walkerCfg, replan: (wm, who) => planfix.replanFor(wm, who) });
+const gait = createGaitFit({ scene, walker: () => walkerCfg, replan: (wm, who, pop) => planfix.replanFor(wm, who, 3000, pop) });
 $('gfplay').onclick = () => gait.play(+($('gfspeed') as HTMLSelectElement).value);
 $('gfreplan').onclick = () => gait.replan();
 game.gait = gait;   // VR: feed game.gait.observe() per heel strike, hang game.gait.panel / show game.gait.ghost (HANDOFF_GAIT.md)
+// ---------- world model in the kitchen (wmghosts.ts): two gait styles life-size, futures fan, predicted self, a month of trips ----------
+const wmg = createWmGhosts({ scene, walker: () => walkerCfg, planfix, view: () => game.setFly(-0.7, -2.3, 2.3, 55, -36) });
+$('wgstyles').onclick = () => wmg.twoStyles();
+$('wgstyle').onchange = () => wmg.twoStyles();
+$('wgmonth').onclick = () => wmg.month();
+$('wgstop').onclick = () => wmg.stop();
+game.wmghosts = wmg;
 
 // ---------- stairs (stairs.ts, stairs3d.ts): measured against code and this patient; rail, step lights, a walker at the top ----------
 // From config game.stairs (stage 12) and/or marked here with three clicks and measured from the splat (kept per scene in
@@ -1916,6 +1924,7 @@ function step(dt: number, t: number) {
   if (xr.presenting()) return xrFrame(dt, t);
   if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
   tourStep(dt);
+  wmg.update(dt);
   const wb = explore.parked ?? body;
   walker.group.position.set(wb.x, wb.y, 0);
   walker.group.rotation.z = wb.yaw;

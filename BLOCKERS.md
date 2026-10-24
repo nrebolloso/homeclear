@@ -39,3 +39,7 @@
 11. **Our own walker videos for gait personalization.** Film yourself and teammates with the walker and write `steps.csv` as
    described in `worldmodel/walker_videos.py`. Then run `python -m worldmodel.persona --extra <dir>`. Until then the embedding is
    trained on PhysioNet only.
+12. **VR: the 3D ghosts are untested in a headset (VR team).** `game.gait.ghost` and the life-size world-model ghosts
+   (`game.wmghosts`: two gait styles, futures fan, predicted self, month replay) are scene objects, so they should render in
+   WebXR, but nobody has looked at them on a Quest 2. Labels are sprites sized for a desktop camera, and the month replay
+   draws 3 instanced meshes of 60. Check legibility and fps in the headset, and bind `twoStyles()` / `month()` from `xr.ts`.
