@@ -45,7 +45,7 @@ grid:
 plan:
   start: null                   # [x, y] metres in the floor frame: read off out/<run>/occupancy.png (1 m grid)
   goal: null                    # null = auto (two far-apart reachable points); or read off occupancy.png
-  walker_width_m: 0.66
+  walker_width_m: 0.61
   preferred_clearance_m: 0.30   # path prefers this much room on each side when it can
   clearance_weight: 5.0
 

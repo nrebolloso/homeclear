@@ -6,6 +6,9 @@ import { rollouts, type Persona, type Risk, type Heat, type Ghost } from './sim.
 import type { StepModel } from './stepmodel.ts';
 import type { WorldModel } from './worldmodel.ts';
 import { runChecks, type Fixture, type TransferRules, type EmsRules, type BodyFacts, type CheckOut } from './checks.ts';
+import { objectRisk, type BatchResults, type ObjEvent } from './objrisk.ts';
+// shortcut: one batch, run on kitchen4_lighter's chairs and mat, serves every scene; rerun the batch per scene when it matters
+import batch from '../../physics/batch_results.json' with { type: 'json' };
 import { stairChecks, type Stair, type Side, type WalkerDims } from './stairs.ts';
 import { doorChecks, doorFixes, doorGain, doorOnRoute, needWidth, type Door } from './doors.ts';
 
@@ -57,6 +60,8 @@ export interface Eval {
   heat?: Heat; steps: { xy: XY; side: number; hit: boolean }[];
   /** transfers, reach, grab bars, stretcher access, phone after a fall (checks.ts) */
   checks: CheckOut[];
+  /** simulated object events per route: mat slides, chair tips (objrisk.ts, from the offline physics batch) */
+  objects: ObjEvent[];
 }
 
 
@@ -71,7 +76,7 @@ export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: nu
       for (const c of polyCells(g, worldFootprint(o, lay.poses[k]))) if (comps[c]) names[comps[c]] = o.name;
   });
   const lights = O.flatMap((o, k) => (o.kind === 'nightlight' && !lay.poses[k].removed ? [{ x: lay.poses[k].x, y: lay.poses[k].y, r: o.light_radius_m ?? 1.5 }] : []));
-  const out = { per_month: 0, per_month_lo: 0, per_month_hi: 0, routes: [], sel, hazards: [], ghosts: [], steps: [] } as unknown as Eval;
+  const out = { per_month: 0, per_month_lo: 0, per_month_hi: 0, routes: [], sel, hazards: [], ghosts: [], steps: [], objects: [] } as unknown as Eval;
   const paths: XY[][] = [];
   S.routes.forEach((rd, k) => {
     const P = plan(g, L, routeStart(rd, O, lay.poses), rd.goal, S.plan);
@@ -87,6 +92,8 @@ export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: nu
       { height_err_m: S.rules.margin_m.height, heat: opts.heat && k === sel, world: S.worldModel });
     Object.assign(summary, { per_month: R.per_month, lo: R.per_month_lo, hi: R.per_month_hi });
     out.per_month += R.per_month; out.per_month_lo += R.per_month_lo; out.per_month_hi += R.per_month_hi;
+    out.objects.push(...objectRisk(batch as unknown as BatchResults, rd.name, P.xy, O.flatMap((o, j) => (lay.poses[j].removed ? [] : [{ name: o.name, kind: o.kind, poly: worldFootprint(o, lay.poses[j]) }])),
+      S.persona.speed_mps ?? 0.5, rd.trips_per_night * S.risk.days_per_month, S.plan.walker_width_m / 2, S.risk.path_offset_sd_m));
     if (k !== sel) return;
     out.ghosts = R.ghosts; out.heat = R.heat; out.steps = R.steps;
     out.hazards = routeHazards(g, L, P, S.plan.walker_width_m, S.rules.clearance_margin_m, S.rules.bump_min_m, comps).map(h => ({

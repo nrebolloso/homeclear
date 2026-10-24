@@ -56,18 +56,23 @@ export function columns(p: Float32Array, stride = 3): { c: [number, number, numb
 
 /** The most curled corner of a mat, from the bump layer: highest cell within 15 cm of a corner (inside the mat) above
  *  the mat's median height. null if no corner stands curl_min_m above the rest. */
-export function curledCorner(g: GridMeta, bump: Float32Array, poly: XY[], curlMin: number) {
-  const cells = polyCells(g, poly).map(k => { const [x, y] = cellXY(g, k); return { x, y, h: bump[k] }; });
-  if (!cells.length) return null;
-  const med = cells.map(c => c.h).sort((a, b) => a - b)[cells.length >> 1];
+export function curledCorner(points: Float32Array, poly: XY[], curlMin: number) {
+  // the mat's own splat points (pivot-local, like poly): the bump layer has movable rugs cut out, so it can't show a curl
+  const pts: { x: number; y: number; h: number }[] = [];
+  for (let i = 0; i + 2 < points.length; i += 3) pts.push({ x: points[i], y: points[i + 1], h: points[i + 2] });
+  if (!pts.length) return null;
+  const q = (hs: number[], f: number) => hs.sort((a, b) => a - b)[Math.floor(f * (hs.length - 1))];
+  const med = q(pts.map(c => c.h), 0.5);
   let best: { corner: number; lift_m: number; size_m: number } | null = null;
   poly.forEach(([cx, cy], k) => {
-    const near = cells.filter(c => Math.hypot(c.x - cx, c.y - cy) < 0.15);
-    if (!near.length) return;
-    const top = Math.max(...near.map(c => c.h)) - med;
-    // flap size: how far from the corner the raised cells reach (at least 6 cm, at most 20)
-    const reach = Math.max(0, ...cells.filter(c => c.h - med > top / 3 && Math.hypot(c.x - cx, c.y - cy) < 0.25).map(c => Math.hypot(c.x - cx, c.y - cy)));
-    if (top >= curlMin && (!best || top > best.lift_m)) best = { corner: k, lift_m: top, size_m: Math.min(0.2, Math.max(0.06, reach * Math.SQRT2)) };
+    const near = pts.filter(c => Math.hypot(c.x - cx, c.y - cy) < 0.06);   // the tip: a curl rises toward the corner
+    if (near.length < 5) return;
+    const top = q(near.map(c => c.h), 0.9) - med;   // 90th percentile, not max: single floaters are splat noise
+    // flap size: how far from the corner the raised points reach (at least 6 cm, at most 20)
+    const reach = Math.max(0, ...pts.filter(c => c.h - med > top / 3 && Math.hypot(c.x - cx, c.y - cy) < 0.25).map(c => Math.hypot(c.x - cx, c.y - cy)));
+    // never past half of either adjacent edge, or the cut-down slab turns inside out on a small mat
+    const n = poly.length, edge = Math.min(Math.hypot(poly[(k + 1) % n][0] - cx, poly[(k + 1) % n][1] - cy), Math.hypot(poly[(k + n - 1) % n][0] - cx, poly[(k + n - 1) % n][1] - cy));
+    if (top >= curlMin && (!best || top > best.lift_m)) best = { corner: k, lift_m: top, size_m: Math.min(0.2, edge / 2, Math.max(0.06, reach * Math.SQRT2)) };
   });
   return best as { corner: number; lift_m: number; size_m: number } | null;
 }
@@ -135,7 +140,7 @@ export function createWorld(I: WorldInit) {
       s.mass_kg = pick(R.mass_per_m2_kg, u) * w * d; s.floor_friction = pick(R.floor_friction, u);
       // the curled corner (if the splat shows one) is cut off the slab and hung on a hinge
       const world0 = o.footprint.map(([x, y]) => [x + o.pivot[0], y + o.pivot[1]] as XY);
-      const curl = curledCorner(g, I.bump, world0, R.curl_min_m);
+      const curl = curledCorner(o.points, o.footprint, R.curl_min_m);
       let poly = o.footprint.map(q => [q[0], q[1]] as XY);   // pivot-local; the body sits at the pose
       let tri: XY[] | null = null;
       if (curl) {
