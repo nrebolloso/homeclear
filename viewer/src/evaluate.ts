@@ -78,7 +78,8 @@ export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: nu
     if (o.layer === 'bump' && !lay.poses[k].removed)
       for (const c of polyCells(g, worldFootprint(o, lay.poses[k]))) if (comps[c]) names[comps[c]] = o.name;
   });
-  const lights = O.flatMap((o, k) => (o.kind === 'nightlight' && !lay.poses[k].removed ? [{ x: lay.poses[k].x, y: lay.poses[k].y, r: o.light_radius_m ?? 1.5 }] : []));
+  const lights = [...O.flatMap((o, k) => (o.kind === 'nightlight' && !lay.poses[k].removed ? [{ x: lay.poses[k].x, y: lay.poses[k].y, r: o.light_radius_m ?? 1.5 }] : [])),
+    ...placedFixtures(S.interventions, lay).flatMap(f => (f.light_r && f.xyz ? [{ x: f.xyz[0], y: f.xyz[1], r: f.light_r }] : []))];   // added nightlights (lights.ts)
   const out = { per_month: 0, per_month_lo: 0, per_month_hi: 0, routes: [], sel, hazards: [], ghosts: [], steps: [], objects: [] } as unknown as Eval;
   const paths: XY[][] = [];
   S.routes.forEach((rd, k) => {
