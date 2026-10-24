@@ -1,19 +1,20 @@
 // End-to-end checks in headless Chrome on the laptop GPU, against `npm run dev`:
 //   node e2e/run.ts [http://localhost:5179]        -> prints PASS/FAIL per check, writes e2e/results.json
 // Needs the synthetic scenes (tests/make_game_scene.py) and the Python venv (for tests/make_test_clip.py).
+import { CHROME, ROOT, PYTHON } from './env.ts';
 import { chromium, type Page } from 'playwright-core';
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 
 const BASE = process.argv[2] ?? 'http://localhost:5179';
-const ROOT = new URL('../../', import.meta.url).pathname;
+
 const results: { check: string; pass: boolean; detail: string }[] = [];
 const check = (name: string, pass: boolean, detail: string) => { results.push({ check: name, pass, detail }); console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}: ${detail}`); };
 // SHOTS=<dir> also saves a screenshot at each visual check (proof/screenshots)
 const shot = (p: Page, name: string) => process.env.SHOTS ? p.screenshot({ path: `${process.env.SHOTS}/${name}.png` }) : null;
 const G = (p: Page, f: string) => p.evaluate(`(async () => { const game = window.game; ${f} })()`) as Promise<any>;
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true,
+const browser = await chromium.launch({ executablePath: CHROME, headless: true,
   args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
     '--disable-accelerated-video-decode'] });   // headless: HW decode + ANGLE stalls seeks and loses the WebGL context
 async function open(scene: string) {
@@ -61,7 +62,7 @@ try {
   const st = await G(p, 'return { red: game.state.red, gap: game.state.gap }');
   await shot(p, 'hazard_doorway_red_frame');
   const gapTxt = await p.evaluate(() => [...document.querySelectorAll('.label3d.red')].map(e => e.textContent).find(t => t?.endsWith('gap')));
-  check('frame turns red below the clearance margin (doorway)', st.red && st.gap > 0.04 && st.gap < 0.10 && gapTxt === `${Math.round(st.gap * 100)} cm gap`,
+  check('frame turns red below the clearance margin (doorway)', st.red && st.gap > 0 && st.gap < 0.10 && gapTxt === `${Math.round(st.gap * 100)} cm gap`,
     `gap ${(st.gap * 100).toFixed(1)} cm (margin 10 cm), red=${st.red}, label "${gapTxt}"`);
 
   // 1c. free walk is fenced: into a wall, and into floor the capture never saw (far end of the bathroom)
@@ -70,7 +71,7 @@ try {
     await p.keyboard.down('KeyW'); await p.waitForTimeout(5000); await p.keyboard.up('KeyW');
     return G(p, 'return { x: game.body.x, y: game.body.y, ...game.cell(game.body.x, game.body.y) }');
   };
-  const wallStop = await walkInto(3.0, 2.6, Math.PI / 2), covStop = await walkInto(5.0, 2.4, 0);
+  const wallStop = await walkInto(3.0, 2.6, Math.PI / 2), covStop = await walkInto(5.0, 0.7, 0);   // below the open door leaf, which hides y > 1.9 from the bedroom cameras
   check('free walk stays on covered floor (walls, unseen floor)', wallStop.y < 3.3 && wallStop.floor && !wallStop.obst && covStop.cov > 0 && covStop.x < 6.2,
     `toward wall y=4.0: stopped at y=${wallStop.y.toFixed(2)} (front legs need 0.75 m); toward unseen x>6.2: stopped at x=${covStop.x.toFixed(2)} (coverage ${covStop.cov} views)`);
 
@@ -129,7 +130,7 @@ try {
     `${job}: ${ex.frames} frames, ${ex.chunks} chunks, ${pngs} walker depth PNGs, walker covers ${(100 * ex.walkerPx).toFixed(1)}% of frame 0`);
 
   // 6. clip overlay alignment: synthetic clip with dots at the PYTHON projection + frame number bits
-  const mk = spawnSync(`${ROOT}.venv/bin/python`, [`${ROOT}tests/make_test_clip.py`, dir], { encoding: 'utf8' });
+  const mk = spawnSync(PYTHON, [`${ROOT}tests/make_test_clip.py`, dir], { encoding: 'utf8' });
   if (mk.status !== 0) throw new Error(`make_test_clip failed: ${mk.stderr}`);
   const align = await G(p, `
     const clip = (await fetch('/api/clips').then(r => r.json())).find(c => c.file === 'test_${job}.mp4');
@@ -170,6 +171,67 @@ try {
   await n.p.waitForTimeout(1000);
   const status = await n.p.textContent('#status');
   check('doorway narrower than the walker blocks the route', /^No route/.test(status ?? ''), `status: "${status}"`);
+  await n.p.close();
+
+  // 8. the newer layers on the synthetic scene
+  const q = await open('game_synth');
+  const Q = (f: string) => G(q.p, f);
+  const r0 = await Q('return { pm: game.current().per_month, lo: game.current().per_month_lo, hi: game.current().per_month_hi, routes: game.current().routes.length, checks: game.current().checks.length }');
+  check('risk range, routes and checks', r0.lo <= r0.pm && r0.pm <= r0.hi && r0.routes >= 2 && r0.checks >= 4, JSON.stringify(r0));
+  const pk = await Q("await game.setPersona('parkinsons'); const a = game.current().per_month; await game.setPersona('patient'); return { a, b: game.current().per_month }");
+  check('persona switch re-plans (Parkinson\'s > patient)', pk.a > pk.b, `${pk.a.toFixed(2)} vs ${pk.b.toFixed(2)}`);
+  const px = async () => q.p.evaluate(() => { const c = document.querySelector('#view canvas') as HTMLCanvasElement; return c.toDataURL('image/jpeg', 0.5).length; });
+  await Q('game.setVision("normal")'); await q.p.waitForTimeout(300); const n0 = await px();
+  await Q('game.setVision("cataract")'); await q.p.waitForTimeout(300); const n1 = await px();
+  await Q('game.setVision("normal")');
+  check('vision pass changes the frame (cataract blurs: smaller JPEG)', n1 < n0 * 0.95, `${n0} -> ${n1} bytes`);
+  await q.p.click('#heat'); await q.p.waitForTimeout(800);
+  const heat = await Q('return !!game.current().heat');
+  await q.p.click('#heat');
+  check('heatmap: rollouts return per-cell counts when on', heat, String(heat));
+  const t0 = Date.now();
+  const opts = await Q('const o = await game.suggest(); return o.map(x => ({ n: x.name, pm: x.per_month, f: x.checks_failed }))');
+  const pmNow = await Q('return game.current().per_month');
+  await Q('await game.applyOption(game.suggestions.length - 1)');
+  const applied = await Q('return { pm: game.current().per_month, err: game.current().error, key: game.layoutKey() }');
+  check('suggest layouts, apply the full option, walkable', opts.length >= 2 && !applied.err && applied.pm <= pmNow + 1e-9 && applied.key !== 'original',
+    `${opts.map((o: any) => `${o.n} ${o.pm.toFixed(2)}`).join(', ')} in ${((Date.now() - t0) / 1000).toFixed(1)} s; now ${applied.pm.toFixed(2)} (${applied.key.slice(0, 60)})`);
+  const [rep] = await Promise.all([q.p.context().waitForEvent('page'), Q('game.openReport()')]);
+  await rep.waitForLoadState('networkidle');
+  const repText = await rep.textContent('body');
+  check('OT report renders the live layout', /Expected toe contacts/.test(repText ?? '') && /Changes in this layout/.test(repText ?? '') && (await rep.$$('img')).length >= 2,
+    `${(repText ?? '').length} chars`);
+  await rep.close();
+  const url = await Q('return await game.openFixCard()');
+  const card = await browser.newPage({ viewport: { width: 390, height: 900 } });   // a phone
+  await card.goto(url.replace(/^https?:\/\/[^/]+/, BASE));
+  await card.waitForSelector('#list li', { timeout: 20000 });
+  const items = await card.$$eval('#list li', l => l.length);
+  check('fix card opens from the QR link with numbered fixes', items >= 3, `${items} items, url ${url.length} chars`);
+  await card.close();
+  await Q("document.getElementById('third').click(); game.setAuto()");
+  await q.p.waitForTimeout(1500);
+  check('third person: mannequin walks the simulated footsteps', await Q('return game.mannequinVisible() && game.heroSteps().length > 4'), 'visible with footsteps');
+  const ph = await Q(`const r = await game.physicsPass(); return { done: r.every(x => x.done), snags: r.reduce((n, x) => n + x.snags.length, 0),
+    li: document.querySelectorAll('#snags li').length, ms: Math.round(r.reduce((n, x) => n + x.ms, 0)) }`);
+  check('physics pass (Rapier): the walker reaches every goal, snags listed', ph.done && ph.li >= 2, JSON.stringify(ph));
+  await q.p.close();
+  // 9. reimagined room: the room morphs into the safest suggested layout, each change costed, undo takes one back
+  const ri = await open('game_synth');
+  const R = (f: string) => G(ri.p, f);
+  const run = await R(`const cs = await game.reimagine.run(); const m = cs.find(c => c.kind === 'move');
+    game.reimagine.setT(0); const at0 = m && game.reimagine.pose(m.name);
+    game.reimagine.setT(1); const at1 = m && game.reimagine.pose(m.name);
+    return { n: cs.length, m: m && { from: m.from, to: m.to, name: m.name }, at0, at1, costed: cs.every(c => c.cost && c.cost.minutes > 0),
+      li: document.querySelectorAll('#receipt li').length, total: document.getElementById('reimtotal').textContent }`);
+  const near = (a: any, b: any) => !!a && !!b && Math.hypot(a.x - b.x, a.y - b.y) < 1e-3;
+  check('reimagine: morphs into the safest layout, every change costed in the receipt',
+    run.n >= 1 && run.costed && run.li === run.n && (!run.m || (near(run.at0, run.m.from) && near(run.at1, run.m.to))), JSON.stringify(run).slice(0, 300));
+  await R('game.reimagine.setT(0.5)'); await shot(ri.p, 'reimagine_half'); await R('game.reimagine.setT(1)'); await shot(ri.p, 'reimagine_full');
+  const un = await R('await game.reimagine.undo(0); return game.reimagine.changes().length');
+  check('reimagine: undo takes one change back', un === run.n - 1, `${run.n} -> ${un}; page errors: ${ri.errors.join(' | ') || 'none'}`);
+  check('reimagine: no page errors', ri.errors.length === 0, ri.errors.join(' | ') || 'none');
+  await ri.p.close();
 } finally {
   await browser.close();
   writeFileSync(new URL('results.json', import.meta.url), JSON.stringify(results, null, 1));

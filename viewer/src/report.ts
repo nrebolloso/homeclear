@@ -1,0 +1,68 @@
+// The OT report: what the walker game shows, on paper. The game writes a snapshot (sessionStorage) and opens this page;
+// print it to PDF from the browser. Measured numbers, imagined content and judgement calls are kept visibly apart.
+import type { ReportPayload } from './share.ts';
+
+const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
+const f1 = (x: number) => (x < 0.05 && x > 0 ? x.toFixed(2) : x.toFixed(1));
+const cm = (m: number) => `${(m * 100).toFixed(1)} cm`;
+const vcls = (v: string) => (v === 'ok' ? 'ok' : v === 'fail' ? 'bad' : 'ot');
+
+const scene = new URLSearchParams(location.search).get('scene') ?? '';
+const raw = sessionStorage.getItem(`report:${scene}`);
+if (raw) render(JSON.parse(raw) as ReportPayload);
+
+function render(p: ReportPayload) {
+  const c = p.current, d = c.per_month - p.baseline;
+  const hz = c.hazards.map(h => `<tr><td>${esc(h.type === 'floor_bump' ? h.name : 'tight passage')}</td>
+    <td>${h.type === 'floor_bump' ? `${cm(h.height_m!)} high${h.estimated ? ' <span class="ot">(estimated: classified, not measured)</span>' : ` ± ${cm(p.margins.height)}`}`
+      : `${cm(h.min_side_clearance_m!)} each side of the walker ± ${cm(p.margins.width)}`}</td>
+    <td>${h.length_m.toFixed(2)} m</td><td>${h.type === 'floor_bump' ? f1(h.per_month) : '–'}</td>
+    <td>${h.ot_check ? '<span class="ot">OT to verify</span>' : ''}</td></tr>`).join('');
+  const checks = c.checks.map(k => `<tr><td class="${vcls(k.verdict)}">${esc(k.verdict)}</td><td>${esc(k.label)}</td><td class="dim">${esc(k.note)}</td></tr>`).join('');
+  const routes = c.routes.map(r => `<tr><td>${esc(r.name)}${r.night ? ' (night)' : ''}</td><td>${r.trips_per_night}</td><td>${r.error ? '<span class="bad">no route</span>' : `${f1(r.per_month)} (${f1(r.lo)}–${f1(r.hi)})`}</td><td>${r.length_m.toFixed(1)} m</td></tr>`).join('');
+  const acts = p.actions.map((a, n) => `<tr><td>${n + 1}</td><td>${esc(a.label)}</td><td>${a.cost_usd !== undefined ? `$${a.cost_usd}` : ''}</td><td>${a.minutes ?? ''}${a.minutes ? ' min' : ''}</td><td class="dim">${esc(a.product ?? '')}</td></tr>`).join('');
+  const reason = p.reason.filter((r: any) => r.verdict !== 'dismissed').map((r: any) => `<li><span class="imag">${esc(r.note)}</span> · proposed by Cosmos Reason` +
+    (r.verdict === 'confirmed' ? ` · geometry agrees: ${esc(r.measured)}` : ' · not measurable from the scan · <span class="ot">OT to verify</span>') + '</li>').join('');
+  const sugg = p.suggestions.map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${f1(o.per_month)} (${f1(o.per_month_lo)}–${f1(o.per_month_hi)})</td><td>${o.checks_failed}</td><td>$${o.cost_usd} · ${o.minutes} min</td><td>${o.actions.map((a: { label: string }) => esc(a.label)).join('; ')}</td></tr>`).join('');
+  const clips = p.clips.map(k => `<li><span class="imag">${esc(k)}</span></li>`).join('');
+  document.getElementById('root')!.innerHTML = `
+  <button onclick="print()">Print / save as PDF</button>
+  <h1>Home walkthrough: ${esc(p.scene)}</h1>
+  <div class="dim">${esc(new Date(p.created).toLocaleString())} · ${esc(p.persona.label)} · knees ${cm(p.persona.knee_height_m)}, seated reach ${cm(p.persona.reach_m)}${p.persona.hip_precautions ? ', hip precautions' : ''}</div>
+  <div class="banner"><b>For the occupational therapist to review: a flag list, not a diagnosis.</b> Measurements come from a 3D
+  reconstruction of the home (Gaussian splat) scaled to metres${p.scale_note ? ` (${esc(p.scale_note)})` : ''}; anything marked
+  <span class="imag">imagined</span> is generated and never used for a number; <span class="ot">OT to verify</span> marks what the scan can't settle.
+  ${p.synthetic ? '<br><b class="bad">SYNTHETIC test scene, not a real home.</b>' : ''}</div>
+
+  <h2>Expected toe contacts per month</h2>
+  <div class="row"><div><div class="big">${f1(c.per_month)}</div><div class="dim">likely ${f1(c.per_month_lo)}–${f1(c.per_month_hi)} · original layout ${f1(p.baseline)}
+    (<span class="${d <= 0 ? 'ok' : 'bad'}">${d <= 0 ? '' : '+'}${f1(d)}</span>)</div>
+    <p class="dim">${p.rollouts} simulated trips per route, gait "${esc(p.gait)}". Toe-contact rate calibrated to published data
+    (${esc(p.calibration)}); darkness multiplier ${p.dark_multiplier} (assumption). Range = measured height error + simulation noise.</p></div>
+    <div><table><tr><th>Route</th><th>Trips/night</th><th>Contacts/month</th><th>Length</th></tr>${routes}</table></div></div>
+
+  <h2>Layout and route</h2>
+  <div class="row"><img alt="top-down map of the layout with the route" src="${p.topdown}"><img alt="walker's view" src="${p.view}"></div>
+  <p class="dim">Map: grey = walls/furniture, orange = floor bumps (rugs, thresholds, cables), blue line = route, rings = hazards,
+  blue furniture = moved, dashed = where it stood, light grey floor = scanned too thinly to trust (not walked).</p>
+
+  <h2>Measured hazards on the route (${esc(p.route)})</h2>
+  <table><tr><th>What</th><th>Measurement</th><th>Along route</th><th>Contacts/month</th><th></th></tr>${hz || '<tr><td colspan="5">none</td></tr>'}</table>
+
+  <h2>Transfers, reach and emergencies</h2>
+  <table><tr><th>Verdict</th><th>Check</th><th>Basis</th></tr>${checks || '<tr><td colspan="3">no fixtures marked</td></tr>'}</table>
+
+  <h2>Changes in this layout</h2>
+  <table><tr><th>#</th><th>Change</th><th>Cost</th><th>Time</th><th>Product</th></tr>${acts || '<tr><td colspan="5">none: the home as filmed</td></tr>'}</table>
+  ${sugg ? `<h2>Suggested layouts (optimizer)</h2><table><tr><th>Option</th><th>Contacts/month</th><th>Failed checks</th><th>Cost · time</th><th>Changes</th></tr>${sugg}</table>` : ''}
+  ${reason ? `<h2>Not measurable from the scan (proposed by a model)</h2><ul>${reason}</ul>` : ''}
+  ${clips ? `<h2>Generated visualisations of this layout</h2><ul>${clips}</ul><p class="dim">Cosmos Transfer videos: imagined, for the family; hazard markers on them are the measured ones.</p>` : ''}
+
+  <h2>Methods and limits</h2>
+  <ul class="dim">
+    <li>Map error (stage 6b): heights ± ${cm(p.margins.height)}, widths ± ${cm(p.margins.width)}; values within that of a limit are "borderline, OT to verify".</li>
+    <li>Thin floor items (cables) are classified, not measured: their height is a typical value.</li>
+    <li>Floor and walls under or behind furniture that was moved were never filmed; they are shown imagined (tinted) and not measured.</li>
+    <li>Toe contacts are not falls; the numbers compare layouts for this person and route, they are not a fall probability.</li>
+  </ul>`;
+}

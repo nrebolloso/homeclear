@@ -2,6 +2,7 @@
 // whatever the GPU manages): node e2e/record.ts <scene> <out.mp4> <seconds> [--fps 30] [--size 1280x720]
 //   [--at "<t>:<js>"]...   (js runs with `game` in scope at time t; e.g. --at "0:game.view.third=true")
 // Every frame: advance the clock, render, let Spark re-sort the splats for the new camera, render again, screenshot.
+import { CHROME } from './env.ts';
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -13,7 +14,7 @@ const fps = +opt('--fps', '30'), [W, H] = opt('--size', '1280x720').split('x').m
 const at = a.flatMap((v, i) => (v === '--at' ? [a[i + 1]] : [])).map(s => { const k = s.indexOf(':'); return { t: +s.slice(0, k), js: s.slice(k + 1), done: false }; });
 const BASE = opt('--url', 'http://localhost:5179');
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true,
+const browser = await chromium.launch({ executablePath: CHROME, headless: true,
   args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 const p = await browser.newPage({ viewport: { width: W, height: H } });
 p.on('pageerror', e => console.error('pageerror', e));

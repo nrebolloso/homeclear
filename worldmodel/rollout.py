@@ -26,6 +26,11 @@ def load_cfg(path=Path(__file__).with_name("config.yaml")):
     return {**c, **game}
 
 
+# walker users walk smooth curves, not the grid's 2 cm kinks; also keeps the route inside the curvature of the training
+# walks (WORLD_MODEL.md "Closed-loop stability"). Clearance is checked by test_route_avoids_obstacles.
+SMOOTH_M = 0.3
+
+
 def plan_route(m, waypoints, walker):
     """A* through the waypoints on the grid inflated by half the walker width (stage-7 cost); 1 cm resampled polyline."""
     half, pref = walker["width_m"] / 2, 0.3
@@ -41,9 +46,12 @@ def plan_route(m, waypoints, walker):
     xy = m.origin + (np.array(cells) + 0.5) * m.cell
     from scipy.ndimage import gaussian_filter1d
     xy = gaussian_filter1d(xy, 3, axis=0, mode="nearest")   # take the stair-steps out of the grid path
-    s = np.r_[0, np.cumsum(np.linalg.norm(np.diff(xy, axis=0), axis=1))]
-    u = np.arange(0, s[-1], 0.01)
-    return np.stack([np.interp(u, s, xy[:, k]) for k in range(2)], 1)
+    for sigma in (0, SMOOTH_M / 0.01):
+        xy = gaussian_filter1d(xy, sigma, axis=0, mode="nearest") if sigma else xy
+        s = np.r_[0, np.cumsum(np.linalg.norm(np.diff(xy, axis=0), axis=1))]
+        u = np.arange(0, s[-1], 0.01)
+        xy = np.stack([np.interp(u, s, xy[:, k]) for k in range(2)], 1)
+    return xy
 
 
 def contact_prob(t, h):
@@ -98,8 +106,9 @@ class Engine:
         L0, Wd = self.P["stride_m"], self.P["foot_sep_m"]
         u = unit(route[20] - route[0])
         side0 = rng.choice([-1, 1])
-        heels = np.array([route[0] + side0 * Wd / 2 * left(u), route[0] - L0 * u - side0 * Wd / 2 * left(u),
-                          route[0] - 2 * L0 * u + side0 * Wd / 2 * left(u)])
+        # mid-heels on route[0], as in the training data (its route points are measured from the nearest point to mid-heels)
+        heels = np.array([route[0] + L0 / 2 * u + side0 * Wd / 2 * left(u), route[0] - L0 / 2 * u - side0 * Wd / 2 * left(u),
+                          route[0] - 1.5 * L0 * u + side0 * Wd / 2 * left(u)])
         s = State(heels, heels + X["toe_offset_m"] * u, np.array([side0, -side0, side0]),
                   route[0].copy(), u * L0 / X["step_time_s"], np.zeros(3), np.full(8, 2.0))
         k = 0
@@ -129,7 +138,7 @@ class Engine:
                 p = contact_prob(self.table, rise / clear)
                 out["events"].append(("toe_contact", night, trip, step, m.at(m.ids, at), round(float(rise), 4), round(p, 5),
                                       int(rng.random() < p), *np.round(at, 3)))
-            pose = walker_pose(s, heel, a, W, s.walker)
+            pose = self.model.walker_pose(s, heel, a, W, s.walker)
             d = np.array([np.cos(pose[2]), np.sin(pose[2])])
             for _ in range(35):   # a user stops the walker at a counter or wall ahead: pull it back, up to 0.7 m
                 if not m.at(m.blocked, frame_outline(pose, W)[24:]).any():   # front bar clear
@@ -191,7 +200,7 @@ def run(map_dir, out_dir, model_name=None, nights=None, remove=(), move=(), cfg=
     summ.update({"map": str(map_dir), "model": model_name, "nights": nights, "trips": nights * cfg["risk"]["trips_per_night"],
                  "remove": list(remove), "move": [list(x) for x in move], "route_length_m": round(len(route) * 0.01, 2),
                  "runtime_s": round(secs, 1), "assumed": cfg["extras"],
-                 "labels": "contact_table is a PLACEHOLDER, NOT CALIBRATED; walker pose is a geometric rule for every model",
+                 "labels": "contact_table is a PLACEHOLDER, NOT CALIBRATED; walker pose: " + ("learned walker head (Multi-Gait-Posture camera fit)" if model_name == "learned" else "geometric rule"),
                  "map_source": json.loads((Path(map_dir) / "grid.json").read_text()).get("source", "stage 6 (measured splat)")})
     (out_dir / "summary.json").write_text(json.dumps(summ, indent=1))
     return summ, out, route, m

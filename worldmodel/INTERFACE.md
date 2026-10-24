@@ -55,8 +55,9 @@ world xy. The 1 m point is the steering target.
 **output** (`StepDist`): a mixture of K Gaussians over the next heel position of the swing foot (world xy, with each
 component's covariance given in the frame of the route direction), plus the next walker pose. The next toe is the
 heel + `toe_offset_m` along the step direction. Models: `baseline` (hand rule, K = 1) and `learned` (MDN, K = 5).
-The learned MDN predicts the heel; the walker pose comes from the same geometric rule for both models, because no
-training data in hand has walker markers (stated in every result).
+The learned model has a second head for the walker pose (fitted from the dataset's walker camera, see
+`proof/world_model/WORLD_MODEL.md` step 2); the baseline uses the geometric rule. The learned model's inputs are the
+heels and the action only, not the previous walker pose (fed back, it diverged).
 
 ## 3. Rollout engine output (per night)
 

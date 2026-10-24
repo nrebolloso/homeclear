@@ -6,15 +6,13 @@ cd "$(dirname "$0")/.."
 JOB=${1:?usage: cosmos/submit_cosmos.sh <job> [sbatch args, e.g. --dependency=afterok:<id>]   (job = folder under viewer/public/exports/)}; shift
 D=viewer/public/exports/$JOB
 [ -f "$D/cosmos_job.json" ] || { echo "no $D/cosmos_job.json - press Export for Cosmos in the viewer first"; exit 1; }
-cfg() { .venv/bin/python -c "import os, sys, yaml; c = yaml.safe_load(open('config.yaml')); print(os.path.expandvars(str(eval(sys.argv[1], {}, c))))" "$1"; }
-HOST=$(cfg "cluster['ssh']"); REPO=$(cfg "cluster['repo']"); CP=$(cfg "cluster['control_path']"); CP=${CP/#\~/$HOME}
-SSH="ssh -o ControlPath=$CP -o BatchMode=yes"
-SCENE=$(.venv/bin/python -c "import json; print(json.load(open('$D/cosmos_job.json'))['scene'])")
-$SSH "$HOST" "mkdir -p $REPO/viewer/public/exports $REPO/viewer/public/scene"
-rsync -a -e "$SSH" common.py "$HOST:$REPO/"
-rsync -a -e "$SSH" cosmos/ "$HOST:$REPO/cosmos/"
-rsync -a -e "$SSH" cosmos/ "$HOST:$HPG_ROOT/cosmos/"
-rsync -a -e "$SSH" "viewer/public/scene/$SCENE" "$HOST:$REPO/viewer/public/scene/"
-rsync -a -e "$SSH" "$D" "$HOST:$REPO/viewer/public/exports/"
-$SSH "$HOST" "bash -lc 'cd $HPG_ROOT/cosmos && sbatch --parsable $* slurm/cosmos_job.sbatch $JOB'"
+source ./hpg.sh && hpg_load config.yaml   # PY, HOST REPO HPG_ROOT, hpg_ssh / hpg_rsync (WSL on Windows)
+SCENE=$($PY -c "import json; print(json.load(open('$D/cosmos_job.json'))['scene'])")
+hpg_ssh "mkdir -p $REPO/viewer/public/exports $REPO/viewer/public/scene"
+hpg_rsync -a common.py "$HOST:$REPO/"
+hpg_rsync -a cosmos/ "$HOST:$REPO/cosmos/"
+hpg_rsync -a cosmos/ "$HOST:$HPG_ROOT/cosmos/"
+hpg_rsync -a "viewer/public/scene/$SCENE" "$HOST:$REPO/viewer/public/scene/"
+hpg_rsync -a "$D" "$HOST:$REPO/viewer/public/exports/"
+hpg_ssh "bash -lc 'cd $HPG_ROOT/cosmos && HPG_ROOT=$HPG_ROOT ENV=$ENV sbatch --parsable $* slurm/cosmos_job.sbatch $JOB'"
 echo "submitted $JOB; when squeue is empty: cosmos/fetch_cosmos.sh $JOB"

@@ -2,12 +2,17 @@
 import { defineConfig } from 'vite';
 import { mkdirSync, writeFileSync, readdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { networkInterfaces } from 'node:os';
 
 const PUB = join(import.meta.dirname, 'public');
 
 export default defineConfig({
-  server: { port: 5179, strictPort: true },   // README, e2e/ and scripts/ all use 5179
   worker: { format: 'es' },
+  server: {
+    port: 5179, strictPort: true,   // README, e2e/ and scripts/ all use 5179
+    fs: { allow: ['.', '../physics_ranges.json'] },   // the object-physics ranges, shared with the offline batch; nothing else outside viewer/
+  },
+  build: { rollupOptions: { input: { main: 'index.html', report: 'report.html', fixcard: 'fixcard.html' } } },
   plugins: [{
     name: 'rehearsal-api',
     configureServer(server) {
@@ -23,6 +28,11 @@ export default defineConfig({
           writeFileSync(f, Buffer.concat(parts));
           res.end('ok');
         });
+      });
+      server.middlewares.use('/api/lan', (_req, res) => {   // the laptop's LAN IPv4s: the fix-card QR must not say "localhost"
+        const ips = Object.values(networkInterfaces()).flat().filter(a => a && a.family === 'IPv4' && !a.internal).map(a => a!.address);
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify(ips));
       });
       server.middlewares.use('/api/clips', (_req, res) => {
         const d = join(PUB, 'clips');

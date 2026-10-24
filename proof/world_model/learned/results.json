@@ -1,0 +1,216 @@
+{
+ "split_participants": {
+  "train": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9
+  ],
+  "val": [
+   10,
+   11
+  ],
+  "test": [
+   12,
+   13
+  ]
+ },
+ "samples": {
+  "train": 3294,
+  "val": 749,
+  "test": 751
+ },
+ "best_epoch": 18,
+ "hand_rule_fit": {
+  "stride_m": 0.4101341874101032,
+  "foot_sep_m": 0.11340640057116984,
+  "stride_cv": 0.21078453299399844,
+  "sd_lat_m": 0.04920718805354176
+ },
+ "walker_gap_shift_m": -0.593,
+ "mean_user_to_camera_m": 1.093,
+ "one_step_test": {
+  "baseline_as_configured": {
+   "all": {
+    "n": 751,
+    "heel_err_mean_cm": 10.73,
+    "heel_err_p90_cm": 17.07,
+    "heel_nll": 0.261,
+    "cover_50": 0.08,
+    "cover_90": 0.324,
+    "walker_pos_err_mean_cm": 8.17,
+    "walker_yaw_err_mean_deg": 3.37
+   },
+   "straight": {
+    "n": 356,
+    "heel_err_mean_cm": 11.28,
+    "heel_err_p90_cm": 17.03,
+    "heel_nll": 0.624,
+    "cover_50": 0.011,
+    "cover_90": 0.267,
+    "walker_pos_err_mean_cm": 7.37,
+    "walker_yaw_err_mean_deg": 2.89
+   },
+   "corner": {
+    "n": 395,
+    "heel_err_mean_cm": 10.23,
+    "heel_err_p90_cm": 17.18,
+    "heel_nll": -0.067,
+    "cover_50": 0.142,
+    "cover_90": 0.375,
+    "walker_pos_err_mean_cm": 8.9,
+    "walker_yaw_err_mean_deg": 3.79
+   },
+   "in_turn(>15deg)": {
+    "n": 13,
+    "heel_err_mean_cm": 9.52,
+    "heel_err_p90_cm": 14.13,
+    "heel_nll": -1.198,
+    "cover_50": 0.154,
+    "cover_90": 0.385,
+    "walker_pos_err_mean_cm": 10.45,
+    "walker_yaw_err_mean_deg": 2.39
+   }
+  },
+  "baseline_fit_to_train": {
+   "all": {
+    "n": 751,
+    "heel_err_mean_cm": 7.49,
+    "heel_err_p90_cm": 12.06,
+    "heel_nll": -2.903,
+    "cover_50": 0.636,
+    "cover_90": 0.953,
+    "walker_pos_err_mean_cm": 8.17,
+    "walker_yaw_err_mean_deg": 3.37
+   },
+   "straight": {
+    "n": 356,
+    "heel_err_mean_cm": 6.6,
+    "heel_err_p90_cm": 10.83,
+    "heel_nll": -3.212,
+    "cover_50": 0.834,
+    "cover_90": 0.992,
+    "walker_pos_err_mean_cm": 7.37,
+    "walker_yaw_err_mean_deg": 2.89
+   },
+   "corner": {
+    "n": 395,
+    "heel_err_mean_cm": 8.3,
+    "heel_err_p90_cm": 13.02,
+    "heel_nll": -2.624,
+    "cover_50": 0.458,
+    "cover_90": 0.919,
+    "walker_pos_err_mean_cm": 8.9,
+    "walker_yaw_err_mean_deg": 3.79
+   },
+   "in_turn(>15deg)": {
+    "n": 13,
+    "heel_err_mean_cm": 10.67,
+    "heel_err_p90_cm": 14.1,
+    "heel_nll": -2.333,
+    "cover_50": 0.154,
+    "cover_90": 0.923,
+    "walker_pos_err_mean_cm": 10.45,
+    "walker_yaw_err_mean_deg": 2.39
+   }
+  },
+  "learned": {
+   "all": {
+    "n": 751,
+    "heel_err_mean_cm": 3.63,
+    "heel_err_p90_cm": 6.33,
+    "heel_nll": -4.548,
+    "cover_50": 0.565,
+    "cover_90": 0.931,
+    "walker_pos_err_mean_cm": 7.91,
+    "walker_yaw_err_mean_deg": 2.7
+   },
+   "straight": {
+    "n": 356,
+    "heel_err_mean_cm": 2.99,
+    "heel_err_p90_cm": 5.45,
+    "heel_nll": -4.879,
+    "cover_50": 0.626,
+    "cover_90": 0.955,
+    "walker_pos_err_mean_cm": 6.68,
+    "walker_yaw_err_mean_deg": 2.27
+   },
+   "corner": {
+    "n": 395,
+    "heel_err_mean_cm": 4.2,
+    "heel_err_p90_cm": 7.18,
+    "heel_nll": -4.249,
+    "cover_50": 0.509,
+    "cover_90": 0.909,
+    "walker_pos_err_mean_cm": 9.01,
+    "walker_yaw_err_mean_deg": 3.08
+   },
+   "in_turn(>15deg)": {
+    "n": 13,
+    "heel_err_mean_cm": 2.35,
+    "heel_err_p90_cm": 4.04,
+    "heel_nll": -4.798,
+    "cover_50": 0.769,
+    "cover_90": 1.0,
+    "walker_pos_err_mean_cm": 7.14,
+    "walker_yaw_err_mean_deg": 3.06
+   }
+  }
+ },
+ "closed_loop_test": {
+  "baseline_as_configured": {
+   "straight": {
+    "trials": 18,
+    "heel_lateral_err_cm": 5.54,
+    "walker_pos_err_cm": 2.77,
+    "walker_yaw_err_deg": 3.99,
+    "step_len_err_cm": 6.73
+   },
+   "corner": {
+    "trials": 36,
+    "heel_lateral_err_cm": 10.15,
+    "walker_pos_err_cm": 4.07,
+    "walker_yaw_err_deg": 9.39,
+    "step_len_err_cm": 4.56
+   }
+  },
+  "baseline_fit_to_train": {
+   "straight": {
+    "trials": 18,
+    "heel_lateral_err_cm": 4.47,
+    "walker_pos_err_cm": 2.85,
+    "walker_yaw_err_deg": 4.35,
+    "step_len_err_cm": 5.89
+   },
+   "corner": {
+    "trials": 36,
+    "heel_lateral_err_cm": 8.77,
+    "walker_pos_err_cm": 4.61,
+    "walker_yaw_err_deg": 10.54,
+    "step_len_err_cm": 4.86
+   }
+  },
+  "learned": {
+   "straight": {
+    "trials": 18,
+    "heel_lateral_err_cm": 2.09,
+    "walker_pos_err_cm": 2.68,
+    "walker_yaw_err_deg": 3.35,
+    "step_len_err_cm": 3.82
+   },
+   "corner": {
+    "trials": 36,
+    "heel_lateral_err_cm": 3.02,
+    "walker_pos_err_cm": 3.7,
+    "walker_yaw_err_deg": 4.12,
+    "step_len_err_cm": 3.47
+   }
+  }
+ }
+}

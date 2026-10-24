@@ -2,11 +2,13 @@
   python cosmos/prepare_hallway.py [--video data/home.mp4] [--start 12.5] [--depth d.mp4] [--seg s.mp4]
 Edge and blur controls are auto-extracted by Cosmos from the RGB clip. --depth/--seg are the hook for control
 videos rendered from the splat (same 93 frames, same camera path); give them and the spec uses them too."""
-import argparse, json, os, shutil, subprocess
+import argparse, json, os, shutil, subprocess, sys
 from pathlib import Path
 import yaml
 
 HERE, ROOT, C = Path(__file__).resolve().parent, Path(__file__).resolve().parents[1], os.environ["HPG_ROOT"] + "/cosmos"
+sys.path.insert(0, str(ROOT))
+from common import FFMPEG
 PROMPT = ("The same kitchen at 3 AM, lights off, lit only by a small warm nightlight near the floor; "
           "realistic home interior; camera moving slowly forward.")
 ap = argparse.ArgumentParser()
@@ -20,7 +22,7 @@ assert video.exists(), f"{video} not found (set --video or config.yaml video)"
 out = HERE / "inputs"; out.mkdir(exist_ok=True)
 clip = out / "hallway_93.mp4"
 # fill 1280x720 (crops a portrait phone video to its middle band), 16 fps = the model's output rate, exactly 93 frames
-subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", str(a.start), "-i", str(video),
+subprocess.run([FFMPEG, "-y", "-v", "error", "-ss", str(a.start), "-i", str(video),
                 "-vf", "fps=16,scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,setsar=1",
                 "-frames:v", "93", "-an", "-c:v", "libx264", "-crf", "16", "-pix_fmt", "yuv420p", str(clip)], check=True)
 w, h, n = subprocess.run(["ffprobe", "-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries",

@@ -2,7 +2,7 @@
 import shutil, subprocess, sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from common import run_stage, ROOT
+from common import run_stage, ROOT, FFMPEG
 
 import cv2
 import numpy as np
@@ -20,7 +20,7 @@ def main(cfg):
     native, dur = eval(probe[0]), float(probe[1])  # avg_frame_rate is a fraction like "30000/1001"
     fps = min(3 * fc["target"] / dur, native)  # never oversample past the real frames (duplicates)
     s = fc["max_side"]
-    subprocess.run(["ffmpeg", "-v", "error", "-i", str(video), "-vf",
+    subprocess.run([FFMPEG, "-v", "error", "-i", str(video), "-vf",
                     f"fps={fps},scale='if(gt(iw,ih),min({s},iw),-2)':'if(gt(iw,ih),-2,min({s},ih))'",
                     "-q:v", "2", str(cand / "%05d.jpg")], check=True)
     files = sorted(cand.glob("*.jpg"))

@@ -1,7 +1,7 @@
 # World model / rollout engine settings. Walker, persona and risk come from the project config's `game` section
 # (`base`), with `overrides` merged on top. See INTERFACE.md.
 base: config.yaml
-step_model: baseline        # baseline | learned  (learned = worldmodel/out/model.pt, see WORLD_MODEL.md)
+step_model: baseline        # baseline | learned  (learned = worldmodel/weights/learned.npz, see WORLD_MODEL.md)
 nights: 200
 seed: 0
 ghosts: 24                  # trips drawn on the ghost-walker plot

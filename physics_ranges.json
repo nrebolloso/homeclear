@@ -1,0 +1,23 @@
+{
+ "_note": "Object physics ranges: NOT measured. Each run samples one value per object from these ranges (uniform); the viewer (src/objphys.ts) and the offline batch (physics/batch_mujoco.py) both read this file. Heights and shapes come from the splat; everything here is an assumption until measured.",
+ "objects": {
+  "chair":      {"mass_kg": [3.0, 8.0],   "floor_friction": [0.25, 0.7]},
+  "table":      {"mass_kg": [15.0, 40.0], "floor_friction": [0.3, 0.7]},
+  "nightstand": {"mass_kg": [8.0, 25.0],  "floor_friction": [0.3, 0.7]},
+  "other":      {"mass_kg": [1.0, 10.0],  "floor_friction": [0.3, 0.7]}
+ },
+ "mat": {
+  "mass_per_m2_kg": [0.8, 2.5],
+  "floor_friction": [0.15, 0.6],
+  "_flap": "curled corner: a hinged triangle; stiffness = how hard the curl springs back (N m per rad)",
+  "flap_stiffness_nm_per_rad": [0.01, 0.15],
+  "flap_damping": [0.001, 0.01],
+  "curl_min_m": 0.008
+ },
+ "walker": {
+  "push_max_n": [25.0, 60.0],
+  "glide_friction": [0.15, 0.45],
+  "frame_mass_kg": [2.5, 4.0],
+  "hand_load_n": [15.0, 45.0]
+ }
+}

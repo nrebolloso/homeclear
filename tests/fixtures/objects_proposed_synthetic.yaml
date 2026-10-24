@@ -1,0 +1,439 @@
+# SYNTHETIC: faked in stage 6c's schema from tests/make_sample_objects.py, not detected by any model
+objects:
+- name: bed
+  kind: bed
+  poly_xy:
+  - - 0.1
+    - 1.9
+  - - 1.7
+    - 1.9
+  - - 1.7
+    - 3.95
+  - - 0.1
+    - 3.95
+  points: 57000
+  detected_as: bed
+  box_xy:
+  - - 0.1
+    - 1.9
+  - - 1.7
+    - 3.95
+  z_max: 0.7
+  parts:
+  - poly_xy:
+    - - 0.1
+      - 1.9
+    - - 1.7
+      - 1.9
+    - - 1.7
+      - 3.95
+    - - 0.1
+      - 3.95
+    z:
+    - 0.002
+    - 0.7
+- name: nightstand
+  kind: nightstand
+  poly_xy:
+  - - 1.8
+    - 3.45
+  - - 2.3
+    - 3.45
+  - - 2.3
+    - 3.95
+  - - 1.8
+    - 3.95
+  points: 9000
+  detected_as: nightstand
+  box_xy:
+  - - 1.8
+    - 3.45
+  - - 2.3
+    - 3.95
+  z_max: 0.8
+  parts:
+  - poly_xy:
+    - - 1.8
+      - 3.45
+    - - 2.3
+      - 3.45
+    - - 2.3
+      - 3.95
+    - - 1.8
+      - 3.95
+    z:
+    - 0.002
+    - 0.8
+- name: rug
+  kind: rug
+  poly_xy:
+  - - 2.4
+    - 0.9
+  - - 3.5
+    - 0.9
+  - - 3.5
+    - 2.3
+  - - 2.4
+    - 2.3
+  points: 18000
+  detected_as: rug
+  box_xy:
+  - - 2.4
+    - 0.9
+  - - 3.5
+    - 2.3
+  z_max: 0.03
+  parts:
+  - poly_xy:
+    - - 2.4
+      - 0.9
+    - - 3.5
+      - 0.9
+    - - 3.5
+      - 2.3
+    - - 2.4
+      - 2.3
+    z:
+    - 0.002
+    - 0.03
+- name: rug_curl
+  kind: rug
+  poly_xy:
+  - - 3.35
+    - 2.15
+  - - 3.5
+    - 2.15
+  - - 3.5
+    - 2.3
+  - - 3.35
+    - 2.3
+  points: 400
+  detected_as: rug
+  box_xy:
+  - - 3.35
+    - 2.15
+  - - 3.5
+    - 2.3
+  z_max: 0.04
+  parts:
+  - poly_xy:
+    - - 3.35
+      - 2.15
+    - - 3.5
+      - 2.15
+    - - 3.5
+      - 2.3
+    - - 3.35
+      - 2.3
+    z:
+    - 0.002
+    - 0.04
+- name: chair
+  kind: chair
+  poly_xy:
+  - - 2.6
+    - 3.0
+  - - 3.05
+    - 3.0
+  - - 3.05
+    - 3.45
+  - - 2.6
+    - 3.45
+  points: 6000
+  detected_as: chair
+  box_xy:
+  - - 2.6
+    - 3.0
+  - - 3.05
+    - 3.45
+  z_max: 0.95
+  parts:
+  - poly_xy:
+    - - 2.6
+      - 3.0
+    - - 3.05
+      - 3.0
+    - - 3.05
+      - 3.45
+    - - 2.6
+      - 3.45
+    z:
+    - 0.002
+    - 0.95
+- name: table
+  kind: other
+  poly_xy:
+  - - 0.5
+    - 0.3
+  - - 1.4
+    - 0.3
+  - - 1.4
+    - 0.8
+  - - 0.5
+    - 0.8
+  points: 5000
+  detected_as: other
+  box_xy:
+  - - 0.5
+    - 0.3
+  - - 1.4
+    - 0.8
+  z_max: 0.47
+  parts:
+  - poly_xy:
+    - - 0.5
+      - 0.3
+    - - 1.4
+      - 0.3
+    - - 1.4
+      - 0.8
+    - - 0.5
+      - 0.8
+    z:
+    - 0.05
+    - 0.47
+- name: nightlight
+  kind: other
+  poly_xy:
+  - - 0.03
+    - 0.18
+  - - 0.17
+    - 0.18
+  - - 0.17
+    - 0.32
+  - - 0.03
+    - 0.32
+  points: 300
+  detected_as: other
+  box_xy:
+  - - 0.03
+    - 0.18
+  - - 0.17
+    - 0.32
+  z_max: 0.3
+  parts:
+  - poly_xy:
+    - - 0.03
+      - 0.18
+    - - 0.17
+      - 0.18
+    - - 0.17
+      - 0.32
+    - - 0.03
+      - 0.32
+    z:
+    - 0.002
+    - 0.3
+- name: door
+  kind: door
+  poly_xy:
+  - - 4.11
+    - 1.84
+  - - 4.85
+    - 1.84
+  - - 4.85
+    - 1.9
+  - - 4.11
+    - 1.9
+  points: 2000
+  detected_as: door
+  box_xy:
+  - - 4.11
+    - 1.84
+  - - 4.85
+    - 1.9
+  z_max: 2.1
+  parts:
+  - poly_xy:
+    - - 4.11
+      - 1.84
+    - - 4.85
+      - 1.84
+    - - 4.85
+      - 1.9
+    - - 4.11
+      - 1.9
+    z:
+    - 0.002
+    - 2.1
+- name: bed1
+  kind: bed
+  poly_xy:
+  - - 1.9
+    - 0.3
+  - - 2.3
+    - 0.3
+  - - 2.3
+    - 0.5
+  - - 1.9
+    - 0.5
+  points: 331
+  detected_as: bed
+  box_xy:
+  - - 1.9
+    - 0.3
+  - - 2.3
+    - 0.5
+  z_max: 0.034
+  parts:
+  - poly_xy:
+    - - 1.9
+      - 0.3
+    - - 2.3
+      - 0.3
+    - - 2.3
+      - 0.5
+    - - 1.9
+      - 0.5
+    z:
+    - -0.016
+    - 0.034
+- name: bed2
+  kind: bed
+  poly_xy:
+  - - 0.5
+    - 2.5
+  - - 0.8
+    - 2.5
+  - - 0.8
+    - 2.8
+  - - 0.5
+    - 2.8
+  points: 820
+  detected_as: bed
+  box_xy:
+  - - 0.5
+    - 2.5
+  - - 0.8
+    - 2.8
+  z_max: 0.428
+  parts:
+  - poly_xy:
+    - - 0.5
+      - 2.5
+    - - 0.8
+      - 2.5
+    - - 0.8
+      - 2.8
+    - - 0.5
+      - 2.8
+    z:
+    - 0.002
+    - 0.428
+- name: chair14
+  kind: chair
+  poly_xy:
+  - - 2.6
+    - 3.0
+  - - 2.8
+    - 3.0
+  - - 2.8
+    - 3.2
+  - - 2.6
+    - 3.2
+  points: 250
+  detected_as: chair
+  box_xy:
+  - - 2.6
+    - 3.0
+  - - 2.8
+    - 3.2
+  z_max: 0.667
+  parts:
+  - poly_xy:
+    - - 2.6
+      - 3.0
+    - - 2.8
+      - 3.0
+    - - 2.8
+      - 3.2
+    - - 2.6
+      - 3.2
+    z:
+    - 0.002
+    - 0.667
+- name: cable
+  kind: cable
+  poly_xy:
+  - - 3.6
+    - 0.3
+  - - 3.68
+    - 0.3
+  - - 3.68
+    - 2.7
+  - - 3.6
+    - 2.7
+  points: 400
+  detected_as: cable
+  box_xy:
+  - - 3.6
+    - 0.3
+  - - 3.68
+    - 2.7
+  z_max: 0.071
+  parts:
+  - poly_xy:
+    - - 3.6
+      - 0.3
+    - - 3.68
+      - 0.3
+    - - 3.68
+      - 2.7
+    - - 3.6
+      - 2.7
+    z:
+    - 0.002
+    - 0.071
+- name: other16
+  kind: other
+  poly_xy:
+  - - 0.2
+    - 0.2
+  - - 3.9
+    - 0.2
+  - - 3.9
+    - 3.9
+  - - 0.2
+    - 3.9
+  points: 800
+  detected_as: table
+  box_xy:
+  - - 0.2
+    - 0.2
+  - - 3.9
+    - 3.9
+  z_max: 1.871
+  parts:
+  - poly_xy:
+    - - 0.2
+      - 0.2
+    - - 3.9
+      - 0.2
+    - - 3.9
+      - 3.9
+    - - 0.2
+      - 3.9
+    z:
+    - 0.002
+    - 1.871
+fixtures:
+- name: toilet
+  kind: toilet
+  poly_xy:
+  - - 5.9
+    - 1.2
+  - - 6.45
+    - 1.2
+  - - 6.45
+    - 1.8
+  - - 5.9
+    - 1.8
+  points: 3000
+  detected_as: toilet
+  box_xy:
+  - - 5.9
+    - 1.2
+  - - 6.45
+    - 1.8
+note: 'SYNTHETIC: faked in stage 6c''s schema from tests/make_sample_objects.py, not
+  detected by any model'

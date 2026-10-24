@@ -10,23 +10,20 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 CFG=${1:-config.yaml}
-PY=.venv/bin/python
+source ./hpg.sh && hpg_load "$CFG"   # PY, HOST REPO ENV HPG_ROOT (config + cluster.local.yaml), hpg_ssh / hpg_rsync
 cfg() { $PY -c "import os, sys, yaml; c = yaml.safe_load(open('$CFG')); print(os.path.expandvars(str(eval(sys.argv[1], {}, c))))" "$1"; }
 WORK=$(cfg work_dir); VIDEO=$(cfg video)
-HOST=$(cfg "cluster['ssh']"); REPO=$(cfg "cluster['repo']"); ENV=$(cfg "cluster['env']")
-CP=$(cfg "cluster['control_path']"); CP=${CP/#\~/$HOME}
-SSH="ssh -o ControlPath=$CP -o BatchMode=yes"
-remote() { $SSH "$HOST" "bash -lc 'cd $REPO && ENV=$ENV $*'"; }  # login shell: lmod's module() is inherited by the jobs
-pull() { rsync -a -e "$SSH" --exclude candidates/ --exclude images/ --exclude colmap/ --exclude splat.ply --exclude splat_scaled.ply "$HOST:$REPO/$WORK/" "$WORK/"; }
+remote() { hpg_ssh "bash -lc 'cd $REPO && HPG_ROOT=$HPG_ROOT ENV=$ENV $*'"; }  # login shell: lmod's module() is inherited by the jobs
+pull() { hpg_rsync -a --exclude candidates/ --exclude images/ --exclude colmap/ --exclude splat.ply --exclude splat_scaled.ply "$HOST:$REPO/$WORK/" "$WORK/"; }
 laptop() { for s in "$@"; do $PY stages/$s.py "$CFG"; done; }
 
 if [ -z "${SKIP_CLUSTER:-}" ]; then
   : "${HPG_ROOT:?export HPG_ROOT=/blue/<group>/<user> (README: 'Connect')}" "${HPG_GROUP:?export HPG_GROUP=<group>}"
-  $SSH -O check "$HOST" 2>/dev/null || { echo "No SSH master at $CP. Open one first (README: 'Connect')."; exit 1; }
+  $X ssh $SSH_OPTS -O check "$HOST" 2>/dev/null || { echo "No SSH master for $HOST. Open one first (README: 'Connect'; on Windows inside WSL)."; exit 1; }
   echo "== CLUSTER: sync repo + video"
   remote "mkdir -p $(dirname "$VIDEO") logs" || exit 1
-  rsync -a -e "$SSH" --exclude .git --exclude .venv --exclude out --exclude data --exclude logs --exclude node_modules --exclude viewer/public ./ "$HOST:$REPO/"
-  [ -f "$VIDEO" ] && rsync -a -e "$SSH" "$VIDEO" "$HOST:$REPO/$VIDEO"
+  hpg_rsync -a --exclude .git --exclude .venv --exclude out --exclude data --exclude logs --exclude node_modules --exclude viewer/public ./ "$HOST:$REPO/"
+  [ -f "$VIDEO" ] && hpg_rsync -a "$VIDEO" "$HOST:$REPO/$VIDEO"
   echo "== CLUSTER: stages 1-2 (CPU, burst QOS)"
   remote sbatch --wait --parsable --qos=$HPG_GROUP-b slurm/sfm.sbatch "$CFG" || exit 1
   echo "== CLUSTER: stages 0, 3-6 (sbatch --wait; queue time depends on hpg-b200)"
@@ -34,13 +31,13 @@ if [ -z "${SKIP_CLUSTER:-}" ]; then
   mkdir -p "$WORK" && pull
 fi
 
-echo "== LAPTOP: stages 6b-8 (accuracy check, route, hazards)"
-laptop 06b_accuracy 07_plan 08_hazards
+echo "== LAPTOP: stages 5c, 6b-8 (room shell, accuracy check, route, hazards)"
+laptop 05c_shell 06b_accuracy 07_plan 08_hazards
 
 if [ -z "${SKIP_CLUSTER:-}" ] && [ -f "$WORK/hazards.json" ]; then
   echo "== CLUSTER: stage 9 (renders)"
-  rsync -a -e "$SSH" "$WORK/hazards.json" "$WORK/path.json" "$HOST:$REPO/$WORK/"
-  rsync -a -e "$SSH" "$CFG" "$HOST:$REPO/$CFG"
+  hpg_rsync -a "$WORK/hazards.json" "$WORK/path.json" "$HOST:$REPO/$WORK/"
+  hpg_rsync -a "$CFG" "$HOST:$REPO/$CFG"
   remote sbatch --wait --parsable slurm/render.sbatch "$CFG"
   pull
 fi

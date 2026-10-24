@@ -1,0 +1,6 @@
+log_w dims=5,5 max|web - torch|=1.43e-6
+mu dims=5,5,2 max|web - torch|=2.09e-7
+log_sd dims=5,5,2 max|web - torch|=1.43e-6
+walker_mu dims=5,3 max|web - torch|=3.58e-7
+walker_log_sd dims=5,3 max|web - torch|=9.54e-7
+{"backend":"wasm","ort_web":"1.30.0","inputs":5,"max_abs_diff":0.000001430511474609375,"pass":true}

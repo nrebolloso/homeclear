@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Home Walkthrough Report</title>
+  <link rel="icon" href="data:," />
+  <style>
+    :root { --fg: #1a1a1a; --dim: #5f6368; --line: #d6d6d6; --bg: #fff; --bad: #c62828; --ok: #1a7f37; --ot: #b25d00; --imag: #8a2be2; }
+    @media (prefers-color-scheme: dark) { :root:not([data-print]) { --fg: #eee; --dim: #a0a4a8; --line: #444; --bg: #151515; } }
+    body { background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-serif; max-width: 980px; margin: auto; padding: 16px; }
+    h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 16px; margin: 22px 0 6px; border-bottom: 1px solid var(--line); padding-bottom: 3px; }
+    table { border-collapse: collapse; width: 100%; } td, th { border: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+    th { background: rgba(127,127,127,.08); } .dim { color: var(--dim); } .bad { color: var(--bad); font-weight: 600; } .ok { color: var(--ok); font-weight: 600; }
+    .ot { color: var(--ot); font-weight: 600; } .imag { color: var(--imag); border-bottom: 1px dashed var(--imag); }
+    .big { font-size: 30px; font-weight: 700; } .banner { border: 2px solid var(--ot); border-radius: 6px; padding: 8px 10px; margin: 10px 0; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; } img { max-width: 100%; border: 1px solid var(--line); }
+    @media (max-width: 700px) { .row { grid-template-columns: 1fr; } }
+    @media print { button { display: none; } body { max-width: none; } h2 { break-after: avoid; } table, img { break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <div id="root"><p>Open this from the walker game ("OT report"): it reads the layout on screen.</p></div>
+  <script type="module" src="/src/report.ts"></script>
+</body>
+</html>

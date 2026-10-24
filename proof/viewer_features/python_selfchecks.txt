@@ -1,0 +1,9 @@
+test_synthetic       SYNTHETIC OK
+make_game_scene      GAME SCENE OK {'out': 'viewer/public/scene/game_synth', 'objects': {'bed': 0.55, 'nightstand': 0.6, 
+test_contact_table   CONTACT TABLE OK: p(10 mm) = 1/578 trip-averaged in every config
+test_shell           SHELL OK {'walls': 16, 'x': [-0.09, 0.01, 4.01, 4.09, 6.51, 6.59], 'y': [-0.09, 0.01, 1.85, 1.89, 3.
+test_fills           FILLS OK {'bed': 'ns', 'nightstand': 'ns', 'rug': 'ns', 'nightlight': 'ns', 'door': 'ns'}
+test_verdict         VERDICT TEST OK
+test_plan_auto       OK
+test_table_scale     TABLE SCALE TEST OK (SYNTHETIC)
+test_clean           CLEAN ACCURACY OK

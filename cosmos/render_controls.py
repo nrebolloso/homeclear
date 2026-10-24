@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path[:0] = [str(ROOT), str(ROOT / "cosmos")]
 from common import read_ply, ply_xyz, transform_ply
 from render_route import write_mp4, W, H
+import shell_depth
 
 import cv2
 import numpy as np
@@ -103,13 +104,17 @@ def main(job_dir):
         return img[0, ..., :3].clamp(0, 1).cpu().numpy(), img[0, ..., 3].cpu().numpy(), alpha[0, ..., 0].cpu().numpy()
 
     V = {k: [] for k in ("rgb", "depth", "seg", "edge", "mask")}
-    walker_px = []
+    walker_px, shell_px = [], []
+    shell = shell_depth.load(scene_dir / "shell.json")   # stage 5c: walls/ceiling where the capture saw nothing
     with torch.no_grad():
         for k, view in enumerate(job["cameras"]):
             rgb, d, a = render(sh, deg, view)
             s_img = render(seg_t, None, view)[0]
             m_img = render(imag_t, None, view)[0][..., 0] > 0.5
             d = np.where(a > 0.1, d, np.inf)   # MCMC floor is opacity 0.1-0.3 (same cut as stage 5): 0.5 left holes Cosmos drew as snow
+            # never-filmed space gets the room shell's depth + a wall/ceiling label, not a void (Cosmos drew rock and sky there)
+            d, s_img, m_img, f = shell_depth.fill_empty(d, s_img, m_img, view, job["K"], shell)
+            shell_px.append(f)
             wd = walker_depth(job_dir / (job["walker"]["depth_frames"] % k))
             front = wd < d                                            # walker in front of the scene
             d, rgb, s_img, m_img = np.where(front, wd, d), np.where(front[..., None], 0.72, rgb), np.where(front[..., None], SEG["walker"], s_img), m_img & ~front
@@ -135,7 +140,8 @@ def main(job_dir):
     sheet = np.concatenate([np.concatenate([V[k][i] for i in (0, len(V["rgb"]) // 2, job["route_frames"] - 1)], 1) for k in V], 0)
     cv2.imwrite(str(out / "preview.jpg"), cv2.cvtColor(cv2.resize(sheet, None, fx=0.25, fy=0.25), cv2.COLOR_RGB2BGR))
     m = {"gaussians": N, "imagined_gaussians": int(imag.sum()), "frames": len(V["rgb"]), "chunks": len(specs),
-         "walker_pixels_pct": round(100 * float(np.mean(walker_px)), 2), "specs": specs}
+         "walker_pixels_pct": round(100 * float(np.mean(walker_px)), 2), "shell_pixels_pct": round(100 * float(np.mean(shell_px)), 2),
+         "specs": specs}
     (out / "render_controls.json").write_text(json.dumps(m, indent=1))
     print(json.dumps(m, indent=1))
     assert m["walker_pixels_pct"] > 0.5, "walker never visible: walker depth frames don't line up with the camera path"

@@ -1,0 +1,149 @@
+{
+ "per_hazard_per_month": {
+  "bump:threshold": {
+   "toe_contacts_expected": 0.501,
+   "toe_contacts_sampled": 0.6,
+   "swings_over": 119.4,
+   "snags": 0.0,
+   "collisions": 0.0,
+   "brushes": 0.0
+  },
+  "obst:chair_W": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 11.7,
+   "brushes": 48.0
+  },
+  "obst:counter": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 4.95,
+   "brushes": 26.25
+  },
+  "obst:door_jamb_L": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 3.15,
+   "brushes": 16.05
+  },
+  "obst:door_jamb_R": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 1.35,
+   "brushes": 8.7
+  },
+  "obst:hall_E": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 0.0,
+   "brushes": 0.3
+  },
+  "obst:hall_S": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 0.0,
+   "brushes": 27.15
+  },
+  "obst:island": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 10.65,
+   "brushes": 27.9
+  },
+  "obst:table": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 0.15,
+   "brushes": 0.75
+  },
+  "obst:wall_N": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 0.15,
+   "brushes": 0.0
+  },
+  "obst:wall_S_left": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 1.8,
+   "brushes": 9.6
+  },
+  "obst:wall_S_right": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 0.3,
+   "brushes": 1.2
+  }
+ },
+ "totals_per_month": {
+  "toe_contacts_expected": 0.501,
+  "toe_contacts_sampled": 0.6,
+  "snags": 0.0,
+  "collisions": 34.2,
+  "brushes": 165.9
+ },
+ "toe_contacts_by_month": [
+  1.0,
+  1.0,
+  0.0,
+  1.0,
+  0.0,
+  1.0
+ ],
+ "partial_last_month_nights": 20,
+ "sanity": {
+  "steps": 6830,
+  "raw_draw_in_obstacle_pct": 0.1,
+  "final_feet_in_obstacle_pct": 0.0,
+  "resampled_pct": 0.1,
+  "impossible_step_len_pct": 0.53,
+  "step_len_p5_p50_p95": [
+   0.248,
+   0.393,
+   0.593
+  ]
+ },
+ "map": "worldmodel/maps/synth_kitchen",
+ "model": "learned",
+ "nights": 200,
+ "trips": 400,
+ "remove": [
+  "bump:sink_mat"
+ ],
+ "move": [],
+ "route_length_m": 5.49,
+ "runtime_s": 6.9,
+ "assumed": {
+  "step_time_s": 0.9,
+  "toe_offset_m": 0.17,
+  "brush_m": 0.03,
+  "snag_rise_m": {
+   "wheel": 0.015,
+   "glide": 0.01
+  }
+ },
+ "labels": "contact_table is a PLACEHOLDER, NOT CALIBRATED; walker pose: learned walker head (Multi-Gait-Posture camera fit)",
+ "map_source": "SYNTHETIC kitchen-like test map (worldmodel/maps.py), not measured"
+}
