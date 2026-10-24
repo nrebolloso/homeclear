@@ -8,7 +8,9 @@ export interface PerfCfg {
   /** Spark: how far out (standard deviations) and how big (px) a splat is drawn; the defaults are sqrt(8) and 512 */
   max_std_dev: number; max_pixel_radius: number;
 }
-export const PERF: PerfCfg = { pixel_ratio: 1, max_std_dev: 2.2, max_pixel_radius: 128 };
+// max_std_dev 2.0, measured: Quest 2, kitchen4 150K, 72 Hz, route sweep (e2e/quest-sweep.ts), worst view 57.5 fps at 2.0
+// against 47.8 at 2.2 (twice); the median is 72 either way
+export const PERF: PerfCfg = { pixel_ratio: 1, max_std_dev: 2.0, max_pixel_radius: 128 };
 export const FULL: PerfCfg = { pixel_ratio: 1.5, max_std_dev: Math.sqrt(8), max_pixel_radius: 512 };
 
 /** Where it runs: on the monitor, in a standalone headset (a Quest 2 renders a thinned scene by itself), or over

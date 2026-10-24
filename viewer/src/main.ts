@@ -1429,13 +1429,13 @@ const inGridXY = (x: number, y: number) => x >= g.origin_xy[0] && y >= g.origin_
 const standable = (x: number, y: number) => { const c = cellAt(x, y); return inGridXY(x, y) && !!L.floor[c] && !L.obst[c] && coverage[c] > 0; };
 let perfBeforeXR = perfOn;
 // "See a safer room": the reimagined room around you (game.reimagine, AGENTS.md). The first press searches for the
-// layout (10-30 s), then the room morphs into it; after that the button morphs between your room and the safer one.
+// layout (10-30 s on a laptop, ~36 s on a Quest 2), then the room morphs into it; after that the button morphs between your room and the safer one.
 // Words for the patient and family, not the OT: no toe-contact numbers, just what changes.
 const reimVR = { goal: null as number | null, busy: false, ran: false, none: false };
 const reimButton = {
   text() {
     const n = game.reimagine.changes().length, sub = `${n} change${n === 1 ? '' : 's'}`;
-    if (reimVR.busy) return ['Finding a safer layout…', 'about half a minute'];
+    if (reimVR.busy) return ['Finding a safer layout…', 'up to a minute'];   // Quest 2, kitchen4: 36 s
     if (reimVR.none) return ['Your room is already safe', 'nothing to change'];
     if (!reimVR.ran) return ['See a safer room'];
     return game.reimagine.t() > 0.5 ? ['Back to my room', sub] : ['See the safer room', sub];
