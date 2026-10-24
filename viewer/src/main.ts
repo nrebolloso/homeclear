@@ -701,9 +701,15 @@ async function reimagineRoom() {
   const why = (msg: string) => { $('reimtotal').textContent = msg; return []; };   // say why nothing moved instead of doing nothing
   if (!objs.length && !interventions.length)
     return why('Nothing to rearrange: this scene exported no movable objects and no fixes (furniture is still part of the room splat). Try ?scene=game_synth.');
-  if (!suggestions.length) await suggest();
+  if (!suggestions.length) {
+    $('reimtotal').textContent = `searching layouts: every move of ${objs.length} objects and each fix, re-run in full (10–30 s)…`;
+    await suggest();
+  }
   if (!suggestions.length) return why('The layout search returned no options.');
-  const best = suggestions.reduce((b, o, n) => (o.per_month < suggestions[b].per_month ? n : b), 0);
+  // the optimizer's own score (toe contacts + squeezes + failed checks + route length), not toe contacts alone: with none
+  // to save (0.0/month) every option ties on them, and the one that widens a squeeze would lose to doing nothing
+  const better = (o: any, b: any) => o.score < b.score - 1e-9 || (o.score <= b.score + 1e-9 && o.actions.length < b.actions.length);
+  const best = suggestions.reduce((b, o, n) => (better(o, suggestions[b]) ? n : b), 0);
   if (!suggestions[best].actions.length)
     return why(`No change earns its place: ${fmt(current?.per_month ?? 0)} toe contacts/month already, and no move or fix lowers it or clears a failed check.`);
   await applyOption(best);
