@@ -14,15 +14,16 @@ RUN=$1
 R=$HPG_ROOT/Homeclear
 cd $R && source slurm/env.sh
 SRC=$R/out/$RUN; W=$R/out/${RUN}_glomap; mkdir -p $W/colmap
-cp $SRC/colmap/database.db $W/colmap/database.db
+# SQLite on /blue (network FS) can SIGBUS when it maps its -shm file: read the database from node-local disk
+DB=${TMPDIR:-/tmp}/glomap-$SLURM_JOB_ID.db; cp $SRC/colmap/database.db $DB
 ln -sfn $SRC/images $W/images
-python - $W <<'EOF'
+python - $W $DB <<'EOF'
 import json, sys, time
 from pathlib import Path
 import numpy as np, pycolmap
 w = Path(sys.argv[1]); col = w / "colmap"
 t0 = time.time()
-recs = pycolmap.global_mapping(col / "database.db", w / "images", col / "sparse")
+recs = pycolmap.global_mapping(sys.argv[2], w / "images", col / "sparse")
 dt = time.time() - t0
 assert recs, "global mapping produced no reconstruction"
 rec = max(recs.values(), key=lambda r: r.num_reg_images())
