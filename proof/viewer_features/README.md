@@ -71,3 +71,9 @@ Left inside footprints: chair7 172 -> 0, chair4 39 -> 4, bedside tables 112 / 47
 The Fixes panel lists every removed object ("Removed") with a Put back button; put back returns it where it stood if
 that spot passes the placement check. `game.inventory()` / `game.restoreObject(name)` for tests. Live-checked on
 `kitchen4_lighter`: remove chair4 + chair7 -> both listed; Put back chair7 -> back in the room, list shows chair4 only.
+Second follow-up: chair8's runners were still left (user screenshot). They were labelled chair8 but lie 0-4 mm up, under
+the 4 mm floor band every cut started at. An object's own labelled points now go with it below the floor band (the zone
+of unlabelled Gaussians still starts at it). Yellow Gaussians on the floor inside chair8's footprint: 391 -> 0
+(`kitchen4_lighter_chair8_removed.png`). Still left: ~60 runner Gaussians shared by the chair4 / chair7 footprints,
+more than 10 cm from any label and at floor height (a short yellow bar under the table). Fills re-run (job 47391130).
+The Removed list is now icon tiles (an icon per kind, name under it); click a tile to put it back.

@@ -367,12 +367,25 @@ function syncObjects() {
   $('inventory').innerHTML = gone.length ? '' : '<li class="hint">nothing removed</li>';
   for (const k of gone) {
     const li = document.createElement('li'), b = document.createElement('button');
-    li.textContent = `${objs[k].name} (${objs[k].kind}) `;
-    b.textContent = 'Put back'; b.onclick = () => restoreObject(k);
+    b.title = `Put back ${objs[k].name}`; b.onclick = () => restoreObject(k);
+    b.innerHTML = `<svg viewBox="0 0 24 24">${iconOf(objs[k])}</svg>`;
+    b.append(objs[k].name.replace(/_/g, ' '));
     li.appendChild(b); $('inventory').appendChild(li);
   }
   updateNight();
 }
+const ICONS: Record<string, string> = {   // line drawings for the Removed list, by kind or name
+  chair: '<path d="M7 3v18M7 12h10v9M7 12V3m0 0h3"/>',
+  table: '<path d="M2 8h20M5 8v12M19 8v12"/>',
+  nightstand: '<rect x="5" y="5" width="14" height="12"/><path d="M5 11h14M11 8h2M11 14h2M7 17v3M17 17v3"/>',
+  rug: '<rect x="3" y="7" width="18" height="10" rx="1"/><path d="M7 7v10M17 7v10"/>',
+  basket: '<path d="M3 10h18l-2 10H5zM8 10l3-6M16 10l-3-6"/>',
+  box: '<path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10"/>',
+  trash: '<path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15"/>',
+  other: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
+};
+const iconOf = (o: { name: string; kind: string }) =>
+  ICONS[o.kind] ?? ICONS[Object.keys(ICONS).find(n => o.name.startsWith(n)) ?? 'other'];
 function restoreObject(k: number) {   // back where it stood when removed, if that spot is still free
   const poses = layout.poses.map((q, n) => (n === k ? { ...q, removed: false } : q));
   if (!placementOk(g, placeBase, objs, poses, k, overlapOk[k])) return refused();
