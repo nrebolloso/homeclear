@@ -315,6 +315,8 @@ def main(cfg):
              # stairs (viewer stairs.ts): tape-measured, or copied from the viewer's "Copy as config YAML"; an entry
              # with only bottom/top is measured from the splat in the viewer
              "stairs": gm.get("stairs", []),
+             # doorways (viewer doors.ts): {name, a, b} = the two jambs' inside faces; the viewer offers ways to widen them
+             "doors": gm.get("doors", []),
              "hazards": "hazards.json", "route": "route.json", "routes": "routes.json", "walker": "walker.json", "personas": "personas.json",
              "persona": "persona.json", "interventions": gm["interventions"], "risk": gm["risk"],
              "plan": {k: cfg["plan"][k] for k in ("preferred_clearance_m", "clearance_weight")},

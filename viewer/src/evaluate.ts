@@ -1,12 +1,13 @@
 // One layout -> every route planned, rolled out and checked. Pure (no Worker globals): the worker, the optimizer and the
 // tests all call it.
-import { stamp, plan, routeHazards, bumpComponents, polyCells, worldFootprint, applyIntervention,
+import { stamp, carvedPolys, plan, routeHazards, bumpComponents, polyCells, worldFootprint, applyIntervention,
   type GridMeta, type Layers, type Footprinted, type Layout, type Intervention, type XY, type RouteHazard } from './grid.ts';
 import { rollouts, type Persona, type Risk, type Heat, type Ghost } from './sim.ts';
 import type { StepModel } from './stepmodel.ts';
 import type { WorldModel } from './worldmodel.ts';
 import { runChecks, type Fixture, type TransferRules, type EmsRules, type BodyFacts, type CheckOut } from './checks.ts';
 import { stairChecks, type Stair, type Side } from './stairs.ts';
+import { doorChecks, doorGain, needWidth, type Door } from './doors.ts';
 
 /** One walk the patient makes: night trips get the darkness multiplier, daytime ones don't. start_with: the start
  *  rides on that object (the bed): move the bed and the patient gets up from the same spot beside it. */
@@ -37,6 +38,8 @@ export interface Init {
   rules: { clearance_margin_m: number; bump_min_m: number; bump_link_cells?: number; bump_limit_m: number; margin_m: { width: number; height: number } };
   /** stairs (stairs.ts): marked in the viewer or config game.stairs; the stronger hand (viewer override, else persona) and the device */
   stairs?: Stair[]; strong_side?: Side | null; device?: string;
+  /** doorways (doors.ts): marked in the viewer or config game.doors */
+  doors?: Door[];
 }
 export interface HazardOut extends RouteHazard { name: string; per_month: number; ot_check: boolean; estimated: boolean }
 export interface RouteSummary {
@@ -57,7 +60,7 @@ export interface Eval {
 
 export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: number; heat?: boolean }): Eval {
   const t = performance.now(), { g, objects: O } = S, sel = Math.min(opts.sel ?? 0, S.routes.length - 1);
-  const L = stamp(g, S.base, O, lay.poses, lay.flattened);
+  const L = stamp(g, S.base, O, lay.poses, lay.flattened, carvedPolys(lay));
   const comps = bumpComponents(g, L.bump, S.rules.bump_min_m, S.rules.bump_link_cells);
   const names: Record<number, string> = {}, estComp = new Set<number>();
   S.est.forEach((e, c) => { if (e && comps[c]) estComp.add(comps[c]); });
@@ -98,6 +101,7 @@ export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: nu
     hazards: out.hazards.map(h => ({ position: h.position, name: h.name })) }) : [];
   for (const st of S.stairs ?? []) out.checks.push(...stairChecks(st, { g, L, fixtures: [...(S.fixtures ?? []), ...added], margin: S.rules.margin_m,
     strong_side: S.strong_side !== undefined ? S.strong_side : (S.persona as { strong_side?: Side }).strong_side ?? null, device: S.device ?? 'walker' }));
+  for (const d of S.doors ?? []) out.checks.push(...doorChecks(d, { gain: doorGain(lay, d.name), need_m: needWidth(S.plan.walker_width_m, S.rules.clearance_margin_m), margin: S.rules.margin_m }));
   // a route this walker can't make at all is the error to show, whichever route is selected
   const blocked = out.routes.find(r => r.error);
   if (blocked && !out.error) out.error = `${blocked.name}: ${blocked.error}`;

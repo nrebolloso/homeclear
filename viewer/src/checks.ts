@@ -10,7 +10,7 @@ export interface EmsRules { stretcher_width_m: number; phone_reach_m: number; en
 export interface BodyFacts { knee_height_m?: number; reach_m?: number; hip_precautions?: boolean }
 export type Verdict = 'ok' | 'fail' | 'borderline, OT to verify' | 'OT to verify';
 export interface CheckOut {
-  id: string; kind: 'transfer' | 'reach' | 'grab_bar' | 'ems' | 'phone' | 'stairs'; label: string; verdict: Verdict; note: string;
+  id: string; kind: 'transfer' | 'reach' | 'grab_bar' | 'ems' | 'phone' | 'stairs' | 'door'; label: string; verdict: Verdict; note: string;
   value_m?: number; limit_m?: [number, number]; position?: XY;
 }
 type Obj = Footprinted & { name: string; kind: string; surface_m?: number | null };
