@@ -17,3 +17,7 @@
    and the toilet (floor-frame x, y, read off `out/bedroom/occupancy.png` or by hovering in the viewer)? Those go into
    `config.bedroom.yaml` (`game.objects`, `game.routes`, `plan.start/goal`); they are not guessed. Optional, before seeing any
    Cosmos Reason output: list the real hazards in an answer key (kind + floor-frame x, y); empty, the run is not scored.
+7. **Real-walker physics check** (object physics is SIMULATED until this is done): push the walker over a bath towel
+   with one corner folded up 2-3 cm (10 head-on, 10 at about 45°), across the kitchen mat (10), and into a kitchen
+   chair (10 head-on, 10 grazing). Film from the side with a tape measure in view, count catches, folds, slides and
+   moves (more than 2 cm), and weigh the chair. Full protocol: `proof/physics/README.md`.

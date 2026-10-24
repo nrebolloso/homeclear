@@ -24,6 +24,9 @@ function render(p: ReportPayload) {
   const reason = p.reason.filter((r: any) => r.verdict !== 'dismissed').map((r: any) => `<li><span class="imag">${esc(r.note)}</span> · proposed by Cosmos Reason` +
     (r.verdict === 'confirmed' ? ` · geometry agrees: ${esc(r.measured)}` : ' · not measurable from the scan · <span class="ot">OT to verify</span>') + '</li>').join('');
   const sugg = p.suggestions.map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${f1(o.per_month)} (${f1(o.per_month_lo)}–${f1(o.per_month_hi)})</td><td>${o.checks_failed}</td><td>$${o.cost_usd} · ${o.minutes} min</td><td>${o.actions.map((a: { label: string }) => esc(a.label)).join('; ')}</td></tr>`).join('');
+  const pct = (x: number) => `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}%`, EV: Record<string, string> = { slid: 'slides ≥ 2 cm', folded: 'corner folds over', moved: 'moves ≥ 2 cm', tipped: 'tips > 30°' };
+  const objs = (c.objects ?? []).map(e => `<tr><td>${esc(e.object.replace(/_/g, ' '))}</td><td>${EV[e.event] ?? esc(e.event)}</td><td>${esc(e.route)}</td><td>${e.angle_deg.toFixed(0)}° · ${e.speed_mps.toFixed(2)} m/s</td>`
+    + `<td>${e.p_contact < 1 ? `${pct(e.p_contact)} of trips touch it` : 'every trip crosses it'}</td><td>${pct(e.p)} (${pct(e.ci95[0] ?? 0)}–${pct(e.ci95[1] ?? 0)}, n=${e.n})</td><td>${f1(e.per_month)}</td></tr>`).join('');
   const clips = p.clips.map(k => `<li><span class="imag">${esc(k)}</span></li>`).join('');
   document.getElementById('root')!.innerHTML = `
   <button onclick="print()">Print / save as PDF</button>
@@ -55,6 +58,8 @@ function render(p: ReportPayload) {
   <h2>Changes in this layout</h2>
   <table><tr><th>#</th><th>Change</th><th>Cost</th><th>Time</th><th>Product</th></tr>${acts || '<tr><td colspan="5">none: the home as filmed</td></tr>'}</table>
   ${sugg ? `<h2>Suggested layouts (optimizer)</h2><table><tr><th>Option</th><th>Contacts/month</th><th>Failed checks</th><th>Cost · time</th><th>Changes</th></tr>${sugg}</table>` : ''}
+  ${objs ? `<h2>Furniture the walker could push (<span class="imag">simulated</span>)</h2><table><tr><th>Object</th><th>Event</th><th>Route</th><th>Approach</th><th>Contact</th><th>P per touch/crossing (95% CI)</th><th>Per month</th></tr>${objs}</table>
+  <p class="dim">SIMULATED (MuJoCo batch, physics/batch_mujoco.py): shapes from the scan; masses, frictions and corner stiffness sampled from assumed ranges, not measured; not yet checked against the real walker. Approach angle 0° = straight at the edge.</p>` : ''}
   ${reason ? `<h2>Not measurable from the scan (proposed by a model)</h2><ul>${reason}</ul>` : ''}
   ${clips ? `<h2>Generated visualisations of this layout</h2><ul>${clips}</ul><p class="dim">Cosmos Transfer videos: imagined, for the family; hazard markers on them are the measured ones.</p>` : ''}
 
