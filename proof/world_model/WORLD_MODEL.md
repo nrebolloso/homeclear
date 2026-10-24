@@ -103,6 +103,51 @@ back; phase-free errors vs the real walk):
 side-offset 3.0 vs 8.8–10.2 cm, walker yaw 4.1° vs 9.4–10.5°). Smallest margin: walker position on straights, 2.68 vs
 2.77 cm (about a tie). The 90% region covers 93% of held-out steps (calibrated); the 50% region 57%.
 
+### Closed loop by horizon, trial kind and spread calibration (REAL held-out, P12-P13) - `learned/horizon/`
+Run: `python -m worldmodel.horizon data/samples.npz out/horizon --n-roll 100 --rho 0 --rho baseline_fit_to_train=0.73,learned=0` on the
+committed weights (`worldmodel/horizon.py`; the full tables are `learned/horizon/horizon.md`). Each model walks each of the 54 held-out
+trials 100 times, and every real step k is scored against the rollouts at the same arc length. The "horizon" is the real step number.
+Its totals agree with the closed-loop table above (learned 2.1 / 3.0 cm heel error on straights / corners here, 2.09 / 3.02 above).
+
+**What the held-out data can and cannot say.** The held-out trials are short: corner trials have 7-20 steps (typically 10-11), straights 14-28.
+Only 17 of the 36 corner trials get past step 10, none past step 20, and only **6 trials (all straight, 28 steps) reach step 21+**. So "beats the
+hand rule at turns over 20+ steps" **cannot be shown with this data**: corners are covered to 20 steps, 21+ only on straights. Longer corner
+walks need leave-participant-out folds over all 14 participants, or a capture of longer walks; the synthetic kitchen's long routes
+have no ground truth. All 54 trials are two people (P12, P13) walking repeatedly, so the trial-bootstrap intervals below are narrower than
+two participants justify.
+
+**Accuracy by horizon (heel lateral error, cm; learned minus hand rule fit to train, 90% interval over trials, trials where learned is better):**
+
+| | steps 1-5 | 6-10 | 11-20 | 21+ |
+|---|---|---|---|---|
+| corner | -5.96 [-6.59, -5.36] (36/36) | -5.52 [-6.20, -4.93] (36/36) | -3.63 [-4.05, -3.15] (17/17) | no trials |
+| straight | -2.13 [-2.28, -1.98] (18/18) | -1.96 [-2.04, -1.87] (18/18) | -2.05 [-2.12, -1.99] (18/18) | -1.89 [-2.00, -1.79] (6/6) |
+
+The learned model is better in every trial at every horizon with data, and its own error does not grow (corners 2.99 / 2.93 / 2.90 cm at
+1-5 / 6-10 / 11-20 steps; straights 1.99 to 2.27 cm out to 21+). The loop is steered by the real route at the same arc length, so this
+shows stability along a known route, not freedom from drift off it. The hand rule fit to train is worst at corners (8.6-9.0 cm at 1-10 steps, 6.4 cm at 11-20,
+where only the longer trials remain). Walker yaw: learned 2.9-4.2 deg, hand rule 3.1-13 deg; walker position is
+close (learned 2.3-3.9 cm, hand rule 2.4-4.9 cm).
+
+**Sideways spread (calibration of the rollouts' heel lateral offset; ratio = ensemble spread / RMS error of its mean, 1 = honest, < 1 over-confident;
+cover = share of real steps inside the central 50 / 90% of the rollouts):**
+
+| | learned corner | learned straight | hand rule fit, corner | hand rule fit, straight |
+|---|---|---|---|---|
+| ratio | 1.12-1.19 (steps 1-20) | 1.41-1.58 | 0.55 / 0.56 / 0.80 (steps 1-5 / 6-10 / 11-20) | 2.7-3.5 |
+| cover 50 / 90 | 0.58-0.62 / 0.90-0.96 | 0.62-0.71 / 0.97-1.00 | 0.07-0.19 / 0.51-0.81 | 0.92-0.97 / 0.99-1.00 |
+
+- **The learned model's sideways spread is not over-confident at corners in this test.** It is calibrated to slightly wide (ratio about 1.15,
+  90% coverage 0.90-0.96). On straights it is wider than it needs to be (ratio about 1.5, 90% coverage near 1.0), which errs toward
+  overstating chances of brushing something. The note "sideways spread over-confident in corners" is true of the **hand rule**
+  (ratio 0.38-0.51 as configured, 0.55-0.80 fit to train; 90% coverage 0.38-0.81), whose mean is off by 6-12 cm at corners and whose spread
+  (4-5 cm) is not wide enough to cover that. It is too wide on straights (spread 5 cm against a 1.4-1.9 cm error of the mean) because its jitter is fit across corners and straights together.
+- **What it does not test:** the kitchen S-curve is sharper than any training corner (~0.5% of learned steps still outside 0.1-0.8 m there),
+  so the corner calibration above does not carry over to sharp bends. There is no ground truth on that map.
+- **Step-noise persistence** (`step_noise_autocorr` in the training results: learned lag-1 about 0.09 along and -0.05 across, so rho = 0
+  is right for it; the hand rule's residuals persist, lag-1 0.73-0.77). Giving the hand rule that persistence widens its spread (corner ratio
+  0.74 / 0.88 / 1.34) without lowering its error (9.8 cm at steps 1-5), so it fixes the hand rule's spread, not its corner bias.
+
 ### Walker feedback
 A first version also took the previous walker pose as input. One-step it was better (walker 4.9 cm), but in closed loop
 on the synthetic kitchen it fed its own errors back: walker up to 4.4 m from the feet, yaw flipping 180°, 374

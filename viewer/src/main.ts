@@ -6,7 +6,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 import { stamp, carvedPolys, placementOk, polyCells, edt, worldFootprint, toCell, applyIntervention, placedFixtures, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
 import { buildDevice as deviceMesh, type WalkerCfg } from './walker.ts';
 import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
-import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z } from './wheelchair.ts';
+import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z, WHEEL_R } from './wheelchair.ts';
 import { chairGeometry, clearOf, driveStep, spinBy, type Chair } from './drive.ts';
 import { keyIntent, createHistory, createKeyOverlay } from './controls.ts';
 import { controlHints, hintLines, type HintCtx } from './hints.ts';
@@ -17,6 +17,7 @@ import { nightShader } from './night.ts';
 import { createVision, PROFILES, type Profile } from './vision.ts';
 import { createHeatOverlay, nights, drawTimeline } from './heat.ts';
 import { buildMannequin, feetAt, type Step } from './mannequin.ts';
+import { loadRigged } from './rig.ts';
 import { createLivePhys, type LivePhys } from './livephys.ts';
 import { initClips, exportForCosmos, listClips, type ExportOpts } from './cosmos.ts';
 import { layoutKey } from './prerender.ts';
@@ -178,7 +179,7 @@ const items = objs.map(o => {
   group.add(proxy, outline);
   scene.add(group);
   const fill = splat(o.fill);
-  fill.recolor = new THREE.Color(1, 0.75, 1);      // tint: imagined, not measured (light, so a generated floor texture still reads)
+  fill.recolor = new THREE.Color(1, 0.9, 1);       // tint: imagined, not measured (faint, so the generated floor reads as floor; the "imagined" tag says the rest)
   fill.visible = false;
   const tag = o.placed ? new THREE.Object3D() : label('imagined, not measured', 'imag');   // staged for the demo: the floor under it was filmed
   tag.position.set(o.pivot[0], o.pivot[1], 0.15);
@@ -2061,10 +2062,19 @@ function nearestS(x: number, y: number) {
 }
 
 // third person in autoplay: a mannequin walks behind the walker on the simulation's own footsteps (hero trip)
-const mannequin = buildMannequin(persona.eye_height_m / 0.94);
+type Mannequin = { group: THREE.Object3D; head: { visible: boolean }; update: (...a: any[]) => unknown; seated: (...a: any[]) => unknown };
+let mannequin: Mannequin = buildMannequin(persona.eye_height_m / 0.94);
 mannequin.group.visible = false;
 scene.add(mannequin.group);
-const manShadows = GROUND ? footShadows(mannequin.group) : null;
+let manShadows = GROUND ? footShadows(mannequin.group) : null, manPose: unknown = null;   // manPose: the rigged mannequin's last pose report (ankle / hand errors)
+// the skinned model (rig.ts, CesiumMan CC BY 4.0) replaces the plain one once it has loaded; ?mannequin=basic or a failed load keeps the plain one
+if (PARAMS.get('mannequin') !== 'basic') loadRigged('models/mannequin/CesiumMan.glb', persona.eye_height_m / 0.94).then(rigged => {
+  renderer.localClippingEnabled = true;   // first person clips the head off at the neck
+  rigged.group.visible = mannequin.group.visible;
+  scene.remove(mannequin.group); scene.add(rigged.group);
+  mannequin = rigged;
+  manShadows = GROUND ? footShadows(rigged.group) : null;
+}).catch(e => console.warn('rigged mannequin not loaded, keeping the plain one:', e));
 let heroSteps: Step[] = [];
 /** The hero trip's footsteps, moved from the walker frame's centre line (where the simulation puts the route) back to
  *  the user's own feet, each with its arc length along the route. */
@@ -2149,10 +2159,10 @@ function step(dt: number, t: number) {
   mannequin.group.visible = showMan || seatedMan;
   mannequin.head.visible = !seatedMan || view.third;
   stepCloudUpdate(showMan);
-  if (isChair() && (showMan || seatedMan)) { mannequin.seated(body, SEAT_Z, walkerCfg.legs[0][1] + 0.025); manShadows?.hide(); }   // the chair's own blobs ground it
+  if (isChair() && (showMan || seatedMan)) { manPose = mannequin.seated(body, SEAT_Z, walkerCfg.legs[0][1] + 0.025, { x: walkerCfg.legs[0][0], z: WHEEL_R, r: WHEEL_R - 0.04 }); manShadows?.hide(); }   // the chair's own blobs ground it
   else if (showMan) {
     const f = feetAt(heroSteps, autoS, persona.stride_m ?? 0.35), hy = walkerCfg.width_m / 2 - walkerCfg.leg_radius_m, gx = walkerCfg.user_gap_m + 0.05;
-    mannequin.update(body, [f[1], f[0]], [[gx, hy], [gx, -hy]], walkerCfg.handle_height_m);   // sim side 1 = left
+    manPose = mannequin.update(body, [f[1], f[0]], [[gx, hy], [gx, -hy]], walkerCfg.handle_height_m);   // sim side 1 = left
     manShadows?.(body, [f[0].pos, f[1].pos]);
   }
   pulseSpots(t);
@@ -2330,7 +2340,7 @@ Object.assign(game, {
     return replan().then(ms => { if (!current?.error) Object.assign(body, routePose(0, 0, Infinity)); return ms; });
   },
   setNight(on: boolean) { $<HTMLInputElement>('night').checked = on; updateNight(); },
-  openReport, openFixCard, describeChanges, mannequinVisible: () => mannequin.group.visible, heroSteps: () => heroSteps,
+  openReport, openFixCard, describeChanges, mannequinVisible: () => mannequin.group.visible, mannequinPose: () => manPose, heroSteps: () => heroSteps,
   setVision(p: Profile) { $<HTMLSelectElement>('vision').value = p; vision.set(p); return vision.profile; },
   selectRoute(k: number) { const s = $<HTMLSelectElement>('routesel'); s.value = String(k); return replanRoute(k); },
   cell(x: number, y: number) { const c = cellAt(x, y); return { floor: L.floor[c], obst: L.obst[c], cov: coverage[c] }; },
@@ -2367,7 +2377,7 @@ const frontendAdapter: FrontendAdapter = {
     else if (m === 'route') { xrFollowRoute = renderer.xr.isPresenting; const at = mode === 'free' && !explore.on ? resumeS() : 0; if (mode !== 'auto') { setWalk('auto'); autoS = at; } routePaused = false; }
     else if (m === 'walk' || (m === 'fly' && renderer.xr.isPresenting)) { xrFollowRoute = false; goWalk(); routePaused = false; }
     else if (m === 'fly') { xrFollowRoute = false; setWalk('fly'); routePaused = false; }
-    else { xrFollowRoute = false; const view = mode === 'fly' ? { x: fly.x, y: fly.y, yaw: body.yaw } : null; setWalk('free'); routePaused = false; if (!explore.on && !isChair()) setExplore(true); if (view && explore.on) Object.assign(body, view); }   // from Fly: the walker parks where it was, the camera stays where you flew   // the chair drives fenced here: the noclip camera would hide "no room to turn" (Fly, F, is still noclip)
+    else { xrFollowRoute = false; const view = mode === 'fly' ? { x: fly.x, y: fly.y, yaw: body.yaw } : null; setWalk('free'); routePaused = false; if (!explore.on) setExplore(true); if (view && explore.on) Object.assign(body, view); }   // from Fly: the walker parks where it was, the camera stays where you flew
   },
   focus(item) {
     const p = vantage(item.at, current?.xy ?? [item.at], 1.2, 1.1);
