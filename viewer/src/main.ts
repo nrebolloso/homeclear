@@ -8,6 +8,7 @@ import { buildWalker, type WalkerCfg } from './walker.ts';
 import { nightShader } from './night.ts';
 import { initClips, exportForCosmos } from './cosmos.ts';
 import type { Eval, Init } from './worker.ts';
+import type { WorldModel } from './worldmodel.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const RUN = new URLSearchParams(location.search).get('scene') ?? 'game_synth';
@@ -18,8 +19,10 @@ const bin = (f: string) => fetch(BASE + f).then(r => r.arrayBuffer());
 const sc = await json('scene.json');
 const [walkerCfg, persona, route, hzFile] = await Promise.all([json(sc.walker), json(sc.persona), json(sc.route), json(sc.hazards)]) as
   [WalkerCfg, any, { start: XY; goal: XY }, { hazards: any[] }];
-persona.step_model = new URLSearchParams(location.search).get('step') ?? persona.step_model ?? 'hand';   // ?step=learned|hand
+persona.step_model = new URLSearchParams(location.search).get('step') ?? persona.step_model ?? 'hand';   // ?step=learned|world|hand
 const stepModel = persona.step_model === 'learned' ? await fetch('models/step_model.json').then(r => r.json()) : undefined;
+const worldModel: WorldModel | undefined = persona.step_model === 'world' ? await fetch('models/world_model.json').then(r => r.json()) : undefined;
+if (worldModel) worldModel.shift = walkerCfg.user_gap_m + walkerCfg.depth_m / 2 - worldModel.mean_gap_m;   // learned.py Learned.shift
 const g: GridMeta = sc.grid;
 const [nx, ny] = g.shape;
 const base: Layers = { floor: new Uint8Array(await bin(sc.grid.floor)), obst: new Uint8Array(await bin(sc.grid.obstacles)), bump: new Float32Array(await bin(sc.grid.bump_height_m)) };
@@ -160,7 +163,7 @@ let L = stamp(g, base, objs, layout.poses);
 let current: Eval | null = null, baselinePerMonth: number | null = null;
 let routeS: number[] = [];
 const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
-const init: Init = { g, base, est, objects: objs, route, persona, risk, interventions, stepModel,
+const init: Init = { g, base, est, objects: objs, route, persona, risk, interventions, stepModel, worldModel,
   plan: { walker_width_m: walkerCfg.width_m, ...sc.plan }, rules: sc.hazard_rules };
 worker.postMessage({ type: 'init', init });
 let seq = 0, latestEval = 0;
@@ -221,7 +224,7 @@ function renderPanels() {
   const r = current!;
   const d = r.per_month - (baselinePerMonth ?? r.per_month);
   $('risk').innerHTML = r.error ? '<span class="delta-bad">no route for this walker</span>' :
-    `<div class="big measured">${fmt(r.per_month)}</div>expected toe contacts / month (${risk.rollouts} simulated trips, ${risk.trips_per_night}/night; steps: ${persona.step_model === 'learned' ? 'learned model' : 'hand rule'})` +
+    `<div class="big measured">${fmt(r.per_month)}</div>expected toe contacts / month (${risk.rollouts} simulated trips, ${risk.trips_per_night}/night; steps: ${persona.step_model === 'world' ? 'world model (heels + walker)' : persona.step_model === 'learned' ? 'learned model' : 'hand rule'})` +
     `<br>original layout: ${fmt(baselinePerMonth!)} → now ${fmt(r.per_month)} <span class="${d <= 0 ? 'delta-good' : 'delta-bad'}">(${d <= 0 ? '' : '+'}${fmt(d)})</span>`;
   const geo = r.hazards.map(h => `<li><span class="measured">${h.type === 'floor_bump' ? (h.estimated ? `${h.name}: thin cable/cord, ~${(h.height_m! * 100).toFixed(1)} cm ESTIMATED (classified, not measured)` : `${h.name}: ${(h.height_m! * 100).toFixed(1)} cm bump`) : `tight passage: ${(h.min_side_clearance_m! * 100).toFixed(0)} cm each side`}</span>` +
     ` over ${h.length_m.toFixed(2)} m${h.type === 'floor_bump' ? ` · ${fmt(h.per_month)}/month` : ''}${h.ot_check ? ' · <span class="ot">OT should check</span>' : ''}</li>`);
@@ -395,8 +398,37 @@ function routeAt(s: number): [number, number, number] {
   return [xy[k - 1][0] + f * (xy[k][0] - xy[k - 1][0]), xy[k - 1][1] + f * (xy[k][1] - xy[k - 1][1]), 0];
 }
 const SPEED = 0.45;   // m/s, also the Cosmos export's pace
+// world model: autoplay replays ghost 0, the walker on the walker head's poses and its last two heels shown
+const feet = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ vertexColors: true, size: 14, sizeAttenuation: false, depthWrite: false }));
+feet.renderOrder = 2;
+scene.add(feet);
+function worldStep(dt: number): boolean {
+  const gh = current?.ghosts[0];
+  if (!gh?.walker || gh.walker.length < 2) return false;
+  const W = gh.walker, d = [0];
+  for (let k = 1; k < W.length; k++) d.push(d[k - 1] + Math.hypot(W[k][0] - W[k - 1][0], W[k][1] - W[k - 1][1]));
+  const Ls = d[d.length - 1];
+  if (autoS >= Ls) { autoPause += dt; if (autoPause > 2) { autoS = 0; autoPause = 0; } }
+  else autoS = Math.min(Ls, autoS + SPEED * dt);
+  let k = 1;
+  while (k < d.length - 1 && d[k] < autoS) k++;
+  const f = THREE.MathUtils.clamp((autoS - d[k - 1]) / (d[k] - d[k - 1] || 1), 0, 1), a = W[k - 1], b = W[k];
+  const yaw = a[2] + f * Math.atan2(Math.sin(b[2] - a[2]), Math.cos(b[2] - a[2]));
+  Object.assign(body, { x: a[0] + f * (b[0] - a[0]) - Math.cos(yaw) * centreOffset, y: a[1] + f * (b[1] - a[1]) - Math.sin(yaw) * centreOffset, yaw });
+  const pos: number[] = [], col: number[] = [];
+  for (const j of [k - 1, k - 2]) if (j >= 0) {   // heel k lands with walker pose k: show the two latest landed heels
+    pos.push(gh.pts[j][0], gh.pts[j][1], 0.05);
+    col.push(...(gh.hit[j] ? [1, 0.1, 0.1] : j % 2 ? [1, 0.55, 0.2] : [0.3, 0.6, 1]));
+  }
+  feet.geometry.dispose();
+  feet.geometry = new THREE.BufferGeometry();
+  feet.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  feet.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return true;
+}
 function autoStep(dt: number) {
   if (!current || current.error || routeS.length < 2) return;
+  if (persona.step_model === 'world' && worldStep(dt)) return;
   const Ls = routeS[routeS.length - 1];
   if (autoS >= Ls) { autoPause += dt; if (autoPause > 2) { autoS = 0; autoPause = 0; } }
   else autoS = Math.min(Ls, autoS + SPEED * dt);

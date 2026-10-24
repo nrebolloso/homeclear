@@ -50,3 +50,32 @@ def test_rollout_and_remove_mat():
     assert s0["per_hazard_per_month"]["bump:sink_mat"]["swings_over"] > 0
     assert "bump:sink_mat" not in s1["per_hazard_per_month"]
     assert s0["sanity"]["final_feet_in_obstacle_pct"] == 0
+
+
+def test_learned_features_mirror():
+    from worldmodel.learned import features, targets
+    rng = np.random.default_rng(1)
+    h, a, h1, w1 = rng.normal(size=(3, 2)), rng.normal(size=(3, 2)), rng.normal(size=2), rng.normal(size=3)
+    F = np.array([1, -1])                                              # mirror the world in y, swap the feet
+    sd = np.array([1, -1, 1])
+    assert np.allclose(features(h, sd, a), features(h * F, -sd, a * F), atol=1e-6)
+    assert np.allclose(targets(h, sd, a, h1, w1), targets(h * F, -sd, a * F, h1 * F, w1 * [1, -1, -1]), atol=1e-5)
+
+
+def test_kabsch_recovers_pose():
+    from worldmodel.gait import kabsch
+    c, s = np.cos(0.8), np.sin(0.8)
+    R = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+    a = np.random.default_rng(2).normal(size=(23, 3))
+    R2, t = kabsch(a, a @ R.T + [1, 2, 3])
+    assert np.allclose(R2, R) and np.allclose(t, [1, 2, 3])
+
+
+def test_learned_prunes_glitches_and_stays_stable():
+    from worldmodel.learned import Learned
+    cfg = load_cfg()
+    L, s = Learned(cfg), State(np.array([[0.1, 0], [-0.25, -0.2], [-0.6, 0]]), np.zeros((3, 2)), np.array([1, -1, 1]),
+                               np.zeros(2), np.array([0.4, 0]), np.zeros(3), np.full(8, 2.0))
+    assert (L.predict(s, np.array([[0.25, 0], [0.5, 0], [1.0, 0]])).w >= 0.02).all()
+    r, *_ = run(D, tempfile.mkdtemp(), "learned", nights=10)
+    assert r["sanity"]["impossible_step_len_pct"] < 2 and r["sanity"]["final_feet_in_obstacle_pct"] < 0.1

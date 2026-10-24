@@ -3,17 +3,18 @@
 import type { GridMeta, XY } from './grid.ts';
 import { toCell } from './grid.ts';
 import { mdn, features, draw, type StepModel } from './stepmodel.ts';
+import { predict, sampleHeel, smoothRoute, type WorldModel, type Pose } from './worldmodel.ts';
 
 export interface Persona {
   gait_profile: string; stride_m: number; stride_cv: number; foot_sep_m: number; toe_clearance_cv: number;
-  step_model?: 'hand' | 'learned'; speed_mps?: number;   // learned = stepmodel.ts, trained on Multi-Gait-Posture
+  step_model?: 'hand' | 'learned' | 'world'; speed_mps?: number;   // learned = stepmodel.ts; world = worldmodel.ts (heels + walker)
 }
 export interface Risk {
   rollouts: number; trips_per_night: number; days_per_month: number; path_offset_sd_m: number; step_jitter_m: number;
   dark_contact_multiplier: number; ghosts: number; contact_table: Record<string, { height_m: number[]; p_per_stride: number[] }>;
 }
 export interface Light { x: number; y: number; r: number }
-export interface Ghost { pts: XY[]; hit: boolean[] }
+export interface Ghost { pts: XY[]; hit: boolean[]; walker?: Pose[] }   // walker: world model only, one pose per step
 export interface RolloutResult { per_month: number; per_comp: Record<number, number>; trips: number; ghosts: Ghost[] }
 
 /** Linear interpolation in the calibration table, clamped at both ends. */
@@ -33,7 +34,8 @@ export function rng(seed: number) {
 }
 
 export function rollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, route: XY[], persona: Persona, risk: Risk,
-                         lights: Light[], seed = 1, model?: StepModel): RolloutResult {
+                         lights: Light[], seed = 1, model?: StepModel, world?: WorldModel): RolloutResult {
+  if (persona.step_model === 'world') return worldRollouts(g, bump, comps, route, persona, risk, lights, seed, world);
   const learned = persona.step_model === 'learned';
   if (learned && !model) throw new Error('persona.step_model = learned but no step model loaded');
   const table = risk.contact_table[persona.gait_profile];
@@ -119,6 +121,61 @@ export function rollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, rou
       }
       last[side] = foot;
       if (trip < risk.ghosts) { ghost.pts.push(body); ghost.hit.push(hit); }
+    }
+    if (trip < risk.ghosts) ghosts.push(ghost);
+  }
+  const month = risk.trips_per_night * risk.days_per_month / risk.rollouts;
+  const per_comp: Record<number, number> = {};
+  for (const c in perComp) per_comp[c] = perComp[c] * month;
+  return { per_month: total * month, per_comp, trips: risk.rollouts, ghosts };
+}
+
+/** World model trips (worldmodel/rollout.py Engine.trip): heels drawn from the learned mixture, the walker pose from its
+ *  walker head. Ghost dots are the heels. shortcut: no per-trip path offset and no walker pull-back at counters (the
+ *  Python engine has both); the live frame check still turns the walker red where it gets too close. */
+function worldRollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, route: XY[], persona: Persona, risk: Risk,
+                       lights: Light[], seed: number, m?: WorldModel): RolloutResult {
+  if (!m) throw new Error('persona.step_model = world but no world model loaded');
+  const table = risk.contact_table[persona.gait_profile];
+  if (!table) throw new Error(`no contact_table for gait profile ${persona.gait_profile}`);
+  const rt = smoothRoute(route), n0 = rt.length, ny = g.shape[1];
+  const e = rt[n0 - 1], b = rt[Math.max(0, n0 - 20)], du = Math.hypot(e[0] - b[0], e[1] - b[1]) || 1;
+  const ext: XY[] = [...rt, ...[...Array(150)].map((_, i) => [e[0] + (i + 1) * 0.01 * (e[0] - b[0]) / du, e[1] + (i + 1) * 0.01 * (e[1] - b[1]) / du] as XY)];
+  const R = rng(seed), perComp: Record<number, number> = {}, ghosts: Ghost[] = [];
+  let total = 0;
+  const L0 = persona.stride_m, Wd = persona.foot_sep_m, d0 = Math.hypot(rt[20][0] - rt[0][0], rt[20][1] - rt[0][1]) || 1;
+  const ux = (rt[20][0] - rt[0][0]) / d0, uy = (rt[20][1] - rt[0][1]) / d0;
+  for (let trip = 0; trip < risk.rollouts; trip++) {
+    const clearance = Math.exp(R.n() * persona.toe_clearance_cv), s0 = R.u() < 0.5 ? -1 : 1;
+    // mid-heels on route[0], as in the training data
+    const at = (a: number, l: number): XY => [rt[0][0] + a * ux - l * uy, rt[0][1] + a * uy + l * ux];
+    const heels: XY[] = [at(L0 / 2, s0 * Wd / 2), at(-L0 / 2, -s0 * Wd / 2), at(-1.5 * L0, s0 * Wd / 2)], sides = [s0, -s0, s0];
+    const last: XY[] = s0 > 0 ? [heels[1], heels[0]] : [heels[0], heels[1]];   // index 0 = right foot, 1 = left foot
+    const ghost: Ghost = { pts: [], hit: [], walker: [] };
+    for (let k = 0, step = 0; step < 400; step++) {
+      const mid: XY = [(heels[0][0] + heels[1][0]) / 2, (heels[0][1] + heels[1][1]) / 2];
+      let best = Infinity, bk = k;
+      for (let j = k; j < Math.min(k + 120, ext.length); j++) { const d = Math.hypot(ext[j][0] - mid[0], ext[j][1] - mid[1]); if (d < best) { best = d; bk = j; } }
+      k = bk;
+      if (k >= n0 - 16) break;
+      const action = [25, 50, 100].map(o => ext[Math.min(k + o, ext.length - 1)]);
+      const p = predict(m, heels, sides, action), foot = sampleHeel(p, R.u, R.n), side = -sides[0], fi = side > 0 ? 1 : 0;
+      let hit = false;
+      const from = last[fi];
+      const ns = Math.max(2, Math.ceil(Math.hypot(foot[0] - from[0], foot[1] - from[1]) / (g.cell_m / 2)));
+      let h = 0, comp = 0;
+      for (let q = 0; q <= ns; q++) {
+        const [i, j] = toCell(g, [from[0] + (foot[0] - from[0]) * q / ns, from[1] + (foot[1] - from[1]) * q / ns]);
+        if (bump[i * ny + j] > h) { h = bump[i * ny + j]; comp = comps[i * ny + j]; }
+      }
+      if (h > 0) {
+        const lit = lights.some(l => Math.hypot(foot[0] - l.x, foot[1] - l.y) <= l.r);
+        const pc = Math.min(1, contactProb(table, h / clearance) * (lit ? 1 : risk.dark_contact_multiplier));
+        if (R.u() < pc) { hit = true; total++; perComp[comp] = (perComp[comp] || 0) + 1; }
+      }
+      last[fi] = foot;
+      heels.unshift(foot); heels.length = 3; sides.unshift(side); sides.length = 3;
+      if (trip < risk.ghosts) { ghost.pts.push(foot); ghost.hit.push(hit); ghost.walker!.push(p.walker); }
     }
     if (trip < risk.ghosts) ghosts.push(ghost);
   }

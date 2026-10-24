@@ -39,8 +39,11 @@ class StepDist:
         return x[0] if n is None else x
 
     def logpdf(self, x):
-        z = np.einsum("kji,kj->ki", self.R, np.asarray(x, float)[None] - self.mu) / self.sd   # R^T (x - mu)
-        return float(np.log(np.sum(self.w * np.exp(-0.5 * (z ** 2).sum(1)) / (2 * np.pi * self.sd.prod(1))) + 1e-300))
+        """x (2,) -> float, or (n, 2) -> (n,)."""
+        x = np.asarray(x, float)
+        z = np.einsum("kji,nkj->nki", self.R, x.reshape(-1, 1, 2) - self.mu) / self.sd   # R^T (x - mu)
+        lp = np.log(np.sum(self.w * np.exp(-0.5 * (z ** 2).sum(2)) / (2 * np.pi * self.sd.prod(1)), 1) + 1e-300)
+        return float(lp[0]) if x.ndim == 1 else lp
 
 
 class Baseline:
@@ -60,9 +63,12 @@ class Baseline:
         mu = m + self.L * stride_scale * u - side0 * self.W / 2 * left(u)
         return StepDist([1.0], [mu], [self.sd * [stride_scale, 1]], [np.stack([u, left(u)], 1)])
 
+    def walker_pose(self, s, heel, action, walker, prev=None):
+        return walker_pose(s, heel, action, walker, prev)
+
 
 def walker_pose(s: State, heel, action, walker, prev=None):
-    """Geometric walker rule (both models; no training data has walker markers): the frame centre sits user_gap + depth/2
+    """Geometric walker rule (baseline): the frame centre sits user_gap + depth/2
     ahead of the body (mid-heels), pointing at the 1 m route point; yaw eases 50% per step toward that direction."""
     com = (heel + s.heels[0]) / 2
     u = unit(np.asarray(action)[-1] - com)

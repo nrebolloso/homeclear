@@ -1,0 +1,125 @@
+{
+ "per_hazard_per_month": {
+  "bump:threshold": {
+   "toe_contacts_expected": 0.474,
+   "toe_contacts_sampled": 0.45,
+   "swings_over": 120.0,
+   "snags": 0.0,
+   "collisions": 0.0,
+   "brushes": 0.0
+  },
+  "obst:chair_W": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 0.0,
+   "brushes": 45.45
+  },
+  "obst:counter": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 0.0,
+   "brushes": 30.0
+  },
+  "obst:door_jamb_L": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 0.0,
+   "brushes": 16.05
+  },
+  "obst:door_jamb_R": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 2.1,
+   "brushes": 13.05
+  },
+  "obst:hall_S": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 0.0,
+   "brushes": 29.85
+  },
+  "obst:island": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 10.95,
+   "brushes": 21.0
+  },
+  "obst:wall_S_left": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 0.0,
+   "brushes": 3.3
+  },
+  "obst:wall_S_right": {
+   "toe_contacts_expected": 0.0,
+   "toe_contacts_sampled": 0.0,
+   "swings_over": 0.0,
+   "snags": 0.0,
+   "collisions": 0.15,
+   "brushes": 0.15
+  }
+ },
+ "totals_per_month": {
+  "toe_contacts_expected": 0.474,
+  "toe_contacts_sampled": 0.45,
+  "snags": 0.0,
+  "collisions": 13.2,
+  "brushes": 158.85
+ },
+ "toe_contacts_by_month": [
+  1.0,
+  0.0,
+  0.0,
+  0.0,
+  2.0,
+  0.0
+ ],
+ "partial_last_month_nights": 20,
+ "sanity": {
+  "steps": 5903,
+  "raw_draw_in_obstacle_pct": 0.0,
+  "final_feet_in_obstacle_pct": 0.0,
+  "resampled_pct": 0.0,
+  "impossible_step_len_pct": 0.0,
+  "step_len_p5_p50_p95": [
+   0.336,
+   0.393,
+   0.454
+  ]
+ },
+ "map": "worldmodel/maps/synth_kitchen",
+ "model": "baseline",
+ "nights": 200,
+ "trips": 400,
+ "remove": [
+  "bump:sink_mat"
+ ],
+ "move": [],
+ "route_length_m": 5.49,
+ "runtime_s": 3.8,
+ "assumed": {
+  "step_time_s": 0.9,
+  "toe_offset_m": 0.17,
+  "brush_m": 0.03,
+  "snag_rise_m": {
+   "wheel": 0.015,
+   "glide": 0.01
+  }
+ },
+ "labels": "contact_table is a PLACEHOLDER, NOT CALIBRATED; walker pose: geometric rule",
+ "map_source": "SYNTHETIC kitchen-like test map (worldmodel/maps.py), not measured"
+}

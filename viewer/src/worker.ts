@@ -3,17 +3,18 @@ import { stamp, plan, routeHazards, bumpComponents, polyCells, worldFootprint, a
   type GridMeta, type Layers, type Footprinted, type Layout, type Intervention, type XY, type RouteHazard } from './grid.ts';
 import { rollouts, type Persona, type Risk } from './sim.ts';
 import type { StepModel } from './stepmodel.ts';
+import type { WorldModel } from './worldmodel.ts';
 
 export interface Init {
   g: GridMeta; base: Layers; est: Uint8Array; objects: (Footprinted & { name: string; kind: string; light_radius_m: number | null })[];
-  route: { start: XY; goal: XY }; persona: Persona; risk: Risk; interventions: Intervention[]; stepModel?: StepModel;
+  route: { start: XY; goal: XY }; persona: Persona; risk: Risk; interventions: Intervention[]; stepModel?: StepModel; worldModel?: WorldModel;
   plan: { walker_width_m: number; preferred_clearance_m: number; clearance_weight: number };
   rules: { clearance_margin_m: number; bump_min_m: number; bump_link_cells?: number; bump_limit_m: number; margin_m: { width: number; height: number } };
 }
 export interface HazardOut extends RouteHazard { name: string; per_month: number; ot_check: boolean; estimated: boolean }
 export interface Eval {
   error?: string; xy: XY[]; side: number[]; length_m: number; hazards: HazardOut[]; per_month: number;
-  ghosts: { pts: XY[]; hit: boolean[] }[]; dist_m: Float32Array; ms: number;
+  ghosts: { pts: XY[]; hit: boolean[]; walker?: [number, number, number][] }[]; dist_m: Float32Array; ms: number;
 }
 
 let S: Init;
@@ -32,7 +33,7 @@ function evaluate(lay: Layout, ghosts: boolean): Eval {
       for (const c of polyCells(g, worldFootprint(o, lay.poses[k]))) if (comps[c]) names[comps[c]] = o.name;
   });
   const lights = O.flatMap((o, k) => (o.kind === 'nightlight' && !lay.poses[k].removed ? [{ x: lay.poses[k].x, y: lay.poses[k].y, r: o.light_radius_m ?? 1.5 }] : []));
-  const R = rollouts(g, L.bump, comps, P.xy, S.persona, { ...S.risk, ghosts: ghosts ? S.risk.ghosts : 0 }, lights, 1, S.stepModel);
+  const R = rollouts(g, L.bump, comps, P.xy, S.persona, { ...S.risk, ghosts: ghosts ? S.risk.ghosts : 0 }, lights, 1, S.stepModel, S.worldModel);
   out.hazards = routeHazards(g, L, P, S.plan.walker_width_m, S.rules.clearance_margin_m, S.rules.bump_min_m, comps).map(h => ({
     ...h, name: h.type === 'floor_bump' ? names[h.comp!] ?? (estComp.has(h.comp!) ? 'cable' : 'floor bump') : 'tight passage',
     estimated: h.type === 'floor_bump' && estComp.has(h.comp!),
