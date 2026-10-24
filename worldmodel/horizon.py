@@ -11,10 +11,12 @@ Per step: heel lateral offset (same foot), walker position and yaw. Spread calib
   cover_50 / cover_90   real value inside the central 50 / 90 % of the rollouts (should be 0.5 / 0.9)
   ratio    sqrt((1 + 1/n_roll) * mean ensemble variance) / RMS error of the ensemble mean. 1 = honest; < 1 over-confident
            (the real walk lands further from the ensemble than the ensemble thinks it spreads), > 1 under-confident.
-`rho` = within-trip step-noise persistence (models.TripNoise); 0 is independent draws, as train.py scores.
+`rho` = within-trip step-noise persistence (models.TripNoise); 0 is independent draws, as train.py scores. One number for every
+model, or a {model: rho} dict (train.py measures it per model: the hand rule's residuals persist, the learned model's barely do).
 Intervals are 90 % bootstrap over TRIALS (the steps of one trial are not independent).
 
-usage: python -m worldmodel.horizon <samples.npz> <out_dir> [--n-roll 100] [--rho 0.0 [--rho 0.3 ...]] [--weights worldmodel/weights/learned.npz]
+usage: python -m worldmodel.horizon <samples.npz> <out_dir> [--n-roll 100] [--rho 0.0] [--rho baseline_fit_to_train=0.73,learned=0.0 ...]
+       [--weights worldmodel/weights/learned.npz]   (each --rho is one run: a number for every model, or name=value pairs)
 Writes horizon_results.json and horizon.md."""
 import argparse, json, sys
 from pathlib import Path
@@ -48,7 +50,7 @@ def trial_scores(z, routes, trial, models, cfg, d_shift, n_roll, rho=0.0, seed=0
         rng = np.random.default_rng(seed)
         lat, wpos, wyaw = np.full((n_roll, n), np.nan), np.full((n_roll, n), np.nan), np.full((n_roll, n), np.nan)
         for r in range(n_roll):
-            H, S, P = walk(mod, z, route, i0, 3 * n + 30, d_shift, cfg, rng, rho)
+            H, S, P = walk(mod, z, route, i0, 3 * n + 30, d_shift, cfg, rng, rho.get(name, 0.0) if isinstance(rho, dict) else rho)
             if len(H) < 2:
                 continue
             hs, hl = frenet(route, H)
@@ -142,7 +144,7 @@ def run(z, routes, models, cfg, d_shift, test_mask, n_roll=100, rho=0.0):
         sc = trial_scores(z, routes, trial, models, cfg, d_shift, n_roll, rho)
         for n in models:
             per_model[n].append((str(trial), kind, accumulate(sc[n])))
-    res = {"rho": rho, "n_roll": n_roll, "trials": len(per_model[next(iter(models))]),
+    res = {"rho": rho if isinstance(rho, dict) else {n: rho for n in models}, "n_roll": n_roll, "trials": len(per_model[next(iter(models))]),
            "table": {n: table(v, n_roll) for n, v in per_model.items()}}
     if "learned" in models and "baseline_fit_to_train" in models:
         res["learned_minus_baseline_fit"] = {g: paired(per_model, "learned", "baseline_fit_to_train", g) for g in ("straight", "corner", "all")}
@@ -153,7 +155,8 @@ def report(results):
     """Markdown tables: per rho, per group, per model and bucket."""
     L = []
     for res in results:
-        L += [f"### rho = {res['rho']}, {res['n_roll']} rollouts per trial, {res['trials']} held-out trials", ""]
+        rho = ", ".join(f"{n} {v:g}" for n, v in res["rho"].items())
+        L += [f"### step-noise persistence rho: {rho}; {res['n_roll']} rollouts per trial, {res['trials']} held-out trials", ""]
         for g in ("corner", "straight"):
             L += [f"**{g} trials**", "", "| model | steps | trials | heel error (cm) | ensemble-mean error (cm) | spread sd (cm) | spread ratio | cover 50 | cover 90 | walker pos (cm) | walker yaw (deg) |",
                   "|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -187,7 +190,7 @@ def report(results):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("npz"); ap.add_argument("out")
-    ap.add_argument("--n-roll", type=int, default=100); ap.add_argument("--rho", type=float, action="append")
+    ap.add_argument("--n-roll", type=int, default=100); ap.add_argument("--rho", action="append")
     ap.add_argument("--weights", default=None)
     a = ap.parse_args(argv)
     from .learned import Learned, WEIGHTS
@@ -201,7 +204,9 @@ def main(argv=None):
     hand, sd_lat = fit_hand(z, sp["train"], cfg["persona"])
     models = {"baseline_as_configured": Baseline(cfg["persona"], cfg["risk"]),
               "baseline_fit_to_train": Baseline({**cfg["persona"], **hand}, {**cfg["risk"], "step_jitter_m": sd_lat}), "learned": learned}
-    results = [run(z, routes, models, cfg, learned.shift, sp["test"], a.n_roll, rho) for rho in (a.rho or [0.0])]
+    def parse(r):
+        return {k: float(v) for k, v in (kv.split("=") for kv in r.split(","))} if "=" in r else float(r)
+    results = [run(z, routes, models, cfg, learned.shift, sp["test"], a.n_roll, parse(r)) for r in (a.rho or ["0"])]
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     (out / "horizon_results.json").write_text(json.dumps({"split_participants": SPLIT, "buckets": [b[0] for b in BUCKETS], "runs": results}, indent=1))
     (out / "horizon.md").write_text(report(results))
