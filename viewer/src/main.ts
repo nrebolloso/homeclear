@@ -178,7 +178,7 @@ const items = objs.map(o => {
   group.add(proxy, outline);
   scene.add(group);
   const fill = splat(o.fill);
-  fill.recolor = new THREE.Color(1, 0.75, 1);      // tint: imagined, not measured (light, so a generated floor texture still reads)
+  fill.recolor = new THREE.Color(1, 0.9, 1);       // tint: imagined, not measured (faint, so the generated floor reads as floor; the "imagined" tag says the rest)
   fill.visible = false;
   const tag = o.placed ? new THREE.Object3D() : label('imagined, not measured', 'imag');   // staged for the demo: the floor under it was filmed
   tag.position.set(o.pivot[0], o.pivot[1], 0.15);
