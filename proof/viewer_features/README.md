@@ -1,0 +1,33 @@
+# Viewer features from Juan's branch, with the world model
+
+Ported from `origin/juan` of the old repo (26 commits, merged against the world-model branch) on 2026-10-23.
+
+What came over: Rapier walker physics pass, multiple routes (night/day) with a risk range, personas (cane,
+Parkinson's), vision filters, heatmap, a month of nights, transfer / reach / emergency checks, suggested layouts
+(optimizer), OT report, fix card with QR, third-person mannequin on the simulated footsteps, room shell, fill
+backends, WebXR. Python side: stage 12 exports routes / personas / fixtures / transfer and EMS rules, stage 5c
+room shell, stage 12b fills (CPU backends), estimated ground truth in stages 4 and 6b, and `tools/contact_table.py`.
+Not ported yet: object detection (06c), re-scan diff (14), Cosmos Reason / fill / prerender.
+
+`?step=world` works with all of it: world-model rollouts take the batches, height-error bias, heatmap and
+persona clearance scale, and the mannequin walks the world model's heels at the walker's own pace.
+
+## Contact table (changes every risk number)
+
+The placeholder table is replaced in every config by `tools/contact_table.py`: minimum toe clearance 14.1 ± 8.3 mm
+(lognormal) and ~1 contact in 578 strides over a 1 cm obstacle (Frontiers 2014), trip-averaged with
+`toe_clearance_cv`. p(1 cm) went from 0.005 to 0.00168 per stride, p(5 cm) from 0.20 to 0.0046.
+Risk numbers from before this change are not comparable. The darkness multiplier is still a labelled assumption.
+
+## Checks
+
+| Check | Result | File |
+|---|---|---|
+| viewer unit tests (`npm test`) | 52 / 52 pass | `viewer_tests.txt` |
+| Python self-checks (`tests/run_py.sh`) | all OK | `python_selfchecks.txt` |
+| headless end-to-end (`node e2e/run.ts`, Intel Arc, ANGLE GL) | 24 / 24 pass, 60 fps autoplay | `e2e_results.json` |
+| `kitchen4_lighter?step=world`, third person (REAL scene) | loads, no page errors, mannequin on the world-model heels | `kitchen4_lighter_world_thirdperson.png` |
+
+The e2e checks run on the SYNTHETIC scenes (`game_synth`, `game_synth_narrow`, `sample_objects`). The real scenes
+were re-exported with the new stage 12; kitchen4's route has no floor bump, so it reads 0.0 contacts/month and its
+one hazard is a 9 cm/side tight passage.

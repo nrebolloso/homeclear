@@ -146,4 +146,17 @@ if __name__ == "__main__":
     if "--viewer" in sys.argv:
         print(run("10_viewer", cfg_path)["status"])
     run("11_report", cfg_path)
+
+    # estimates (estimated: true) are reported but never verify: right value -> SKIP not PASS; 30% off -> FAIL (gross);
+    # stage 6b with estimates only -> SKIP, no margins for stage 8
+    for meters, want in ((0.75, "SKIP"), (0.75 * 1.3, "FAIL")):
+        cfg["scale"]["ground_truth"] = [{"name": "marker_height", "kind": "marker_height", "meters": meters, "estimated": True}]
+        cfg_path.write_text(yaml.safe_dump(cfg))
+        r = run("04_scale", cfg_path)
+        assert r["status"] == want and r["metrics"]["scale_error_pct"] is None and "estimate_error_pct" in r["metrics"], r
+    cfg["accuracy"]["ground_truth"] = [{**g, "estimated": True} for g in cfg["accuracy"]["ground_truth"]]
+    cfg_path.write_text(yaml.safe_dump(cfg))
+    r = run("06b_accuracy", cfg_path)
+    acc = json.loads((W / "accuracy.json").read_text())
+    assert r["status"] == "SKIP" and acc["margin_m"] == {"height": None, "width": None} and acc["estimate_max_error_m"] < 0.005, (r, acc)
     print("SYNTHETIC OK")

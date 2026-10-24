@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Home Fix Card</title>
+  <link rel="icon" href="data:," />
+  <style>
+    :root { --fg: #1a1a1a; --dim: #5f6368; --line: #d9d9d9; --bg: #fafaf7; --card: #fff; --ok: #0a7d3b; }
+    @media (prefers-color-scheme: dark) { :root { --fg: #eee; --dim: #a0a4a8; --line: #3a3a3a; --bg: #121212; --card: #1d1d1d; } }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.45 system-ui, sans-serif; }
+    main { max-width: 640px; margin: auto; padding: 16px; }
+    h1 { font-size: 22px; margin: 4px 0; } .dim { color: var(--dim); font-size: 14px; }
+    canvas { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    ol { list-style: none; padding: 0; } li { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin: 10px 0; display: flex; gap: 12px; }
+    .n { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--ok); color: #fff; font-weight: 700; display: grid; place-items: center; }
+    label { display: flex; gap: 8px; align-items: center; margin-top: 6px; font-size: 14px; } input { width: 20px; height: 20px; }
+    .total { font-weight: 600; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Before they come home</h1>
+    <div class="dim" id="sub">Loading…</div>
+    <canvas id="map"></canvas>
+    <ol id="list"></ol>
+    <div class="total" id="total"></div>
+    <p class="dim">From the occupational therapist's walkthrough plan. Ticks are saved on this phone only.</p>
+  </main>
+  <script type="module" src="/src/fixcard.ts"></script>
+</body>
+</html>

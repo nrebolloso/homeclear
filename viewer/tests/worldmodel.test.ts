@@ -38,7 +38,7 @@ test('world model rollouts on the synthetic scene: plausible steps, walker near 
   const P = plan(g, L, route.start, route.goal, { walker_width_m: 0.66, ...sc.plan });
   const comps = bumpComponents(g, L.bump, sc.hazard_rules.bump_min_m);
   const t = performance.now();
-  const R = rollouts(g, L.bump, comps, P.xy, { ...persona, step_model: 'world' }, { ...sc.risk, ghosts: 24 }, [], 1, undefined, { ...model, shift: 0.25 + 0.5 / 2 - model.mean_gap_m });
+  const R = rollouts(g, L.bump, comps, P.xy, { ...persona, step_model: 'world' }, { ...sc.risk, ghosts: 24 }, [], 1, undefined, { world: { ...model, shift: 0.25 + 0.5 / 2 - model.mean_gap_m } });
   const steps = R.ghosts.flatMap(gh => gh.pts.slice(1).map((p, k) => Math.hypot(p[0] - gh.pts[k][0], p[1] - gh.pts[k][1])));
   const bad = steps.filter(s => s < 0.1 || s > 0.8).length / steps.length;
   const gap = R.ghosts.flatMap(gh => gh.walker!.map((w, k) => Math.hypot(w[0] - gh.pts[k][0], w[1] - gh.pts[k][1])));

@@ -8,6 +8,9 @@ import { predict, sampleHeel, smoothRoute, type WorldModel, type Pose } from './
 export interface Persona {
   gait_profile: string; stride_m: number; stride_cv: number; foot_sep_m: number; toe_clearance_cv: number;
   step_model?: 'hand' | 'learned' | 'world'; speed_mps?: number;   // learned = stepmodel.ts; world = worldmodel.ts (heels + walker)
+  /** typical toe clearance relative to the calibration population (1 = as published; < 1 = lower swing, e.g. a
+   *  shuffling Parkinsonian gait). An ASSUMPTION per persona, labelled as such in personas config. */
+  clearance_scale?: number;
 }
 export interface Risk {
   rollouts: number; trips_per_night: number; days_per_month: number; path_offset_sd_m: number; step_jitter_m: number;
@@ -15,7 +18,18 @@ export interface Risk {
 }
 export interface Light { x: number; y: number; r: number }
 export interface Ghost { pts: XY[]; hit: boolean[]; walker?: Pose[] }   // walker: world model only, one pose per step
-export interface RolloutResult { per_month: number; per_comp: Record<number, number>; trips: number; ghosts: Ghost[] }
+/** Per-cell sums over all trips (flat i*ny + j): footsteps landing there, and expected toe contacts on the swing into it. */
+export interface Heat { steps: Float32Array; hits: Float32Array }
+export interface RolloutResult {
+  per_month: number; per_comp: Record<number, number>; trips: number; ghosts: Ghost[];
+  /** 10th / 90th percentile over batches of trips, each batch with its own height error (the bump heights are measured
+   *  within +-height_err_m, stage 6b): the range combines that measurement error with Monte Carlo noise. */
+  per_month_lo: number; per_month_hi: number;
+  heat?: Heat;
+  /** the first trip's footsteps (the mannequin walks these) */
+  steps: { xy: XY; side: number; hit: boolean }[];
+}
+export interface RolloutOpts { height_err_m?: number; batches?: number; heat?: boolean; world?: WorldModel }
 
 /** Linear interpolation in the calibration table, clamped at both ends. */
 export function contactProb(t: { height_m: number[]; p_per_stride: number[] }, h: number): number {
@@ -34,8 +48,8 @@ export function rng(seed: number) {
 }
 
 export function rollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, route: XY[], persona: Persona, risk: Risk,
-                         lights: Light[], seed = 1, model?: StepModel, world?: WorldModel): RolloutResult {
-  if (persona.step_model === 'world') return worldRollouts(g, bump, comps, route, persona, risk, lights, seed, world);
+                         lights: Light[], seed = 1, model?: StepModel, opts: RolloutOpts = {}): RolloutResult {
+  if (persona.step_model === 'world') return worldRollouts(g, bump, comps, route, persona, risk, lights, seed, opts);
   const learned = persona.step_model === 'learned';
   if (learned && !model) throw new Error('persona.step_model = learned but no step model loaded');
   const table = risk.contact_table[persona.gait_profile];
@@ -66,10 +80,17 @@ export function rollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, rou
     rd.push([(q[0] - p[0]) / d, (q[1] - p[1]) / d]);
   }
   const R = rng(seed), perComp: Record<number, number> = {}, ghosts: Ghost[] = [];
+  // the height error per batch comes from its own stream, so the trips themselves draw exactly what they did without it
+  const B = Math.max(1, Math.min(opts.batches ?? 10, risk.rollouts)), E = rng(seed + 7919), err = opts.height_err_m ?? 0;
+  const bias = Array.from({ length: B }, () => (2 * E.u() - 1) * err), batchHits = new Array(B).fill(0), batchTrips = new Array(B).fill(0);
+  const N2 = g.shape[0] * ny, heat: Heat | undefined = opts.heat ? { steps: new Float32Array(N2), hits: new Float32Array(N2) } : undefined;
+  const steps: RolloutResult['steps'] = [];
   let total = 0;
   for (let trip = 0; trip < risk.rollouts; trip++) {
+    const b = Math.floor((trip * B) / risk.rollouts);
+    batchTrips[b]++;
     const off = R.n() * risk.path_offset_sd_m;
-    const clearance = Math.exp(R.n() * persona.toe_clearance_cv);   // this trip's toe clearance vs. typical
+    const clearance = Math.exp(R.n() * persona.toe_clearance_cv) * (persona.clearance_scale ?? 1);   // this trip's toe clearance vs. typical
     const step = learned ? model!.hand_rule_fit!.stride_m : Math.max(0.15, persona.stride_m * (1 + R.n() * persona.stride_cv));
     const last: (XY | null)[] = [null, null];
     const ghost: Ghost = { pts: [], hit: [] };
@@ -113,28 +134,38 @@ export function rollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, rou
           const [i, j] = toCell(g, [from[0] + (foot[0] - from[0]) * q / n, from[1] + (foot[1] - from[1]) * q / n]);
           if (bump[i * ny + j] > h) { h = bump[i * ny + j]; comp = comps[i * ny + j]; }
         }
+        if (h > 0) h = Math.max(0, h + bias[b]);
         if (h > 0) {
           const lit = lights.some(l => Math.hypot(foot[0] - l.x, foot[1] - l.y) <= l.r);
           const p = Math.min(1, contactProb(table, h / clearance) * (lit ? 1 : risk.dark_contact_multiplier));
-          if (R.u() < p) { hit = true; total++; perComp[comp] = (perComp[comp] || 0) + 1; }
+          // totals add the expected contact p (same mean as counting draws, far less noise: contacts are rare, ~1/578 per
+          // stride at 1 cm); the draw only decides which ghost dots turn red
+          total += p; batchHits[b] += p; perComp[comp] = (perComp[comp] || 0) + p;
+          if (heat) heat.hits[toCell(g, foot)[0] * ny + toCell(g, foot)[1]] += p;
+          hit = R.u() < p;
         }
       }
       last[side] = foot;
       if (trip < risk.ghosts) { ghost.pts.push(body); ghost.hit.push(hit); }
+      if (trip === 0) steps.push({ xy: foot, side, hit });
+      if (heat) { const [i, j] = toCell(g, foot); heat.steps[i * ny + j]++; }
     }
     if (trip < risk.ghosts) ghosts.push(ghost);
   }
   const month = risk.trips_per_night * risk.days_per_month / risk.rollouts;
   const per_comp: Record<number, number> = {};
   for (const c in perComp) per_comp[c] = perComp[c] * month;
-  return { per_month: total * month, per_comp, trips: risk.rollouts, ghosts };
+  const perBatch = batchHits.map((h, k) => (h * risk.trips_per_night * risk.days_per_month) / Math.max(1, batchTrips[k])).sort((a, c) => a - c);
+  const q = (f: number) => { const x = f * (B - 1), i = Math.floor(x), t = x - i; return perBatch[i] + (perBatch[Math.min(B - 1, i + 1)] - perBatch[i]) * t; };
+  return { per_month: total * month, per_comp, trips: risk.rollouts, ghosts, per_month_lo: q(0.1), per_month_hi: q(0.9), heat, steps };
 }
 
 /** World model trips (worldmodel/rollout.py Engine.trip): heels drawn from the learned mixture, the walker pose from its
  *  walker head. Ghost dots are the heels. shortcut: no per-trip path offset and no walker pull-back at counters (the
  *  Python engine has both); the live frame check still turns the walker red where it gets too close. */
 function worldRollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, route: XY[], persona: Persona, risk: Risk,
-                       lights: Light[], seed: number, m?: WorldModel): RolloutResult {
+                       lights: Light[], seed: number, opts: RolloutOpts): RolloutResult {
+  const m = opts.world;
   if (!m) throw new Error('persona.step_model = world but no world model loaded');
   const table = risk.contact_table[persona.gait_profile];
   if (!table) throw new Error(`no contact_table for gait profile ${persona.gait_profile}`);
@@ -142,11 +173,18 @@ function worldRollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, route
   const e = rt[n0 - 1], b = rt[Math.max(0, n0 - 20)], du = Math.hypot(e[0] - b[0], e[1] - b[1]) || 1;
   const ext: XY[] = [...rt, ...[...Array(150)].map((_, i) => [e[0] + (i + 1) * 0.01 * (e[0] - b[0]) / du, e[1] + (i + 1) * 0.01 * (e[1] - b[1]) / du] as XY)];
   const R = rng(seed), perComp: Record<number, number> = {}, ghosts: Ghost[] = [];
+  // batches with their own height error, heat and the mannequin's steps: as in rollouts() above
+  const B = Math.max(1, Math.min(opts.batches ?? 10, risk.rollouts)), E = rng(seed + 7919), err = opts.height_err_m ?? 0;
+  const bias = Array.from({ length: B }, () => (2 * E.u() - 1) * err), batchHits = new Array(B).fill(0), batchTrips = new Array(B).fill(0);
+  const N2 = g.shape[0] * ny, heat: Heat | undefined = opts.heat ? { steps: new Float32Array(N2), hits: new Float32Array(N2) } : undefined;
+  const steps: RolloutResult['steps'] = [];
   let total = 0;
   const L0 = persona.stride_m, Wd = persona.foot_sep_m, d0 = Math.hypot(rt[20][0] - rt[0][0], rt[20][1] - rt[0][1]) || 1;
   const ux = (rt[20][0] - rt[0][0]) / d0, uy = (rt[20][1] - rt[0][1]) / d0;
   for (let trip = 0; trip < risk.rollouts; trip++) {
-    const clearance = Math.exp(R.n() * persona.toe_clearance_cv), s0 = R.u() < 0.5 ? -1 : 1;
+    const b = Math.floor((trip * B) / risk.rollouts);
+    batchTrips[b]++;
+    const clearance = Math.exp(R.n() * persona.toe_clearance_cv) * (persona.clearance_scale ?? 1), s0 = R.u() < 0.5 ? -1 : 1;
     // mid-heels on route[0], as in the training data
     const at = (a: number, l: number): XY => [rt[0][0] + a * ux - l * uy, rt[0][1] + a * uy + l * ux];
     const heels: XY[] = [at(L0 / 2, s0 * Wd / 2), at(-L0 / 2, -s0 * Wd / 2), at(-1.5 * L0, s0 * Wd / 2)], sides = [s0, -s0, s0];
@@ -168,19 +206,26 @@ function worldRollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, route
         const [i, j] = toCell(g, [from[0] + (foot[0] - from[0]) * q / ns, from[1] + (foot[1] - from[1]) * q / ns]);
         if (bump[i * ny + j] > h) { h = bump[i * ny + j]; comp = comps[i * ny + j]; }
       }
+      if (h > 0) h = Math.max(0, h + bias[b]);
       if (h > 0) {
         const lit = lights.some(l => Math.hypot(foot[0] - l.x, foot[1] - l.y) <= l.r);
         const pc = Math.min(1, contactProb(table, h / clearance) * (lit ? 1 : risk.dark_contact_multiplier));
-        if (R.u() < pc) { hit = true; total++; perComp[comp] = (perComp[comp] || 0) + 1; }
+        total += pc; batchHits[b] += pc; perComp[comp] = (perComp[comp] || 0) + pc;
+        if (heat) heat.hits[toCell(g, foot)[0] * ny + toCell(g, foot)[1]] += pc;
+        hit = R.u() < pc;
       }
       last[fi] = foot;
       heels.unshift(foot); heels.length = 3; sides.unshift(side); sides.length = 3;
       if (trip < risk.ghosts) { ghost.pts.push(foot); ghost.hit.push(hit); ghost.walker!.push(p.walker); }
+      if (trip === 0) steps.push({ xy: foot, side: fi, hit });
+      if (heat) { const [i, j] = toCell(g, foot); heat.steps[i * ny + j]++; }
     }
     if (trip < risk.ghosts) ghosts.push(ghost);
   }
   const month = risk.trips_per_night * risk.days_per_month / risk.rollouts;
   const per_comp: Record<number, number> = {};
   for (const c in perComp) per_comp[c] = perComp[c] * month;
-  return { per_month: total * month, per_comp, trips: risk.rollouts, ghosts };
+  const perBatch = batchHits.map((h, k) => (h * risk.trips_per_night * risk.days_per_month) / Math.max(1, batchTrips[k])).sort((a, c) => a - c);
+  const q = (f: number) => { const x = f * (B - 1), i = Math.floor(x), t = x - i; return perBatch[i] + (perBatch[Math.min(B - 1, i + 1)] - perBatch[i]) * t; };
+  return { per_month: total * month, per_comp, trips: risk.rollouts, ghosts, per_month_lo: q(0.1), per_month_hi: q(0.9), heat, steps };
 }

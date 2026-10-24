@@ -56,7 +56,8 @@ Ubuntu/Mint with Python 3.12, ffmpeg, Google Chrome (headless checks), Node, and
 python3 -m venv --system-site-packages .venv
 .venv/bin/pip install numpy scipy opencv-python pillow plyfile pyyaml
 .venv/bin/python tests/test_synthetic.py --viewer     # should end with SYNTHETIC OK
-cd viewer && npm ci && npm test
+tests/run_py.sh                                       # every Python self-check, synthetic scenes first
+cd viewer && npm ci && npm test && node e2e/run.ts   # e2e: headless Chrome against the dev server
 ```
 
 ## HiPerGator

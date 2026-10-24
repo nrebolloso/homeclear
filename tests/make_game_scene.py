@@ -22,25 +22,54 @@ RUG_H, CABLE_H = 0.015, 0.005   # spec: 1.5 cm rug, 5 mm cable
 # known dimensions of scene(0.80): the accuracy check (stage 6b) measures them back off the map
 GROUND_TRUTH = [
     {"name": "rug height", "kind": "bump_height", "box_xy": [[2.5, 1.0], [3.4, 2.2]], "meters": RUG_H},
-    {"name": "bathroom doorway width", "kind": "free_span", "box_xy": [[3.95, 0.9], [4.15, 2.1]], "axis": 1, "meters": 0.80},
+    {"name": "bathroom doorway width", "kind": "free_span", "box_xy": [[4.0, 0.9], [4.15, 2.1]], "axis": 1, "meters": 0.80},
     {"name": "bedroom depth (wall to wall)", "kind": "free_span", "box_xy": [[2.9, -0.3], [3.1, 4.3]], "axis": 1, "meters": 4.0},
     {"name": "bathroom depth (wall to wall)", "kind": "free_span", "box_xy": [[4.9, -0.3], [5.1, 3.3]], "axis": 1, "meters": 3.0},
     {"name": "bed to wall gap", "kind": "free_span", "box_xy": [[-0.3, 2.5], [0.5, 2.7]], "axis": 0, "meters": 0.10},
 ]
 COLORS = {"floor": (0.62, 0.48, 0.33), "wall": (0.86, 0.83, 0.76), "bed": (0.80, 0.85, 0.95), "nightstand": (0.45, 0.30, 0.18),
-          "rug": (0.70, 0.15, 0.15), "cable": (0.1, 0.1, 0.1), "nightlight": (1.0, 0.9, 0.5), "toilet": (0.97, 0.97, 0.97)}
+          "rug": (0.70, 0.15, 0.15), "cable": (0.1, 0.1, 0.1), "nightlight": (1.0, 0.9, 0.5), "toilet": (0.97, 0.97, 0.97),
+          "door": (0.55, 0.42, 0.30)}
 OBJECTS = [  # movable: cut out by stage 12 (boxes in the floor frame)
     {"name": "bed", "kind": "bed", "box_xy": [[0.1, 1.9], [1.7, 3.95]], "z_max": 0.7},
     {"name": "nightstand", "kind": "nightstand", "box_xy": [[1.8, 3.45], [2.3, 3.95]], "z_max": 0.8},
     {"name": "rug", "kind": "rug", "box_xy": [[2.4, 0.9], [3.5, 2.3]], "z_max": 0.04},
     {"name": "nightlight", "kind": "nightlight", "box_xy": [[0.03, 0.18], [0.17, 0.32]], "z_max": 0.3, "light_radius_m": 1.5},
+    # the bathroom door, open 90 degrees into the bathroom: its leaf + hinge knuckle (6 cm) take that much of the clear width
+    {"name": "door", "kind": "door", "box_xy": [[4.11, 1.84], [4.85, 1.90]], "z_max": 2.1},
 ]
-INTERVENTIONS = [
-    {"id": "remove_rug", "label": "Remove the rug", "kind": "remove", "object": "rug"},
-    {"id": "tape_cable", "label": "Tape the cable flat", "kind": "flatten", "box_xy": [[3.58, 0.25], [3.70, 2.75]]},
-    {"id": "move_nightstand", "label": "Move the nightstand to the far wall", "kind": "move", "object": "nightstand", "to": [0.4, 0.35, 0]},
-    {"id": "add_nightlight", "label": "Nightlight by the doorway", "kind": "move", "object": "nightlight", "to": [3.88, 0.95, 90]},
-    {"id": "move_bed", "label": "Turn the bed along the left wall", "kind": "move", "object": "bed", "to": [1.1, 1.05, 90]},
+INTERVENTIONS = [  # cost (USD), minutes and effort (1 = anyone, 5 = two people + furniture moving) feed the fix card and optimizer
+    {"id": "remove_rug", "label": "Remove the rug", "kind": "remove", "object": "rug", "cost_usd": 0, "minutes": 5, "effort": 1},
+    {"id": "tape_cable", "label": "Tape the cable flat", "kind": "flatten", "box_xy": [[3.58, 0.25], [3.70, 2.75]],
+     "cost_usd": 8, "minutes": 10, "effort": 1, "product": "flat cord cover or gaffer tape"},
+    {"id": "move_nightstand", "label": "Move the nightstand to the far wall", "kind": "move", "object": "nightstand", "to": [0.4, 0.35, 0],
+     "cost_usd": 0, "minutes": 10, "effort": 2},
+    {"id": "add_nightlight", "label": "Nightlight by the doorway", "kind": "move", "object": "nightlight", "to": [3.88, 0.95, 90],
+     "cost_usd": 12, "minutes": 5, "effort": 1, "product": "plug-in motion-sensor nightlight"},
+    {"id": "move_bed", "label": "Turn the bed along the left wall", "kind": "move", "object": "bed", "to": [1.1, 1.05, 90],
+     "cost_usd": 0, "minutes": 45, "effort": 5},
+    {"id": "offset_hinges", "label": "Swing-clear (offset) hinges on the bathroom door", "kind": "move", "object": "door", "to": [4.48, 1.93, 0],
+     "cost_usd": 25, "minutes": 30, "effort": 3, "product": "swing-clear offset hinges (pair)"},
+    {"id": "remove_door", "label": "Take the bathroom door off its hinges", "kind": "remove", "object": "door",
+     "cost_usd": 0, "minutes": 15, "effort": 4, "product": "a curtain for privacy"},
+    {"id": "raised_toilet_seat", "label": "Raised toilet seat (+15 cm) with arms", "kind": "raise", "target": "toilet", "by_m": 0.15,
+     "cost_usd": 35, "minutes": 5, "effort": 1, "product": "raised toilet seat with arms, 15 cm (6 in)"},
+    {"id": "bed_risers", "label": "Bed risers (+8 cm)", "kind": "raise", "target": "bed", "by_m": 0.08,
+     "cost_usd": 20, "minutes": 20, "effort": 3, "product": "bed risers, 8 cm"},
+    {"id": "touch_lamp", "label": "Touch lamp on the nightstand", "kind": "add",
+     "fixture": {"name": "touch lamp", "kind": "switch", "attach": "nightstand"}, "cost_usd": 15, "minutes": 5, "effort": 1,
+     "product": "touch or clap-on bedside lamp"},
+]
+
+ROUTES = [  # night trips to the toilet, and a daytime walk to the wardrobe corner (no darkness multiplier)
+    {"name": "bed to bathroom", "start": [2.25, 2.7], "goal": [5.4, 1.5], "trips_per_night": 2, "night": True, "start_with": "bed"},
+    {"name": "bed to wardrobe (day)", "start": [2.25, 2.7], "goal": [3.3, 0.5], "trips_per_night": 3, "night": False, "start_with": "bed"},
+]
+
+FIXTURES = [  # the toilet seat is measured off the splat (0.40 m box top); the switch and phone are placed by hand
+    {"name": "toilet", "kind": "toilet", "box_xy": [[5.9, 1.2], [6.45, 1.8]]},
+    {"name": "light switch", "kind": "switch", "xyz": [2.6, 3.97, 1.1], "note": "bedroom wall, right of the door"},
+    {"name": "phone", "kind": "phone", "attach": "nightstand"},
 ]
 
 
@@ -60,7 +89,8 @@ def scene(door_w):
         ("rug", box_surface([2.4, 0.9, 0.002], [3.5, 2.3, RUG_H], 0.01), 0.01),
         ("cable", box_surface([3.62, 0.3, 0.002], [3.66, 2.7, CABLE_H], 0.01), 0.01),
         ("nightlight", box_surface([0.05, 0.2, 0.1], [0.15, 0.3, 0.2], 0.01), 0.01),
-        ("toilet", box_surface([5.9, 1.2, 0], [6.45, 1.8, 0.4], 0.015), 0.015)]
+        ("toilet", box_surface([5.9, 1.2, 0], [6.45, 1.8, 0.4], 0.015), 0.015),
+        ("door", box_surface([4.11, 1.84, 0], [4.85, 1.90, 2.05], 0.015), 0.015)]
     pts = np.concatenate([p for _, p, _ in parts])
     # flat discs in each face's plane, overlapping their neighbours: a solid surface, no grid or dots (as a trained splat looks)
     ax = np.concatenate([np.full(len(p), 2) if k == "floor" else np.minimum(abs(p - p.min(0)), abs(p - p.max(0))).argmin(1) for k, p, _ in parts])
@@ -105,10 +135,11 @@ def build(run, door_w):
     cfg = yaml.safe_load((ROOT / "config.yaml").read_text())
     cfg.update(run_name=run, work_dir=f"out/{run}")
     cfg["plan"].update(start=[2.25, 2.7], goal=[5.4, 1.5])
-    cfg["game"].update(objects=OBJECTS, interventions=INTERVENTIONS)
+    cfg["game"].update(objects=OBJECTS, interventions=INTERVENTIONS, routes=ROUTES, fixtures=FIXTURES, entry=[0.6, 0.6])
+    cfg["game"]["persona"].update(knee_height_m=0.50, reach_m=0.65, hip_precautions=True)
     cfg["accuracy"]["ground_truth"] = [{**g, "source": "synthetic known dimension"} for g in GROUND_TRUTH] if door_w == 0.80 else []
     (work / "config.yaml").write_text(yaml.safe_dump(cfg, sort_keys=False))
-    for s in ("06_occupancy", "06b_accuracy", "07_plan", "08_hazards", "12_export_scene"):   # 7 + 8 fail on the narrow door, as they should
+    for s in ("05c_shell", "06_occupancy", "06b_accuracy", "07_plan", "08_hazards", "12_export_scene", "12b_fills"):   # 7 + 8 fail on the narrow door, as they should
         subprocess.run([sys.executable, str(ROOT / "stages" / f"{s}.py"), str(work / "config.yaml")], check=s in ("06_occupancy", "12_export_scene"))
     return json.loads((work / "results" / "12_export_scene.json").read_text())
 
