@@ -1,9 +1,9 @@
 # Status
 
 ## Demo push (2026-10-24)
-- **Done:** steps 1-2. Merge as before (Python, 131 viewer tests, build pass; not pushed). Viewer default is now kitchen4_lighter (no game_synth fallback); route pinned in `configs/kitchen4.yaml` as fridge (-0.44, 1.83) -> entrance (2.82, -0.39), loads clean at 60 fps headless.
-- **Next:** step 3, `demo-safe` tag + `proof/demo/backup_v1.mp4`.
-- **Risks:** `viewer/public/scene/` is gitignored, so the demo kitchen's route.json/routes.json edits (and the whole export) are not in git or the tag; autoplay starts on load, so the fridge turn is already over by the first frame (fix with the scripted camera, step 7); e2e not rerun.
+- **Done:** steps 1-3. Merged (not pushed); kitchen4_lighter is the default, route fridge -> entrance; tag `demo-safe` + `proof/demo/backup_v1.mp4` (30 s autoplay, ~58 fps headless, `node viewer/e2e/record.ts`). The gitignored scene export is copied to `../Homeclear-demo-safe/kitchen4_lighter_v1`.
+- **Next:** step 4, three hazards (mat edge, cord, chair squeeze) on the route + hazards.json.
+- **Risks:** autoplay starts on load, so the fridge turn is over by the first frame (scripted camera in step 7); the e2e suite (game_synth) was not rerun after the merge.
 
 Each result counts once it is reproduced here, with proof in `proof/`.
 
