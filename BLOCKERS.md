@@ -32,3 +32,10 @@
    headless fps to about 16-22 (it was 60 plugged in), and the e2e fps check fails. Plug in and switch to the
    balanced or performance profile first.
 9. **Quest 2 test with taped controllers: fps + tracking (VR team).**
+10. **Kitchen planner zones and outlets (kitchen4_lighter).** `configs/planner/kitchen4_lighter.json` uses the zones you
+   described (start in front of the fridge, sink next to it, goal near the stairs), read off the viewer. The outlets are
+   assumed: the nightlight at (-1.13, -0.58) and the add_nightlight spot at (1.35, 0.80). Mark the real outlets and tape
+   the fridge-door swing; the planner then only places nightlights on real outlets.
+11. **Our own walker videos for gait personalization.** Film yourself and teammates with the walker and write `steps.csv` as
+   described in `worldmodel/walker_videos.py`. Then run `python -m worldmodel.persona --extra <dir>`. Until then the embedding is
+   trained on PhysioNet only.

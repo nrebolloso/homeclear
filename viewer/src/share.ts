@@ -11,6 +11,7 @@ export interface ReportPayload {
   margins: { width: number; height: number }; actions: ActionOut[]; suggestions: any[];
   reason: { note: string }[]; clips: string[]; topdown: string; view: string;
   ranked_fixes?: { label: string; error?: string; reduction: number; share: number; clearance_gain_m: number; cost_usd?: number; minutes?: number; effort?: number; product?: string }[];
+  ranked_by?: string;   // set when the ranking comes from the kitchen planner (planfix.ts): its unit is events/month, not toe contacts
 }
 
 /** The card's state, small enough for a QR code: the layout delta and the numbered actions. */

@@ -120,6 +120,27 @@
       <div id="physsampled" class="hint">loading object colliders…</div>
       <button id="physresample" title="new masses and frictions from the assumed ranges (physics_ranges.json)">Resample unknowns</button>
     </section>
+    <section id="planfixpanel">
+      <h2>Kitchen planner <span class="imagined">simulated</span></h2>
+      <button id="pfplay" title="replay the B200 layout search, then apply the layout it chose">Plan fixes</button>
+      <button id="pflive" title="the critic searches thousands of layouts starting from the room as you left it; the best 5 and yours are re-run for real">Improve my layout</button>
+      <label title="taping is not visible in the room: say whether your layout includes it"><input type="checkbox" id="pfmattaped" /> my layout has the mat's edges taped</label>
+      <div id="pfstats" class="status"></div>
+      <canvas id="pfchart" width="266" height="170"></canvas>
+      <div id="pfresult" class="status"></div>
+      <ol id="pfoptions"></ol>
+    </section>
+    <section id="gaitfitpanel">
+      <h2>Gait personalization <span class="imagined">model</span></h2>
+      <button id="gfplay" title="a held-out PhysioNet participant (never trained on) walks; the model fits their gait from walker + head only">Fit a new walker</button>
+      <select id="gfspeed" title="replay speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select>
+      <button id="gfreplan" title="rerun the kitchen planner with this person's fitted world model">Re-plan for me</button>
+      <div id="gfstatus" class="status"></div>
+      <canvas id="gfghost" width="266" height="170"></canvas>
+      <div id="gfmeter" class="status"></div>
+      <canvas id="gfchart" width="266" height="110"></canvas>
+      <canvas id="gfmap" width="266" height="200"></canvas>
+    </section>
   </aside>
   <div id="player" hidden>
     <div class="wrap"><video id="video" controls muted playsinline></video><canvas id="overlay"></canvas>

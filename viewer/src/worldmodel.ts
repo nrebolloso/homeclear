@@ -19,11 +19,11 @@ export function frame(heels: XY[], sides: number[], action: XY[]) {
   return { o, t, mir: -sides[0] };
 }
 type F = ReturnType<typeof frame>;
-const toLocal = ({ o, t, mir }: F, p: XY): XY => {
+export const toLocal = ({ o, t, mir }: F, p: XY): XY => {
   const q = [p[0] - o[0], p[1] - o[1]];
   return [q[0] * t[0] + q[1] * t[1], mir * (-q[0] * t[1] + q[1] * t[0])];
 };
-const toWorld = ({ o, t, mir }: F, p: XY): XY => [o[0] + p[0] * t[0] - mir * p[1] * t[1], o[1] + p[0] * t[1] + mir * p[1] * t[0]];
+export const toWorld = ({ o, t, mir }: F, p: XY): XY => [o[0] + p[0] * t[0] - mir * p[1] * t[1], o[1] + p[0] * t[1] + mir * p[1] * t[0]];
 
 /** Heel mixture (world frame, glitch components under min_w dropped) and the mean walker pose (frame centre, yaw). */
 export function predict(m: WorldModel, heels: XY[], sides: number[], action: XY[]): { mix: Mixture; walker: Pose; f: F } {

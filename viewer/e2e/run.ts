@@ -322,6 +322,23 @@ try {
   check('reset: no page errors', rs.errors.length === 0, rs.errors.join(' | ') || 'none');
   await rs.p.close();
   }
+  // 13. kitchen planner + gait personalization (planfix.ts, gaitfit.ts; skipped where the B200 search isn't published):
+  // the replay ends on options, the AI never loses to the judge, a bad judge layout says why, the gait fit converges
+  if (existsSync(`${ROOT}viewer/public/planner/kitchen4_lighter/search.json`) && existsSync(`${ROOT}viewer/public/scene/kitchen4_lighter/scene.json`)) {
+    const pk = await open('kitchen4_lighter');
+    const P = (f: string) => G(pk.p, f);
+    const pl = await P('await game.planfix.ready; const s = await game.planfix.play(8); return { frame: s.frame, frames: s.frames, opts: document.querySelectorAll("#pfoptions li").length, searched: s.stats.layouts_searched, gpu: s.stats.gpu }');
+    check('planner: replay plays to the end and offers 2-3 Pareto options', pl.frame === pl.frames - 1 && pl.opts >= 2 && pl.opts <= 3, `${pl.frame + 1}/${pl.frames} frames, ${pl.opts} options; job: ${pl.searched} layouts on ${pl.gpu}`);
+    const lv = await P("await game.moveObject('chair8', 1.6, -0.9, 0); const r = await game.planfix.improve(2000); return { j: r.judge.risk, b: r.best.risk, inv: r.invalid, kept: r.kept }");
+    check('planner live: AI layout is never worse than the judge\'s', lv.inv.length === 0 && lv.b <= lv.j + 1e-9, `judge ${lv.j.toFixed(1)} -> AI ${lv.b.toFixed(1)}/month, kept: ${lv.kept.join(', ') || 'none'}`);
+    const bad = await P("await game.moveObject('chair3', -0.4, 1.8, 0); const r = await game.planfix.improve(500); return { inv: r.invalid, msg: document.getElementById('pfresult').textContent }");
+    check('planner live: an invalid judge layout is flagged with the reason', bad.inv.some((s: string) => /fridge swing/.test(s)) && /can't be used/.test(bad.msg), bad.inv.join('; '));
+    const gf = await P("await game.gait.play(32); const s = game.gait.state(); const r = await game.planfix.replanFor(game.gait.worldModel(), 'e2e', 300); return { steps: s.steps, err: s.err_last10, r: !!r && Number.isFinite(r.best_you.risk) && r.best_you.risk <= r.current_you.risk + 1e-9 }");
+    check('gait: fitted embedding predicts the held-out walker\'s head better than the mean; re-plan runs', gf.steps > 100 && gf.err.head.fit < gf.err.head.pop && gf.r,
+      `${gf.steps} steps, head err (last 10) ${gf.err.head.pop.toFixed(1)} -> ${gf.err.head.fit.toFixed(1)} cm, re-plan ok=${gf.r}`);
+    check('planner + gait: no page errors', pk.errors.length === 0, pk.errors.join(' | ') || 'none');
+    await pk.p.close();
+  }
 } finally {
   await browser.close();
   writeFileSync(new URL('results.json', import.meta.url), JSON.stringify(results, null, 1));

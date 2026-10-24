@@ -44,6 +44,8 @@ import type { WorldModel } from './worldmodel.ts';
 import { setupXR, type XrEditor } from './xr.ts';
 import { plainSpot, tourStand } from './xrtour.ts';
 import { createXRComparison } from './xrcompare.ts';
+import { createPlanFix } from './planfix.ts';
+import { createGaitFit } from './gaitfit.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 // model and scene text (Cosmos Reason notes, hazard details) goes into innerHTML escaped; same as report.ts's, which can't
@@ -825,6 +827,19 @@ game.reimagine = { run: reimagineRoom, setT: reim.setT, t: reim.t, play: reim.pl
   changes: reim.changes, resolved: reim.resolved, undo: (n: number) => undoReimagined(reim.changes()[n]),
   pose: (name: string) => { const gr = items[objs.findIndex(o => o.name === name)].group; return { x: gr.position.x, y: gr.position.y, yaw: gr.rotation.z, visible: gr.visible }; } };
 
+// ---------- kitchen planner (planfix.ts, planworker.ts): the B200 layout search replayed; live critic search from the judge's layout ----------
+const planfix = createPlanFix({ run: RUN, scene, init: () => init, base: original, walker: () => walkerCfg, layout: () => layout,
+  show: lay => { layout = lay; syncObjects(); },   // gliding: no re-plan per frame
+  commit: (lay, ids) => { layout = lay; applied = ids; syncObjects(); return replan(); } });
+$('pfplay').onclick = () => planfix.play();
+$('pflive').onclick = () => planfix.improve();
+game.planfix = planfix;
+// ---------- gait personalization (gaitfit.ts): a per-person gait embedding fitted from walker + head; "Re-plan for me" ----------
+const gait = createGaitFit({ scene, walker: () => walkerCfg, replan: (wm, who) => planfix.replanFor(wm, who) });
+$('gfplay').onclick = () => gait.play(+($('gfspeed') as HTMLSelectElement).value);
+$('gfreplan').onclick = () => gait.replan();
+game.gait = gait;   // VR: feed game.gait.observe() per heel strike, hang game.gait.panel / show game.gait.ghost (HANDOFF_GAIT.md)
+
 // ---------- stairs (stairs.ts, stairs3d.ts): measured against code and this patient; rail, step lights, a walker at the top ----------
 // From config game.stairs (stage 12) and/or marked here with three clicks and measured from the splat (kept per scene in
 // this browser; "Copy as config YAML" makes it permanent). Their fixes are interventions like any other.
@@ -1403,6 +1418,7 @@ async function openReport() {
     return { label: f.label, error: f.error, reduction: Math.max(0, f.reduction), share: before > 0 ? f.reduction / before : 0, clearance_gain_m: f.clearance_gain_m,
       cost_usd: iv?.cost_usd, minutes: iv?.minutes, effort: iv?.effort, product: iv?.product };
   }).sort((a: any, b: any) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.clearance_gain_m - a.clearance_gain_m) || ((a.cost_usd ?? 0) - (b.cost_usd ?? 0)));
+  const planned = await planfix.rankedFixes();   // kitchen planner scenes: its layout's changes, ranked by real risk removed (planfix.ts)
   const payload: ReportPayload = {
     scene: RUN, created: new Date().toISOString(), synthetic: (sc.synthetic ?? []).length > 0 || /synth/.test(RUN), scale_note: sc.scale_note,
     route: routes[selRoute].name,
@@ -1413,7 +1429,8 @@ async function openReport() {
     margins: sc.hazard_rules.margin_m, actions: describeChanges(), suggestions,
     reason: hzFile.hazards.filter(h => h.source === 'cosmos_reason'),
     clips: (game.clips ?? []).filter((k: any) => k.layout_key === layoutKey(objs, layout)).map((k: any) => k.title ?? k.file),
-    topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85), ranked_fixes,
+    topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85), ranked_fixes: planned ?? ranked_fixes,
+    ranked_by: planned ? 'kitchen planner (B200 layout search + critic): each change alone on this layout, events/month = toe contacts + snags + brushes' : undefined,
   };
   sessionStorage.setItem(`report:${RUN}`, JSON.stringify(payload));
   if (!w) return window.open(`report.html?scene=${encodeURIComponent(RUN)}`, '_blank');
