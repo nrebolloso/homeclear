@@ -21,7 +21,9 @@ export interface Stair {
   top_z?: number | null;
   /** tread top heights, bottom to top (m above the floor), and each tread's front edge (m from the bottom edge) */
   treads_z?: number[]; tread_fronts_m?: number[]; tread_depth_m?: number | null; width_m?: number;
-  rails?: { left: RailSeen; right: RailSeen; height_m?: { left?: number; right?: number } };
+  rails?: { left: RailSeen; right: RailSeen; height_m?: { left?: number; right?: number }; peak_m?: { left?: number; right?: number } };
+  /** what is really at each side, set by hand (the scan can mistake another flight's railing or a wall for a rail) */
+  rails_set?: { left?: 'seen' | 'none'; right?: 'seen' | 'none' };
   measured?: 'splat' | 'tape';
   trips_per_day?: number;
 }
@@ -89,7 +91,7 @@ export function measureStair(pts: Float32Array, st: Stair): Stair & { flat_point
   const out: Stair = { ...st, treads_z, tread_fronts_m, tread_depth_m: gaps.length ? +median(gaps).toFixed(3) : null, width_m: +F.width.toFixed(3), measured: 'splat' };
   const pitch = pitchAt(out), bins = Math.max(1, Math.ceil(F.run / 0.1));
   const rail = (side: Side) => {
-    const tS = side === 'left' ? half : -half, any = new Set<number>(), at = new Set<number>(), hs: number[] = [];
+    const tS = side === 'left' ? half : -half, any = new Set<number>(), at = new Set<number>(), hs: number[] = [], peak = new Array(10).fill(0);
     let hi = 0, mid = 0;
     for (let i = 0; i < pts.length; i += 4) {
       const { s, t } = F.local([pts[i], pts[i + 1]]);
@@ -99,13 +101,29 @@ export function measureStair(pts: Float32Array, st: Stair): Stair & { flat_point
       if (h >= 0.7 && h <= 1.1) { at.add(b); hs.push(h); }
       if (h >= 0.8 && h <= 1.0) hi++;
       if (h >= 0.35 && h <= 0.6) mid++;
+      if (h >= 0.6 && h < 1.1) peak[Math.floor((h - 0.6) / 0.05)]++;
     }
     const seen: RailSeen = any.size < 0.3 * bins ? 'unseen' : at.size < 0.4 * bins ? 'none' : hi >= 2 * mid ? 'seen' : 'wall';
-    return { seen, h: seen === 'seen' ? +median(hs).toFixed(3) : undefined };
+    const pk = peak.indexOf(Math.max(...peak));   // the densest 5 cm band at rail heights: where a rail set by hand runs
+    return { seen, h: seen === 'seen' ? +median(hs).toFixed(3) : undefined, peak: Math.max(...peak) >= 5 ? +(0.6 + 0.05 * pk + 0.025).toFixed(3) : undefined };
   };
   const L = rail('left'), R = rail('right');
-  out.rails = { left: L.seen, right: R.seen, height_m: { ...(L.h ? { left: L.h } : {}), ...(R.h ? { right: R.h } : {}) } };
+  out.rails = { left: L.seen, right: R.seen, height_m: { ...(L.h ? { left: L.h } : {}), ...(R.h ? { right: R.h } : {}) },
+    peak_m: { ...(L.peak ? { left: L.peak } : {}), ...(R.peak ? { right: R.peak } : {}) } };
   return { ...out, flat_points: flat.length };
+}
+
+/** The stair with the rails as set by hand (rails_set) over what the scan saw; a rail set by hand runs at the scan's
+ *  densest rail-height band on that side, and a side set to none has no height. */
+export function withRails(st: Stair): Stair {
+  const ov = st.rails_set;
+  if (!ov || (!ov.left && !ov.right)) return st;
+  const r = st.rails ?? { left: 'unseen' as RailSeen, right: 'unseen' as RailSeen }, h = { ...(r.height_m ?? {}) };
+  for (const side of ['left', 'right'] as Side[]) {
+    if (ov[side] === 'seen') h[side] ??= r.peak_m?.[side];
+    else if (ov[side] === 'none') delete h[side];
+  }
+  return { ...st, rails: { ...r, left: ov.left ?? r.left, right: ov.right ?? r.right, height_m: h } };
 }
 
 export interface StairCtx {
@@ -217,6 +235,56 @@ export function stairFixes(st: Stair): Intervention[] {
     fixture: { name: `${st.name} top walker`, kind: 'walker_parked', attach: st.name, xyz: at(F.run + 0.4, 0, top) },
     cost_usd: 70, minutes: 5, effort: 1, product: 'folding walker' });
   return out;
+}
+
+/** Splat records for mirrorRail: x y z, sx sy sz, qx qy qz qw, opacity, r g b (14 floats each). */
+export const SPLAT_STRIDE = 14;
+/** Is a splat centre part of the scanned rail on `side`: near that edge and within a few cm of the measured rail height
+ *  over the nosing line (balusters below it are left behind, so the copy reads as a wall-mounted rail). */
+export function inRailBand(st: Stair, side: Side) {
+  const F = stairFrame(st), pitch = pitchAt(st), tS = (side === 'left' ? 1 : -1) * F.width / 2;
+  const h = st.rails?.height_m?.[side] ?? st.rails?.peak_m?.[side] ?? 0.9;
+  return (x: number, y: number, z: number) => {
+    const { s, t } = F.local([x, y]), dz = z - pitch(s) - h;
+    return s >= -0.1 && s <= F.run + 0.1 && Math.abs(t - tS) <= 0.12 && dz >= -0.04 && dz <= 0.05;
+  };
+}
+/** The scanned rail on `from`, mirrored across the stair's centre line to the other side, its centre line set 9 cm
+ *  in from that edge (a wall-mounted rail stands off the wall; mirroring alone can bury it in the wall's splats). Each
+ *  splat keeps its offset from the rail's centre, and its orientation is reflected (R -> M R M, M the mirror). */
+export function mirrorRail(src: Float32Array, st: Stair, from: Side): Float32Array {
+  const F = stairFrame(st), [vx, vy] = F.v, out: number[] = [], toward = from === 'left' ? 1 : -1;   // the copy ends up on the -toward side
+  const M = [[1 - 2 * vx * vx, -2 * vx * vy, 0], [-2 * vx * vy, 1 - 2 * vy * vy, 0], [0, 0, 1]];
+  const off = (i: number) => (src[i] - F.o[0]) * vx + (src[i + 1] - F.o[1]) * vy;   // signed distance off the centre line
+  const ds: number[] = [];
+  for (let i = 0; i < src.length; i += SPLAT_STRIDE) ds.push(off(i));
+  const target = -toward * (F.width / 2 - 0.09), shift = ds.length ? target + median(ds) : 0;   // mirrored centre -median -> target
+  for (let i = 0; i < src.length; i += SPLAT_STRIDE) {
+    const [x, y, z] = [src[i], src[i + 1], src[i + 2]], d = off(i);
+    const k = -2 * d + shift;   // across the line (d -> -d), then the whole rail to 9 cm off the far edge
+    const [qx, qy, qz, qw] = [src[i + 6], src[i + 7], src[i + 8], src[i + 9]];
+    const R = [
+      [1 - 2 * (qy * qy + qz * qz), 2 * (qx * qy - qz * qw), 2 * (qx * qz + qy * qw)],
+      [2 * (qx * qy + qz * qw), 1 - 2 * (qx * qx + qz * qz), 2 * (qy * qz - qx * qw)],
+      [2 * (qx * qz - qy * qw), 2 * (qy * qz + qx * qw), 1 - 2 * (qx * qx + qy * qy)]];
+    const MR = M.map(r => [0, 1, 2].map(j => r[0] * R[0][j] + r[1] * R[1][j] + r[2] * R[2][j]));
+    const N = MR.map(r => [0, 1, 2].map(j => r[0] * M[0][j] + r[1] * M[1][j] + r[2] * M[2][j]));
+    out.push(x + k * vx, y + k * vy, z, src[i + 3], src[i + 4], src[i + 5], ...matToQuat(N), src[i + 10], src[i + 11], src[i + 12], src[i + 13]);
+  }
+  return new Float32Array(out);
+}
+function matToQuat(m: number[][]): [number, number, number, number] {
+  const tr = m[0][0] + m[1][1] + m[2][2];
+  if (tr > 0) { const s = 0.5 / Math.sqrt(tr + 1); return [(m[2][1] - m[1][2]) * s, (m[0][2] - m[2][0]) * s, (m[1][0] - m[0][1]) * s, 0.25 / s]; }
+  if (m[0][0] > m[1][1] && m[0][0] > m[2][2]) { const s = 2 * Math.sqrt(1 + m[0][0] - m[1][1] - m[2][2]); return [0.25 * s, (m[0][1] + m[1][0]) / s, (m[0][2] + m[2][0]) / s, (m[2][1] - m[1][2]) / s]; }
+  if (m[1][1] > m[2][2]) { const s = 2 * Math.sqrt(1 + m[1][1] - m[0][0] - m[2][2]); return [(m[0][1] + m[1][0]) / s, 0.25 * s, (m[1][2] + m[2][1]) / s, (m[0][2] - m[2][0]) / s]; }
+  const s = 2 * Math.sqrt(1 + m[2][2] - m[0][0] - m[1][1]);
+  return [(m[0][2] + m[2][0]) / s, (m[1][2] + m[2][1]) / s, 0.25 * s, (m[1][0] - m[0][1]) / s];
+}
+/** Where the motion step lights shine from: a little over each tread's nose (for the night shader). */
+export function stepLights(st: Stair): { x: number; y: number; z: number }[] {
+  const F = stairFrame(st), z = st.treads_z ?? [], f = st.tread_fronts_m?.length === z.length ? st.tread_fronts_m : z.map((_, k) => k * (st.tread_depth_m ?? 0.27));
+  return z.map((h, k) => { const [x, y] = F.world(f[k] + 0.05, 0); return { x, y, z: h + 0.06 }; });
 }
 
 /** The stair as a config `game.stairs` entry (YAML), to keep it: paste into config.<scene>.yaml, stage 12 exports it. */

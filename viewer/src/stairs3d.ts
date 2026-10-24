@@ -11,6 +11,7 @@ const cm = (m: number) => `${(m * 100).toFixed(0)} cm`;
 function dispose(grp: THREE.Object3D) {
   for (const c of [...grp.children]) {
     grp.remove(c);
+    if (c.userData.shared) continue;   // a copied scan rail: kept by its owner, re-added on the next build
     c.traverse(x => {
       const m = x as THREE.Mesh;
       m.geometry?.dispose();
@@ -20,8 +21,10 @@ function dispose(grp: THREE.Object3D) {
 }
 const lineMat = (color: number, opacity = 0.9) => new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false });
 
-/** `device()` builds the patient's walking aid (walker.ts buildDevice) for the one parked at the top. */
-export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group) {
+/** `device()` builds the patient's walking aid (walker.ts buildDevice) for the one parked at the top. `scanRail(st, side)`
+ *  gives the rail for that side copied from the scanned one (stairs.ts mirrorRail), or null where nothing was scanned to
+ *  copy: then a drawn tube stands in. The step lights are thin fixtures here; the light itself is the night shader's. */
+export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, scanRail: (st: Stair, side: Side) => THREE.Object3D | null = () => null) {
   const root = new THREE.Group(), measured = new THREE.Group(), fixes = new THREE.Group();
   root.add(measured, fixes);
   scene.add(root);
@@ -60,6 +63,22 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group) {
       for (const side of ['left', 'right'] as Side[]) {
         if (!added.includes(`stair_rail:${st.name}:${side}`)) continue;
         const t = (side === 'left' ? 1 : -1) * (half - 0.06), y0 = pitch(0) + 0.9, y1 = pitch(F.run) + 0.9;
+        const copy = scanRail(st, side);
+        if (copy) {   // the scanned rail, mirrored: real material in the room's own light
+          copy.userData.shared = true;
+          fixes.add(copy);
+          const from: Side = side === 'left' ? 'right' : 'left', h = st.rails?.height_m?.[from] ?? st.rails?.peak_m?.[from] ?? 0.9;
+          const thin = (copy.userData.count ?? 0) / Math.max(0.3, F.run) < 300;   // a sparse scan copies a dotted rail
+          if (thin) {   // so it still reads: a slim outline on the copy's own line and height
+            const tc = (side === 'left' ? 1 : -1) * (half - 0.09), line = new THREE.CurvePath<THREE.Vector3>();
+            line.add(new THREE.LineCurve3(P(0, tc, pitch(0) + h), P(F.run, tc, pitch(F.run) + h)));
+            fixes.add(new THREE.Mesh(new THREE.TubeGeometry(line, 24, 0.012, 8, false), new THREE.MeshBasicMaterial({ color: DESIGNED, transparent: true, opacity: 0.7 })));
+          }
+          const tag = card(['designed, not built', `handrail (${side}), copied from the scanned one${thin ? ', outlined' : ''}`], '#7ff5e8', 'rgba(14,20,28,0.75)', 0.04);
+          tag.position.copy(P(F.run * 0.3, t, pitch(F.run * 0.3) + 1.1));
+          fixes.add(tag);
+          continue;
+        }
         const path = new THREE.CurvePath<THREE.Vector3>();
         path.add(new THREE.LineCurve3(P(-0.3, t, y0), P(0, t, y0)));   // returns 30 cm past each end, level
         path.add(new THREE.LineCurve3(P(0, t, y0), P(F.run, t, y1)));
@@ -80,12 +99,7 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group) {
         const strip = new THREE.Mesh(new THREE.BoxGeometry(0.03, F.width - 0.12, 0.012), new THREE.MeshBasicMaterial({ color: 0xfff4d6 }));
         strip.position.copy(P(fronts[k] + 0.02, 0, h + 0.008));
         strip.rotation.z = Math.atan2(F.u[1], F.u[0]);
-        const glow = new THREE.Mesh(new THREE.PlaneGeometry(0.22, F.width - 0.05), new THREE.MeshBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
-        glow.position.copy(P(fronts[k] + 0.12, 0, h + 0.004));
-        glow.rotation.z = strip.rotation.z;
-        glow.renderOrder = 4;
-        strip.userData.glow = glow;
-        fixes.add(strip, glow);
+        fixes.add(strip);
         lights.push(strip);
       });
       if (added.includes(`stair_walker:${st.name}`)) {
@@ -106,12 +120,10 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group) {
 
   return {
     root, build,
-    /** per frame: the step lights breathe, brighter at night */
-    update(t: number, night: boolean) {
-      for (const [k, s] of lights.entries()) {
-        const glow = s.userData.glow as THREE.Mesh, p = 0.75 + 0.25 * Math.sin(t * 2 + k * 0.4);
-        ((glow.material) as THREE.MeshBasicMaterial).opacity = (night ? 1 : 0.3) * p;
-      }
+    /** per frame: the strips themselves are lit at night, dim by day (the light on the steps is the night shader's,
+     *  steady: changing it would regenerate every splat) */
+    update(_t: number, night: boolean) {
+      for (const s of lights) ((s.material) as THREE.MeshBasicMaterial).color.setHex(night ? 0xfff4d6 : 0xd8d2c4);
     },
     setVisible(on: boolean) { root.visible = on; },
   };

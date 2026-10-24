@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { measureStair, stairChecks, stairFixes, stairFrame, stairYaml, type Stair, type StairCtx } from '../src/stairs.ts';
+import { measureStair, stairChecks, stairFixes, stairFrame, stairYaml, mirrorRail, inRailBand, stepLights, withRails, type Stair, type StairCtx } from '../src/stairs.ts';
 import { evaluate } from '../src/evaluate.ts';
 import { applyIntervention, type GridMeta, type XY } from '../src/grid.ts';
 import { rng } from '../src/sim.ts';
@@ -110,6 +110,42 @@ test('stair fixes: a rail only where none is seen; through evaluate() each clear
   for (const f of fx) lay = applyIntervention(init.objects, lay, f);
   const after = evaluate(S, lay, { ghosts: false }).checks.filter(c => c.kind === 'stairs');
   for (const w of ['rails', 'light', 'walker']) assert.equal(after.find(c => c.id === `stairs:stairs:${w}`)!.verdict, 'ok', w);
+});
+
+test('mirrorRail: the rail band lands on the other side, 7 cm in, with each splat shape reflected', () => {
+  // stair facing up +y, width 0.9 (x 0..0.9); the rail is on the LEFT (x = 0); one stretched, rotated splat on it
+  const st: Stair = { ...base, bottom: [[0.9, 0], [0, 0]], top: [0.45, 2.7], rails: { left: 'seen', right: 'wall', height_m: { left: 0.9 } } };
+  assert.ok(inRailBand(st, 'left')(0.02, 1.0, 0.18 + (0.36 / 0.54) * 1.0 + 0.9) && !inRailBand(st, 'left')(0.02, 1.0, 0.5), 'rail height in, baluster height out');
+  const a = 0.6, q = [0, Math.sin(a / 2), 0, Math.cos(a / 2)];   // a tilt about y: not symmetric under the x-mirror
+  const src = new Float32Array([0.02, 1.0, 1.5, 0.2, 0.01, 0.03, q[0], q[1], q[2], q[3], 0.8, 0.1, 0.1, 0.1]);
+  const m = mirrorRail(src, st, 'left');
+  assert.ok(Math.abs(m[0] - (0.88 - 0.07)) < 1e-6, `x ${m[0]}`);   // across the centre (0.45) to 0.88, then 7 cm in
+  assert.equal(m[1], 1.0); assert.equal(m[2], 1.5);
+  // covariance check: reflected Sigma = M Sigma M with M = diag(-1, 1, 1)
+  const cov = (qq: number[], s: number[]) => {
+    const [x, y, z, w] = qq, R = [[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)], [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)], [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]];
+    return R.map(r => R.map(c => r.reduce((acc, v, k) => acc + v * c[k] * s[k] * s[k], 0)));
+  };
+  const S0 = cov(q, [0.2, 0.01, 0.03]), S1 = cov([...m.slice(6, 10)], [0.2, 0.01, 0.03]), sg = [-1, 1, 1];
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) assert.ok(Math.abs(S1[i][j] - sg[i] * sg[j] * S0[i][j]) < 1e-6, `cov ${i}${j}`);
+  assert.deepEqual([...m.slice(10)].map(v => +v.toFixed(3)), [0.8, 0.1, 0.1, 0.1]);
+});
+
+test('step lights: one over each tread nose', () => {
+  const L = stepLights(base);
+  assert.equal(L.length, 3);
+  assert.ok(Math.abs(L[1].z - (0.36 + 0.06)) < 1e-9 && Math.abs(L[1].y - (0.27 + 0.05)) < 1e-9);
+});
+
+test('rails set by hand: over the scan, at the densest rail height; the rail fix follows', () => {
+  const { pts, st } = synthStair(Array(6).fill(0.18));
+  const m = measureStair(pts, st);
+  assert.ok(Math.abs(m.rails!.peak_m!.left! - 0.9) <= 0.05, `peak ${m.rails!.peak_m!.left}`);
+  const flipped = withRails({ ...m, rails_set: { left: 'none', right: 'seen' } });
+  assert.equal(flipped.rails!.left, 'none'); assert.equal(flipped.rails!.right, 'seen');
+  assert.equal(flipped.rails!.height_m!.left, undefined, 'no rail, no height');
+  assert.deepEqual(stairFixes(flipped).filter(f => f.id.startsWith('stair_rail')).map(f => f.id), ['stair_rail:stairs:left']);
+  assert.equal(withRails(m), m, 'nothing set: the scan as is');
 });
 
 test('stairYaml round-trips the numbers a config needs', () => {
