@@ -1,5 +1,8 @@
 # Guided marking and room renovations
 
+The subsequent merge with Diego's VR refactor is documented in `MERGE_VR_REVIEW.md`. VR now routes marking through
+`xr.ts`'s `XrEditor` adapter; its room restore and comparison buttons use `xrcompare.ts`.
+
 Continuation of the October 24 session transcript in the parent directory. Work stays on the existing
 `feat/renovations` branch. The session started with unfinished edits on top of `790c030`, including the new
 `marker.ts` and `marker3d.ts` files. This continuation completes those edits on the same branch.

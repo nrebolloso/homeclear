@@ -301,8 +301,10 @@ try {
   const rf = await rs.p.waitForFunction(() => (window as any).game.fixes, null, { timeout: 20000 }).then(h => h.jsonValue());
   await RS(`await game.applyFix('${rf[0].id}')`);
   await rs.p.waitForTimeout(300);
+  const evalsBeforeReset = await RS('return game.evals');
   await rs.p.keyboard.press('Shift+KeyZ');
-  await rs.p.waitForTimeout(800);
+  // Applying a fix also queues fix ranking. The reset evaluation waits behind it: a fixed 800 ms races that worker.
+  await rs.p.waitForFunction(n => (window as any).game.evals > n, evalsBeforeReset, { timeout: 20000 });
   const all = await RS("const l = game.layout(); return { poses: l.poses, flat: l.flattened.length, gone: game.inventory(), reimt: game.reimagine.t(), changes: game.reimagine.changes().length, pm: game.current().per_month }");
   const same = all.poses.every((q: any, n: number) => !q.removed && Math.hypot(q.x - r0.poses[n].x, q.y - r0.poses[n].y) < 0.01 && Math.abs(q.yaw - r0.poses[n].yaw) < 0.01);
   check('Shift+Z restores every object, removal and fix', same && all.flat === 0 && all.gone.length === 0 && all.reimt === 1 && all.changes === 0 && Math.abs(all.pm - r0.pm) < 0.01,

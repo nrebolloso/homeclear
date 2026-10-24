@@ -118,6 +118,8 @@ try {
   await button('left', 'x-button');
   check('VR off-hand X changes the top device while editing', await G(v, 'return game.stairs.list()[0].top_device === "rollator"'), 'controller event');
   await G(v, 'await game.applyFix("stair_walker:stairs"); game.marker.done()');
+  await button('right', 'b-button');   // editing hides the family story card, which can otherwise sit in front of the device
+  check('VR editing hides story buttons so renovation triggers stay unambiguous', await G(v, 'return game.marker.state().editing && game.debug.xrButtons().every(b => b.at === null)'), 'edit mode');
   const proxy = await G(v, `const w = game.debug.stairs.children.flatMap(c => c.children).flatMap(c => c.children).find(c => c.userData.parked);
     return w.getWorldPosition(new game.debug.rig.position.constructor()).toArray()`);
   await G(v, `__aimMark(${JSON.stringify(proxy)})`); await v.waitForTimeout(300);

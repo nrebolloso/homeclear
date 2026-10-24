@@ -1,10 +1,9 @@
 import { cameraToW2C } from './frame.ts';   // first: sets the +z-up convention before any camera exists
 import * as THREE from 'three';
-import { SparkRenderer, SparkXr, SplatMesh } from '@sparkjsdev/spark';
+import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { stamp, carvedPolys, placementOk, polyCells, worldFootprint, toCell, applyIntervention, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
-import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 import { buildDevice, type WalkerCfg } from './walker.ts';
 import { nightShader } from './night.ts';
 import { createVision, PROFILES, type Profile } from './vision.ts';
@@ -17,9 +16,10 @@ import { drawTopdown } from './topdown.ts';
 import { spots, vantage, heightTexels, type Spot } from './spotlight.ts';
 import { summarize, drawPushChart, poseAt, pushColor, sampleText } from './physdebug.ts';
 import { cardState, encodeCard, type ActionOut, type ReportPayload } from './share.ts';
-import { createReimagine, undoChange, costText, card, type Change } from './reimagine.ts';
+import { createReimagine, undoChange, costText, card, poseAt as layoutPoseAt, type Change } from './reimagine.ts';
 import { moveCost, removeCost, sumCosts } from './movecost.ts';
-import { isMoved, movedText, resetPose, resetHoldProgress } from './resets.ts';
+import { isMoved, movedText, resetPose } from './resets.ts';
+import { twistAngle, snapQuarter } from './wand.ts';
 import { createObjLabel } from './objlabel.ts';
 import { measureStair, stairFixes, stairFrame, stairYaml, mirrorRail, inRailBand, stepLights, withRails, pitchAt, parkedPose, walkerPlacement, SPLAT_STRIDE, type Stair, type Side } from './stairs.ts';
 import { createStairs3d } from './stairs3d.ts';
@@ -33,9 +33,14 @@ import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } f
 import QRCode from 'qrcode';
 import type { Eval, Init, RouteDef } from './worker.ts';
 import type { WorldModel } from './worldmodel.ts';
-import { floorHit, twistAngle, snapQuarter, holdProgress, DELETE_HOLD_S, DELETE_SHOW_S, DRAG_DEADZONE_M } from './wand.ts';
+import { setupXR, type XrEditor } from './xr.ts';
+import { plainSpot, tourStand } from './xrtour.ts';
+import { createXRComparison } from './xrcompare.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+// model and scene text (Cosmos Reason notes, hazard details) goes into innerHTML escaped; same as report.ts's, which can't
+// be imported: that module renders the report page when loaded
+const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 const RUN = new URLSearchParams(location.search).get('scene') ?? 'game_synth';
 const BASE = `scene/${RUN}/`;
 const json = (f: string) => fetch(BASE + f).then(r => { if (!r.ok) throw new Error(`${BASE}${f}: ${r.status}`); return r.json(); });
@@ -70,6 +75,7 @@ let selRoute = 0;
 // performance mode (perf.ts): on in a standalone headset, off over Link (the PC renders the full scene); ?perf=1|0 decides,
 // else what the person chose last time. ?stddev= and ?maxpx= (the Link guide's names) always set the splat limits.
 const wantXR = new URLSearchParams(location.search).has('xr');
+let inXR = false;   // presenting in a headset (xr.ts): hazard labels are scene cards then, DOM labels don't render in WebXR
 const tier = tierAtLoad(location.search, wantXR);
 let perfOn = perfAtLoad(location.search, tier, (() => { try { return localStorage.getItem('homeclear.perf'); } catch { return null; } })());
 // the drawing buffer is kept on the monitor for screenshots (fix card, e2e); a headset frame doesn't need the extra copy
@@ -312,7 +318,7 @@ function drawPlan(r: Eval) {
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.22, 32), new THREE.MeshBasicMaterial({ color: bump ? 0xff8a1f : 0xffe14d, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide }));
     ring.position.set(h.position[0], h.position[1], 0.03);
     ring.userData.s = routeS[h.a] ?? 0;
-    const t = wantXR ? card([text], bump ? '#ffcf99' : '#fff0a8', 'rgba(14,20,28,0.8)', 0.05) : label(text);   // DOM labels don't render in WebXR
+    const t = wantXR || inXR ? card([text], bump ? '#ffcf99' : '#fff0a8', 'rgba(14,20,28,0.8)', 0.05) : label(text);   // DOM labels don't render in WebXR
     t.position.set(0, 0, 0.35);
     ring.add(t);
     hazardGroup.add(ring);
@@ -337,7 +343,7 @@ function renderPanels() {
     ` over ${h.length_m.toFixed(2)} m${h.type === 'floor_bump' ? ` · ${fmt(h.per_month)}/month` : ''}${h.ot_check ? ' · <span class="ot">OT should check</span>' : ''}</li>`);
   // Cosmos Reason: proposals already checked against the grids (cosmos/reason.py); the dismissed ones are not listed
   const reason = hzFile.hazards.filter(h => h.source === 'cosmos_reason' && h.verdict !== 'dismissed').map(h =>
-    `<li><span class="imagined">${h.note}</span> · proposed by Cosmos Reason${h.verdict === 'confirmed' ? `, <span class="measured">geometry agrees: ${h.measured}</span>` : ', not measurable from the scan · <span class="ot">OT should check</span>'}</li>`);
+    `<li><span class="imagined">${esc(h.note)}</span> · proposed by Cosmos Reason${h.verdict === 'confirmed' ? `, <span class="measured">geometry agrees: ${esc(h.measured)}</span>` : ', not measurable from the scan · <span class="ot">OT should check</span>'}</li>`);
   $('hazards').innerHTML = [...geo, ...reason].join('') || '<li>none on this route</li>';
   const vcls = (v: string) => (v === 'ok' ? 'delta-good' : v === 'fail' ? 'delta-bad' : 'ot');
   $('checks').innerHTML = r.checks.map(c => `<li><span class="${vcls(c.verdict)}">${c.verdict}</span> ${c.label}<br><small>${c.note}</small></li>`).join('')
@@ -438,7 +444,7 @@ function tourStep(dt: number) {
       tour.phase = 'hold'; tour.t = 0;
       const s = spotList[tour.k], cap = $('tourcap');
       cap.hidden = false;
-      cap.innerHTML = `<b>${tour.k + 1}/${spotList.length}</b> · ${s.kind === 'measured' ? 'measured' : '<span class="imagined">proposed by Cosmos Reason, not measured</span>'}<br>${s.detail}`;
+      cap.innerHTML = `<b>${tour.k + 1}/${spotList.length}</b> · ${s.kind === 'measured' ? 'measured' : '<span class="imagined">proposed by Cosmos Reason, not measured</span>'}<br>${esc(s.detail)}`;   // model/scene text: escaped
     }
   } else if (tour.t >= TOUR_HOLD_S) {
     if (tour.k + 1 < spotList.length) tourGo(tour.k + 1);
@@ -493,15 +499,11 @@ function syncObjects() {
     const p = layout.poses[k], o = original[k];
     it.group.position.set(p.x, p.y, 0); it.group.rotation.set(0, 0, p.yaw);   // upright (live physics re-tilts a tipped one)
     it.group.visible = !p.removed;
+    it.mesh.opacity = 1;
     const moved = !!p.removed || Math.hypot(p.x - o.x, p.y - o.y) > 0.01 || Math.abs(p.yaw - o.yaw) > 0.01;
     it.fill.visible = it.tag.visible = moved && $<HTMLInputElement>('imagfill').checked;   // the spot it used to cover was never filmed
   });
-  for (const c of [...tapeGroup.children]) tapeGroup.remove(c);
-  for (const [[x0, y0], [x1, y1]] of layout.flattened) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), new THREE.MeshBasicMaterial({ color: 0x8a8f96, transparent: true, opacity: 0.8 }));
-    m.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0.022);
-    tapeGroup.add(m);
-  }
+  drawTape(layout);
   const gone = objs.flatMap((o, k) => (layout.poses[k].removed ? [k] : []));
   $('inventory').innerHTML = gone.length ? '' : '<li class="hint">nothing removed</li>';
   for (const k of gone) {
@@ -513,6 +515,13 @@ function syncObjects() {
   }
   updateNight();
   live?.sync(layout);
+}
+function drawTape(lay: Layout) {
+  for (const c of [...tapeGroup.children] as THREE.Mesh[]) { tapeGroup.remove(c); c.geometry.dispose(); (c.material as THREE.Material).dispose(); }
+  for (const [[x0, y0], [x1, y1]] of lay.flattened) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0), new THREE.MeshBasicMaterial({ color: 0x8a8f96, transparent: true, opacity: 0.8 }));
+    m.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0.022); tapeGroup.add(m);
+  }
 }
 const ICONS: Record<string, string> = {   // line drawings for the Removed list, by kind or name
   chair: '<path d="M7 3v18M7 12h10v9M7 12V3m0 0h3"/>',
@@ -853,13 +862,13 @@ function setupStairs() {
   $<HTMLSelectElement>('topdevice').value = stairs[0]?.top_device ?? 'walker';
   markRefresh();
 }
-function drawStairs() {
-  stairs3d.build(stairs, layout.added ?? [], layout.placed ?? {});
+function drawStairs(lay = layout) {
+  stairs3d.build(stairs, lay.added ?? [], lay.placed ?? {});
   const verdict = (d: Door) => current?.checks.find(c => c.id === `door:${d.name}`)?.verdict === 'ok';
-  const change = (d: Door) => { const c = layout.carved?.find(x => x.target === d.name); return c ? { gain: c.by_m, grow: growOf(d, c.id.split(':')[0].slice('door_'.length)) } : { gain: 0, grow: 'both' as const }; };
+  const change = (d: Door) => { const c = lay.carved?.find(x => x.target === d.name); return c ? { gain: c.by_m, grow: growOf(d, c.id.split(':')[0].slice('door_'.length)) } : { gain: 0, grow: 'both' as const }; };
   doors3d.build(doors, Object.fromEntries(doors.map(d => [d.name, change(d)])), Object.fromEntries(doors.map(d => [d.name, verdict(d)])));
   // motion step lights light the scan itself at night (night.ts); only re-light when they change: it regenerates every splat
-  const L = stairs.filter(st => layout.added?.includes(`stair_lights:${st.name}`)).flatMap(st => stepLights(st).map(p => ({ ...p, r: 0.7 }))).slice(0, MAX_EXTRA_LIGHTS);
+  const L = stairs.filter(st => lay.added?.includes(`stair_lights:${st.name}`)).flatMap(st => stepLights(st).map(p => ({ ...p, r: 0.7 }))).slice(0, MAX_EXTRA_LIGHTS);
   if (JSON.stringify(L) !== JSON.stringify(stepLightList)) { stepLightList = L; updateNight(); }
 }
 function saveMarked() { try { localStorage.setItem(STAIR_KEY, JSON.stringify(marked)); } catch { /* private window: kept for this visit only */ } }
@@ -1205,6 +1214,73 @@ game.marker = {   // for e2e and the VR team: the same actions as the clicks
 // The marking state must exist before setup calls markRefresh (also for stairs loaded from config/storage).
 setupStairs();
 
+// The marking lane owns these actions; xr.ts supplies tracked rays and gives editing priority over its story card.
+let xrPlacing = false, xrSnap = true;
+let markGripWas = false, markAWas = false, markBWas = false, markOAWas = false, markOBWas = false;
+const xrMarkHelp = card(['A/X: mark doorway · B/Y: mark stairs', 'wand B/Y: edit saved marks'], '#ffe27a', undefined, 0.025);
+xrMarkHelp.position.set(0, 0.12, -0.15); xrMarkHelp.renderOrder = 4;
+const markerXR: XrEditor = {
+  hint: xrMarkHelp,
+  active: () => !!(mk || editing || handleDrag || parkDrag),
+  down(ray, q) {
+    if (mk) { xrPlacing = true; return true; }
+    markRay.ray.copy(ray);
+    const h = editing ? markRay.intersectObjects(mk3d.pickables(), false)[0] : null;
+    if (h?.object.userData.handle) {
+      const { owner, key } = h.object.userData.handle;
+      handleDrag = { owner, key, at: handleList.find(h => h.owner === owner && h.key === key)!.at }; return true;
+    }
+    if (h?.object.userData.toggle) { toggleRail(h.object.userData.toggle); return true; }
+    const w = markRay.intersectObjects(stairs3d.walkers(), false)[0];
+    if (w) { startParkDrag(w.object.userData.parked, ray, q); return true; }
+    return editing;
+  },
+  up(ray) {
+    if (xrPlacing) { xrPlacing = false; if (mk) markPlace(markHit(ray, xrSnap)?.p ?? null); }
+    else if (handleDrag) commitHandle();
+    else if (parkDrag) commitPark();
+  },
+  frame(ray, q) {
+    if (!this.active()) return null;
+    if (!ray) { markHover = null; markDraw(); say(); return null; }
+    if (parkDrag) moveParked(ray, snapQuarter(twistAngle(parkDrag.q0!, q!)));
+    else {
+      markHover = markHit(ray, xrSnap);
+      if (handleDrag && markHover) handleDrag.at = markHover.p;
+      markDraw(); say();
+    }
+    return markHover ? ray.origin.distanceTo(new THREE.Vector3(...markHover.p)) : 5;
+  },
+  buttons(pads, wand) {
+    const wp = pads[wand], op = pads[wand === 'left' ? 'right' : 'left'];
+    const grip = !!wp?.buttons[1]?.pressed, a = !!wp?.buttons[4]?.pressed, b = !!wp?.buttons[5]?.pressed;
+    const oa = !!op?.buttons[4]?.pressed, ob = !!op?.buttons[5]?.pressed, active = this.active();
+    let handled = active;
+    xrSnap = !op?.buttons[1]?.pressed;
+    if (active) {
+      if (grip && !markGripWas) {
+        xrPlacing = false;
+        if (parkDrag) { parkDrag = null; drawStairs(); say(); }
+        else if (mk) cancelMark(); else setEditing(false);
+      } else if (b && !markBWas) {
+        xrPlacing = false;
+        if (mk) undoPoint(); else if (parkDrag) { const id = parkDrag.id; parkDrag = null; resetParked(id); }
+      } else if (a && !markAWas && editing) setEditing(false);
+      else if (oa && !markOAWas && editing && stairs.length) setTopDevice(stairs[0].top_device === 'rollator' ? 'walker' : 'rollator');
+    } else if ((oa && !markOAWas) || (ob && !markOBWas) || (b && !markBWas)) {
+      handled = true;
+      if (oa && !markOAWas) beginMark('door'); else if (ob && !markOBWas) beginMark('stairs'); else setEditing(true);
+    }
+    markGripWas = grip; markAWas = a; markBWas = b; markOAWas = oa; markOBWas = ob;
+    return handled;
+  },
+  cancelDrag() {
+    xrPlacing = false; handleDrag = null;
+    if (parkDrag) { parkDrag = null; drawStairs(); }
+    markHover = null; markDraw(); say();
+  },
+};
+
 // ---------- live object physics (livephys.ts, Rapier in its own worker): objects the walker pushes, slides, tips ----------
 const live: LivePhys | null = PARAMS.has('nophys') ? null : createLivePhys({ base: BASE, g, objs, items, scene, renderer, obst: placeBase.obst, bump: base.bump,
   walker: () => walkerCfg, layout: () => layout, overlap: overlapOk.flatMap((s, k) => [...s].filter(n => n > k).map(n => [k, n] as [number, number])),
@@ -1325,13 +1401,14 @@ game.resetAll = resetAll;
 const objLabel = createObjLabel(scene);
 let labelLines: string[] = [];
 function labelStep() {
-  const xr = renderer.xr.isPresenting, k = xr ? (grab?.k ?? hover) : selected;
-  const resetBtn = $<HTMLButtonElement>('resetobj'), canReset = !xr && selected >= 0 && isMoved(layout.poses[selected], original[selected]);
+  const inHeadset = renderer.xr.isPresenting, wand = inHeadset ? xr.wand() : null;
+  const k = wand ? objs.findIndex(o => o.name === (wand.grab ?? wand.hover)) : selected;
+  const resetBtn = $<HTMLButtonElement>('resetobj'), canReset = !inHeadset && selected >= 0 && isMoved(layout.poses[selected], original[selected]);
   if (resetBtn.disabled === canReset) resetBtn.disabled = !canReset;
   if (k < 0 || layout.poses[k].removed) { labelLines = []; return objLabel.set(null, [], false); }
   const name = objs[k].name.replace(/_/g, ' '), moved = movedText(poseOf(k), original[k]);
-  labelLines = [name[0].toUpperCase() + name.slice(1), moved ? `${moved} · ${xr ? 'grip' : 'Z'} resets` : ''].filter(Boolean);
-  objLabel.set(items[k].proxy, labelLines, !xr || !!grab);
+  labelLines = [name[0].toUpperCase() + name.slice(1), moved ? `${moved} · ${inHeadset ? 'grip' : 'Z'} resets` : ''].filter(Boolean);
+  objLabel.set(items[k].proxy, labelLines, !inHeadset || !!wand?.grab);
   objLabel.update(camera);
 }
 game.label = () => labelLines;
@@ -1691,20 +1768,15 @@ function frame(now: number) {
   }
 }
 function step(dt: number, t: number) {
-  if (renderer.xr.isPresenting) xrStep(dt);
-  else if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
-  if (!renderer.xr.isPresenting) tourStep(dt);
+  if (xr.presenting()) return xrFrame(dt, t);
+  if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
+  tourStep(dt);
   walker.group.position.set(body.x, body.y, 0);
   walker.group.rotation.z = body.yaw;
   reim.update(dt);
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
   if (mode !== 'fly') live?.frame(dt, body, mode === 'free', walker.group);
   labelStep();
-  if (renderer.xr.isPresenting) {
-    liveChecks(t);
-    renderer.render(scene, camera);   // CSS2D labels are DOM and the post pass can't run per eye: plain render in the headset
-    return;
-  }
   if (mode === 'fly') {
     const c = Math.cos(body.pitch);
     camera.position.set(fly.x, fly.y, fly.z);
@@ -1720,269 +1792,118 @@ function step(dt: number, t: number) {
   pulseSpots(t);
   replayStep(dt);
   liveChecks(t);
-  if (renderer.xr.isPresenting) renderer.render(scene, camera);   // the post pass can't run per eye: plain render in the headset
-  else vision.render();
-  if (!renderer.xr.isPresenting) css.render(scene, camera);   // DOM labels don't show in the headset: skip their layout work
+  vision.render();
+  css.render(scene, camera);
 }
 
-// ---------- VR (WebXR, e.g. Quest Browser) ----------
-// WebXR's local-floor space is y-up with the floor at y=0; the scene is the +z-up floor frame. The camera rides in a
-// rig: +90 deg about x maps XR up (+y) to +z, then a turn about z by yaw - 90 deg points XR forward (-z) along yaw.
-// Room-scale walking is 1:1. Left stick walks along the floor, only where free walk could stand (walls, furniture and
-// unfilmed floor block it: no noclip); right stick snap-turns 30 deg about the head. Holding a pinch or trigger on the
-// non-wand hand walks forward where you look (the wand hand edits: see below). The walker stays at your feet.
-// ?emulate=quest2: Meta's IWER replaces navigator.xr with a scripted Quest 2 (head, controllers, hands), so e2e/xr.ts
-// can enter VR, look, point and press with no headset. Loaded only with the flag; must run before SparkXr checks support.
-const xrDevice = PARAMS.has('emulate')
-  ? await import('iwer').then(({ XRDevice, metaQuest2 }) => {   // forceInstall: desktop Chrome has its own (deviceless) navigator.xr
-    const d = new XRDevice(metaQuest2); d.installRuntime({ forceInstall: true }); return d;
-  })
-  : null;
-const rig = new THREE.Group();
-scene.add(rig);
-const xrRig = { x: 0, y: 0, yaw: 0 };
-const TILT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2), UP = new THREE.Vector3(0, 0, 1);
-function placeRig() {
-  rig.position.set(xrRig.x, xrRig.y, 0);
-  rig.quaternion.setFromAxisAngle(UP, xrRig.yaw - Math.PI / 2).multiply(TILT);
-}
-let snapReady = true;
-const pinching = new Set<object>();   // non-wand hands/controllers holding select: walk
-const head = new THREE.Vector3(), headDir = new THREE.Vector3();
-function xrStep(dt: number) {
-  // the user camera, not renderer.xr.getCamera(): before render() that one still holds the raw y-up headset pose
-  // without the rig; three writes the camera's rig-local pose after each render, so this is last frame's head, in the floor frame
-  camera.getWorldPosition(head); camera.getWorldDirection(headDir);
-  const yaw = Math.atan2(headDir.y, headDir.x);
-  const pads: Record<string, Gamepad> = {};
-  for (const s of renderer.xr.getSession()?.inputSources ?? []) if (s.gamepad) pads[s.handedness] = s.gamepad;
-  const stick = (p?: Gamepad) => (p ? [p.axes[2] ?? 0, p.axes[3] ?? 0].map(a => (Math.abs(a) < 0.2 ? 0 : a)) : [0, 0]);
-  const [sx, stickY] = stick(pads.left), [tx] = stick(pads.right), sy = stickY || (pinching.size ? -1 : 0);
-  if (sx || sy) {   // sub-steps of at most half a cell, as in free walk
-    const v = 0.6 * dt, dx = (-sy * Math.cos(yaw) + sx * Math.sin(yaw)) * v, dy = (-sy * Math.sin(yaw) - sx * Math.cos(yaw)) * v;
-    const n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / (g.cell_m / 2)));
-    for (let i = 0; i < n; i++) {
-      const c = cellAt(head.x + dx / n, head.y + dy / n);
-      if (!L.floor[c] || L.obst[c] || coverage[c] === 0) break;
-      xrRig.x += dx / n; xrRig.y += dy / n; head.x += dx / n; head.y += dy / n;
-    }
-  }
-  if (Math.abs(tx) > 0.7 && snapReady) {   // rotate the rig about the head, so turning doesn't also slide you sideways
-    const a = -Math.sign(tx) * Math.PI / 6, c = Math.cos(a), s = Math.sin(a), rx = xrRig.x - head.x, ry = xrRig.y - head.y;
-    Object.assign(xrRig, { x: head.x + c * rx - s * ry, y: head.y + s * rx + c * ry, yaw: xrRig.yaw + a });
-    snapReady = false;
-  } else if (Math.abs(tx) < 0.3) snapReady = true;
-  placeRig();
-  body.x = head.x; body.y = head.y;
-  body.yaw += Math.atan2(Math.sin(yaw - body.yaw), Math.cos(yaw - body.yaw)) * Math.min(1, dt * 4);
-  xrButtons(dt, pads);
-  wandStep();
-}
-// Controller buttons (standard mapping: 1 = grip, 4 = A/X). Hands have no gamepad, so they only get the wand.
-// Grip on the wand hand puts back what it points at or holds; A removes what it points at; both grips held reset everything.
-let gripWas = false, aWas = false, bWas = false, oaWas = false, obWas = false, bothHeld = 0, resetFired = false, ringN = 0, ringCard: THREE.Sprite | null = null;
-let xrSnap = true;
-function xrButtons(dt: number, pads: Record<string, Gamepad>) {
-  const wp = pads[WAND], op = pads[WAND === 'left' ? 'right' : 'left'];
-  const grip = !!wp?.buttons[1]?.pressed, a = !!wp?.buttons[4]?.pressed, b = !!wp?.buttons[5]?.pressed, both = grip && !!op?.buttons[1]?.pressed;
-  const oa = !!op?.buttons[4]?.pressed, ob = !!op?.buttons[5]?.pressed, marking = !!(mk || editing || handleDrag || parkDrag);
-  xrSnap = !op?.buttons[1]?.pressed;
-  if (marking) {
-    if (grip && !gripWas) {
-      xrPlacing = false;
-      if (parkDrag) { parkDrag = null; drawStairs(); say(); }
-      else if (mk) cancelMark(); else setEditing(false);
-    } else if (b && !bWas) {
-      xrPlacing = false;
-      if (mk) undoPoint(); else if (parkDrag) { const id = parkDrag.id; parkDrag = null; resetParked(id); }
-    } else if (a && !aWas && editing) setEditing(false);
-    else if (oa && !oaWas && editing && stairs.length) setTopDevice(stairs[0].top_device === 'rollator' ? 'walker' : 'rollator');
-  } else if ((oa && !oaWas) || (ob && !obWas) || (b && !bWas)) {
-    dropWand();
-    if (oa && !oaWas) beginMark('door'); else if (ob && !obWas) beginMark('stairs'); else setEditing(true);
-  } else {
-    if (grip && !gripWas) { const k = grab?.k ?? hover; if (k >= 0) { grab = null; syncObjects(); resetObject(k); } }
-    if (a && !aWas && !grab && hover >= 0) removeObject(hover);
-  }
-  gripWas = grip; aWas = a; bWas = b; oaWas = oa; obWas = ob;
-  bothHeld = both && !marking ? bothHeld + dt : 0;
-  if (!both) resetFired = false;
-  const p = resetHoldProgress(bothHeld);
-  if (p >= 1 && !resetFired) { resetFired = true; resetAll(); }
-  const n = both && !resetFired ? Math.ceil(p * 5) : 0;   // five-step bar in front of the face while the hold fills
-  if (n !== ringN) {
-    ringN = n; ringCard?.removeFromParent(); ringCard?.material.dispose(); ringCard = null;
-    if (n) { ringCard = card(['Reset everything', '▮'.repeat(n) + '▯'.repeat(5 - n)], '#ffd84d'); scene.add(ringCard); }
-  }
-  ringCard?.position.copy(head).addScaledVector(headDir, 1).setZ(head.z - 0.15);
-}
-
-// ---------- VR wand: point at furniture and hold to drag it (twist the wrist to turn it), hold still to delete it;
-// point at the floor and release to teleport. A hand pinch and a controller trigger are the same WebXR "select", so
-// hands stand in for the controllers. Moves go through the desktop editor's placement check and commitPose re-plan.
-const WAND: XRHandedness = PARAMS.get('wand') === 'left' ? 'left' : 'right';   // ?wand=left for left-handed users
-type Ctl = { group: THREE.XRTargetRaySpace; source?: XRInputSource; ray: THREE.Line };
-const wandRay = new THREE.Raycaster(), RED3 = new THREE.Color(0xff3030);
-const tpRing = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.24, 32),
-  new THREE.MeshBasicMaterial({ color: 0x44ff88, transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide }));
-tpRing.renderOrder = 1; tpRing.visible = false;
-scene.add(tpRing);
-let grab: { k: number; off: XY; start: XY; drag: number; t0: number; yaw0: number; q0: THREE.Quaternion; valid?: Pose } | null = null;
-let aiming = false, hover = -1;
-let xrPlacing = false;
-const isWand = (c: Ctl) => c.source?.handedness === WAND;
-const ctls: Ctl[] = [0, 1].map(i => {
-  const group = renderer.xr.getController(i);
-  const ray = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x66ccff }));
-  ray.visible = false;
-  group.add(ray); rig.add(group);
-  const c: Ctl = { group, ray };
-  group.addEventListener('connected', e => { c.source = e.data; });
-  group.addEventListener('disconnected', () => { if (isWand(c)) dropWand(); pinching.delete(c); c.source = undefined; });
-  group.addEventListener('selectstart', () => (isWand(c) ? wandDown(c) : pinching.add(c)));
-  group.addEventListener('selectend', () => (isWand(c) ? wandUp() : pinching.delete(c)));
-  return c;
-});
-const xrMarkHelp = card(['A/X: mark doorway · B/Y: mark stairs', 'wand B/Y: edit saved marks'], '#ffe27a', undefined, 0.025);
-xrMarkHelp.position.set(0, 0.12, -0.15); xrMarkHelp.renderOrder = 4;
-// tracked hands drawn in the rig like the controllers; models served locally (models/hands/, webxr-input-profiles, MIT)
-const handModels = new XRHandModelFactory().setPath('models/hands/');
-for (const i of [0, 1]) { const hand = renderer.xr.getHand(i); hand.add(handModels.createHandModel(hand, 'mesh')); rig.add(hand); }
-
-// The headset GPU is fill-bound: a splat's soft tail and huge near-eye splats cost the most for the least. In VR only,
-// trim splats to ?stddev= standard deviations (Spark default sqrt 8) and cap them at ?maxpx= pixels (default 512).
-// Quest 2, kitchen 120K at 72 Hz: 36 fps with Spark's defaults, 72 with 2.0 and 128.
-const XR_SPLAT = { maxStdDev: +(PARAMS.get('stddev') ?? 2.0), maxPixelRadius: +(PARAMS.get('maxpx') ?? 128) };
-const DESK_SPLAT = { maxStdDev: sparkR.maxStdDev, maxPixelRadius: sparkR.maxPixelRadius };
-
-function aim(c: Ctl) {   // the controller's pose is rig-local (reference space): refresh its world matrix through the rig
-  c.group.updateWorldMatrix(true, false);
-  return wandRay.setFromXRController(c.group), wandRay.ray;
-}
-const inGrid = (x: number, y: number) => x >= g.origin_xy[0] && y >= g.origin_xy[1] && x < g.origin_xy[0] + nx * g.cell_m && y < g.origin_xy[1] + ny * g.cell_m;
-const standable = (x: number, y: number) => { const c = cellAt(x, y); return inGrid(x, y) && !!L.floor[c] && !L.obst[c] && coverage[c] > 0; };
-function wandDown(c: Ctl) {
-  const r = aim(c);
-  if (mk) { xrPlacing = true; return; }
-  const h = editing ? wandRay.intersectObjects(mk3d.pickables(), false)[0] : null;
-  if (h?.object.userData.handle) {
-    const { owner, key } = h.object.userData.handle;
-    handleDrag = { owner, key, at: handleList.find(h => h.owner === owner && h.key === key)!.at }; return;
-  }
-  if (h?.object.userData.toggle) { toggleRail(h.object.userData.toggle); return; }
-  const w = wandRay.intersectObjects(stairs3d.walkers(), false)[0];
-  if (w) { startParkDrag(w.object.userData.parked, r, c.group.getWorldQuaternion(new THREE.Quaternion())); return; }
-  if (editing) return;
-  if (hover < 0) { aiming = true; return; }
-  const f = floorHit(r.origin, r.direction), p = layout.poses[hover], at: XY = f ? [f.x, f.y] : [p.x, p.y];
-  grab = { k: hover, off: [p.x - at[0], p.y - at[1]], start: at, drag: 0, t0: performance.now(), yaw0: p.yaw, q0: c.group.getWorldQuaternion(new THREE.Quaternion()) };
-}
-function wandUp() {
-  if (xrPlacing) {
-    xrPlacing = false;
-    const c = ctls.find(isWand);
-    if (mk && c) markPlace(markHit(aim(c), xrSnap)?.p ?? null);
-    return;
-  }
-  if (handleDrag) { commitHandle(); return; }
-  if (parkDrag) { commitPark(); return; }
-  if (mk || editing) return;
-  if (grab) { const { k, valid } = grab; grab = null; if (valid) commitPose(k, valid); return; }
-  if (aiming && tpRing.visible) { xrRig.x += tpRing.position.x - head.x; xrRig.y += tpRing.position.y - head.y; placeRig(); }
-  aiming = false; tpRing.visible = false;
-}
-/** Put the head at floor-frame (x, y) looking along yaw by moving the rig: scripted viewpoints on a headset nobody
- * wears (e2e/quest-sweep.ts). Uses last frame's head pose, like xrStep. */
-function xrPlace(x: number, y: number, yaw: number) {
-  camera.getWorldPosition(head); camera.getWorldDirection(headDir);
-  const a = yaw - Math.atan2(headDir.y, headDir.x), c = Math.cos(a), s = Math.sin(a), rx = xrRig.x - head.x, ry = xrRig.y - head.y;
-  Object.assign(xrRig, { x: x + c * rx - s * ry, y: y + s * rx + c * ry, yaw: xrRig.yaw + a });   // turn about the head, then move it
-  placeRig();
-}
-function dropWand() {   // wand lost mid-gesture (hand out of view): put a dragged object back where the layout has it
-  if (grab) syncObjects();
-  grab = null; aiming = false; tpRing.visible = false;
-  xrPlacing = false; handleDrag = null;
-  if (parkDrag) { parkDrag = null; drawStairs(); }
-  markHover = null; markDraw(); say();
-}
-function wandStep() {
-  const c = ctls.find(isWand);
-  const other = ctls.find(o => o.source && !isWand(o));
-  if (other && xrMarkHelp.parent !== other.group) other.group.add(xrMarkHelp);
-  xrMarkHelp.visible = !!other?.source?.gamepad && !mk && !editing && !parkDrag;
-  for (const o of ctls) o.ray.visible = o === c;
-  tpRing.visible = false;
-  let prog = -1;
-  if (c) {
-    const r = aim(c), f = floorHit(r.origin, r.direction);
-    if (mk || editing || parkDrag) {
-      hover = -1; aiming = false;
-      items.forEach(it => { it.outline.visible = false; });
-      if (parkDrag) moveParked(r, snapQuarter(twistAngle(parkDrag.q0!, c.group.getWorldQuaternion(new THREE.Quaternion()))));
-      else {
-        markHover = markHit(r, xrSnap);
-        if (handleDrag && markHover) handleDrag.at = markHover.p;
-        markDraw(); say();
-      }
-      c.ray.scale.z = markHover ? r.origin.distanceTo(new THREE.Vector3(...markHover.p)) : 5;
-      return;
-    }
-    let len = f ? r.origin.distanceTo(f) : 5;
-    if (grab) {
-      const it = items[grab.k], twist = snapQuarter(twistAngle(grab.q0, c.group.getWorldQuaternion(new THREE.Quaternion())));
-      if (f) grab.drag = Math.max(grab.drag, Math.hypot(f.x - grab.start[0], f.y - grab.start[1]));
-      if (twist) grab.drag = Math.max(grab.drag, DRAG_DEADZONE_M * 2);   // a turn is an edit too: never a delete
-      if (f && grab.drag > DRAG_DEADZONE_M) {
-        const p: Pose = { x: f.x + grab.off[0], y: f.y + grab.off[1], yaw: grab.yaw0 - twist };
-        if (placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === grab!.k ? p : q)), grab.k)) {
-          it.group.position.set(p.x, p.y, 0); it.group.rotation.z = p.yaw; grab.valid = p;
-        }
-      }
-      prog = holdProgress((performance.now() - grab.t0) / 1000, grab.drag);
-      if (prog >= 1) { const k = grab.k; grab = null; removeObject(k); prog = -1; }
-    } else {
-      const hit = wandRay.intersectObjects(items.filter((_, k) => !layout.poses[k].removed).map(i => i.proxy))[0];
-      hover = hit ? items.findIndex(i => i.proxy === hit.object) : -1;
-      if (hit) len = hit.distance;
-      if (hover < 0 && aiming && f && standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
-    }
-    c.ray.scale.z = len;
-  } else { hover = -1; if (mk || editing) { markHover = null; markDraw(); say(); } }
-  items.forEach((it, k) => {   // blue = pointed at, yellow = held, turning red = about to be deleted
-    const held = grab?.k === k, m = it.outline.material as THREE.LineBasicMaterial;
-    it.outline.visible = held || (!grab && k === hover);
-    m.color.setHex(held ? 0xffd84d : 0x66ccff);
-    if (held && prog > 0) m.color.lerp(RED3, THREE.MathUtils.clamp((prog * DELETE_HOLD_S - DELETE_SHOW_S) / (DELETE_HOLD_S - DELETE_SHOW_S), 0, 1));
-  });
-}
-
-new SparkXr({   // adds the Enter VR button; "VR not supported" where WebXR isn't available
-  renderer, mode: 'vr', referenceSpaceType: 'local-floor', enableHands: true,
-  // ?xrscale=<0..1> render resolution per eye (Spark's default 0.5), ?foveation=<0..1> blur toward the edges (headset GPUs are fill-bound)
-  frameBufferScaleFactor: PARAMS.has('xrscale') ? +PARAMS.get('xrscale')! : undefined,
-  fixedFoveation: PARAMS.has('foveation') ? +PARAMS.get('foveation')! : undefined,
-  onEnterXr: () => {
-    // a route can start at the edge of the scan (kitchen4: a doorway outside the grid): start at the first point along
-    // it with filmed floor, or the headset begins inside a wall's splats (slow, and you see the room through the wall)
-    if (!standable(body.x, body.y) && current && !current.error) {
-      for (let s = 0; s < routeS[routeS.length - 1]; s += 0.05) { const p = routePose(s, body.yaw, Infinity); if (standable(p.x, p.y)) { Object.assign(body, p); break; } }
-    }
-    Object.assign(xrRig, { x: body.x, y: body.y, yaw: body.yaw }); placeRig(); rig.add(camera); snapReady = true; game.xr = true;
-    select(-1);   // the desktop gizmo has no place in the headset
-    say();
-    Object.assign(sparkR, XR_SPLAT);
-    // ?hz=72: a lower refresh gives each frame more time (90 Hz = 11.1 ms, 72 Hz = 13.9 ms); the Quest 2 offers 60-120
-    if (PARAMS.has('hz')) renderer.xr.getSession()?.updateTargetFrameRate?.(+PARAMS.get('hz')!).catch(() => {});
+// ---------- VR (xr.ts): the headset is the patient's eyes; main.ts hands it the scene, the walker and the editor ----------
+const inGridXY = (x: number, y: number) => x >= g.origin_xy[0] && y >= g.origin_xy[1] && x < g.origin_xy[0] + nx * g.cell_m && y < g.origin_xy[1] + ny * g.cell_m;
+const standable = (x: number, y: number) => { const c = cellAt(x, y); return inGridXY(x, y) && !!L.floor[c] && !L.obst[c] && coverage[c] > 0; };
+let perfBeforeXR = perfOn;
+// Real layout changes are separate from a labelled, read-only comparison of the saved prior and safer rooms.
+let previewVisibility: [THREE.Object3D, boolean][] | null = null, previewSide: number | null = null;
+const comparison = createXRComparison({
+  capture: () => ({ layout, applied }),
+  context: () => JSON.stringify([personaKey, strongSide, stairs, doors, routes, init.plan]),
+  search: reimagineRoom,
+  async apply(snapshot) {
+    layout = snapshot.layout; applied = snapshot.applied;
+    syncObjects(); await replan(); reim.setT(1);
   },
-  onExitXr: () => {
-    camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1; game.xr = false;
-    say();
-    Object.assign(sparkR, DESK_SPLAT);
-    for (const it of items) { it.outline.visible = false; (it.outline.material as THREE.LineBasicMaterial).color.setHex(0x66ccff); }
+  preview(from, to, t) {
+    if (!previewVisibility) {
+      reim.setT(1);   // stop an automatic morph before drawing this independent comparison
+      previewVisibility = [routeLine, ghostDots, hazardGroup, spotGroup, reim.root].map(o => [o, o.visible]);
+      for (const [o] of previewVisibility) o.visible = false;
+      objLabel.set(null, [], false);
+    }
+    items.forEach((it, k) => {
+      const a = from.poses[k], b = to.poses[k], p = layoutPoseAt(a, b, t), u = t * t * (3 - 2 * t);
+      const alpha = (a.removed ? 0 : 1) * (1 - u) + (b.removed ? 0 : 1) * u;
+      it.group.position.set(p.x, p.y, 0); it.group.rotation.set(0, 0, p.yaw);
+      it.group.visible = alpha > 0.001; it.mesh.opacity = alpha;
+      const moved = alpha < 0.999 || Math.hypot(p.x - original[k].x, p.y - original[k].y) > 0.01 || Math.abs(p.yaw - original[k].yaw) > 0.01;
+      it.fill.visible = it.tag.visible = moved && $<HTMLInputElement>('imagfill').checked;
+    });
+    const side = t >= 0.5 ? 1 : 0;
+    if (previewSide !== side) { const lay = side ? to : from; drawStairs(lay); drawTape(lay); previewSide = side; }
+  },
+  endPreview() {
+    for (const [o, visible] of previewVisibility ?? []) o.visible = visible;
+    previewVisibility = null; previewSide = null;
+    syncObjects(); drawStairs();
   },
 });
-
+// "Night walk": the lights go down (the night shader, as the Night box does), lit only by a nightlight if the room has one
+const nightOn = () => $<HTMLInputElement>('night').checked;
+const nightButton = {
+  text() {
+    const k = objs.findIndex(o => o.kind === 'nightlight'), lit = k >= 0 && !layout.poses[k].removed;
+    return nightOn() ? ['Turn the lights back on', lit ? 'a nightlight is on' : 'no nightlight in this room'] : ['Night walk', 'the lights go down, like at 3 a.m.'];
+  },
+  tone: () => (nightOn() ? 'plain' as const : 'go' as const),
+  press: () => game.setNight(!nightOn()),
+};
+// "Show me the dangers": stand in front of each hazard spot (worst first, the desktop tour's order) facing it, the spot
+// glowing, with what it is in plain words; each press goes to the next, at the person's pace (no timer)
+const dangerVR = { k: -1, none: false };
+function dangerGo(k: number) {
+  comparison.endPreview();
+  const s = spotList[k], at = s && current && !current.error ? tourStand(s, current.xy, standable) : null;
+  if (!at) { dangerVR.k = -1; tourSpot = -1; return; }
+  dangerVR.k = k; tourSpot = k;
+  xr.place(at.x, at.y, at.yaw);
+}
+const dangersButton = {
+  text() {
+    const n = spotList.length;
+    if (dangerVR.k >= n) { dangerVR.k = -1; tourSpot = -1; }
+    if (dangerVR.k < 0) return dangerVR.none ? ['No dangers found', 'on this walk'] : ['Show me the dangers', n ? `${n} place${n === 1 ? '' : 's'} to look at` : 'none on this walk'];
+    const { title, why } = plainSpot(spotList[dangerVR.k]);
+    return [`${dangerVR.k + 1} of ${n}: ${title}`, why, dangerVR.k + 1 < n ? 'pinch for the next one' : 'pinch to finish'];
+  },
+  tone: () => (dangerVR.k >= 0 ? 'busy' as const : 'go' as const),
+  press() {
+    if (dangerVR.k < 0) { dangerVR.none = !spotList.length; if (!dangerVR.none) dangerGo(0); return; }
+    if (dangerVR.k + 1 < spotList.length) dangerGo(dangerVR.k + 1);
+    else { dangerVR.k = -1; tourSpot = -1; }
+  },
+};
+const xr = await setupXR({
+  renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses,
+  canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
+  commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m,
+  resetObject, resetAll, editor: markerXR, readOnly: comparison.previewing,
+  startPose() {   // the first point along the route with filmed floor
+    if (!current || current.error) return null;
+    for (let s = 0; s < routeS[routeS.length - 1]; s += 0.05) { const p = routePose(s, body.yaw, Infinity); if (standable(p.x, p.y)) return p; }
+    return null;
+  },
+  enter(t) {   // a standalone headset turns performance mode on; hazard labels become scene cards
+    select(-1); inXR = true; game.xr = true; perfBeforeXR = perfOn;
+    if (t === 'quest' && PARAMS.get('perf') !== '0') applyPerf(true, false);
+    if (current) drawPlan(current);
+    say();
+  },
+  exit() { comparison.endPreview(); inXR = false; game.xr = false; dangerVR.k = -1; tourSpot = -1; applyPerf(perfBeforeXR, false); if (current) drawPlan(current); say(); },
+  buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton],   // the story for a family: what's risky, how night feels, the fix
+});
+/** One headset frame: the monitor's world updates (walker, glow, the reimagined room, stairs, live checks), but no camera
+ *  placement (the headset is the camera), no DOM labels and no post pass (it can't run per eye). Live physics follows
+ *  without holding the body back: in VR the body is wherever the person physically stands. */
+function xrFrame(dt: number, t: number) {
+  xr.step(dt);
+  walker.group.position.set(body.x, body.y, 0);
+  walker.group.rotation.z = body.yaw;
+  if (!comparison.previewing()) live?.frame(dt, body, false, walker.group);
+  pulseSpots(t);
+  reim.update(dt);
+  comparison.step(dt);
+  stairs3d.update(t, $<HTMLInputElement>('night').checked);
+  if (!comparison.previewing()) labelStep();
+  liveChecks(t);
+  renderer.render(scene, camera);
+}
 // ---------- start ----------
 setWalk('auto');
 await replan();
@@ -2005,14 +1926,9 @@ Object.assign(game, {
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
   debug: { renderer, scene, camera, marker: mk3d.root, stairs: stairs3d.root, spark: sparkR, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup],
-    rig, xrDevice, xrPlace, wand: () => ({ hover: hover >= 0 ? objs[hover].name : null, grab: grab ? objs[grab.k].name : null, aiming, teleport: tpRing.visible,
-      drag: grab?.drag, valid: grab?.valid ?? null }) },
+    rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrTier: xr.tier, xrButtons: xr.buttons, xrComparison: comparison.state },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
-  xrPose() {
-    const w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3));
-    return { xr: renderer.xr.isPresenting, head: w(renderer.xr.getCamera()), userCam: w(camera), rig: { ...xrRig }, body: { ...body }, walker: w(walker.group),
-      inputs: [...renderer.xr.getSession()?.inputSources ?? []].map(s => `${s.handedness}:${s.hand ? 'hand' : 'controller'}`), pinching: pinching.size };
-  },
+  xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); Object.assign(body, { x, y, yaw }); },
   layout: () => layout, current: () => current, routes,
   spots: () => spotList, startTour, endTour, tourState: () => ({ ...tour }), replayState: () => ({ on: replay.on, t: replay.t }), startReplay, stopReplay, showPhysics,
