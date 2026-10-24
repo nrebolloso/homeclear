@@ -1,6 +1,6 @@
 import { cameraToW2C } from './frame.ts';   // first: sets the +z-up convention before any camera exists
 import * as THREE from 'three';
-import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
+import { SparkRenderer, SparkXr, SplatMesh } from '@sparkjsdev/spark';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { stamp, placementOk, polyCells, worldFootprint, toCell, applyIntervention, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
@@ -490,12 +490,17 @@ function frame(now: number) {
     game.fps = (frames * 1000) / (now - fpsT); frames = 0; fpsT = now;
     $('hud').textContent = `${game.fps.toFixed(0)} fps · ${mode === 'auto' ? 'autoplay' : mode === 'fly' ? 'fly (noclip)' : 'free walk'} · ${RUN}${sc.scale_note ? ` · ${sc.scale_note}` : ""}`;
   }
-  requestAnimationFrame(frame);
 }
 function step(dt: number, t: number) {
-  if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
+  if (renderer.xr.isPresenting) xrStep(dt);
+  else if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
   walker.group.position.set(body.x, body.y, 0);
   walker.group.rotation.z = body.yaw;
+  if (renderer.xr.isPresenting) {
+    liveChecks(t);
+    renderer.render(scene, camera);   // CSS2D labels are DOM: they can't show inside the headset
+    return;
+  }
   if (mode === 'fly') {
     const c = Math.cos(body.pitch);
     camera.position.set(fly.x, fly.y, fly.z);
@@ -506,12 +511,68 @@ function step(dt: number, t: number) {
   css.render(scene, camera);
 }
 
+// ---------- VR (WebXR, e.g. Quest Browser) ----------
+// WebXR's local-floor space is y-up with the floor at y=0; the scene is the +z-up floor frame. The camera rides in a
+// rig: +90 deg about x maps XR up (+y) to +z, then a turn about z by yaw - 90 deg points XR forward (-z) along yaw.
+// Room-scale walking is 1:1. Left stick walks along the floor, only where free walk could stand (walls, furniture and
+// unfilmed floor block it: no noclip); right stick snap-turns 30 deg about the head. Without controllers, holding a
+// pinch on either hand (any "select": a trigger too) walks forward where you look. The walker stays at your feet.
+const rig = new THREE.Group();
+scene.add(rig);
+const xrRig = { x: 0, y: 0, yaw: 0 };
+const TILT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2), UP = new THREE.Vector3(0, 0, 1);
+function placeRig() {
+  rig.position.set(xrRig.x, xrRig.y, 0);
+  rig.quaternion.setFromAxisAngle(UP, xrRig.yaw - Math.PI / 2).multiply(TILT);
+}
+let snapReady = true;
+const pinching = new Set<XRInputSource>();
+const head = new THREE.Vector3(), headDir = new THREE.Vector3();
+function xrStep(dt: number) {
+  // the user camera, not renderer.xr.getCamera(): before render() that one still holds the raw y-up headset pose
+  // without the rig; three writes the camera's rig-local pose after each render, so this is last frame's head, in the floor frame
+  camera.getWorldPosition(head); camera.getWorldDirection(headDir);
+  const yaw = Math.atan2(headDir.y, headDir.x);
+  const pads: Record<string, Gamepad> = {};
+  for (const s of renderer.xr.getSession()?.inputSources ?? []) if (s.gamepad) pads[s.handedness] = s.gamepad;
+  const stick = (p?: Gamepad) => (p ? [p.axes[2] ?? 0, p.axes[3] ?? 0].map(a => (Math.abs(a) < 0.2 ? 0 : a)) : [0, 0]);
+  const [sx, stickY] = stick(pads.left), [tx] = stick(pads.right), sy = stickY || (pinching.size ? -1 : 0);
+  if (sx || sy) {   // sub-steps of at most half a cell, as in free walk
+    const v = 0.6 * dt, dx = (-sy * Math.cos(yaw) + sx * Math.sin(yaw)) * v, dy = (-sy * Math.sin(yaw) - sx * Math.cos(yaw)) * v;
+    const n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / (g.cell_m / 2)));
+    for (let i = 0; i < n; i++) {
+      const c = cellAt(head.x + dx / n, head.y + dy / n);
+      if (!L.floor[c] || L.obst[c] || coverage[c] === 0) break;
+      xrRig.x += dx / n; xrRig.y += dy / n; head.x += dx / n; head.y += dy / n;
+    }
+  }
+  if (Math.abs(tx) > 0.7 && snapReady) {   // rotate the rig about the head, so turning doesn't also slide you sideways
+    const a = -Math.sign(tx) * Math.PI / 6, c = Math.cos(a), s = Math.sin(a), rx = xrRig.x - head.x, ry = xrRig.y - head.y;
+    Object.assign(xrRig, { x: head.x + c * rx - s * ry, y: head.y + s * rx + c * ry, yaw: xrRig.yaw + a });
+    snapReady = false;
+  } else if (Math.abs(tx) < 0.3) snapReady = true;
+  placeRig();
+  body.x = head.x; body.y = head.y;
+  body.yaw += Math.atan2(Math.sin(yaw - body.yaw), Math.cos(yaw - body.yaw)) * Math.min(1, dt * 4);
+}
+new SparkXr({   // adds the Enter VR button; "VR not supported" where WebXR isn't available
+  renderer, mode: 'vr', referenceSpaceType: 'local-floor', enableHands: true,
+  onEnterXr: () => {
+    Object.assign(xrRig, { x: body.x, y: body.y, yaw: body.yaw }); placeRig(); rig.add(camera); snapReady = true; game.xr = true;
+    const s = renderer.xr.getSession()!;
+    s.addEventListener('selectstart', e => pinching.add(e.inputSource));
+    s.addEventListener('selectend', e => pinching.delete(e.inputSource));
+    s.addEventListener('inputsourceschange', e => e.removed.forEach(r => pinching.delete(r)));   // a hand lost mid-pinch
+  },
+  onExitXr: () => { camera.removeFromParent(); pinching.clear(); game.xr = false; },
+});
+
 // ---------- start ----------
 setWalk('auto');
 await replan();
 if ((current as Eval | null)?.error === undefined && current) Object.assign(body, routePose(0, 0, Infinity));
 else { const [sx, sy] = route.start; Object.assign(body, { x: sx - centreOffset, y: sy, yaw: 0 }); }
-requestAnimationFrame(frame);
+renderer.setAnimationLoop(frame);   // not requestAnimationFrame: in a headset session only the XR frame loop runs
 
 const ctx = { RUN, sc, objs, layout: () => layout, applied: () => applied, current: () => current, routePose, routeS: () => routeS,
   walker: walkerCfg, persona, body, renderer, scene, walkerGroup: walker.group, placeCamera, cameraToW2C, night: () => $<HTMLInputElement>('night').checked };
@@ -522,8 +583,14 @@ Object.assign(game, {
   ready: true, state, body, fly, items: objs.map(o => o.name), view,
   /** Fixed-step clock for recordings: game.manual = true stops the rAF loop; each tick advances dt s and renders. */
   tick(dt: number) { clockT += dt; step(dt, clockT); },
-  resume() { game.manual = false; last = performance.now(); requestAnimationFrame(frame); },
+  resume() { game.manual = false; last = performance.now(); },   // the animation loop never stopped: frame() was skipping
   autoS: () => autoS, setAuto: () => setWalk('auto'),
+  /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
+  xrPose() {
+    const w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3));
+    return { xr: renderer.xr.isPresenting, head: w(renderer.xr.getCamera()), userCam: w(camera), rig: { ...xrRig }, body: { ...body }, walker: w(walker.group),
+      inputs: [...renderer.xr.getSession()?.inputSources ?? []].map(s => `${s.handedness}:${s.hand ? 'hand' : 'controller'}`), pinching: pinching.size };
+  },
   setFree(x: number, y: number, yaw: number) { setWalk('free'); Object.assign(body, { x, y, yaw }); },
   layout: () => layout, current: () => current,
   cell(x: number, y: number) { const c = cellAt(x, y); return { floor: L.floor[c], obst: L.obst[c], cov: coverage[c] }; },

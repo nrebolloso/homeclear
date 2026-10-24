@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:quest": "adb reverse tcp:5179 tcp:5179 && vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "test": "node --test tests/*.test.ts",
     "e2e": "node e2e/run.ts"
