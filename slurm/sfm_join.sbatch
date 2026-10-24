@@ -14,6 +14,9 @@ source slurm/env.sh
 # pycolmap matching runs FAISS under OpenMP; each thread calling sgemm then spawns OpenBLAS threads and, on 64-core nodes,
 # overflows the precompiled thread table (SIGSEGV in blas_memory_alloc, myhome_living 02_poses). One BLAS thread per caller.
 export OPENBLAS_NUM_THREADS=1
+# That alone did not hold (myhome_living_b crashed again on 64 cores): the callers are the 64 COLMAP matcher threads, so also keep FAISS
+# single-threaded and submit with --cpus-per-task=16 (stage 02 sizes its matcher threads from the job's cores; <= 24 stays inside the table).
+export OMP_NUM_THREADS=1
 CFG=$1; shift
 read -r VID RUN WORK < <(python -c "import sys, yaml; c = yaml.safe_load(open(sys.argv[1])); print(c['video'], c['run_name'], c['work_dir'])" $CFG)
 [ -s $VID ] || {
