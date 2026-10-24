@@ -2377,7 +2377,7 @@ const frontendAdapter: FrontendAdapter = {
     else if (m === 'route') { xrFollowRoute = renderer.xr.isPresenting; const at = mode === 'free' && !explore.on ? resumeS() : 0; if (mode !== 'auto') { setWalk('auto'); autoS = at; } routePaused = false; }
     else if (m === 'walk' || (m === 'fly' && renderer.xr.isPresenting)) { xrFollowRoute = false; goWalk(); routePaused = false; }
     else if (m === 'fly') { xrFollowRoute = false; setWalk('fly'); routePaused = false; }
-    else { xrFollowRoute = false; const view = mode === 'fly' ? { x: fly.x, y: fly.y, yaw: body.yaw } : null; setWalk('free'); routePaused = false; if (!explore.on && !isChair()) setExplore(true); if (view && explore.on) Object.assign(body, view); }   // from Fly: the walker parks where it was, the camera stays where you flew   // the chair drives fenced here: the noclip camera would hide "no room to turn" (Fly, F, is still noclip)
+    else { xrFollowRoute = false; const view = mode === 'fly' ? { x: fly.x, y: fly.y, yaw: body.yaw } : null; setWalk('free'); routePaused = false; if (!explore.on) setExplore(true); if (view && explore.on) Object.assign(body, view); }   // from Fly: the walker parks where it was, the camera stays where you flew
   },
   focus(item) {
     const p = vantage(item.at, current?.xy ?? [item.at], 1.2, 1.1);
