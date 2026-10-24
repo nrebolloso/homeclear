@@ -8,3 +8,12 @@
 3. **Bedroom tape measurements** (`config.bedroom.yaml`): the printed marker's black square, toilet seat height, bed
    height, and the bathroom doorway's clear width.
 4. **Walker specs** for physics: wheel diameter, glide size, frame width and depth, handle height, weight.
+5. **Your own home (`config.myhome.yaml`): film it, measure later.** Print the marker (`python marker/make_marker.py --print`,
+   100%, check with a bank card), keep it in view, copy the video to `data/myhome.mp4`, `./run_all.sh config.myhome.yaml`.
+   Until anything is taped, the dimensions are placeholders with `estimated: true` (stage 4 SKIP, no margins). Then tape:
+   a doorway's clear width, a rug or threshold height, the toilet seat and bed heights.
+6. **Bedroom objects and route.** Stage 6c proposes objects (`out/bedroom/objects_proposed.yaml`, from Grounding DINO + SAM 2);
+   the bed and rug come out in several pieces. Which pieces are the real bed, rug and door, and where are the bed's exit side
+   and the toilet (floor-frame x, y, read off `out/bedroom/occupancy.png` or by hovering in the viewer)? Those go into
+   `config.bedroom.yaml` (`game.objects`, `game.routes`, `plan.start/goal`); they are not guessed. Optional, before seeing any
+   Cosmos Reason output: list the real hazards in an answer key (kind + floor-frame x, y); empty, the run is not scored.
