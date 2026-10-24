@@ -582,9 +582,10 @@ const costOf = (id: string) => {   // what a fix takes: money, time, product (co
   return ` <small class="cost">$${iv.cost_usd}${iv.minutes ? ` · ${iv.minutes} min` : ''}${iv.product ? ` · ${iv.product}` : ''}</small>`;
 };
 $('planfixes').onclick = async () => {
-  $('fixes').innerHTML = '<li>rolling out each fix…</li>';
+  // an Apply re-runs this: keep the old list up until the new one is ready (a one-line placeholder shrinks the pane and snaps its scroll to the top)
+  if (!$('fixes').childElementCount) $('fixes').innerHTML = '<li>rolling out each fix…</li>';
   const { before, fixes } = await ask({ type: 'fixes', layout, sel: selRoute });
-  $('fixes').innerHTML = '';
+  const items: HTMLLIElement[] = [];
   for (const f of fixes) {
     const li = document.createElement('li');
     li.innerHTML = f.error ? `${f.label}: <span class="delta-bad">blocks the route</span> ` :
@@ -594,8 +595,9 @@ $('planfixes').onclick = async () => {
     b.textContent = 'Apply'; b.disabled = !!f.error || applied.includes(f.id);
     b.onclick = () => applyFix(f.id);
     li.appendChild(b);
-    $('fixes').appendChild(li);
+    items.push(li);
   }
+  $('fixes').replaceChildren(...items);
   game.fixes = fixes;
 };
 function applyFix(id: string) {
