@@ -136,13 +136,15 @@ try {
     const t = clip.test, busy = Object.keys(t.expected).filter(k => t.expected[k].length).map(Number);
     const picks = [busy[0], busy[Math.floor(busy.length / 2)], busy[busy.length - 1]];
     const video = game.openClip(clip);
-    await new Promise(r => video.readyState >= 1 ? r() : video.addEventListener('loadedmetadata', r, { once: true }));
+    // a stalled decoder never fires these events (seen on macOS headless): fail with a reason instead of hanging
+    const within = (pr, what) => Promise.race([pr, new Promise((_, no) => setTimeout(() => no(new Error(what + ' timed out after 10 s')), 10000))]);
+    await within(new Promise(r => video.readyState >= 1 ? r() : video.addEventListener('loadedmetadata', r, { once: true })), 'clip metadata');
     video.pause();
     const cv = document.createElement('canvas'); cv.width = clip.width; cv.height = clip.height;
     const ctx = cv.getContext('2d', { willReadFrequently: true });
     const out = [];
     for (const k of picks) {
-      await new Promise(r => { video.addEventListener('seeked', r, { once: true }); video.currentTime = (k + 0.5) / clip.fps; });
+      await within(new Promise(r => { video.addEventListener('seeked', r, { once: true }); video.currentTime = (k + 0.5) / clip.fps; }), 'seek to frame ' + k);
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       ctx.drawImage(video, 0, 0);
       let shown = 0;

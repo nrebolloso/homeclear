@@ -520,6 +520,13 @@ function step(dt: number, t: number) {
 // Room-scale walking is 1:1. Left stick walks along the floor, only where free walk could stand (walls, furniture and
 // unfilmed floor block it: no noclip); right stick snap-turns 30 deg about the head. Holding a pinch or trigger on the
 // non-wand hand walks forward where you look (the wand hand edits: see below). The walker stays at your feet.
+// ?emulate=quest2: Meta's IWER replaces navigator.xr with a scripted Quest 2 (head, controllers, hands), so e2e/xr.ts
+// can enter VR, look, point and press with no headset. Loaded only with the flag; must run before SparkXr checks support.
+const xrDevice = PARAMS.has('emulate')
+  ? await import('iwer').then(({ XRDevice, metaQuest2 }) => {   // forceInstall: desktop Chrome has its own (deviceless) navigator.xr
+    const d = new XRDevice(metaQuest2); d.installRuntime({ forceInstall: true }); return d;
+  })
+  : null;
 const rig = new THREE.Group();
 scene.add(rig);
 const xrRig = { x: 0, y: 0, yaw: 0 };
@@ -611,6 +618,14 @@ function wandUp() {
   if (aiming && tpRing.visible) { xrRig.x += tpRing.position.x - head.x; xrRig.y += tpRing.position.y - head.y; placeRig(); }
   aiming = false; tpRing.visible = false;
 }
+/** Put the head at floor-frame (x, y) looking along yaw by moving the rig: scripted viewpoints on a headset nobody
+ * wears (e2e/quest-sweep.ts). Uses last frame's head pose, like xrStep. */
+function xrPlace(x: number, y: number, yaw: number) {
+  camera.getWorldPosition(head); camera.getWorldDirection(headDir);
+  const a = yaw - Math.atan2(headDir.y, headDir.x), c = Math.cos(a), s = Math.sin(a), rx = xrRig.x - head.x, ry = xrRig.y - head.y;
+  Object.assign(xrRig, { x: x + c * rx - s * ry, y: y + s * rx + c * ry, yaw: xrRig.yaw + a });   // turn about the head, then move it
+  placeRig();
+}
 function dropWand() {   // wand lost mid-gesture (hand out of view): put a dragged object back where the layout has it
   if (grab) syncObjects();
   grab = null; aiming = false; tpRing.visible = false;
@@ -694,7 +709,9 @@ Object.assign(game, {
   resume() { game.manual = false; last = performance.now(); },   // the animation loop never stopped: frame() was skipping
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
-  debug: { renderer, scene, spark, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup] },
+  debug: { renderer, scene, spark, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup],
+    rig, xrDevice, xrPlace, wand: () => ({ hover: hover >= 0 ? objs[hover].name : null, grab: grab ? objs[grab.k].name : null, aiming, teleport: tpRing.visible,
+      drag: grab?.drag, valid: grab?.valid ?? null }) },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose() {
     const w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3));

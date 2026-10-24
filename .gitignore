@@ -12,3 +12,5 @@ viewer/public/clips/
 cosmos/inputs/
 cosmos/results_local/
 *.egg-info/
+viewer/e2e/xr-results.json
+viewer/e2e/quest-sweep.json

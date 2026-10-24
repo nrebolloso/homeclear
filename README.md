@@ -101,7 +101,12 @@ snap-turns. Labels are flat-view only for now.
 Full-detail scenes from a Windows PC over Quest Link / Air Link: `VR_WINDOWS.md`.
 Watch the headset on the laptop: `npm run mirror:quest` (needs `brew install scrcpy`): a 16:9 crop centred on the left
 eye's lens centre (about x 870, y 960 of 3664x1920; edges are lens pre-distortion, so a smaller crop looks straighter). `npm run mirror:quest:both` shows the
-whole panel (both eyes, as the headset draws them). Mirroring
+whole panel (both eyes, as the headset draws them).
+VR without a headset: `npm run e2e:xr` (with `npm run dev` running) enters VR on an emulated Quest 2 (Meta's IWER,
+`?emulate=quest2`), moves the head, points and presses controllers and hands, and checks walking, teleport, drag, turn
+and delete. On a real Quest nobody is wearing: `npm run quest:sweep -- <scene> --hz 72` enters VR from the laptop,
+puts the head every 0.75 m along the route facing 4 ways and prints the fps at each (needs the DevTools forward:
+`adb forward tcp:9223 localabstract:chrome_devtools_remote`). Mirroring
 costs the headset frames (kitchen 200K at 72 Hz: 72 -> ~50 fps), so mirror the 150K copy for demos.
 
 ## Image-edit backend (stage 9)
