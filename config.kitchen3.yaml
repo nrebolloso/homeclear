@@ -16,7 +16,7 @@ splat:
   test_every: 8
   min_psnr: 20.0
 scale:
-  manual_factor: null   # set from tools/table_scale.py after COLMAP
+  manual_factor: 1.25133   # tools/table_scale.py: table 62 in long (frames 00363-00482, max_dist 0.6: one-sided orbit); height check -1.5%, width -17.5% (table patch cut off on one side)
   marker_dict: DICT_4X4_50
   marker_id: 0
   marker_size_m: 0.1

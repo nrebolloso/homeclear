@@ -16,7 +16,7 @@ splat:
   test_every: 8
   min_psnr: 20.0
 scale:
-  manual_factor: null   # set from tools/table_scale.py after COLMAP
+  manual_factor: 1.13099   # tools/table_scale.py: table 62 in long (orbit frames 01022-01202); height check -2.6%, width -18.4% (as kitchen3)
   marker_dict: DICT_4X4_50
   marker_id: 0
   marker_size_m: 0.1
