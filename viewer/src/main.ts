@@ -641,9 +641,14 @@ function wandStep() {
 
 new SparkXr({   // adds the Enter VR button; "VR not supported" where WebXR isn't available
   renderer, mode: 'vr', referenceSpaceType: 'local-floor', enableHands: true,
+  // ?xrscale=<0..1> render resolution per eye (Spark's default 0.5), ?foveation=<0..1> blur toward the edges (headset GPUs are fill-bound)
+  frameBufferScaleFactor: PARAMS.has('xrscale') ? +PARAMS.get('xrscale')! : undefined,
+  fixedFoveation: PARAMS.has('foveation') ? +PARAMS.get('foveation')! : undefined,
   onEnterXr: () => {
     Object.assign(xrRig, { x: body.x, y: body.y, yaw: body.yaw }); placeRig(); rig.add(camera); snapReady = true; game.xr = true;
     select(-1);   // the desktop gizmo has no place in the headset
+    // ?hz=72: a lower refresh gives each frame more time (90 Hz = 11.1 ms, 72 Hz = 13.9 ms); the Quest 2 offers 60-120
+    if (PARAMS.has('hz')) renderer.xr.getSession()?.updateTargetFrameRate?.(+PARAMS.get('hz')!).catch(() => {});
   },
   onExitXr: () => {
     camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1; game.xr = false;
@@ -669,6 +674,8 @@ Object.assign(game, {
   tick(dt: number) { clockT += dt; step(dt, clockT); },
   resume() { game.manual = false; last = performance.now(); },   // the animation loop never stopped: frame() was skipping
   autoS: () => autoS, setAuto: () => setWalk('auto'),
+  /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
+  debug: { renderer, scene, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup] },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose() {
     const w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3));
