@@ -4,6 +4,7 @@ base: configs/home.yaml
 step_model: baseline        # baseline | learned  (learned = worldmodel/weights/learned.npz, see WORLD_MODEL.md)
 nights: 200
 seed: 0
+step_corr: 0.0              # lag-1 correlation of one trip's step noise (TripNoise); 0 = independent draws. Set only to the value train.py measures on held-out walkers
 ghosts: 24                  # trips drawn on the ghost-walker plot
 extras:                     # ASSUMED values, not measured; labelled in every summary
   step_time_s: 0.9          # one step for an older adult with a walker (~67 steps/min)
