@@ -34,6 +34,8 @@ layout = ", ".join(moved + j["fixes_applied"]) or "original layout"
 json.dump({"file": sys.argv[3], "title": j["label"], "date": j["created"], "prompt": j["prompt"], "layout": layout,
            "objects": j["objects"], "night": j["night"], "fps": j["fps"], "width": j["width"], "height": j["height"],
            "K": j["K"], "cameras": j["cameras"], "hazards": j["hazards"], "per_month": j["per_month"],
+           # pre-render bookkeeping: the viewer lists clips made for the layout on screen first (prerender.ts layoutKey)
+           **{k: j.get(k) for k in ("layout_key", "route", "condition", "mode", "scenario", "route_s")},
            "label": "imagined, not measured (Cosmos Transfer 2.5); hazard markers are overlays from measured geometry"},
           open(sys.argv[2], "w"), indent=1)
 PY

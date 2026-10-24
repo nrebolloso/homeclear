@@ -1,0 +1,31 @@
+# Cosmos clips to make ahead of the demo, per scene. Each scenario = a layout x a condition x full route or hero chunk.
+#   python cosmos/prerender.py cosmos/prerender.yaml            export them all (needs `npm run dev`), print the cost
+#   python cosmos/prerender.py cosmos/prerender.yaml --submit   ... and run them as one Slurm array on the B200s
+# Every clip is IMAGINED (tinted, labelled); the hazard markers drawn over it come from the measured layout.
+
+# measured B200 wall time per 93-frame chunk, model load included (proof/cosmos: 272-545 s, ~5 min typical)
+chunk_seconds: 330
+# render_controls + stitching + tint per job, on top of the chunks
+job_overhead_seconds: 120
+max_parallel: 2   # up to 2 GPU jobs at once on the group QOS
+
+prompts:
+  night: >-
+    The same home at 3 AM, lights off, lit only by a small warm nightlight near the floor; an older adult pushing a
+    walker slowly along the route; realistic home interior.
+  dusk: >-
+    The same home at dusk, low warm sunlight through the window, lamps not yet on; an older adult pushing a walker
+    slowly along the route; realistic home interior.
+  day: >-
+    The same home in soft daylight; an older adult pushing a walker slowly along the route; realistic home interior.
+
+scenes:
+  game_synth:
+    - {name: night_as_is, condition: night, night: true}
+    - {name: night_as_is_hero, condition: night, night: true, hero: true}
+    - {name: night_quick_fixes, condition: night, night: true, fixes: [remove_rug, raised_toilet_seat]}
+    - {name: night_suggested_moderate, condition: night, night: true, option: 1}
+    - {name: dusk_suggested_moderate_hero, condition: dusk, option: 1, hero: true}
+  bedroom:   # the real capture: fill in once its objects and fixes are in config.bedroom.yaml
+    - {name: night_as_is, condition: night, night: true}
+    - {name: night_as_is_hero, condition: night, night: true, hero: true}
