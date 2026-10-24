@@ -1,0 +1,6 @@
+# Hand-labelled hazards for one run, floor frame, metres. Copy to answer_key_<run_name>.yaml (cosmos/reason.py scores against that
+# name) and fill it from the capture photos or the viewer, NOT from what the geometry or Reason flagged; see README.md.
+# kinds: floor_bump, rug, cable, threshold, clutter (floor kinds, one family), tight_clearance,
+#        grab_bar, slippery, lighting, handrail, other (what no scan can measure)
+items: []
+# - {kind: rug, xy: [3.0, 1.6], note: "raised edge on the side nearest the bed"}
