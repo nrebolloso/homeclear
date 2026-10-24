@@ -55,6 +55,15 @@ test('doorway narrower than the walker blocks the route', () => {
   assert.match(P.error ?? '', /no path/);
 });
 
+test('start and goal snapping into the same one-cell pocket is no path, not a 1-point route', () => {
+  const g: GridMeta = { origin_xy: [0, 0], cell_m: 0.1, shape: [9, 9] };
+  const floor = new Uint8Array(81);
+  for (let i = 3; i < 6; i++) for (let j = 3; j < 6; j++) floor[i * 9 + j] = 1;   // 3x3 floor: only its centre fits a 0.3 m walker
+  const P = plan(g, { floor, obst: new Uint8Array(81), bump: new Float32Array(81) }, [0.05, 0.05], [0.85, 0.85],
+                 { walker_width_m: 0.3, preferred_clearance_m: 0.1, clearance_weight: 1 });
+  assert.match(P.error ?? '', /no path/);
+});
+
 test('moving the bed next to the route reroutes it (still passable); walls reject placement', () => {
   const { sc, g, base, route, poses } = load('game_synth');
   const k = sc.objects.findIndex((o: any) => o.name === 'bed');
