@@ -9,11 +9,14 @@
     "e2e": "node e2e/run.ts"
   },
   "dependencies": {
+    "@dimforge/rapier3d-compat": "0.21.0",
     "@sparkjsdev/spark": "^2.4.0",
+    "qrcode": "1.5.4",
     "three": "^0.186.1"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
+    "@types/qrcode": "1.5.5",
     "@types/three": "^0.186.0",
     "playwright-core": "^1.64.1",
     "typescript": "^7.0.2",

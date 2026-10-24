@@ -17,15 +17,32 @@
       <button id="fly">Fly (noclip)</button>
       <label><input type="checkbox" id="night" /> Night</label>
       <label><input type="checkbox" id="ghosts" checked /> Ghosts</label>
-      <label><input type="checkbox" id="imagfill" checked /> Imagined floor</label>
+      <label><input type="checkbox" id="imagfill" checked /> Imagined floor</label> <select id="fillsel" title="how the hidden floor is imagined"></select>
       <label><input type="checkbox" id="imagceil" checked /> Imagined ceiling</label>
+      <label><input type="checkbox" id="heat" /> Heatmap</label>
+      <label><input type="checkbox" id="shell" /> Room shell</label>
+      <label><input type="checkbox" id="verify" /> Re-scan check</label>
+      <label title="autoplay from behind: a mannequin walks on the simulated footsteps"><input type="checkbox" id="third" /> Third person</label>
     </div>
     <p class="hint">Free walk: WASD / arrows, drag to look. Fly (F): WASD, Q/E down/up, Shift fast, no walls. Click furniture to move it: drag the gizmo or use the arrow keys (5 cm steps), T move, R rotate, Esc deselect.</p>
+    <label>Who <select id="persona"></select></label>
+    <div id="personanote" class="hint"></div>
+    <div id="verifyinfo" class="hint"></div>
+    <label>Route <select id="routesel"></select></label>
+    <label>Eyes <select id="vision"></select></label>
     <div id="status" class="status"></div>
     <h2>Toe contacts per month</h2>
     <div id="risk"></div>
+    <h2>A month of nights</h2>
+    <canvas id="timeline" width="266" height="54"></canvas>
+    <input type="range" id="nightscrub" min="0" max="30" value="0" />
+    <div id="nightinfo" class="hint"></div>
     <h2>Hazards on the route</h2>
     <ul id="hazards"></ul>
+    <button id="physics" title="Rapier: the walker pushed along each route over the measured floor; where a wheel or glide catches">Physics pass (walker)</button>
+    <ul id="snags"></ul>
+    <h2>Transfers, reach, emergencies</h2>
+    <ul id="checks"></ul>
     <div class="legend">
       <span class="measured">measured</span> from the splat geometry and the simulation ·
       <span class="imagined">imagined, not measured</span> generated content, never used for numbers
@@ -36,11 +53,18 @@
     <button id="planfixes">Plan fixes</button>
     <button id="remove" disabled title="or press Delete">Remove selected</button>
     <button id="reset">Reset layout</button>
+    <button id="report" title="printable report for the occupational therapist">OT report</button>
+    <button id="fixcard" title="QR code: the family's checklist on a phone">Fix card (QR)</button>
     <ol id="fixes"></ol>
+    <h2>Suggested layouts</h2>
+    <button id="suggest">Suggest layouts</button>
+    <div id="optstatus" class="status"></div>
+    <ul id="options"></ul>
     <h2>Cosmos clips <span class="imagined">imagined</span></h2>
     <ul id="clips"></ul>
     <label>Prompt <textarea id="prompt" rows="3">The same home at 3 AM, lights off, lit only by a small warm nightlight near the floor; an older adult pushing a walker slowly along the route; realistic home interior.</textarea></label>
     <button id="export">Export for Cosmos</button>
+    <label title="one 93-frame chunk (~5 min of B200) around the riskiest hazard, instead of the whole route"><input type="checkbox" id="hero" /> hero chunk only</label>
     <div id="exportstatus" class="status"></div>
   </aside>
   <div id="player" hidden>
@@ -48,6 +72,8 @@
       <div class="tag imagined">Imagined by Cosmos Transfer, not measured · markers are measured hazards</div></div>
     <button id="closeplayer">Close</button>
   </div>
+  <div id="qr" hidden><img id="qrimg" alt="QR code for the family fix card" /><a id="qrlink" target="_blank"></a>
+    <div id="qrnote" class="hint"></div><button id="closeqr">Close</button></div>
   <div id="hud"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
