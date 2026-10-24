@@ -54,8 +54,12 @@ export function diffLayouts(objs: Obj[], from: Layout, to: Layout, interventions
   }
   for (const id of to.added ?? []) {
     if (from.added?.includes(id)) continue;
-    const iv = interventions.find(i => i.id === id), k = objs.findIndex(x => x.name === iv?.fixture?.attach), xyz = iv?.fixture?.xyz;
-    if (iv) fixOnly(iv, k >= 0 ? [to.poses[k].x, to.poses[k].y] : xyz ? [xyz[0], xyz[1]] : [0, 0]);
+    const iv = interventions.find(i => i.id === id), k = objs.findIndex(x => x.name === iv?.fixture?.attach), p = to.placed?.[id];
+    const xyz = p ? [p.x, p.y] : iv?.fixture?.xyz;
+    if (iv) {
+      fixOnly(iv, k >= 0 ? [to.poses[k].x, to.poses[k].y] : xyz ? [xyz[0], xyz[1]] : [0, 0]);
+      if (p && iv.fixture?.xyz) out[out.length - 1].label += `; parked ${Math.hypot(p.x - iv.fixture.xyz[0], p.y - iv.fixture.xyz[1]).toFixed(1)} m from its suggested spot`;
+    }
   }
   for (const c of to.carved ?? []) {   // a widened doorway: tag it at the opening, at head height
     if (from.carved?.some(f => f.id === c.id)) continue;
@@ -75,7 +79,8 @@ export function undoChange(lay: Layout, original: Pose[], c: Change, interventio
   if (iv?.kind === 'raise' && raised) { raised = { ...raised }; delete raised[iv.target!]; }
   if (iv?.kind === 'add' && added) added = added.filter(id => id !== iv.id);
   const carved = lay.carved?.filter(x => x.id !== c.iv);
-  return { ...lay, poses, flattened, raised, added, ...(carved ? { carved } : {}) };
+  const placed = lay.placed && iv?.kind === 'add' ? Object.fromEntries(Object.entries(lay.placed).filter(([id]) => id !== iv.id)) : lay.placed;   // taken off: put back, it starts at its default spot
+  return { ...lay, poses, flattened, raised, added, ...(carved ? { carved } : {}), ...(placed ? { placed } : {}) };
 }
 
 const smooth = (t: number) => { const x = Math.min(1, Math.max(0, t)); return x * x * (3 - 2 * x); };

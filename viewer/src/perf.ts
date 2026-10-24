@@ -8,7 +8,9 @@ export interface PerfCfg {
   /** Spark: how far out (standard deviations) and how big (px) a splat is drawn; the defaults are sqrt(8) and 512 */
   max_std_dev: number; max_pixel_radius: number;
 }
-export const PERF: PerfCfg = { pixel_ratio: 1, max_std_dev: 2.2, max_pixel_radius: 128 };
+// max_std_dev 2.0, measured: Quest 2, kitchen4 150K, 72 Hz, route sweep (e2e/quest-sweep.ts), worst view 57.5 fps at 2.0
+// against 47.8 at 2.2 (twice); the median is 72 either way
+export const PERF: PerfCfg = { pixel_ratio: 1, max_std_dev: 2.0, max_pixel_radius: 128 };
 export const FULL: PerfCfg = { pixel_ratio: 1.5, max_std_dev: Math.sqrt(8), max_pixel_radius: 512 };
 
 /** Where it runs: on the monitor, in a standalone headset (a Quest 2 renders a thinned scene by itself), or over
@@ -47,12 +49,13 @@ export interface XrCfg {
   /** target refresh rate to request, 0 = leave it (Link takes its rate from the Link app, so `hz` does nothing there) */
   hz: number;
 }
-/** Headset settings: a standalone Quest gets a little less resolution, full foveation and 72 Hz; Link and the monitor keep
+/** Headset settings: a standalone Quest gets half resolution (Spark's default, which every Quest 2 measurement used; the
+ *  GPU is fill-bound and 0.85 draws 2.9x the pixels), full foveation and 72 Hz; Link and the monitor keep
  *  full resolution and no foveation, since the PC can afford it. `?xrscale=`, `?foveation=` and `?hz=` override. */
 export function xrCfg(search: string, tier: Tier): XrCfg {
   const q = new URLSearchParams(search), quest = tier === 'quest';
   const num = (k: string, d: number) => { const v = Number(q.get(k)); return q.has(k) && Number.isFinite(v) && v >= 0 ? v : d; };
-  return { scale: Math.max(0.25, num('xrscale', quest ? 0.85 : 1)), foveation: Math.min(1, num('foveation', quest ? 1 : 0)), hz: num('hz', quest ? 72 : 0) };
+  return { scale: Math.max(0.25, num('xrscale', quest ? 0.5 : 1)), foveation: Math.min(1, num('foveation', quest ? 1 : 0)), hz: num('hz', quest ? 72 : 0) };
 }
 
 export interface HzIn { type: string; name?: string; position: XY; height_m?: number; min_side_clearance_m?: number; estimated?: boolean }

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { doorFrame, doorFixes, doorChecks, doorEditBoxes, doorGain, needWidth, carvePoly, hingeSide, growOf, DOOR, type Door } from '../src/doors.ts';
-import { evaluate } from '../src/evaluate.ts';
+import { evaluate, availableInterventions } from '../src/evaluate.ts';
 import { applyIntervention, stamp, polyCells, worldFootprint, type Layout } from '../src/grid.ts';
 import { diffLayouts, undoChange } from '../src/reimagine.ts';
 import { actions, DEFAULTS } from '../src/optimize.ts';
@@ -9,6 +9,26 @@ import { loadScene } from './scene.ts';
 
 // the synthetic bathroom doorway (tests/make_game_scene.py): wall x 4.0-4.1, opening y 1.5 +- door_w / 2
 const narrow: Door = { name: 'bathroom door', a: [4.05, 1.225], b: [4.05, 1.775], measured: 'tape' };
+
+test('off-route closet doors stay in the review list and out of fix and optimizer candidates', () => {
+  const { init, poses } = loadScene('game_synth'), d: Door = { name: 'closet', a: [0, 3.5], b: [0, 4] };
+  const S = { ...init, doors: [d], interventions: [...init.interventions, ...doorFixes(d, 0.9)] }, lay = { poses, flattened: [] };
+  const r = evaluate(S, lay, { ghosts: false }), check = r.checks.find(c => c.id === 'door:closet')!;
+  assert.equal(check.on_route, false); assert.equal(check.verdict, 'OT to verify');
+  assert.equal(availableInterventions(S, r).some(i => i.target === 'closet'), false);
+  assert.equal(actions(S, DEFAULTS, lay).some(i => i.id.includes('closet')), false);
+});
+
+test('a blocked bathroom route identifies its door without recommending an unrelated closet', () => {
+  const { init, poses } = loadScene('game_synth_narrow'), closet: Door = { name: 'closet', a: [0, 3.5], b: [0, 4] };
+  const S = { ...init, doors: [narrow, closet], interventions: [...init.interventions, ...[narrow, closet].flatMap(d => doorFixes(d, 0.92))] };
+  const r = evaluate(S, { poses, flattened: [] }, { ghosts: false });
+  assert.ok(r.error);
+  assert.equal(r.checks.find(c => c.id === 'door:bathroom door')!.on_route, true);
+  assert.equal(r.checks.find(c => c.id === 'door:closet')!.on_route, false);
+  const fixes = availableInterventions(S, r);
+  assert.ok(fixes.some(f => f.target === narrow.name)); assert.equal(fixes.some(f => f.target === closet.name), false);
+});
 
 test('doorFrame: clear width between the jambs, along and through the wall', () => {
   const F = doorFrame(narrow);

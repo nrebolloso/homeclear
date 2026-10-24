@@ -2,7 +2,7 @@
 // additions once applied (a handrail, motion step lights, a second walker at the top). Scene objects only, so they show
 // in the headset. Additions are DESIGNED, not built: teal, labelled, never measured.
 import * as THREE from 'three';
-import { stairFrame, pitchAt, CODE, type Stair, type Side } from './stairs.ts';
+import { stairFrame, pitchAt, parkedPose, grabSide, CODE, type Stair, type Side, type ParkPose } from './stairs.ts';
 import { card } from './reimagine.ts';
 
 const DESIGNED = 0x2fd6c8;
@@ -28,19 +28,22 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
   const root = new THREE.Group(), measured = new THREE.Group(), fixes = new THREE.Group();
   root.add(measured, fixes);
   scene.add(root);
-  const lights: THREE.Mesh[] = [];
+  const lights: THREE.Mesh[] = [], pick: THREE.Mesh[] = [];
 
-  function build(stairs: Stair[], added: string[]) {
-    dispose(measured); dispose(fixes); lights.length = 0;
+  /** placed: the parked walker moved by hand, by fix id (layout.placed) */
+  function build(stairs: Stair[], added: string[], placed: Record<string, ParkPose> = {}) {
+    dispose(measured); dispose(fixes); lights.length = 0; pick.length = 0;
     for (const st of stairs) {
       const F = stairFrame(st), pitch = pitchAt(st), half = F.width / 2, z = st.treads_z ?? [];
       const P = (s: number, t: number, h: number) => { const [x, y] = F.world(s, t); return new THREE.Vector3(x, y, h); };
       const fronts = st.tread_fronts_m?.length === z.length ? st.tread_fronts_m : z.map((_, k) => k * (st.tread_depth_m ?? 0.27));
-      // outline on the floor and a line on each measured tread nose
-      const outline = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([P(0, half, 0.02), P(0, -half, 0.02), P(F.run, -half, 0.02), P(F.run, half, 0.02)]), lineMat(0x8fe3ff, 0.6));
-      outline.renderOrder = 3;
-      measured.add(outline);
+      // the flight's two edges along the tread noses (nothing on the floor under the steps), and a line on each nose
       const risers = z.map((v, k) => v - (k ? z[k - 1] : 0));
+      for (const t of [half, -half]) {
+        const prof = z.length ? z.flatMap((h, k) => [P(fronts[k], t, h - risers[k] + 0.005), P(fronts[k], t, h + 0.005)]) : [P(0, t, 0.02), P(F.run, t, pitch(F.run))];
+        const edge = new THREE.Line(new THREE.BufferGeometry().setFromPoints(prof), lineMat(0x8fe3ff, 0.45));
+        measured.add(edge);
+      }
       z.forEach((h, k) => {
         const bad = risers[k] > CODE.riser_max_m;
         const nose = new THREE.Line(new THREE.BufferGeometry().setFromPoints([P(fronts[k], half, h + 0.005), P(fronts[k], -half, h + 0.005)]), lineMat(bad ? 0xff5050 : 0x8fe3ff));
@@ -77,6 +80,11 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
           const tag = card(['designed, not built', `handrail (${side}), copied from the scanned one${thin ? ', outlined' : ''}`], '#7ff5e8', 'rgba(14,20,28,0.75)', 0.04);
           tag.position.copy(P(F.run * 0.3, t, pitch(F.run * 0.3) + 1.1));
           fixes.add(tag);
+          // The copied scan only covers the flight; the designed addition also promises level returns at both ends.
+          for (const [s0, s1, h0] of [[-0.3, 0, pitch(0) + h], [F.run, F.run + 0.3, pitch(F.run) + h]]) {
+            const path = new THREE.LineCurve3(P(s0, t, h0), P(s1, t, h0));
+            fixes.add(new THREE.Mesh(new THREE.TubeGeometry(path, 4, 0.018, 8, false), new THREE.MeshBasicMaterial({ color: DESIGNED })));
+          }
           continue;
         }
         const path = new THREE.CurvePath<THREE.Vector3>();
@@ -102,15 +110,61 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
         fixes.add(strip);
         lights.push(strip);
       });
-      if (added.includes(`stair_walker:${st.name}`)) {
-        const w = device();
-        const [x, y] = F.world(F.run + 0.05, 0);   // the device's origin is the user's body: frame ahead, on the landing
-        w.position.set(x, y, top);
-        w.rotation.z = Math.atan2(F.u[1], F.u[0]);   // facing on, where the patient steps into it off the last step
+      const gs = grabSide(st), tg = (gs === 'left' ? 1 : -1) * half;
+      for (const side of ['left', 'right'] as Side[]) {   // a scanned rail at the wrong height, refitted at 90 cm
+        if (!added.includes(`stair_rail_up:${st.name}:${side}`)) continue;
+        const t = (side === 'left' ? 1 : -1) * (half - 0.06), path = new THREE.LineCurve3(P(0, t, pitch(0) + 0.9), P(F.run, t, pitch(F.run) + 0.9));
+        fixes.add(new THREE.Mesh(new THREE.TubeGeometry(path, 24, 0.02, 10, false), new THREE.MeshBasicMaterial({ color: DESIGNED })));
+        const tag = card(['designed, not built', `${side} rail refitted at 90 cm`], '#7ff5e8', 'rgba(14,20,28,0.75)', 0.04);
+        tag.position.copy(P(F.run * 0.5, t, pitch(F.run * 0.5) + 1.15));
+        fixes.add(tag);
+      }
+      if (added.includes(`stair_rail_ext:${st.name}`)) {   // level returns past the bottom and the top step
+        const t = tg - Math.sign(tg) * 0.06, hb = pitch(0) + 0.9, ht = pitch(F.run) + 0.9;
+        for (const [s0, s1, h] of [[-0.3, 0, hb], [F.run, F.run + 0.3, ht]] as const) {
+          const p = new THREE.CurvePath<THREE.Vector3>();
+          p.add(new THREE.LineCurve3(P(s0, t, h), P(s1, t, h)));
+          fixes.add(new THREE.Mesh(new THREE.TubeGeometry(p, 6, 0.022, 10, false), new THREE.MeshBasicMaterial({ color: DESIGNED })));
+        }
+        const tag = card(['designed, not built', 'rail runs on 30 cm'], '#7ff5e8', 'rgba(14,20,28,0.75)', 0.04);
+        tag.position.copy(P(F.run + 0.15, t, ht + 0.25));
+        fixes.add(tag);
+      }
+      if (added.includes(`stair_grab:${st.name}`)) {   // a vertical bar on the landing wall, where the rail ends
+        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.45, 10), new THREE.MeshBasicMaterial({ color: DESIGNED }));
+        bar.position.copy(P(F.run + 0.2, tg + Math.sign(tg) * 0.03, top + 0.95));
+        bar.rotation.x = Math.PI / 2;   // the cylinder's axis (y) to up (z)
+        fixes.add(bar);
+        const tag = card(['designed, not built', 'grab bar at the top'], '#7ff5e8', 'rgba(14,20,28,0.75)', 0.04);
+        tag.position.copy(P(F.run + 0.2, tg, top + 1.35));
+        fixes.add(tag);
+      }
+      if (added.includes(`stair_nosing:${st.name}`)) z.forEach((h, k) => {   // contrasting strip right on each nose
+        const strip = new THREE.Mesh(new THREE.BoxGeometry(0.04, F.width - 0.04, 0.006), new THREE.MeshBasicMaterial({ color: 0xffc83d }));
+        strip.position.copy(P(fronts[k] + 0.02, 0, h + 0.004));
+        strip.rotation.z = Math.atan2(F.u[1], F.u[0]);
+        fixes.add(strip);
+      });
+      const wid = `stair_walker:${st.name}`;
+      if (added.includes(wid)) {
+        const w = device(), p = placed[wid] ?? parkedPose(st);   // the device's origin is the user's body: frame ahead, on the landing
+        w.position.set(p.x, p.y, top);
+        w.rotation.z = p.yaw;   // facing on, where the patient steps into it off the last step
         w.traverse(m => { const mat = (m as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined; if (mat?.color) { m.userData.mat = mat.clone(); (m as THREE.Mesh).material = m.userData.mat; m.userData.mat.color.setHex(DESIGNED); } });
+        if (st.top_device === 'rollator') {   // a seat between the side rails (and the wheels are implied: same frame)
+          const seat = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.4, 0.03), new THREE.MeshBasicMaterial({ color: 0x1d6b66 }));
+          seat.position.set(0.42, 0, 0.55);
+          w.add(seat);
+        }
+        // a box around the frame to pick it with the mouse or the VR pointer (main.ts drags it on the landing)
+        const proxy = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 1.0), new THREE.MeshBasicMaterial({ visible: false }));
+        proxy.position.set(0.4, 0, 0.5);
+        proxy.userData.parked = wid;
+        w.add(proxy);
+        pick.push(proxy);
         fixes.add(w);
-        const tag = card(['designed, not built', 'second walker waits here'], '#7ff5e8', 'rgba(14,20,28,0.75)', 0.04);
-        tag.position.set(x, y, top + 1.2);
+        const tag = card(['designed, not built', `${st.top_device === 'rollator' ? 'rollator' : 'second walker'} waits here · drag to move`], '#7ff5e8', 'rgba(14,20,28,0.75)', 0.04);
+        tag.position.set(p.x, p.y, top + 1.2);
         fixes.add(tag);
       }
     }
@@ -120,6 +174,8 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
 
   return {
     root, build,
+    /** the parked walkers' pick boxes (userData.parked = the fix id) */
+    walkers: () => pick,
     /** per frame: the strips themselves are lit at night, dim by day (the light on the steps is the night shader's,
      *  steady: changing it would regenerate every splat) */
     update(_t: number, night: boolean) {

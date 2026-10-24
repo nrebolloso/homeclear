@@ -38,7 +38,8 @@ OBJECTS = [  # movable: cut out by stage 12. The curl comes BEFORE the rug so it
     {"name": "chair", "kind": "chair", "box_xy": [[2.6, 3.0], [3.05, 3.45]], "z_max": 0.95},
     {"name": "table", "kind": "other", "box_xy": TABLE_BOX, "z_max": 0.5,
      "parts": [{"box_xy": TABLE_BOX, "z": [0.38, 0.5]},
-               *({"box_xy": [[x, y], [x + 0.05, y + 0.05]], "z": [0.05, 0.38]} for x, y in [(0.5, 0.3), (1.35, 0.3), (0.5, 0.75), (1.35, 0.75)])]},
+               # Include the lower legs (but not the floor plane), so stage 12 recognizes a floor-standing table.
+               *({"box_xy": [[x, y], [x + 0.05, y + 0.05]], "z": [0.001, 0.38]} for x, y in [(0.5, 0.3), (1.35, 0.3), (0.5, 0.75), (1.35, 0.75)])]},
     {"name": "nightlight", "kind": "nightlight", "box_xy": [[0.03, 0.18], [0.17, 0.32]], "z_max": 0.3, "light_radius_m": 1.5},
     {"name": "door", "kind": "door", "box_xy": [[4.11, 1.84], [4.85, 1.90]], "z_max": 2.1},
 ]

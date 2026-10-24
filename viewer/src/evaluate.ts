@@ -1,6 +1,6 @@
 // One layout -> every route planned, rolled out and checked. Pure (no Worker globals): the worker, the optimizer and the
 // tests all call it.
-import { stamp, carvedPolys, plan, routeHazards, bumpComponents, polyCells, worldFootprint, applyIntervention,
+import { stamp, carvedPolys, placedFixtures, plan, routeHazards, bumpComponents, polyCells, worldFootprint, applyIntervention,
   type GridMeta, type Layers, type Footprinted, type Layout, type Intervention, type XY, type RouteHazard } from './grid.ts';
 import { rollouts, type Persona, type Risk, type Heat, type Ghost } from './sim.ts';
 import type { StepModel } from './stepmodel.ts';
@@ -9,8 +9,8 @@ import { runChecks, type Fixture, type TransferRules, type EmsRules, type BodyFa
 import { objectRisk, type BatchResults, type ObjEvent } from './objrisk.ts';
 // shortcut: one batch, run on kitchen4_lighter's chairs and mat, serves every scene; rerun the batch per scene when it matters
 import batch from '../../physics/batch_results.json' with { type: 'json' };
-import { stairChecks, type Stair, type Side } from './stairs.ts';
-import { doorChecks, doorGain, needWidth, type Door } from './doors.ts';
+import { stairChecks, type Stair, type Side, type WalkerDims } from './stairs.ts';
+import { doorChecks, doorFixes, doorGain, doorOnRoute, needWidth, type Door } from './doors.ts';
 
 /** One walk the patient makes: night trips get the darkness multiplier, daytime ones don't. start_with: the start
  *  rides on that object (the bed): move the bed and the patient gets up from the same spot beside it. */
@@ -41,6 +41,8 @@ export interface Init {
   rules: { clearance_margin_m: number; bump_min_m: number; bump_link_cells?: number; bump_limit_m: number; margin_m: { width: number; height: number } };
   /** stairs (stairs.ts): marked in the viewer or config game.stairs; the stronger hand (viewer override, else persona) and the device */
   stairs?: Stair[]; strong_side?: Side | null; device?: string;
+  /** the walking aid's frame, for where the second one is parked at the top of a stair */
+  walker?: WalkerDims;
   /** doorways (doors.ts): marked in the viewer or config game.doors */
   doors?: Door[];
 }
@@ -75,8 +77,10 @@ export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: nu
   });
   const lights = O.flatMap((o, k) => (o.kind === 'nightlight' && !lay.poses[k].removed ? [{ x: lay.poses[k].x, y: lay.poses[k].y, r: o.light_radius_m ?? 1.5 }] : []));
   const out = { per_month: 0, per_month_lo: 0, per_month_hi: 0, routes: [], sel, hazards: [], ghosts: [], steps: [], objects: [] } as unknown as Eval;
+  const paths: XY[][] = [];
   S.routes.forEach((rd, k) => {
     const P = plan(g, L, routeStart(rd, O, lay.poses), rd.goal, S.plan);
+    paths.push(P.xy);
     const summary: RouteSummary = { name: rd.name, night: rd.night, trips_per_night: rd.trips_per_night, per_month: 0, lo: 0, hi: 0,
       length_m: P.length_m, error: P.error, min_side_m: midClearance(P.xy, P.side) };
     out.routes.push(summary);
@@ -102,17 +106,39 @@ export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: nu
     }));
   });
   // fixtures added by fixes in place (a touch lamp on the nightstand) count like marked ones
-  const added = S.interventions.filter(iv => iv.kind === 'add' && lay.added?.includes(iv.id)).map(iv => ({ ...iv.fixture!, measured: false, note: iv.label }));
+  const added = placedFixtures(S.interventions, lay).map(f => ({ ...f, measured: false }));
   out.checks = S.transfer && S.ems ? runChecks({ g, L, objects: O, poses: lay.poses, fixtures: [...(S.fixtures ?? []), ...added], raised: lay.raised ?? {}, body: S.persona,
     transfer: S.transfer, ems: S.ems, routeStart: routeStart(S.routes[0], O, lay.poses), plan: S.plan, margin: S.rules.margin_m,
     hazards: out.hazards.map(h => ({ position: h.position, name: h.name })) }) : [];
   for (const st of S.stairs ?? []) out.checks.push(...stairChecks(st, { g, L, fixtures: [...(S.fixtures ?? []), ...added], margin: S.rules.margin_m,
-    strong_side: S.strong_side !== undefined ? S.strong_side : (S.persona as { strong_side?: Side }).strong_side ?? null, device: S.device ?? 'walker' }));
-  for (const d of S.doors ?? []) out.checks.push(...doorChecks(d, { gain: doorGain(lay, d.name), need_m: needWidth(S.plan.walker_width_m, S.rules.clearance_margin_m), margin: S.rules.margin_m }));
+    strong_side: S.strong_side !== undefined ? S.strong_side : (S.persona as { strong_side?: Side }).strong_side ?? null, device: S.device ?? 'walker', walker: S.walker }));
+  for (const d of S.doors ?? []) {
+    const need = needWidth(S.plan.walker_width_m, S.rules.clearance_margin_m), gain = doorGain(lay, d.name);
+    let on = doorOnRoute(d, paths, false, gain);
+    // A failed plan has no path. Open just this door and retry the blocked routes: an unrelated closet stays off-route.
+    if (!on && out.routes.some(r => r.error)) {
+      const iv = doorFixes(d, need).find(i => i.id.startsWith('door_widen:'));
+      if (iv) {
+        const test = applyIntervention(O, lay, iv), opened = stamp(g, S.base, O, test.poses, test.flattened, carvedPolys(test));
+        on = S.routes.some((rd, k) => {
+          if (!out.routes[k].error) return false;
+          const P = plan(g, opened, routeStart(rd, O, test.poses), rd.goal, S.plan);
+          return !P.error && doorOnRoute(d, [P.xy], false, iv.by_m);
+        });
+      }
+    }
+    out.checks.push(...doorChecks(d, { gain, need_m: need, margin: S.rules.margin_m, on_route: S.routes.length ? on : null }));
+  }
   // a route this walker can't make at all is the error to show, whichever route is selected
   const blocked = out.routes.find(r => r.error);
   if (blocked && !out.error) out.error = `${blocked.name}: ${blocked.error}`;
   if (!out.dist_m) out.dist_m = new Float32Array(g.shape[0] * g.shape[1]);
   return { ...out, ms: performance.now() - t };
+}
+
+/** The same route filter for the fix list and optimizer; keep unmarked configured interventions available. */
+export function availableInterventions(S: Init, result: Eval): Intervention[] {
+  const off = new Set(result.checks.filter(c => c.kind === 'door' && c.on_route === false).map(c => c.id.slice('door:'.length)));
+  return S.interventions.filter(iv => iv.kind !== 'carve' || !off.has(iv.target!));
 }
 

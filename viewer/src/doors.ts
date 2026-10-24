@@ -77,13 +77,28 @@ export function doorFixes(d: Door, need_m: number, opts: { leafObject?: boolean 
 /** How much wider the layout on screen makes this door. */
 export const doorGain = (lay: Layout, name: string) => lay.carved?.find(c => c.target === name)?.by_m ?? 0;
 
-export function doorChecks(d: Door, c: { gain: number; need_m: number; margin: { width: number } }): CheckOut[] {
+/** Does any planned route go through the opening (a path point within it, 30 cm either side of the wall)? A route the
+ *  walker can't make at all may be blocked by this very door, so it counts as through it. */
+export function doorOnRoute(d: Door, paths: XY[][], blocked: boolean, gain = 0): boolean {
+  if (blocked) return true;
+  const F = doorFrame(d), half = F.width / 2 + gain + 0.05, deep = F.wall / 2 + 0.3;
+  return paths.some(xy => xy.some(([x, y]) => {
+    const dx = x - F.o[0], dy = y - F.o[1];
+    return Math.abs(dx * F.e[0] + dy * F.e[1]) <= half && Math.abs(dx * F.n[0] + dy * F.n[1]) <= deep;
+  }));
+}
+
+/** on_route false: no planned route uses this door, so it is listed for the OT, not failed (a closet door doesn't need a
+ *  new frame); null / undefined: routes unknown, judged as if on one. */
+export function doorChecks(d: Door, c: { gain: number; need_m: number; margin: { width: number }; on_route?: boolean | null }): CheckOut[] {
   const F = doorFrame(d), w = F.width + c.gain, limit = Math.max(c.need_m, DOOR.clear_min_m);
   const e = Math.max(c.margin.width, 0.02);   // marked by clicks: a couple of cm
-  const verdict: Verdict = w < limit - e ? 'fail' : w < limit + e ? 'borderline, OT to verify' : 'ok';
-  return [{ id: `door:${d.name}`, kind: 'door', position: F.o, value_m: w, limit_m: [limit, 9], verdict,
-    label: `${d.name}: ${cm(w)} clear${c.gain ? ` (was ${cm(F.width)})` : ''}; the walker needs ${cm(c.need_m)}, code ${cm(DOOR.clear_min_m)}`,
-    note: `${d.measured === 'tape' ? 'tape-measured' : 'between the two marked jambs'}${c.gain ? '; the wider opening is designed, not built' : ''}` }];
+  const tight: Verdict = w < limit - e ? 'fail' : w < limit + e ? 'borderline, OT to verify' : 'ok';
+  const off = c.on_route === false && tight !== 'ok', verdict: Verdict = off ? 'OT to verify' : tight;
+  return [{ id: `door:${d.name}`, kind: 'door', position: F.o, value_m: w, limit_m: [limit, 9], verdict, on_route: c.on_route ?? undefined,
+    label: `${d.name}: ${cm(w)} clear${c.gain ? ` (was ${cm(F.width)})` : ''}; the walker needs ${cm(c.need_m)}, code ${cm(DOOR.clear_min_m)}${off ? '; not on a planned route' : ''}`,
+    note: `${d.measured === 'tape' ? 'tape-measured' : 'between the two marked jambs'}${c.gain ? '; the wider opening is designed, not built' : ''}` +
+      (off ? '; no route in this plan goes through it: OT to verify whether the patient uses it' : '') }];
 }
 
 export interface EditBox { center: [number, number, number]; half: [number, number, number]; yaw: number }

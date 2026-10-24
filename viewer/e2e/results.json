@@ -2,7 +2,7 @@
  {
   "check": "fps (autoplay, 1600x900)",
   "pass": true,
-  "detail": "60.0 fps on ANGLE (Intel, Mesa Intel(R) Arc(tm) Graphics (MTL), OpenGL 4.6)"
+  "detail": "240.0 fps on ANGLE (ATI Technologies Inc., AMD Radeon 780M Graphics, OpenGL 4.5.0)"
  },
  {
   "check": "rug bump flashes the leg with the measured height",
@@ -12,7 +12,7 @@
  {
   "check": "cable classified as thin, height shown as estimated",
   "pass": true,
-  "detail": "leg at (3.61, 0.81), label \"cable ~0.6 cm (estimated)\"; hazard list mentions ESTIMATED: true"
+  "detail": "leg at (3.60, 0.81), label \"cable ~0.6 cm (estimated)\"; hazard list mentions ESTIMATED: true"
  },
  {
   "check": "frame turns red below the clearance margin (doorway)",
@@ -22,7 +22,7 @@
  {
   "check": "free walk stays on covered floor (walls, unseen floor)",
   "pass": true,
-  "detail": "toward wall y=4.0: stopped at y=3.22 (front legs need 0.75 m); toward unseen x>6.2: stopped at x=5.75 (coverage 4 views)"
+  "detail": "toward wall y=4.0: stopped at y=3.23 (front legs need 0.75 m); toward unseen x>6.2: stopped at x=5.75 (coverage 4 views)"
  },
  {
   "check": "fill appears only after the object moves",
@@ -32,7 +32,7 @@
  {
   "check": "moving the bed updates route and numbers within ~1 s",
   "pass": true,
-  "detail": "replan 77 ms; route 3.91 -> 4.14 m; contacts/month 2.93 -> 2.53"
+  "detail": "replan 46 ms; route 3.91 -> 4.12 m; contacts/month 2.93 -> 2.54"
  },
  {
   "check": "placement into a wall is blocked",
@@ -52,12 +52,12 @@
  {
   "check": "night mode toggles without errors",
   "pass": true,
-  "detail": "60.0 fps at night; page errors: none"
+  "detail": "202.0 fps at night; page errors: none"
  },
  {
   "check": "export for Cosmos",
   "pass": true,
-  "detail": "game_synth_20261024T010820: 186 frames, 2 chunks, 186 walker depth PNGs, walker covers 3.9% of frame 0"
+  "detail": "game_synth_20261024T055717: 186 frames, 2 chunks, 186 walker depth PNGs, walker covers 3.9% of frame 0"
  },
  {
   "check": "clip overlay markers align at known frames",
@@ -82,7 +82,7 @@
  {
   "check": "vision pass changes the frame (cataract blurs: smaller JPEG)",
   "pass": true,
-  "detail": "40379 -> 21155 bytes"
+  "detail": "42175 -> 21135 bytes"
  },
  {
   "check": "heatmap: rollouts return per-cell counts when on",
@@ -92,7 +92,7 @@
  {
   "check": "suggest layouts, apply the full option, walkable",
   "pass": true,
-  "detail": "Quick fixes 0.11, Moderate 0.00, Full re-layout 0.08 in 12.8 s; now 0.08 (bed:1.00,3.05,0|door:4.50,1.95,0|nightlight:3.90,0.95,90|rai)"
+  "detail": "Quick fixes 0.11, Moderate 0.00, Full re-layout 0.08 in 7.9 s; now 0.08 (bed:1.00,3.05,0|door:4.50,1.95,0|nightlight:3.90,0.95,90|rai)"
  },
  {
   "check": "OT report renders the live layout",
@@ -102,7 +102,7 @@
  {
   "check": "fix card opens from the QR link with numbered fixes",
   "pass": true,
-  "detail": "6 items, url 790 chars"
+  "detail": "6 items, url 788 chars"
  },
  {
   "check": "third person: mannequin walks the simulated footsteps",
@@ -112,11 +112,81 @@
  {
   "check": "physics pass (Rapier): the walker reaches every goal, snags listed",
   "pass": true,
-  "detail": "{\"done\":true,\"snags\":5,\"li\":6,\"ms\":4682}"
+  "detail": "{\"done\":true,\"snags\":0,\"li\":3,\"ms\":1224}"
  },
  {
-  "check": "?xr=1 loads (VR button, render loop on the renderer)",
+  "check": "reimagine: morphs into the safest layout, every change costed in the receipt",
   "pass": true,
-  "detail": "errors: none"
+  "detail": "{\"n\":6,\"m\":{\"from\":{\"x\":0.9,\"y\":2.925,\"yaw\":0},\"to\":{\"x\":0.9999999999999999,\"y\":3.0700000000000016,\"yaw\":0},\"name\":\"bed\"},\"at0\":{\"x\":0.9,\"y\":2.925,\"yaw\":0,\"visible\":true},\"at1\":{\"x\":0.9999999999999999,\"y\":3.0700000000000016,\"yaw\":0,\"visible\":true},\"costed\":true,\"li\":6,\"total\":\"6 changes · $92 · 129 "
+ },
+ {
+  "check": "reimagine: undo takes one change back",
+  "pass": true,
+  "detail": "6 -> 5; page errors: none"
+ },
+ {
+  "check": "reimagine: no page errors",
+  "pass": true,
+  "detail": "none"
+ },
+ {
+  "check": "reimagine on the demo kitchen: at least one costed move",
+  "pass": true,
+  "detail": "Move the chair8 1.8 m"
+ },
+ {
+  "check": "stairs: measured from the splat (treads, risers, rail side)",
+  "pass": true,
+  "detail": "3 treads, risers 15/20/22 cm, rails {\"left\":\"wall\",\"right\":\"seen\",\"height_m\":{\"right\":0.849},\"peak_m\":{\"left\":0.725,\"right\":0.825}}"
+ },
+ {
+  "check": "stairs: rail for the stronger hand, step lights and a walker at the top clear their checks",
+  "pass": true,
+  "detail": "borderline, OT to verify, borderline, OT to verify, fail -> ok, ok, borderline, OT to verify"
+ },
+ {
+  "check": "stairs: no page errors",
+  "pass": true,
+  "detail": "none"
+ },
+ {
+  "check": "doorway: blocked at 55 cm, open once widened away from the leaf, scan edited",
+  "pass": true,
+  "detail": "{\"err\":\"no path: start and goal not connected for this walker width\",\"v\":\"fail\",\"ids\":[\"b\"]} -> {\"err\":null,\"v\":\"ok\",\"edits\":2,\"squeeze\":0}"
+ },
+ {
+  "check": "doorway: undo closes it and removes the edits",
+  "pass": true,
+  "detail": "{\"err\":\"no path: start and goal not connected for this walker width\",\"edits\":0}"
+ },
+ {
+  "check": "doorway: no page errors",
+  "pass": true,
+  "detail": "none"
+ },
+ {
+  "check": "selecting a moved object names it and says how far it moved",
+  "pass": true,
+  "detail": "{\"lines\":[\"Bed\",\"moved 2.2 m · turned 90° · Z resets\"],\"btn\":true}"
+ },
+ {
+  "check": "Z puts the selected object back where it started",
+  "pass": true,
+  "detail": "bed at (0.90, 2.92) vs original (0.90, 2.92); label [\"Bed\"]"
+ },
+ {
+  "check": "reset refuses when something else has taken the original spot",
+  "pass": true,
+  "detail": "bed moved away=true, nightstand moved onto its old spot=true; bed stays at (2.00, 1.00)"
+ },
+ {
+  "check": "Shift+Z restores every object, removal and fix",
+  "pass": true,
+  "detail": "poses restored=true, taped strips=0, removed=0, reimagine changes=0; 2.93 -> 2.93/month"
+ },
+ {
+  "check": "reset: no page errors",
+  "pass": true,
+  "detail": "none"
  }
 ]

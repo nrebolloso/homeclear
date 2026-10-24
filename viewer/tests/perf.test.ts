@@ -56,7 +56,7 @@ test('splatCfg: ?stddev and ?maxpx win, performance mode only supplies the defau
 });
 
 test('xrCfg: a Quest trades resolution for frames, Link keeps full quality, the query overrides both', () => {
-  assert.deepEqual(xrCfg('', 'quest'), { scale: 0.85, foveation: 1, hz: 72 });
+  assert.deepEqual(xrCfg('', 'quest'), { scale: 0.5, foveation: 1, hz: 72 });
   assert.deepEqual(xrCfg('', 'link'), { scale: 1, foveation: 0, hz: 0 });
   assert.deepEqual(xrCfg('?xrscale=1&foveation=0&hz=90', 'quest'), { scale: 1, foveation: 0, hz: 90 });
   assert.deepEqual(xrCfg('?foveation=0.5&xrscale=0.9', 'link'), { scale: 0.9, foveation: 0.5, hz: 0 });

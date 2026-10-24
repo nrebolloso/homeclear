@@ -2,12 +2,12 @@
 // laptop (a DevTools click counts as the user's), puts the head every --step m along the route facing 4 ways
 // (game.debug.xrPlace), and reads game.fps at each. Over USB, with `npm run dev:quest` running:
 //   adb forward tcp:9223 localabstract:chrome_devtools_remote   (and keep the headset awake: README, VR)
-//   node e2e/quest-sweep.ts <scene> [--hz 72] [--step 0.75] [--settle 2.2]   -> table + e2e/quest-sweep.json
+//   node e2e/quest-sweep.ts <scene> [--hz 72] [--dirs 4|8] [--query 'stddev=2'] [--step 0.75] [--settle 2.2]   -> table + e2e/quest-sweep.json
 import { writeFileSync } from 'node:fs';
 
 const a = process.argv.slice(2);
 const opt = (k: string, d: string) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : d; };
-const scene = a[0] ?? 'game_synth', hz = opt('--hz', ''), step = +opt('--step', '0.75'), settle = +opt('--settle', '2.2');
+const scene = a[0] ?? 'game_synth', hz = opt('--hz', ''), extra = opt('--query', ''), ndirs = +opt('--dirs', '4'), step = +opt('--step', '0.75'), settle = +opt('--settle', '2.2');
 const sleep = (s: number) => new Promise(r => setTimeout(r, s * 1000));
 
 const tabs = await (await fetch('http://localhost:9223/json')).json().catch(() => { throw new Error('no DevTools on :9223: adb forward tcp:9223 localabstract:chrome_devtools_remote'); });
@@ -26,7 +26,11 @@ const E = (expr: string): Promise<any> => new Promise((res, rej) => {
 });
 const until = async (expr: string, s = 60) => { for (let t = 0; t < s * 4; t++) { if (await E(expr).catch(() => false)) return; await sleep(0.25); } throw new Error(`timed out: ${expr}`); };
 
-const url = `http://localhost:5179/?scene=${scene}${hz ? `&hz=${hz}` : ''}`;
+// --dirs 8 adds the diagonals: views across a room corner to corner can be the heaviest (the kitchen's tour stop was)
+const DIRS = (ndirs === 8
+  ? [['ahead', 0], ['ahead-left', Math.PI / 4], ['left', Math.PI / 2], ['back-left', 3 * Math.PI / 4], ['back', Math.PI], ['back-right', -3 * Math.PI / 4], ['right', -Math.PI / 2], ['ahead-right', -Math.PI / 4]]
+  : [['ahead', 0], ['left', Math.PI / 2], ['back', Math.PI], ['right', -Math.PI / 2]]) as [string, number][];
+const url = `http://localhost:5179/?scene=${scene}${hz ? `&hz=${hz}` : ''}${extra ? `&${extra}` : ''}`;   // --query 'stddev=2&maxpx=128'
 await E(`location.href = ${JSON.stringify(url)}`).catch(() => {});   // the navigation drops this evaluation
 await sleep(2);
 await until('!!window.game?.ready', 120);
@@ -39,9 +43,8 @@ const stops: [number, number, number][] = await E(`(() => { const xy = game.curr
   for (let k = 1; k < xy.length; k++) { const d = Math.hypot(xy[k][0] - xy[k - 1][0], xy[k][1] - xy[k - 1][1]); acc += d;
     if (acc >= ${step}) { out.push([xy[k][0], xy[k][1], Math.atan2(xy[k][1] - xy[k - 1][1], xy[k][0] - xy[k - 1][0])]); acc = 0; } }
   return out; })()`);
-console.log(`${scene} on ${meta.gpu} at ${meta.rate} Hz: ${stops.length} stops x 4 directions, ${settle} s each`);
+console.log(`${scene} on ${meta.gpu} at ${meta.rate} Hz: ${stops.length} stops x ${DIRS.length} directions, ${settle} s each`);
 const rows: { x: number; y: number; dir: string; yaw: number; fps: number }[] = [];
-const DIRS = [['ahead', 0], ['left', Math.PI / 2], ['back', Math.PI], ['right', -Math.PI / 2]] as const;
 for (const [x, y, heading] of stops) {
   const line: string[] = [];
   for (const [dir, off] of DIRS) {
@@ -49,7 +52,7 @@ for (const [x, y, heading] of stops) {
     await sleep(settle);   // game.fps is a 1 s window: settle past it at the new view
     const fps = await E('game.fps');
     rows.push({ x, y, dir, yaw: heading + off, fps });
-    line.push(`${dir} ${fps.toFixed(0).padStart(3)}`);
+    line.push(`${dir.replace('ahead', 'a').replace('back', 'b').replace('left', 'L').replace('right', 'R')} ${fps.toFixed(0).padStart(3)}`);
   }
   console.log(`(${x.toFixed(2).padStart(5)}, ${y.toFixed(2).padStart(5)})  ${line.join('  ')}`);
 }
