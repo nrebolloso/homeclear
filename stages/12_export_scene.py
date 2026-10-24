@@ -181,6 +181,23 @@ def nearest_instance(xyz, w):
     return _nearest[key]
 
 
+_walls = {}
+
+
+def room_walls(w, g):
+    """Stage 5c's walls (its shell.json, or fitted here from the splat when the run has none). Tall vertical surfaces:
+    room walls and cabinet sides, some of them noise lines through furniture, so object_parts only trusts the ones an
+    object stands wholly on one side of."""
+    if str(w) not in _walls:
+        if (Path(w) / "shell.json").exists():
+            _walls[str(w)] = json.loads((Path(w) / "shell.json").read_text())["walls"]
+        else:
+            sh = importlib.import_module("05c_shell")
+            v = read_ply(Path(w) / "splat_aligned.ply")
+            _walls[str(w)] = sh.fit_shell(ply_xyz(v), solid_mask(v, min_opacity=g.get("min_opacity", 0.3)), sh.normals(v))["walls"]
+    return _walls[str(w)]
+
+
 def object_parts(o, xyz, g, w, lo, cell, shape):
     """Gaussians that belong to config object o (its height-limited parts, with a cut margin). tools/lighter_clean.py reuses it."""
     in_xy = lambda q, cm: (near_poly(xyz[:, :2], np.array(q["poly_xy"], float), cm) if "poly_xy" in q else
@@ -203,7 +220,25 @@ def object_parts(o, xyz, g, w, lo, cell, shape):
         near = in_parts([{**q, "z": [max(z0, STANDS_M), q["z"][1] + ON_TOP_M]} for q in o["parts"]], GROW_M)
         # what is nearest to nobody goes to the one whose labels it stands under, not whichever outline came first: chair7's
         # leg bottoms (labelled from 22 cm) went to chair4 and the table, whose outlines overlap it, and stayed in its fill
-        return (own & (d <= MEMBER_M)) | (near & own) | (zone & (own | ((inst == -1) & np.isin(col, ids))))
+        sel = (own & (d <= MEMBER_M)) | (near & own) | (zone & (own | ((inst == -1) & np.isin(col, ids))))
+        # but never the wall it stands against: the trash can took the white wall behind and above its lid (6c's mask spilt
+        # onto it, and the grow and on-top rules took the rest). A wall has the object on one side; a line with 3%+ of its
+        # labels on or past it runs through it (a noise line, or a cabinet face it straddles). Up to its top the wall's
+        # points sit within 2 cm of the line (its back can be 2 cm off); above it nothing of it is within GROW_M of a wall
+        mem = own & (d <= MEMBER_M)
+        z1 = xyz[mem, 2].max() if mem.any() else z0
+        for wl in room_walls(w, g):
+            a, b = np.array(wl["a"]), np.array(wl["b"])
+            e = (b - a) / np.linalg.norm(b - a)
+            t, sd = (xyz[:, :2] - a) @ e, (xyz[:, :2] - a) @ [-e[1], e[0]]
+            on = (t >= 0) & (t <= np.linalg.norm(b - a))
+            if (mem & on).sum() < 50:
+                continue
+            sd *= np.sign(np.median(sd[mem & on]))   # > 0: the object's side
+            if (sd[mem & on] < 0.02).mean() > 0.03:
+                continue
+            sel &= ~(on & (sd < np.where(xyz[:, 2] > z1, GROW_M, 0.02)))
+        return sel
     # parts: the object is only these height-limited boxes (a table = top slab + legs; chairs pushed in under it stay put)
     parts = o.get("parts") or [{"box_xy": o["box_xy"], "z": [g["bump_z"][0], o.get("z_max", 2.0)]}]
     if o.get("kind") == "rug":   # a rug lies at an angle: its box takes bare floor too, so cut the measured bump patch instead

@@ -168,8 +168,8 @@
   "default": "lama"
  },
  "trash_can": {
-  "pixels": 2518,
-  "seen_around_pct": 39.9,
+  "pixels": 2269,
+  "seen_around_pct": 41.0,
   "backends": [
    "lama",
    "median",
@@ -180,8 +180,8 @@
   "default": "lama"
  },
  "box3": {
-  "pixels": 1223,
-  "seen_around_pct": 15.3,
+  "pixels": 1235,
+  "seen_around_pct": 16.0,
   "backends": [
    "lama",
    "median",
@@ -192,8 +192,8 @@
   "default": "lama"
  },
  "box4": {
-  "pixels": 1504,
-  "seen_around_pct": 10.3,
+  "pixels": 1228,
+  "seen_around_pct": 10.9,
   "backends": [
    "lama",
    "median",

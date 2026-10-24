@@ -102,3 +102,10 @@ it stands under (nearest with height counted at 30%). Low points in chair7's box
 (the rest of chair4's 29 there are faint wall-edge Gaussians), chair7 209 -> 721. Room Gaussians left per footprint
 barely change (largest: bedside tables +20 each, chair7 +16). Fills re-run (job 47411688). Not live-checked in the
 browser (extension disconnected).
+Fifth follow-up: the trash can carried part of the white wall behind and above its lid (user report). 6c's mask spilt onto
+the wall, and the grow and on-top rules took the rest (1290 Gaussians, a sheet up to 98 cm). Stage 12 now cuts each
+object against stage 5c's walls (fitted in memory when the run has no shell.json, so nothing else reads them): only walls
+the object's labels lie wholly on one side of (5c finds 30 lines here, some running through the trash and basket), and
+everything on or past the line goes back to the room: within 2 cm up to the object's top, within 10 cm above it. Trash
+can 26977 -> 25687 Gaussians, height 0.768 -> 0.664 m; boxes lose 10-86 stray Gaussians from behind the wall; basket and
+all chairs/tables unchanged. Fills re-run (job 47413830). Not live-checked in the browser (extension disconnected).
