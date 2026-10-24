@@ -41,9 +41,9 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
       const P = (s: number, t: number, h: number) => { const [x, y] = F.world(s, t); return new THREE.Vector3(x, y, h); };
       const fronts = st.tread_fronts_m?.length === z.length ? st.tread_fronts_m : z.map((_, k) => k * (st.tread_depth_m ?? 0.27));
       // the flight's two edges along the tread noses (nothing on the floor under the steps), and a line on each nose
-      const risers = z.map((v, k) => v - (k ? z[k - 1] : 0));
+      const risers = z.map((v, k) => v - (k ? z[k - 1] : st.bottom_z ?? 0));
       for (const t of [half, -half]) {
-        const prof = z.length ? z.flatMap((h, k) => [P(fronts[k], t, h - risers[k] + 0.005), P(fronts[k], t, h + 0.005)]) : [P(0, t, 0.02), P(F.run, t, pitch(F.run))];
+        const prof = z.length ? z.flatMap((h, k) => [P(fronts[k], t, h - risers[k] + 0.005), P(fronts[k], t, h + 0.005)]) : [P(0, t, (st.bottom_z ?? 0) + 0.02), P(F.run, t, pitch(F.run))];
         const edge = new THREE.Line(new THREE.BufferGeometry().setFromPoints(prof), lineMat(0x8fe3ff, 0.45));
         measured.add(edge);
       }

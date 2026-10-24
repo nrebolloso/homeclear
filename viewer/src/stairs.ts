@@ -19,6 +19,8 @@ export interface Stair {
   /** a point on the top edge: gives the run direction and length */
   top: XY;
   top_z?: number | null;
+  /** where the flight starts (m above the floor): a landing, for the flight above it; 0 when left out */
+  bottom_z?: number;
   /** tread top heights, bottom to top (m above the floor), and each tread's front edge (m from the bottom edge) */
   treads_z?: number[]; tread_fronts_m?: number[]; tread_depth_m?: number | null; width_m?: number;
   rails?: { left: RailSeen; right: RailSeen; height_m?: { left?: number; right?: number }; peak_m?: { left?: number; right?: number } };
@@ -71,7 +73,7 @@ export function pitchAt(st: Stair) {
     const k = f.reduce((a, x, i) => a + (x - ms) * (z[i] - mz), 0) / (f.reduce((a, x) => a + (x - ms) ** 2, 0) || 1);
     return (s: number) => mz + k * (s - ms);
   }
-  const z0 = z[0] ?? 0.18;
+  const z0 = z[0] ?? (st.bottom_z ?? 0) + 0.18;
   return (s: number) => z0 + DEFAULT_PITCH * s;
 }
 
@@ -79,12 +81,12 @@ export function pitchAt(st: Stair) {
  *  axis; flat surfaces have |nz| near 1). Treads = peaks of the flat points' heights; rails = what stands 0.7-1.1 m
  *  over the nosing line along each side. Sparse scans give fewer treads, never invented ones. */
 export function measureStair(pts: Float32Array, st: Stair): Stair & { flat_points: number; more_above_z: number | null } {
-  const F = stairFrame(st), half = F.width / 2;
-  const H = new Float32Array(320), flat: { s: number; z: number }[] = [], beyond: number[] = [];
+  const F = stairFrame(st), half = F.width / 2, b = st.bottom_z ?? 0;
+  const H = new Float32Array(Math.round((b + 3.2) * 100)), flat: { s: number; z: number }[] = [], beyond: number[] = [];
   for (let i = 0; i < pts.length; i += 4) {
     if (pts[i + 3] < 0.8) continue;
     const { s, t } = F.local([pts[i], pts[i + 1]]), z = pts[i + 2];
-    if (Math.abs(t) > half - 0.03 || z < 0.06 || z > 3.1) continue;
+    if (Math.abs(t) > half - 0.03 || z < b + 0.06 || z > b + 3.1) continue;
     if (s > F.run + 0.08 && s < F.run + 0.45) beyond.push(z);   // just past the marked top: more steps, or the landing
     if (s < -0.03 || s > F.run + 0.05) continue;
     H[Math.round(z * 100)]++; flat.push({ s, z });
@@ -198,7 +200,7 @@ export function stairChecks(st: Stair, c: StairCtx): CheckOut[] {
   const thinNote = thin ? ` · the scan resolves only ${z.length} step${z.length === 1 ? '' : 's'} of this flight: tape-measure it (MEASURING.md)` : '';
   // 1-2. risers: each one, and how much they differ (uneven risers trip people who learned the first step)
   if (z.length) {
-    const risers = z.map((v, k) => v - (k ? z[k - 1] : 0)), hi = Math.max(...risers), lo = Math.min(...risers);
+    const risers = z.map((v, k) => v - (k ? z[k - 1] : st.bottom_z ?? 0)), hi = Math.max(...risers), lo = Math.min(...risers);
     add('risers', `${st.name}: risers ${cm(lo)}–${cm(hi)} (code max ${(CODE.riser_max_m * 100).toFixed(1)} cm)`,
       scanOnly(hi > CODE.riser_max_m + e ? 'fail' : hi > CODE.riser_max_m - e ? 'borderline, OT to verify' : 'ok'),
       `${z.length} tread${z.length === 1 ? '' : 's'} ${src}${st.measured === 'splat' ? ' (treads the scan missed are not counted)' : ''}${thinNote}`, { value_m: hi, limit_m: [0, CODE.riser_max_m] });
@@ -393,6 +395,7 @@ export function stairYaml(st: Stair): string {
   const r = (x: number) => +x.toFixed(3), xy = (p: XY) => `[${r(p[0])}, ${r(p[1])}]`;
   const lines = [`- name: ${st.name}`, `  bottom: [${xy(st.bottom[0])}, ${xy(st.bottom[1])}]`, `  top: ${xy(st.top)}`];
   if (st.top_z != null) lines.push(`  top_z: ${r(st.top_z)}`);
+  if (st.bottom_z) lines.push(`  bottom_z: ${r(st.bottom_z)}`);
   if (st.treads_z?.length) lines.push(`  treads_z: [${st.treads_z.map(r).join(', ')}]`);
   if (st.tread_fronts_m?.length) lines.push(`  tread_fronts_m: [${st.tread_fronts_m.map(r).join(', ')}]`);
   if (st.tread_depth_m) lines.push(`  tread_depth_m: ${r(st.tread_depth_m)}`);
