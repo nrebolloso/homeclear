@@ -1,9 +1,9 @@
 # Status
 
 ## Demo push (2026-10-24)
-- **Done:** steps 1-3. Merged (not pushed); kitchen4_lighter is the default, route fridge -> entrance; tag `demo-safe` + `proof/demo/backup_v1.mp4` (30 s autoplay, ~58 fps headless, `node viewer/e2e/record.ts`). The gitignored scene export is copied to `../Homeclear-demo-safe/kitchen4_lighter_v1`.
-- **Next:** step 4, three hazards (mat edge, cord, chair squeeze) on the route + hazards.json.
-- **Risks:** autoplay starts on load, so the fridge turn is over by the first frame (scripted camera in step 7); the e2e suite (game_synth) was not rerun after the merge.
+- **Done:** steps 1-4. Merged (not pushed); kitchen4_lighter default, route fridge -> entrance. Step 4: `tools/stage_demo_hazards.py` stages a 1.5 cm mat, a 5 mm cord (estimated) and chair8 pulled into the trash-can gap (1 cm/side) + hazards.json; contacts/month 1.21 as-is, 0.07 mat removed, 1.13 cord taped, 0 both; pushing the chair in gives 6.6 cm/side. 60 fps headless. Tag `demo-safe` + `proof/demo/backup_v2.mp4`; export copied to `../Homeclear-demo-safe/kitchen4_lighter_v2`.
+- **Next:** step 5, 200 ghost trips (baseline vs learned) + heatmap on the demo route.
+- **Risks:** rerun the staging tool after any stage 12 / lighter_clean re-export (it rebuilds from `*_scan` copies); the chair's scanned spot shows the pink "imagined" fill on the route (honest, may want it off in demo mode); autoplay fridge turn still happens before the first frame (step 7); e2e suite not rerun.
 
 Each result counts once it is reproduced here, with proof in `proof/`.
 

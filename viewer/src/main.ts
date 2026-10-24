@@ -127,17 +127,20 @@ const label = (text: string, cls = '') => {
 };
 
 // movable objects: splat in a group at its pivot (PLY is pivot-local), invisible box proxy for picking, tinted fill
-const original: Pose[] = objs.map(o => ({ x: o.pivot[0], y: o.pivot[1], yaw: 0 }));
+// scanned = where the piece was filmed (its fill, its never-filmed floor); original = where the walk starts: the scanned
+// spot, or a staged `start` [x, y, yaw deg] (tools/stage_demo_hazards.py pulls a chair into the path)
+const scanned: Pose[] = objs.map(o => ({ x: o.pivot[0], y: o.pivot[1], yaw: 0 }));
+const original: Pose[] = objs.map((o, k) => (o.start ? { x: o.start[0], y: o.start[1], yaw: (o.start[2] * Math.PI) / 180 } : scanned[k]));
 // the floor under each object was never filmed, and specks inside its box are its own splat leftovers, but it stands
 // there now: count its own spot as clear floor for placement only (planning still sees the measured layers), else every
 // drag that still overlaps that spot snaps back (the kitchen rug couldn't move at all otherwise)
 const placeBase: Layers = { ...base, floor: base.floor.slice(), obst: base.obst.slice() };
-objs.forEach((o, k) => { for (const c of polyCells(g, worldFootprint(o, original[k]))) { placeBase.floor[c] = 1; placeBase.obst[c] = 0; } });
+objs.forEach((o, k) => { for (const c of polyCells(g, worldFootprint(o, scanned[k]))) { placeBase.floor[c] = 1; placeBase.obst[c] = 0; } });
 // free walk keeps to filmed floor, but the floor under the furniture was never filmed: once a piece is moved or removed
 // you can walk onto its spot (only where it is floor: a box on a cabinet doesn't open the cabinet top). Unfilmed seams
 // up to 12 cm wide (beside a chair leg, between two outlines) count as filmed too, else they stop you mid-room
 const seen = coverage.map(v => +(v > 0));
-objs.forEach((o, k) => { for (const c of polyCells(g, worldFootprint(o, original[k]))) if (base.floor[c]) seen[c] = 1; });
+objs.forEach((o, k) => { for (const c of polyCells(g, worldFootprint(o, scanned[k]))) if (base.floor[c]) seen[c] = 1; });
 const unseen = edt(seen, nx, ny).map(d => +(d * g.cell_m > 0.06));
 // objects filmed overlapping (a chair pushed in under the table) share floor cells but not space: they may keep overlapping
 // shortcut: 2D footprints, so once apart they may also be dropped into each other; a height-aware check would fix that
@@ -162,7 +165,7 @@ const items = objs.map(o => {
   const fill = splat(o.fill);
   fill.recolor = new THREE.Color(1, 0.75, 1);      // tint: imagined, not measured (light, so a generated floor texture still reads)
   fill.visible = false;
-  const tag = label('imagined, not measured', 'imag');
+  const tag = o.placed ? new THREE.Object3D() : label('imagined, not measured', 'imag');   // staged for the demo: the floor under it was filmed
   tag.position.set(o.pivot[0], o.pivot[1], 0.15);
   tag.visible = false;
   scene.add(fill, tag);
@@ -512,7 +515,7 @@ tc.addEventListener('dragging-changed', e => { if (!e.value && selected >= 0) co
 
 function syncObjects() {
   items.forEach((it, k) => {
-    const p = layout.poses[k], o = original[k];
+    const p = layout.poses[k], o = scanned[k];
     it.group.position.set(p.x, p.y, 0); it.group.rotation.set(0, 0, p.yaw);   // upright (live physics re-tilts a tipped one)
     it.group.visible = !p.removed;
     it.mesh.opacity = 1;
@@ -1845,7 +1848,7 @@ const comparison = createXRComparison({
       const alpha = (a.removed ? 0 : 1) * (1 - u) + (b.removed ? 0 : 1) * u;
       it.group.position.set(p.x, p.y, 0); it.group.rotation.set(0, 0, p.yaw);
       it.group.visible = alpha > 0.001; it.mesh.opacity = alpha;
-      const moved = alpha < 0.999 || Math.hypot(p.x - original[k].x, p.y - original[k].y) > 0.01 || Math.abs(p.yaw - original[k].yaw) > 0.01;
+      const moved = alpha < 0.999 || Math.hypot(p.x - scanned[k].x, p.y - scanned[k].y) > 0.01 || Math.abs(p.yaw - scanned[k].yaw) > 0.01;
       it.fill.visible = it.tag.visible = moved && $<HTMLInputElement>('imagfill').checked;
     });
     const side = t >= 0.5 ? 1 : 0;
