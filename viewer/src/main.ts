@@ -18,6 +18,8 @@ import { summarize, drawPushChart, poseAt, pushColor, sampleText } from './physd
 import { cardState, encodeCard, type ActionOut, type ReportPayload } from './share.ts';
 import { createReimagine, undoChange, costText, card, type Change } from './reimagine.ts';
 import { moveCost, removeCost, sumCosts } from './movecost.ts';
+import { measureStair, stairFixes, stairFrame, stairYaml, type Stair, type Side } from './stairs.ts';
+import { createStairs3d } from './stairs3d.ts';
 import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } from './perf.ts';
 import QRCode from 'qrcode';
 import type { Eval, Init, RouteDef } from './worker.ts';
@@ -689,6 +691,7 @@ function refreshReimagine() {
     li.appendChild(b);
     $('receipt').appendChild(li);
   }
+  drawStairs();   // added rails / lights / walker follow the layout
 }
 function undoReimagined(c: Change) {
   layout = undoChange(layout, original, c, interventions);
@@ -728,6 +731,107 @@ game.reimagine = { run: reimagineRoom, setT: reim.setT, t: reim.t, play: reim.pl
   changes: reim.changes, resolved: reim.resolved, undo: (n: number) => undoReimagined(reim.changes()[n]),
   pose: (name: string) => { const gr = items[objs.findIndex(o => o.name === name)].group; return { x: gr.position.x, y: gr.position.y, yaw: gr.rotation.z, visible: gr.visible }; } };
 
+// ---------- stairs (stairs.ts, stairs3d.ts): measured against code and this patient; rail, step lights, a walker at the top ----------
+// From config game.stairs (stage 12) and/or marked here with three clicks and measured from the splat (kept per scene in
+// this browser; "Copy as config YAML" makes it permanent). Their fixes are interventions like any other.
+const mainSplat = splats[0];
+const stairs3d = createStairs3d(scene, () => buildDevice(walkerCfg).group);
+const STAIR_KEY = `homeclear:stairs:${RUN}`, baseIvCount = interventions.length;
+const stairRay = new THREE.Raycaster();
+let stairs: Stair[] = [], marked: Stair[] = [];
+let strongSide: Side | null = persona.strong_side ?? null;
+/** splat centres + |normal z| (the shortest axis) around a stair, for measureStair */
+function splatPoints(st: Stair): Float32Array {
+  const F = stairFrame(st), pad = 0.45, out: number[] = [], ax = new THREE.Vector3();
+  const cs = [F.world(-pad, F.width / 2 + pad), F.world(-pad, -F.width / 2 - pad), F.world(F.run + pad, F.width / 2 + pad), F.world(F.run + pad, -F.width / 2 - pad)];
+  const [x0, x1, y0, y1] = [Math.min(...cs.map(c => c[0])), Math.max(...cs.map(c => c[0])), Math.min(...cs.map(c => c[1])), Math.max(...cs.map(c => c[1]))];
+  mainSplat.forEachSplat((_, c, s, q, op) => {
+    if (op < 0.3 || c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1 || c.z > 3.2) return;
+    const k = s.x <= s.y && s.x <= s.z ? 0 : s.y <= s.z ? 1 : 2;
+    ax.set(+(k === 0), +(k === 1), +(k === 2)).applyQuaternion(q);
+    out.push(c.x, c.y, c.z, Math.abs(ax.z));
+  });
+  return new Float32Array(out);
+}
+const measured = (st: Stair): Stair => { const { flat_points: _, ...m } = measureStair(splatPoints(st), st); return m; };
+const cfgStairs: Stair[] = (sc.stairs ?? []).map((st: Stair) => (st.treads_z ? st : measured(st)));
+try { marked = JSON.parse(localStorage.getItem(STAIR_KEY) ?? '[]'); } catch { marked = []; }
+/** stairs -> their fixes in the intervention list, the worker's init, the drawing; no re-plan (callers do it) */
+function setupStairs() {
+  stairs = [...cfgStairs, ...marked];
+  interventions.splice(baseIvCount, Infinity, ...stairs.flatMap(stairFixes));
+  const ids = new Set(interventions.map(i => i.id)), keep = (id: string) => !id.startsWith('stair_') || ids.has(id);
+  applied = applied.filter(keep);
+  layout = { ...layout, added: layout.added?.filter(keep) };
+  init = { ...init, interventions, stairs, strong_side: strongSide, device: walkerCfg.device };
+  worker.postMessage({ type: 'init', init });
+  suggestions = [];   // searched without these stairs
+  drawStairs();
+  $('stairstatus').textContent = stairs.length ? stairs.map(st => `${st.name}: ${st.treads_z?.length ?? 0} treads ${st.measured === 'tape' ? 'tape-measured' : 'seen in the scan'}`).join(' · ') +
+    ' · checks under "Transfers, reach, emergencies", additions under Plan fixes' : 'no stairs marked: Fly (F) to see them, then Mark stairs';
+}
+function drawStairs() { stairs3d.build(stairs, layout.added ?? []); }
+function saveMarked() { try { localStorage.setItem(STAIR_KEY, JSON.stringify(marked)); } catch { /* private window: kept for this visit only */ } }
+async function markStair(a: XY, b: XY, top: XY, topZ: number | null = null) {
+  const n = cfgStairs.length + marked.length, st = measured({ name: n ? `stairs ${n + 1}` : 'stairs', bottom: [a, b], top, top_z: topZ });
+  marked.push(st);
+  saveMarked(); setupStairs(); await replan();
+  return st;
+}
+let marking: { pts: XY[]; z: number } | null = null;
+const MARK_STEPS = ['click the front edge of the BOTTOM step at one end', 'now its other end', 'now the front edge of the TOP step (or the landing)'];
+$('markstairs').onclick = () => { marking = { pts: [], z: 0 }; $('stairstatus').textContent = `Marking (Esc cancels): ${MARK_STEPS[0]}`; };
+renderer.domElement.addEventListener('pointerdown', e => {   // capture: while marking, clicks go to the stairs, not to picking furniture or looking
+  if (!marking) return;
+  e.stopImmediatePropagation();
+  stairRay.setFromCamera(new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
+  const hit = stairRay.intersectObject(mainSplat, false)[0];
+  if (!hit) { $('stairstatus').textContent = `Nothing there: ${MARK_STEPS[marking.pts.length]}`; return; }
+  marking.pts.push([hit.point.x, hit.point.y]); marking.z = hit.point.z;
+  if (marking.pts.length < 3) { $('stairstatus').textContent = `Marking: ${MARK_STEPS[marking.pts.length]}`; return; }
+  const [a, b, top] = marking.pts, z = marking.z;
+  marking = null;
+  $('stairstatus').textContent = 'measuring from the splat…';
+  markStair(a, b, top, z);
+}, { capture: true });
+addEventListener('keydown', e => { if (e.code === 'Escape' && marking) { marking = null; setupStairs(); } });
+$('clearstairs').onclick = () => { marked = []; saveMarked(); setupStairs(); replan(); };
+/** Fly to a clear view of a stair: 2.2 m out in front of it, from the first angle (straight on, then swinging out to
+ *  either side) that stands over well-filmed floor (elsewhere the splat is floaters), looking at the middle of the flight. */
+function viewStairs(k = 0) {
+  const st = stairs[k];
+  if (!st) return false;
+  const F = stairFrame(st), mid = F.world(F.run / 2, 0), D = 2.2;
+  const filmed = ([x, y]: XY) => {
+    const i = Math.floor((x - g.origin_xy[0]) / g.cell_m), j = Math.floor((y - g.origin_xy[1]) / g.cell_m);
+    return i >= 0 && j >= 0 && i < nx && j < ny && coverage[i * ny + j] >= sc.grid.coverage_good;
+  };
+  const at = (a: number): XY => { const c = Math.cos(a), s = Math.sin(a), d: XY = [c * F.u[0] - s * F.u[1], s * F.u[0] + c * F.u[1]]; return [F.o[0] - d[0] * D, F.o[1] - d[1] * D]; };
+  const angles = [0, 20, -20, 40, -40, 60, -60, 80, -80].map(a => (a * Math.PI) / 180);
+  const [x, y] = at(angles.find(a => filmed(at(a))) ?? 0), z = 1.6;
+  setWalk('fly');
+  Object.assign(fly, { x, y, z });
+  body.yaw = Math.atan2(mid[1] - y, mid[0] - x);
+  body.pitch = Math.atan2((st.treads_z?.at(-1) ?? 0.5) / 2 - z, Math.hypot(mid[0] - x, mid[1] - y));
+  return true;
+}
+$('viewstairs').onclick = () => viewStairs();
+async function copyStairsYaml() {
+  const yaml = `  stairs:\n${stairs.map(st => stairYaml(st).replace(/^/gm, '  ')).join('\n')}\n`;
+  try { await navigator.clipboard.writeText(yaml); $('stairstatus').textContent = 'copied: paste under game: in config.<scene>.yaml'; }
+  catch { $('stairstatus').textContent = yaml; }
+  return yaml;
+}
+$('copystairs').onclick = () => copyStairsYaml();
+{
+  const sel = $<HTMLSelectElement>('strongside');
+  sel.value = strongSide ?? '';
+  sel.onchange = () => { strongSide = (sel.value || null) as Side | null; init = { ...init, strong_side: strongSide }; worker.postMessage({ type: 'init', init }); replan(); };
+}
+setupStairs();
+game.stairs = { mark: markStair, list: () => stairs, clear: () => $('clearstairs').click(), copyYaml: copyStairsYaml, view: viewStairs,
+  measure: (st: Stair) => measureStair(splatPoints(st), st), setStrongSide: (s: Side | null) => { $<HTMLSelectElement>('strongside').value = s ?? ''; $('strongside').onchange!(new Event('change')); } };
+
 // ---------- what leaves the game: OT report, family fix card ----------
 /** Every change in the layout on screen, in order, with what it takes and where (for the card's numbered pins). */
 function describeChanges(): ActionOut[] {
@@ -743,7 +847,7 @@ function describeChanges(): ActionOut[] {
     if (iv) {
       const at = iv.kind === 'flatten' ? [(iv.box_xy![0][0] + iv.box_xy![1][0]) / 2, (iv.box_xy![0][1] + iv.box_xy![1][1]) / 2] as XY
         : iv.kind === 'raise' ? (sc.fixtures?.find((f: any) => f.name === iv.target)?.xyz?.slice(0, 2) as XY | undefined) ?? poseOf(iv.target!)
-        : iv.kind === 'add' ? poseOf(iv.fixture?.attach ?? '') : poseOf(iv.object!);
+        : iv.kind === 'add' ? poseOf(iv.fixture?.attach ?? '') ?? (iv.fixture?.xyz?.slice(0, 2) as XY | undefined) : poseOf(iv.object!);
       out.push({ label: iv.label, cost_usd: iv.cost_usd, minutes: iv.minutes, product: iv.product, at });
       if (iv.object) covered.add(iv.object);
     } else if (sa) {
@@ -851,7 +955,7 @@ async function setPersona(key: string) {
   scene.add(walker.group);
   centreOffset = walkerCfg.user_gap_m + walkerCfg.depth_m / 2;
   if (worldModel) worldModel.shift = centreOffset - worldModel.mean_gap_m;   // learned.py Learned.shift, for this walker
-  init = { ...init, persona, plan: { ...sc.plan, ...p.plan, walker_width_m: walkerCfg.width_m } };
+  init = { ...init, persona, plan: { ...sc.plan, ...p.plan, walker_width_m: walkerCfg.width_m }, device: walkerCfg.device };
   worker.postMessage({ type: 'init', init });
   baselinePerMonth = null; baseEvals = [];
   if (p.vision) game.setVision(p.vision);
@@ -1181,6 +1285,7 @@ function step(dt: number, t: number) {
   pulseSpots(t);
   replayStep(dt);
   reim.update(dt);
+  stairs3d.update(t, $<HTMLInputElement>('night').checked);
   liveChecks(t);
   if (xr?.presenting()) renderer.render(scene, camera);   // the post pass can't run per eye: plain render in the headset
   else vision.render();
