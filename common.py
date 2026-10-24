@@ -78,6 +78,21 @@ def triangulate(Ps, uvs):
     return X[:3] / X[3]
 
 
+def triangulate_robust(Ps, uvs, thresh_px=3.0, iters=400, seed=0):
+    """DLT on the largest set of views that agree within thresh_px (pairs as RANSAC samples), plus that inlier mask: a few false or
+    mis-posed detections no longer drag the point (newell_stair2: ~55% of marker sightings were off by > 3 px)."""
+    Ps, uvs = np.asarray(Ps, float), np.asarray(uvs, float)
+    rng, best = np.random.default_rng(seed), np.zeros(len(Ps), bool)
+    for _ in range(iters if len(Ps) > 2 else 0):
+        x = Ps @ np.append(triangulate(Ps[(ab := rng.choice(len(Ps), 2, replace=False))], uvs[ab]), 1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            inl = (x[:, 2] > 0) & (np.linalg.norm(x[:, :2] / x[:, 2:] - uvs, axis=1) < thresh_px)
+        if inl.sum() > best.sum():
+            best = inl
+    best = best if best.sum() >= 2 else np.ones(len(Ps), bool)
+    return triangulate(Ps[best], uvs[best]), best
+
+
 def triangulate_picks(cams, picks):
     """Hand-picked points, each {image name: [u, v]} in >= 2 images -> 3-D points in the cameras.json frame + worst reprojection (px)."""
     by = {c["name"]: c for c in cams}
