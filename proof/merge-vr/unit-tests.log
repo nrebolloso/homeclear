@@ -1,0 +1,769 @@
+
+> test
+> node --test tests/*.test.ts
+
+TAP version 13
+# Subtest: transfer heights: toilet too low for hip precautions, bed at the edge of the range
+ok 1 - transfer heights: toilet too low for hip precautions, bed at the edge of the range
+  ---
+  duration_ms: 744.9118
+  type: 'test'
+  ...
+# Subtest: reach follows the furniture: the phone rides on the nightstand
+ok 2 - reach follows the furniture: the phone rides on the nightstand
+  ---
+  duration_ms: 1175.3045
+  type: 'test'
+  ...
+# Subtest: stretcher: fits through the bedroom at 60 cm, not at 2.5 m; spare room is the bottleneck on the way
+ok 3 - stretcher: fits through the bedroom at 60 cm, not at 2.5 m; spare room is the bottleneck on the way
+  ---
+  duration_ms: 386.653
+  type: 'test'
+  ...
+# Subtest: off-route closet doors stay in the review list and out of fix and optimizer candidates
+ok 4 - off-route closet doors stay in the review list and out of fix and optimizer candidates
+  ---
+  duration_ms: 2731.7482
+  type: 'test'
+  ...
+# Subtest: a blocked bathroom route identifies its door without recommending an unrelated closet
+ok 5 - a blocked bathroom route identifies its door without recommending an unrelated closet
+  ---
+  duration_ms: 323.5206
+  type: 'test'
+  ...
+# Subtest: doorFrame: clear width between the jambs, along and through the wall
+ok 6 - doorFrame: clear width between the jambs, along and through the wall
+  ---
+  duration_ms: 1.1409
+  type: 'test'
+  ...
+# Subtest: door check: against the walker and code; a gain counts
+ok 7 - door check: against the walker and code; a gain counts
+  ---
+  duration_ms: 57.0797
+  type: 'test'
+  ...
+# Subtest: fixes: three carve options, one per door at a time; widen reaches what the walker needs
+ok 8 - fixes: three carve options, one per door at a time; widen reaches what the walker needs
+  ---
+  duration_ms: 12.9149
+  type: 'test'
+  ...
+# Subtest: carve opens the wall in the floor map, and only there
+ok 9 - carve opens the wall in the floor map, and only there
+  ---
+  duration_ms: 15.6002
+  type: 'test'
+  ...
+# Subtest: game_synth_narrow: blocked until the doorway is widened; then the door check passes
+ok 10 - game_synth_narrow: blocked until the doorway is widened; then the door check passes
+  ---
+  duration_ms: 1644.1687
+  type: 'test'
+  ...
+# Subtest: hinge: the open door leaf marks jamb b; widening grows the other way, so the leaf stays out of the opening
+ok 11 - hinge: the open door leaf marks jamb b; widening grows the other way, so the leaf stays out of the opening
+  ---
+  duration_ms: 100.3018
+  type: 'test'
+  ...
+# Subtest: edit boxes: the hidden strip sits just outside each jamb band; the shift moves the band out by half the gain
+ok 12 - edit boxes: the hidden strip sits just outside each jamb band; the shift moves the band out by half the gain
+  ---
+  duration_ms: 0.756
+  type: 'test'
+  ...
+# Subtest: remove_rug: the rug patch is gone and the risk drops a lot, whatever the seed
+ok 13 - remove_rug: the rug patch is gone and the risk drops a lot, whatever the seed
+  ---
+  duration_ms: 2801.3279
+  type: 'test'
+  ...
+# \# ranking by seed (SYNTHETIC): remove_rug 2.86 > threshold_ramp 0.31 > move_chair 0.11 > move_table 0.00 > tape_rug_corner 0.00 > cord_cover 0.00
+# \#   remove_rug 2.87 > threshold_ramp 0.34 > move_chair 0.14 > move_table 0.00 > tape_rug_corner 0.00 > cord_cover -0.00
+# \#   remove_rug 2.89 > threshold_ramp 0.35 > move_chair 0.17 > move_table 0.00 > tape_rug_corner 0.00 > cord_cover 0.00
+# \#   remove_rug 2.82 > threshold_ramp 0.29 > move_chair 0.03 > cord_cover 0.00 > move_table 0.00 > tape_rug_corner 0.00
+# \#   remove_rug 2.88 > threshold_ramp 0.35 > move_chair 0.21 > cord_cover 0.03 > move_table 0.00 > tape_rug_corner 0.00
+# Subtest: threshold_ramp: the 12 mm sill patch is gone, risk drops in every seed, and the pushed walker no longer snags there
+ok 14 - threshold_ramp: the 12 mm sill patch is gone, risk drops in every seed, and the pushed walker no longer snags there
+  ---
+  duration_ms: 5804.9084
+  type: 'test'
+  ...
+# Subtest: cord_cover: the cable patch is gone and it never adds risk; once the rug is out of the way it removes real risk
+ok 15 - cord_cover: the cable patch is gone and it never adds risk; once the rug is out of the way it removes real risk
+  ---
+  duration_ms: 1210.5021
+  type: 'test'
+  ...
+# Subtest: tape_rug_corner: the curl no longer makes the rug patch taller than the rug
+ok 16 - tape_rug_corner: the curl no longer makes the rug patch taller than the rug
+  ---
+  duration_ms: 543.191
+  type: 'test'
+  ...
+# Subtest: raised_toilet_seat: the toilet transfer check stops failing; it moves no toe-contact risk
+ok 17 - raised_toilet_seat: the toilet transfer check stops failing; it moves no toe-contact risk
+  ---
+  duration_ms: 332.9497
+  type: 'test'
+  ...
+# Subtest: chair and table moves never add risk and keep every route
+ok 18 - chair and table moves never add risk and keep every route
+  ---
+  duration_ms: 1155.4652
+  type: 'test'
+  ...
+# Subtest: ranking by risk reduction is the same in every seed; check-only fixes are ranked apart; ties go to the cheaper fix
+ok 19 - ranking by risk reduction is the same in every seed; check-only fixes are ranked apart; ties go to the cheaper fix
+  ---
+  duration_ms: 2752.3828
+  type: 'test'
+  ...
+# Subtest: edt matches brute force
+ok 20 - edt matches brute force
+  ---
+  duration_ms: 11.0649
+  type: 'test'
+  ...
+# Subtest: contact table interpolates and clamps
+ok 21 - contact table interpolates and clamps
+  ---
+  duration_ms: 0.6577
+  type: 'test'
+  ...
+# Subtest: synthetic scene: route found, same length as stage 7, rug + cable flagged at measured height
+ok 22 - synthetic scene: route found, same length as stage 7, rug + cable flagged at measured height
+  ---
+  duration_ms: 172.8626
+  type: 'test'
+  ...
+# Subtest: doorway narrower than the walker blocks the route
+ok 23 - doorway narrower than the walker blocks the route
+  ---
+  duration_ms: 100.1147
+  type: 'test'
+  ...
+# Subtest: moving the bed next to the route reroutes it (still passable); walls reject placement
+ok 24 - moving the bed next to the route reroutes it (still passable); walls reject placement
+  ---
+  duration_ms: 203.1964
+  type: 'test'
+  ...
+# Subtest: rollouts: removing the rug and taping the cable cut toe contacts; no bumps -> none
+ok 25 - rollouts: removing the rug and taping the cable cut toe contacts; no bumps -> none
+  ---
+  duration_ms: 983.8898
+  type: 'test'
+  ...
+# Subtest: drag: every kind can be removed, moved and rotated, and the grid follows exactly
+ok 26 - drag: every kind can be removed, moved and rotated, and the grid follows exactly
+  ---
+  duration_ms: 841.8538
+  type: 'test'
+  ...
+# Subtest: drag: placement rejects walls, other furniture and the void, accepts free floor
+ok 27 - drag: placement rejects walls, other furniture and the void, accepts free floor
+  ---
+  duration_ms: 45.087
+  type: 'test'
+  ...
+# Subtest: drag: a table dropped on the route reroutes it; dropped across the doorway corridor it seals it
+ok 28 - drag: a table dropped on the route reroutes it; dropped across the doorway corridor it seals it
+  ---
+  duration_ms: 256.8289
+  type: 'test'
+  ...
+# Subtest: drag: the curled rug corner dropped on the route shows up as a taller bump hazard
+ok 29 - drag: the curled rug corner dropped on the route shows up as a taller bump hazard
+  ---
+  duration_ms: 596.2299
+  type: 'test'
+  ...
+# Subtest: drag: the route starts beside the bed wherever the bed goes (start_with), and checks follow the nightstand
+ok 30 - drag: the route starts beside the bed wherever the bed goes (start_with), and checks follow the nightstand
+  ---
+  duration_ms: 320.5476
+  type: 'test'
+  ...
+# Subtest: imagined fills stay separate from the measured layers: files exist, sit below bump height, and removal uses only the base
+ok 31 - imagined fills stay separate from the measured layers: files exist, sit below bump height, and removal uses only the base
+  ---
+  duration_ms: 42.2443
+  type: 'test'
+  ...
+# Subtest: feet: planted on their last step, swinging with lift toward the next, never behind the start
+ok 32 - feet: planted on their last step, swinging with lift toward the next, never behind the start
+  ---
+  duration_ms: 3.3827
+  type: 'test'
+  ...
+# Subtest: marking rejects mistaken points without advancing; undo restores the previous step
+ok 33 - marking rejects mistaken points without advancing; undo restores the previous step
+  ---
+  duration_ms: 1.7179
+  type: 'test'
+  ...
+# Subtest: door preview compares jamb width with the walker, and refuses implausible openings
+ok 34 - door preview compares jamb width with the walker, and refuses implausible openings
+  ---
+  duration_ms: 0.7847
+  type: 'test'
+  ...
+# Subtest: left and right preview agree whichever end of the bottom edge is marked first
+ok 35 - left and right preview agree whichever end of the bottom edge is marked first
+  ---
+  duration_ms: 1.3525
+  type: 'test'
+  ...
+# Subtest: snapping uses supported horizontal surfaces and leaves an unseen height alone
+ok 36 - snapping uses supported horizontal surfaces and leaves an unseen height alone
+  ---
+  duration_ms: 0.6395
+  type: 'test'
+  ...
+# Subtest: editing a handle discards stale measurements but preserves explicit rail and device choices
+ok 37 - editing a handle discards stale measurements but preserves explicit rail and device choices
+  ---
+  duration_ms: 0.6887
+  type: 'test'
+  ...
+# Subtest: voxel columns keep the legs separate from the seat
+ok 38 - voxel columns keep the legs separate from the seat
+  ---
+  duration_ms: 56.9162
+  type: 'test'
+  ...
+# Subtest: a light chair in the path is bumped and pushed aside; logged as bumped + moved
+ok 39 - a light chair in the path is bumped and pushed aside; logged as bumped + moved
+  ---
+  duration_ms: 1494.6464
+  type: 'test'
+  ...
+# Subtest: a heavy grippy object blocks the walker (the person cannot push 60 kg)
+ok 40 - a heavy grippy object blocks the walker (the person cannot push 60 kg)
+  ---
+  duration_ms: 6967.0859
+  type: 'test'
+  ...
+# Subtest: a slippery mat slides under the glides; a grippy one stays
+ok 41 - a slippery mat slides under the glides; a grippy one stays
+  ---
+  duration_ms: 142.1045
+  type: 'test'
+  ...
+# Subtest: a curled corner is found in the bump layer, held at its curl, and folded by a wheel running into it
+ok 42 - a curled corner is found in the bump layer, held at its curl, and folded by a wheel running into it
+  ---
+  duration_ms: 134.1496
+  type: 'test'
+  ...
+# Subtest: wall slots fit and touch a wall; a bed puts its head (short side) there
+ok 43 - wall slots fit and touch a wall; a bed puts its head (short side) there
+  ---
+  duration_ms: 692.0495
+  type: 'test'
+  ...
+# Subtest: suggested layouts: never worse than now, no two fixes on one thing, the full option clears the failed checks
+ok 44 - suggested layouts: never worse than now, no two fixes on one thing, the full option clears the failed checks
+  ---
+  duration_ms: 17977.8495
+  type: 'test'
+  ...
+# Subtest: clusterHazards: a row of bumps becomes one ring on the tallest, labelled with the count
+ok 45 - clusterHazards: a row of bumps becomes one ring on the tallest, labelled with the count
+  ---
+  duration_ms: 1.3897
+  type: 'test'
+  ...
+# Subtest: clusterHazards: different types never merge; squeezes keep the narrowest
+ok 46 - clusterHazards: different types never merge; squeezes keep the narrowest
+  ---
+  duration_ms: 0.3543
+  type: 'test'
+  ...
+# Subtest: clusterHazards: nothing is dropped
+ok 47 - clusterHazards: nothing is dropped
+  ---
+  duration_ms: 1.3525
+  type: 'test'
+  ...
+# Subtest: tierAtLoad: flat unless in a headset; Link by ?link=1 or by asking for full-quality splats
+ok 48 - tierAtLoad: flat unless in a headset; Link by ?link=1 or by asking for full-quality splats
+  ---
+  duration_ms: 0.4473
+  type: 'test'
+  ...
+# Subtest: perfAtLoad: the query wins; a standalone headset is on; Link and the monitor follow the last choice
+ok 49 - perfAtLoad: the query wins; a standalone headset is on; Link and the monitor follow the last choice
+  ---
+  duration_ms: 0.442
+  type: 'test'
+  ...
+# Subtest: splatCfg: ?stddev and ?maxpx win, performance mode only supplies the default
+ok 50 - splatCfg: ?stddev and ?maxpx win, performance mode only supplies the default
+  ---
+  duration_ms: 30.7722
+  type: 'test'
+  ...
+# Subtest: xrCfg: a Quest trades resolution for frames, Link keeps full quality, the query overrides both
+ok 51 - xrCfg: a Quest trades resolution for frames, Link keeps full quality, the query overrides both
+  ---
+  duration_ms: 0.7443
+  type: 'test'
+  ...
+# Subtest: turn-penalised planning turns less; zero penalty is the plain planner
+ok 52 - turn-penalised planning turns less; zero penalty is the plain planner
+  ---
+  duration_ms: 458.4446
+  type: 'test'
+  ...
+# Subtest: personas: Parkinson persona has more contacts than the patient; the cane persona plans with its own width
+ok 53 - personas: Parkinson persona has more contacts than the patient; the cane persona plans with its own width
+  ---
+  duration_ms: 1713.1002
+  type: 'test'
+  ...
+# Subtest: trace: sampled at trace_dt_s, ordered, one height per leg, ends at the goal
+ok 54 - trace: sampled at trace_dt_s, ordered, one height per leg, ends at the goal
+  ---
+  duration_ms: 2290.1581
+  type: 'test'
+  ...
+# Subtest: summary: the rug edge drives the push to the limit; flat floor never does
+ok 55 - summary: the rug edge drives the push to the limit; flat floor never does
+  ---
+  duration_ms: 823.9259
+  type: 'test'
+  ...
+# Subtest: a stuck walker is reported as stuck, not as no snags
+ok 56 - a stuck walker is reported as stuck, not as no snags
+  ---
+  duration_ms: 2587.8799
+  type: 'test'
+  ...
+# Subtest: poseAt interpolates, clamps and turns the short way round
+ok 57 - poseAt interpolates, clamps and turns the short way round
+  ---
+  duration_ms: 0.6743
+  type: 'test'
+  ...
+# Subtest: pushColor runs blue to red and the caption reads
+ok 58 - pushColor runs blue to red and the caption reads
+  ---
+  duration_ms: 0.5786
+  type: 'test'
+  ...
+# \# step sweep, default person: 2mm crossed (0 N) | 4mm crossed (36 N) | 6mm crossed (38 N) | 8mm front wheel (40 N) | 10mm front wheel (40 N) | 12mm front wheel (40 N) | 15mm front wheel (40 N) | 20mm front wheel (40 N) | 25mm front wheel (40 N) | 30mm front wheel (40 N)
+# \# step sweep, strong person (80 N, 60 N m grip): 2mm crossed (0 N) | 4mm crossed (36 N) | 6mm crossed (38 N) | 8mm crossed (43 N) | 10mm crossed (48 N) | 12mm crossed (51 N) | 15mm crossed (57 N) | 20mm crossed (72 N) | 25mm front wheel (80 N) | 30mm front wheel (80 N)
+# \# 15 mm rug edge: square 1 snag(s), 40 N | 10 cm ramp 0 snag(s), 33 N
+# \# 10 mm cord: head-on 1 snag(s), 40 N | 45 degrees 0 snag(s), 30 N
+# \# threshold + rug edge, 4 cm apart: 1 snag(s) front wheel@x=1.81
+# \# threshold + rug edge, 20 cm apart: 2 snag(s) front wheel@x=1.81, front wheel@x=2.06
+# \# threshold + rug edge, 50 cm apart: 2 snag(s) front wheel@x=1.81, front wheel@x=2.36
+# \# 15 mm rug edge by push limit: 20 N snag | 30 N snag | 40 N snag | 50 N snag | 60 N TIPPED | 70 N TIPPED | 80 N TIPPED
+# \# stall_s: 0.1 s -> goal at 5.14 s | 0.5 s -> 5.54 s | 1 s -> 6.04 s
+# \# 30 mm step: no grip torque -> tipped | normal grip -> snag
+# Subtest: heightfield matches the bump layer (orientation, rows vs columns)
+ok 59 - heightfield matches the bump layer (orientation, rows vs columns)
+  ---
+  duration_ms: 616.0464
+  type: 'test'
+  ...
+# Subtest: flat floor: reaches the goal, no snags, easy push
+ok 60 - flat floor: reaches the goal, no snags, easy push
+  ---
+  duration_ms: 926.154
+  type: 'test'
+  ...
+# Subtest: flat floor, a planner-style route (a vertex every 2 cm, a corner): follows it round the corner, no snags
+ok 61 - flat floor, a planner-style route (a vertex every 2 cm, a corner): follows it round the corner, no snags
+  ---
+  duration_ms: 1031.6837
+  type: 'test'
+  ...
+# Subtest: a 5 mm cord is crossed, a 1 cm edge takes a harder push, a 1.5 cm rug edge snags at the edge
+ok 62 - a 5 mm cord is crossed, a 1 cm edge takes a harder push, a 1.5 cm rug edge snags at the edge
+  ---
+  duration_ms: 2652.8882
+  type: 'test'
+  ...
+# Subtest: synthetic home: the physics pass runs on every route
+ok 63 - synthetic home: the physics pass runs on every route
+  ---
+  duration_ms: 3383.4112
+  type: 'test'
+  ...
+# Subtest: step-height sweep: the push needed never falls as the step grows; the front wheel is the limit (ASSUMED physics)
+ok 64 - step-height sweep: the push needed never falls as the step grows; the front wheel is the limit (ASSUMED physics)
+  ---
+  duration_ms: 5624.308
+  type: 'test'
+  ...
+# Subtest: a ramped edge needs less push than a square one on the same rug (ASSUMED physics)
+ok 65 - a ramped edge needs less push than a square one on the same rug (ASSUMED physics)
+  ---
+  duration_ms: 449.0828
+  type: 'test'
+  ...
+# Subtest: a cord crossed at 45 degrees is no harder than head-on: one wheel meets it at a time (ASSUMED physics)
+ok 66 - a cord crossed at 45 degrees is no harder than head-on: one wheel meets it at a time (ASSUMED physics)
+  ---
+  duration_ms: 658.2739
+  type: 'test'
+  ...
+# Subtest: a threshold and a rug edge close together: one patch when linked, two when apart; the sill is met first (ASSUMED physics)
+ok 67 - a threshold and a rug edge close together: one patch when linked, two when apart; the sill is met first (ASSUMED physics)
+  ---
+  duration_ms: 671.4765
+  type: 'test'
+  ...
+# Subtest: push-limit boundary: pushing harder alone does not get over a 15 mm edge, it tips the frame (ASSUMED physics)
+ok 68 - push-limit boundary: pushing harder alone does not get over a 15 mm edge, it tips the frame (ASSUMED physics)
+  ---
+  duration_ms: 1505.2212
+  type: 'test'
+  ...
+# Subtest: stall_s boundary: a longer stall time delays the snag call; longer than the run, a stuck walker is never reported (ASSUMED physics)
+ok 69 - stall_s boundary: a longer stall time delays the snag call; longer than the run, a stuck walker is never reported (ASSUMED physics)
+  ---
+  duration_ms: 1633.6427
+  type: 'test'
+  ...
+# Subtest: a tipped frame is reported as tipped, and only when the grip lets go (ASSUMED physics)
+ok 70 - a tipped frame is reported as tipped, and only when the grip lets go (ASSUMED physics)
+  ---
+  duration_ms: 331.2912
+  type: 'test'
+  ...
+# Subtest: layout keys: the capture is "original"; the same fixes give the same key in any order; a 1 cm nudge is the same layout
+ok 71 - layout keys: the capture is "original"; the same fixes give the same key in any order; a 1 cm nudge is the same layout
+  ---
+  duration_ms: 8.7264
+  type: 'test'
+  ...
+# Subtest: diffLayouts: a hand move, a configured removal and a taped strip, each costed
+ok 72 - diffLayouts: a hand move, a configured removal and a taped strip, each costed
+  ---
+  duration_ms: 6.8442
+  type: 'test'
+  ...
+# Subtest: undoChange puts one thing back and leaves the rest
+ok 73 - undoChange puts one thing back and leaves the rest
+  ---
+  duration_ms: 3.4633
+  type: 'test'
+  ...
+# Subtest: poseAt: exact ends, eased middle, yaw turns the short way
+ok 74 - poseAt: exact ends, eased middle, yaw turns the short way
+  ---
+  duration_ms: 0.4193
+  type: 'test'
+  ...
+# Subtest: stagger: one after another, all done at 1
+ok 75 - stagger: one after another, all done at 1
+  ---
+  duration_ms: 0.2566
+  type: 'test'
+  ...
+# Subtest: hazardDiff: cleared, still there, new
+ok 76 - hazardDiff: cleared, still there, new
+  ---
+  duration_ms: 0.5575
+  type: 'test'
+  ...
+# Subtest: moveCost: grows with distance and weight; removal and fixes costed
+ok 77 - moveCost: grows with distance and weight; removal and fixes costed
+  ---
+  duration_ms: 0.2863
+  type: 'test'
+  ...
+# Subtest: moveCost agrees with the optimizer (placeholder until the effort model lands)
+ok 78 - moveCost agrees with the optimizer (placeholder until the effort model lands)
+  ---
+  duration_ms: 2482.1341
+  type: 'test'
+  ...
+# Subtest: isMoved: under 1 cm and 0.01 rad is not moved; a move, a turn or a removal is
+ok 79 - isMoved: under 1 cm and 0.01 rad is not moved; a move, a turn or a removal is
+  ---
+  duration_ms: 1.4765
+  type: 'test'
+  ...
+# Subtest: movedText: distance and turn in words, nothing when unmoved
+ok 80 - movedText: distance and turn in words, nothing when unmoved
+  ---
+  duration_ms: 0.4999
+  type: 'test'
+  ...
+# Subtest: resetPose: a fresh copy of the original, removed flag gone
+ok 81 - resetPose: a fresh copy of the original, removed flag gone
+  ---
+  duration_ms: 1.2115
+  type: 'test'
+  ...
+# Subtest: resetHoldProgress: both grips held for RESET_ALL_HOLD_S fills the ring; letting go resets it
+ok 82 - resetHoldProgress: both grips held for RESET_ALL_HOLD_S fills the ring; letting go resets it
+  ---
+  duration_ms: 0.3658
+  type: 'test'
+  ...
+# Subtest: height error gives a range around the mean; zero error leaves the numbers unchanged
+ok 83 - height error gives a range around the mean; zero error leaves the numbers unchanged
+  ---
+  duration_ms: 697.958
+  type: 'test'
+  ...
+# Subtest: several routes: total = sum of routes; a daytime route skips the darkness multiplier
+ok 84 - several routes: total = sum of routes; a daytime route skips the darkness multiplier
+  ---
+  duration_ms: 1421.3978
+  type: 'test'
+  ...
+# Subtest: door fixes: swing-clear hinges and taking the door off both widen the tight doorway
+ok 85 - door fixes: swing-clear hinges and taking the door off both widen the tight doorway
+  ---
+  duration_ms: 419.888
+  type: 'test'
+  ...
+# Subtest: moving the bed takes the route start with it, and its old spot is open floor (no phantom outline)
+ok 86 - moving the bed takes the route start with it, and its old spot is open floor (no phantom outline)
+  ---
+  duration_ms: 141.3351
+  type: 'test'
+  ...
+# Subtest: each object kind: layer, height and footprint area (SYNTHETIC boxes)
+ok 87 - each object kind: layer, height and footprint area (SYNTHETIC boxes)
+  ---
+  duration_ms: 6.1299
+  type: 'test'
+  ...
+# Subtest: thin things are ESTIMATED, wide ones are MEASURED: cable and 5 cm strip vs the 12 cm threshold
+ok 88 - thin things are ESTIMATED, wide ones are MEASURED: cable and 5 cm strip vs the 12 cm threshold
+  ---
+  duration_ms: 3.4835
+  type: 'test'
+  ...
+# Subtest: bump patches: the curl joins the rug, the cable, the strip and the sill are their own
+ok 89 - bump patches: the curl joins the rug, the cable, the strip and the sill are their own
+  ---
+  duration_ms: 28.8669
+  type: 'test'
+  ...
+# Subtest: the movable objects are cut out of the base layers (nothing left behind to trap a moved object)
+ok 90 - the movable objects are cut out of the base layers (nothing left behind to trap a moved object)
+  ---
+  duration_ms: 11.446
+  type: 'test'
+  ...
+# Subtest: measured spots: the worst bump first, bumps tied to their object, gaps to none
+ok 91 - measured spots: the worst bump first, bumps tied to their object, gaps to none
+  ---
+  duration_ms: 3.3624
+  type: 'test'
+  ...
+# Subtest: Cosmos Reason: dismissed are dropped, confirmed ones merge into the spot they agree with, the rest stay proposed
+ok 92 - Cosmos Reason: dismissed are dropped, confirmed ones merge into the spot they agree with, the rest stay proposed
+  ---
+  duration_ms: 1.9872
+  type: 'test'
+  ...
+# Subtest: vantage: stand back along the route, look at the hazard, pitch down
+ok 93 - vantage: stand back along the route, look at the hazard, pitch down
+  ---
+  duration_ms: 4.6695
+  type: 'test'
+  ...
+# Subtest: height colours run cool to amber to red; texels: bump cells only, estimated ones hatched
+ok 94 - height colours run cool to amber to red; texels: bump cells only, estimated ones hatched
+  ---
+  duration_ms: 1.1703
+  type: 'test'
+  ...
+# Subtest: stairFrame: run up the stairs, left/right as seen facing up
+ok 95 - stairFrame: run up the stairs, left/right as seen facing up
+  ---
+  duration_ms: 2.829
+  type: 'test'
+  ...
+# Subtest: measureStair: treads, risers, depth, rail right / wall left
+ok 96 - measureStair: treads, risers, depth, rail right / wall left
+  ---
+  duration_ms: 14.0311
+  type: 'test'
+  ...
+# Subtest: measureStair: a sparse scan gives fewer treads, never invented ones
+ok 97 - measureStair: a sparse scan gives fewer treads, never invented ones
+  ---
+  duration_ms: 63.7406
+  type: 'test'
+  ...
+# Subtest: risers, variation, tread, width against code
+ok 98 - risers, variation, tread, width against code
+  ---
+  duration_ms: 3.7011
+  type: 'test'
+  ...
+# Subtest: rails: the stronger hand needs one going up AND coming down
+ok 99 - rails: the stronger hand needs one going up AND coming down
+  ---
+  duration_ms: 1.8392
+  type: 'test'
+  ...
+# Subtest: landing, light and the walker at the top
+ok 100 - landing, light and the walker at the top
+  ---
+  duration_ms: 2.2405
+  type: 'test'
+  ...
+# Subtest: stair fixes: a rail only where none is seen; through evaluate() each clears its check
+ok 101 - stair fixes: a rail only where none is seen; through evaluate() each clears its check
+  ---
+  duration_ms: 1049.3753
+  type: 'test'
+  ...
+# Subtest: a parked device must stay off the flight and within reach; unseen turning space stays unverified
+ok 102 - a parked device must stay off the flight and within reach; unseen turning space stays unverified
+  ---
+  duration_ms: 21.5858
+  type: 'test'
+  ...
+# Subtest: moving the added walker carries its height, receipt position and undo with it
+ok 103 - moving the added walker carries its height, receipt position and undo with it
+  ---
+  duration_ms: 3.2672
+  type: 'test'
+  ...
+# Subtest: low rail refitting and top additions improve their own checks without inventing tread measurements
+ok 104 - low rail refitting and top additions improve their own checks without inventing tread measurements
+  ---
+  duration_ms: 4.6876
+  type: 'test'
+  ...
+# Subtest: mirrorRail: the rail band lands on the other side, 7 cm in, with each splat shape reflected
+ok 105 - mirrorRail: the rail band lands on the other side, 7 cm in, with each splat shape reflected
+  ---
+  duration_ms: 1.8795
+  type: 'test'
+  ...
+# Subtest: step lights: one over each tread nose
+ok 106 - step lights: one over each tread nose
+  ---
+  duration_ms: 0.4258
+  type: 'test'
+  ...
+# Subtest: rails set by hand: over the scan, at the densest rail height; the rail fix follows
+ok 107 - rails set by hand: over the scan, at the densest rail height; the rail fix follows
+  ---
+  duration_ms: 10.2133
+  type: 'test'
+  ...
+# Subtest: stairYaml round-trips the numbers a config needs
+ok 108 - stairYaml round-trips the numbers a config needs
+  ---
+  duration_ms: 1.6709
+  type: 'test'
+  ...
+# learned 1.02/month vs hand 1.33; 1675 ms for 500 trips; body-to-route max 0.303 m
+# Subtest: TS step model matches PyTorch (train_eval.py step_model_check.json)
+ok 109 - TS step model matches PyTorch (train_eval.py step_model_check.json)
+  ---
+  duration_ms: 10.8264
+  type: 'test'
+  ...
+# Subtest: learned rollouts on the synthetic scene: feet stay near the route, contacts per month finite
+ok 110 - learned rollouts on the synthetic scene: feet stay near the route, contacts per month finite
+  ---
+  duration_ms: 2129.3752
+  type: 'test'
+  ...
+# Subtest: floorHit: 45 deg down from 1 m lands 1 m ahead; level, upward and too-far rays miss
+ok 111 - floorHit: 45 deg down from 1 m lands 1 m ahead; level, upward and too-far rays miss
+  ---
+  duration_ms: 1.6076
+  type: 'test'
+  ...
+# Subtest: twistAngle: roll about the ray, signed; turning the ray itself is not a twist
+ok 112 - twistAngle: roll about the ray, signed; turning the ray itself is not a twist
+  ---
+  duration_ms: 0.6829
+  type: 'test'
+  ...
+# Subtest: snapQuarter: a twist counts past 45 deg
+ok 113 - snapQuarter: a twist counts past 45 deg
+  ---
+  duration_ms: 0.3651
+  type: 'test'
+  ...
+# Subtest: holdProgress: still holds count up to delete, any real drag cancels
+ok 114 - holdProgress: still holds count up to delete, any real drag cancels
+  ---
+  duration_ms: 0.242
+  type: 'test'
+  ...
+# world 1.45/month; 855 ms for 500 trips; impossible steps 0.00%; heel->walker max 0.58 m
+# Subtest: TS world model matches worldmodel/learned.py (export_web.py world_model_check.json)
+ok 115 - TS world model matches worldmodel/learned.py (export_web.py world_model_check.json)
+  ---
+  duration_ms: 7.7053
+  type: 'test'
+  ...
+# Subtest: smoothRoute rounds the corner, 1 cm spacing (as rollout.py plan_route)
+ok 116 - smoothRoute rounds the corner, 1 cm spacing (as rollout.py plan_route)
+  ---
+  duration_ms: 88.1936
+  type: 'test'
+  ...
+# Subtest: world model rollouts on the synthetic scene: plausible steps, walker near the feet
+ok 117 - world model rollouts on the synthetic scene: plausible steps, walker near the feet
+  ---
+  duration_ms: 980.5369
+  type: 'test'
+  ...
+# Subtest: Restore and Use safer layout apply independent snapshots and recalculate, including placed fixtures and applied fixes
+ok 118 - Restore and Use safer layout apply independent snapshots and recalculate, including placed fixtures and applied fixes
+  ---
+  duration_ms: 4.6577
+  type: 'test'
+  ...
+# Subtest: visual comparison changes neither layout nor evaluations and explicitly names the active calculations
+ok 119 - visual comparison changes neither layout nor evaluations and explicitly names the active calculations
+  ---
+  duration_ms: 1.9781
+  type: 'test'
+  ...
+# Subtest: persona or manual-layout changes invalidate the cached comparison rather than restoring stale edits
+ok 120 - persona or manual-layout changes invalidate the cached comparison rather than restoring stale edits
+  ---
+  duration_ms: 0.6063
+  type: 'test'
+  ...
+# Subtest: an unchanged search never calls a room safe; a failed search can be retried
+ok 121 - an unchanged search never calls a room safe; a failed search can be retried
+  ---
+  duration_ms: 0.6751
+  type: 'test'
+  ...
+# Subtest: plainSpot: bumps, cords and squeezes in plain words; proposals are never given a number
+ok 122 - plainSpot: bumps, cords and squeezes in plain words; proposals are never given a number
+  ---
+  duration_ms: 2.5525
+  type: 'test'
+  ...
+# Subtest: tourStand: back along the route, facing the hazard; around it when that spot is not standable; null if nothing is
+ok 123 - tourStand: back along the route, facing the hazard; around it when that spot is not standable; null if nothing is
+  ---
+  duration_ms: 2.1986
+  type: 'test'
+  ...
+1..123
+# tests 123
+# suites 0
+# pass 123
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 20728.0551
