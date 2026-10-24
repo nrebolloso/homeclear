@@ -33,7 +33,8 @@ export interface XrHost {
   /** filmed, free floor inside the grid */
   standable(x: number, y: number): boolean;
   cellM: number;
-  /** where to start when the walker's spot isn't standable (a route can begin at the scan's edge, inside a wall's splats) */
+  /** where to start, or null to stay where the walker user is: a route can start at the scan's edge, where the view across
+   *  the room is the slowest to draw (Quest 2, kitchen4: ~60 fps at the edge, ~85 a quarter metre in) */
   startPose(): { x: number; y: number; yaw: number } | null;
   /** performance mode and in-headset labels: on entering and leaving */
   enter(tier: Tier): void; exit(): void;
@@ -294,7 +295,7 @@ export async function setupXR(host: XrHost) {
     renderer, mode: 'vr', referenceSpaceType: 'local-floor', enableHands: true,
     frameBufferScaleFactor: cfg.scale, fixedFoveation: cfg.foveation,
     onEnterXr: () => {
-      if (!host.standable(body.x, body.y)) { const p = host.startPose(); if (p) Object.assign(body, p); }
+      { const p = host.startPose(); if (p) Object.assign(body, p); }   // null: stay where the walker user is
       Object.assign(xrRig, { x: body.x, y: body.y, yaw: body.yaw }); placeRig(); rig.add(camera);
       anchor.set = false; dash.visible = btns.length > 0;
       host.enter(tier);

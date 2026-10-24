@@ -1874,10 +1874,14 @@ const xr = await setupXR({
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
   commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m,
   resetObject, resetAll, editor: markerXR, readOnly: comparison.previewing,
-  startPose() {   // the first point along the route with filmed floor
+  startPose() {   // stay if this floor is seen as well as the route's median spot; else the first such point along the route
     if (!current || current.error) return null;
-    for (let s = 0; s < routeS[routeS.length - 1]; s += 0.05) { const p = routePose(s, body.yaw, Infinity); if (standable(p.x, p.y)) return p; }
-    return null;
+    const poses: { x: number; y: number; yaw: number }[] = [];
+    for (let s = 0; s < routeS[routeS.length - 1]; s += 0.05) { const p = routePose(s, body.yaw, Infinity); if (standable(p.x, p.y)) poses.push(p); }
+    const cov = (p: { x: number; y: number }) => coverage[cellAt(p.x, p.y)];
+    const sorted = poses.map(cov).sort((a, b) => a - b), median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+    if (standable(body.x, body.y) && cov(body) >= median) return null;
+    return poses.find(p => cov(p) >= median) ?? poses[0] ?? null;
   },
   enter(t) {   // a standalone headset turns performance mode on; hazard labels become scene cards
     select(-1); inXR = true; game.xr = true; perfBeforeXR = perfOn;
