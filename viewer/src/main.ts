@@ -3,10 +3,13 @@ import * as THREE from 'three';
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { stamp, carvedPolys, placementOk, polyCells, worldFootprint, toCell, applyIntervention, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
+import { stamp, carvedPolys, placementOk, polyCells, worldFootprint, toCell, applyIntervention, placedFixtures, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
 import { buildDevice as deviceMesh, type WalkerCfg } from './walker.ts';
 import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
 import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z } from './wheelchair.ts';
+import { pathLights, createLights3d } from './lights.ts';
+import { strokePersona } from './stroke.ts';
+import { bathroomFixes, createBathroom3d } from './bathroom.ts';
 import { nightShader } from './night.ts';
 import { createVision, PROFILES, type Profile } from './vision.ts';
 import { createHeatOverlay, nights, drawTimeline } from './heat.ts';
@@ -62,6 +65,7 @@ let personaKey = 'patient';
 // ---------- wheelchair (wheelchair.ts): one more comparison persona in every scene; a chair has no fall model, so its
 // contact table is all zeros and the ADA checks (turning space, level changes, door width, stairs) carry the result
 if (!personas.wheelchair) personas.wheelchair = wheelchairPersona(personas.patient);
+if (!personas.stroke) personas.stroke = strokePersona(personas.patient);   // stroke.ts: the stronger hand flips to the right
 const stepModel = persona.step_model === 'learned' ? await fetch('models/step_model.json').then(r => r.json()) : undefined;
 const worldModel: WorldModel | undefined = persona.step_model === 'world' ? await fetch('models/world_model.json').then(r => r.json()) : undefined;
 if (worldModel) worldModel.shift = walkerCfg.user_gap_m + walkerCfg.depth_m / 2 - worldModel.mean_gap_m;   // learned.py Learned.shift
@@ -73,6 +77,7 @@ const coverage = new Uint8Array(await bin(sc.grid.coverage));
 const est = sc.grid.bump_estimated ? new Uint8Array(await bin(sc.grid.bump_estimated)) : new Uint8Array(nx * ny);
 const objs: any[] = sc.objects;
 const interventions: Intervention[] = sc.interventions;
+let pathLightIvs: Intervention[] = [];   // "Light the path" (lights.ts): kept in the fix list like the stair and door fixes
 const risk = sc.risk;
 risk.contact_table.wheelchair ??= ZERO_CONTACTS;
 // every walk the patient makes (stage 12 routes.json); older exports have only route.json: one night route
@@ -827,6 +832,8 @@ function scanRail(st: Stair, side: Side): SplatMesh | null {
 }
 const parkedWalkerCfg = { ...personas.patient.walker, device: 'walker' as const };
 const stairs3d = createStairs3d(scene, () => buildDevice(parkedWalkerCfg).group, scanRail, () => buildDevice(WHEELCHAIR).group);
+const lights3d = createLights3d(scene), bath3d = createBathroom3d(scene);
+let pathLightKey = '';
 const doors3d = createDoors3d(scene, mainSplat);
 const STAIR_KEY = `homeclear:stairs:${RUN}`, DOOR_KEY = `homeclear:doors:${RUN}`, baseIvCount = interventions.length;
 let stairs: Stair[] = [], marked: Stair[] = [];
@@ -835,6 +842,7 @@ const cfgDoors: Door[] = sc.doors ?? [];
 try { markedDoors = JSON.parse(localStorage.getItem(DOOR_KEY) ?? '[]'); } catch { markedDoors = []; }
 let stepLightList: PointLight[] = [];
 let strongSide: Side | null = persona.strong_side ?? null;
+const patientStrong = strongSide;   // a comparison persona may bring its own (stroke.ts); back to this on the patient
 // the marking tool's state (its hook block is below the doorways): a marking in progress, or handles shown to drag
 const mk3d = createMarker3d(scene);
 let mk: Marking | null = null, editing = false;
@@ -855,7 +863,7 @@ const moreAbove = new Map<string, number>();   // stairs whose top was marked be
 const measured = (st: Stair): Stair => {
   const { flat_points: _, more_above_z, ...m } = measureStair(splatPoints(st), st);
   if (more_above_z !== null) moreAbove.set(st.name, more_above_z); else moreAbove.delete(st.name);
-  return m;
+  return { ...m, scan_continues_above: more_above_z !== null };
 };
 const cfgStairs: Stair[] = (sc.stairs ?? []).map((st: Stair) => (st.treads_z ? st : measured(st)));
 try { marked = JSON.parse(localStorage.getItem(STAIR_KEY) ?? '[]'); } catch { marked = []; }
@@ -868,8 +876,9 @@ function setupStairs() {
   const leaves = objs.flatMap((o, k) => (o.kind === 'door' ? [worldFootprint(o, original[k])] : []));
   doors = [...cfgDoors.filter(c => !markedDoors.some(m => m.name === c.name)), ...markedDoors].map(d => ({ ...d, hinge: d.hinge ?? hingeSide(d, leaves) }));
   const need = Math.max(needWidth(walkerCfg.width_m, init.rules.clearance_margin_m), walkerCfg.device === 'wheelchair' ? ADA.door_clear_m : 0);
-  interventions.splice(baseIvCount, Infinity, ...stairs.flatMap(stairFixes), ...doors.flatMap(d => doorFixes(d, need, { leafObject: hingeSide(d, leaves) !== null })));
-  const ids = new Set(interventions.map(i => i.id)), keep = (id: string) => !/^(stair|door)_/.test(id) || ids.has(id);
+  interventions.splice(baseIvCount, Infinity, ...stairs.flatMap(stairFixes), ...doors.flatMap(d => doorFixes(d, need, { leafObject: hingeSide(d, leaves) !== null })), ...pathLightIvs,
+    ...bathroomFixes(sc.fixtures ?? [], g, base, strongSide));   // a grab bar beside each toilet, on its side wall (bathroom.ts)
+  const ids = new Set(interventions.map(i => i.id)), keep = (id: string) => !/^(stair_|door_|path_light:|grab_bar_toilet:)/.test(id) || ids.has(id);
   applied = applied.filter(keep);
   layout = { ...layout, added: layout.added?.filter(keep), ...(layout.carved ? { carved: layout.carved.filter(c => ids.has(c.id)) } : {}),
     ...(layout.placed ? { placed: Object.fromEntries(Object.entries(layout.placed).filter(([id]) => ids.has(id))) } : {}) };
@@ -890,7 +899,12 @@ function drawStairs(lay = layout) {
   const change = (d: Door) => { const c = lay.carved?.find(x => x.target === d.name); return c ? { gain: c.by_m, grow: growOf(d, c.id.split(':')[0].slice('door_'.length)) } : { gain: 0, grow: 'both' as const }; };
   doors3d.build(doors, Object.fromEntries(doors.map(d => [d.name, change(d)])), Object.fromEntries(doors.map(d => [d.name, verdict(d)])));
   // motion step lights light the scan itself at night (night.ts); only re-light when they change: it regenerates every splat
-  const L = stairs.filter(st => lay.added?.includes(`stair_lights:${st.name}`)).flatMap(st => stepLights(st).map(p => ({ ...p, r: 0.7 }))).slice(0, MAX_EXTRA_LIGHTS);
+  // added nightlights (lights.ts): a bulb, and at night a point light and a halo; they light the scan like the step lights
+  const pl = placedFixtures(interventions, lay).filter(f => f.light_r && f.xyz), plKey = JSON.stringify(pl);
+  if (plKey !== pathLightKey) { pathLightKey = plKey; lights3d.build(pl); }
+  bath3d.build(placedFixtures(interventions, lay).filter(f => f.kind === 'grab_bar' && (sc.fixtures ?? []).some((t: any) => t.kind === 'toilet' && t.name === f.attach)));
+  const L = [...stairs.filter(st => lay.added?.includes(`stair_lights:${st.name}`)).flatMap(st => stepLights(st).map(p => ({ ...p, r: 0.7 }))),
+    ...pl.map(f => ({ x: f.xyz![0], y: f.xyz![1], z: f.xyz![2], r: f.light_r! }))].slice(0, MAX_EXTRA_LIGHTS);
   if (JSON.stringify(L) !== JSON.stringify(stepLightList)) { stepLightList = L; updateNight(); }
 }
 function saveMarked() { try { localStorage.setItem(STAIR_KEY, JSON.stringify(marked)); } catch { /* private window: kept for this visit only */ } }
@@ -943,7 +957,7 @@ $('copystairs').onclick = () => copyStairsYaml();
 {
   const sel = $<HTMLSelectElement>('strongside');
   sel.value = strongSide ?? '';
-  sel.onchange = () => { strongSide = (sel.value || null) as Side | null; init = { ...init, strong_side: strongSide }; worker.postMessage({ type: 'init', init }); replan(); };
+  sel.onchange = () => { strongSide = (sel.value || null) as Side | null; setupStairs(); replan(); };   // setupStairs posts init (the toilet grab bar's side note follows too)
 }
 /** What is really at each side of a stair (the first by default), set by hand over what the scan saw (kept with the stair). */
 function setRail(side: Side, v: 'seen' | 'none' | null, name = stairs[0]?.name) {
@@ -1441,6 +1455,7 @@ function updateNight() {
   const p = k >= 0 && !layout.poses[k].removed ? layout.poses[k] : null;
   const on = $<HTMLInputElement>('night').checked;
   night.set(on, p && { x: p.x, y: p.y, r: objs[k].light_radius_m ?? 1.5 }, stepLightList);
+  lights3d.setNight(on);
   for (const s of splats) s.updateVersion();
   hemi.intensity = scene.environment ? (on ? 0.1 : HEMI_ENV) : on ? 0.25 : 2.2;
   scene.environmentIntensity = on ? 0.07 : 1;   // the room's light, captured by day (ground.ts); night.ts scales the scan by 0.07
@@ -1449,6 +1464,30 @@ function updateNight() {
   scene.background = new THREE.Color(on ? 0x050607 : 0x1d2126);
 }
 $('night').onchange = updateNight;
+// ---------- light the path (lights.ts): nightlights where the selected route is dark, applied as fixes ----------
+async function lightPath() {
+  if (!current?.xy?.length) return { added: 0, note: 'no route to light' };
+  const k = objs.findIndex(o => o.kind === 'nightlight');
+  const have = [...(k >= 0 && !layout.poses[k].removed ? [{ x: layout.poses[k].x, y: layout.poses[k].y, r: objs[k].light_radius_m ?? 1.5 }] : []),
+    ...placedFixtures(interventions, layout).flatMap(f => (f.light_r && f.xyz ? [{ x: f.xyz[0], y: f.xyz[1], r: f.light_r }] : []))];
+  const before = current.per_month, fresh = pathLights(g, base, current.xy, have, routes[selRoute].name, 0.75, pathLightIvs.length + 1);   // fixed walls only: never on a door leaf or furniture
+  if (!fresh.length) return { added: 0, note: 'this route is already lit end to end' };
+  pathLightIvs = [...pathLightIvs, ...fresh];
+  setupStairs();
+  for (const iv of fresh) { layout = applyIntervention(objs, layout, iv); applied.push(iv.id); }
+  syncObjects(); await replan(); drawStairs();
+  const pct = before > 0 && current ? Math.round((100 * (before - current.per_month)) / before) : 0;
+  return { added: fresh.length, note: `${fresh.length} motion nightlight${fresh.length === 1 ? '' : 's'} added along the ${routes[selRoute].name}` +
+    (pct > 0 ? `: simulated toe contacts down ${pct}%` : '') + ` (darkness raises contacts ${risk.dark_contact_multiplier}×, an assumed number). Designed, not built.` };
+}
+async function clearPathLights() {
+  const ids = new Set(pathLightIvs.map(iv => iv.id));
+  layout = { ...layout, added: layout.added?.filter(id => !ids.has(id)) };
+  applied = applied.filter(id => !ids.has(id));
+  pathLightIvs = [];
+  setupStairs(); syncObjects(); await replan(); drawStairs();
+}
+game.lights = { lightPath, clear: clearPathLights, list: () => pathLightIvs.map(iv => ({ id: iv.id, ...iv.fixture })) };
 const heat = createHeatOverlay(g, scene);
 $('heat').onchange = () => replan();
 $('third').onchange = () => { view.third = $<HTMLInputElement>('third').checked; if (view.third) Object.assign(view, { back: 1.8, up: 0.5 }); };
@@ -1484,10 +1523,12 @@ async function setPersona(key: string) {
   centreOffset = walkerCfg.user_gap_m + walkerCfg.depth_m / 2;
   if (worldModel) worldModel.shift = centreOffset - worldModel.mean_gap_m;   // learned.py Learned.shift, for this walker
   init = { ...init, persona, plan: { ...sc.plan, ...p.plan, walker_width_m: walkerCfg.width_m }, device: walkerCfg.device };
+  strongSide = p.gait.strong_side ?? patientStrong; $<HTMLSelectElement>('strongside').value = strongSide ?? '';
   setupStairs();   // posts init; door fixes widen to this device's need (ADA 815 mm for a wheelchair)
+  night.setReach(walkerCfg.device === 'wheelchair'); for (const s of splats) s.updateVersion();   // reach lens (night.ts)
   baselinePerMonth = null; baseEvals = [];
   if (p.vision) game.setVision(p.vision);
-  $('personanote').textContent = key === 'patient' ? '' : walkerCfg.device === 'wheelchair' ? 'comparison: a typical chair (assumed size); no trip model for a wheelchair, so trips read zero: see the ADA checks'
+  $('personanote').textContent = key === 'patient' ? '' : walkerCfg.device === 'wheelchair' ? 'comparison: a typical chair (assumed size); no trip model for a wheelchair, so trips read zero: see the ADA checks. Green: within seated reach (38-122 cm); red: out of reach'
     : 'comparison: gait and planner numbers for this persona are assumptions, not this patient';
   const ms = await replan();
   if (!current?.error) Object.assign(body, routePose(0, 0, Infinity));
@@ -2038,6 +2079,7 @@ const frontendAdapter: FrontendAdapter = {
   suggest, async apply(index) { await applyOption(index); setWalk('free'); reim.setT(1); },
   undo: undoReimagined, select,
   path(on) { routeLine.visible = on; },
+  async lightPath() { const r = await lightPath(); game.setNight(true); return r; },
   highlights(on) { hazardGroup.visible = on; }, improvements(on) { reim.setParts({ rings: on, ringLabels: on }); },
 };
 const frontend = mountFrontend(frontendAdapter);

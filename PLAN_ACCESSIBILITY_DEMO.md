@@ -252,6 +252,22 @@ Ask first:
 
 Every step: `cd viewer && npm test && npm run build`, then `npm run dev` + `node e2e/run.ts`.
 
+### Status (2026-10-24)
+
+| Step | State | Where / what's left |
+|---|---|---|
+| 1. Grounded meshes | done | `ground.ts`, `proof/rendering/` |
+| 2. Wheelchair | done | `wheelchair.ts`, `proof/wheelchair/` |
+| 3. Stairlift | done | offered for every persona, not only the wheelchair (a stairlift also helps walker users); the fit check only fails it for the chair |
+| 4. Light the path | done | `lights.ts`; Reimagine → "Light the path at night", `game.lights`; `proof/demo_features/` |
+| 5. Bathroom package | partly | a grab bar beside each toilet in `game.fixtures` (`bathroom.ts`), side from the floor map's walls, weak side flagged. No config marks a toilet yet (only `game_synth`), so it shows nowhere real until one is added (MEASURING.md §5). Not done: tub transfer bench, handheld shower, toilet frame (needs a `tub` fixture kind) |
+| 6. Stroke persona | done | `stroke.ts`, left-side view loss in `vision.ts` |
+| 7. Lenses | partly | reach lens (wheelchair persona, `night.ts`). Not done: clearance x-ray, time-of-day slider, light colour temperature |
+| 7. Rigged mannequin | not done | needs a licensed rigged GLB (CC0 / CC-BY) chosen and added to the repo first |
+| 7. Depth occluders | not done | inner boxes from object proxies + wall cells; risk of hiding the object's own splat |
+| Also done | | partial-scan stair guard ("OT to verify" + MEASURING.md, not fail); Explore parks the walker, no collisions |
+| Also not done | | wheelchair threshold-ramp and modular-ramp fixes (the level check's note says it); Parkinson's doorway floor stripes |
+
 Sources to cite in the report: 2010 ADA Standards for Accessible Design (§304 turning space, §404 doors, §303
 level changes, §405 ramps, §505 handrails, §604 toilets, §609 grab bars, §308 reach); CDC STEADI "Check for Safety";
 Gillespie et al., Cochrane 2012 (CD007146); Pighills et al. 2011 (J Am Geriatr Soc). Product sizes and prices are

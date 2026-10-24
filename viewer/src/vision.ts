@@ -12,9 +12,10 @@ export const PROFILES = {
   macular: 'Macular degeneration (central loss)',
   glaucoma: 'Glaucoma (tunnel vision)',
   low_contrast: 'Low contrast (dim, aging eyes)',
+  hemianopia_left: 'After a stroke: left half of the view missing',
 } as const;
 export type Profile = keyof typeof PROFILES;
-const MODE: Record<Profile, number> = { normal: 0, cataract: 1, macular: 2, glaucoma: 3, low_contrast: 4 };
+const MODE: Record<Profile, number> = { normal: 0, cataract: 1, macular: 2, glaucoma: 3, low_contrast: 4, hemianopia_left: 5 };
 
 const VisionShader = {
   uniforms: { tDiffuse: { value: null }, mode: { value: 0 }, res: { value: new THREE.Vector2(1, 1) }, strength: { value: 1 } },
@@ -50,6 +51,8 @@ const VisionShader = {
         c = mix(c, blur(vUv, 10.0) * 0.12, m * strength);
       } else if (mode == 4) {     // low contrast: everything flatter and dimmer
         c = mix(vec3(lum(c) * 0.6 + 0.12), c, 1.0 - 0.55 * strength) * (1.0 - 0.25 * strength);
+      } else if (mode == 5) {     // left homonymous hemianopia: the left half of what both eyes see is gone, soft at the midline
+        c *= 1.0 - strength * (1.0 - smoothstep(0.42, 0.52, vUv.x)) * 0.92;
       }
       gl_FragColor = vec4(c, 1.0);
     }`,
