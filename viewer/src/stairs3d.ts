@@ -150,7 +150,7 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
         const w = device(), p = placed[wid] ?? parkedPose(st);   // the device's origin is the user's body: frame ahead, on the landing
         w.position.set(p.x, p.y, top);
         w.rotation.z = p.yaw;   // facing on, where the patient steps into it off the last step
-        w.traverse(m => { const mat = (m as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined; if (mat?.color) { m.userData.mat = mat.clone(); (m as THREE.Mesh).material = m.userData.mat; m.userData.mat.color.setHex(DESIGNED); } });
+        w.traverse(m => { const mat = (m as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined; if (mat?.color && !m.userData.shadow) { m.userData.mat = mat.clone(); (m as THREE.Mesh).material = m.userData.mat; m.userData.mat.color.setHex(DESIGNED); } });
         if (st.top_device === 'rollator') {   // a seat between the side rails (and the wheels are implied: same frame)
           const seat = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.4, 0.03), new THREE.MeshBasicMaterial({ color: 0x1d6b66 }));
           seat.position.set(0.42, 0, 0.55);

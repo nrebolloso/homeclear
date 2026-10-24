@@ -4,7 +4,8 @@ import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { stamp, carvedPolys, placementOk, polyCells, worldFootprint, toCell, applyIntervention, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
-import { buildDevice, type WalkerCfg } from './walker.ts';
+import { buildDevice as deviceMesh, type WalkerCfg } from './walker.ts';
+import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
 import { nightShader } from './night.ts';
 import { createVision, PROFILES, type Profile } from './vision.ts';
 import { createHeatOverlay, nights, drawTimeline } from './heat.ts';
@@ -96,6 +97,9 @@ const sparkR = new SparkRenderer({ renderer });
 scene.add(sparkR);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 2.2);
 scene.add(hemi);
+const HEMI_ENV = 0.6;   // the hemisphere's share once the room's env map lights the meshes (ground.ts)
+const nightLamp = new THREE.PointLight(0xffb36b, 0, 1.5, 2);   // night: the nightlight on the meshes (updateNight)
+scene.add(nightLamp);
 const vision = createVision(renderer, scene, camera);
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
@@ -234,6 +238,9 @@ scene.add(routeLine, ghostDots, hazardGroup, tapeGroup);
 }
 
 // ---------- walker + camera ----------
+// every device gets contact shadows under its legs (ground.ts): the patient's, the replay's, the one parked up the stairs
+const GROUND = !PARAMS.has('noground');   // ?noground: the old look, for before/after shots
+const buildDevice = (w: WalkerCfg) => { const d = deviceMesh(w); if (GROUND) groundDevice(d.group, w); return d; };
 let walker = buildDevice(walkerCfg);
 scene.add(walker.group);
 let centreOffset = walkerCfg.user_gap_m + walkerCfg.depth_m / 2;   // body centre -> walker frame centre (the planned path)
@@ -1423,7 +1430,10 @@ function updateNight() {
   const on = $<HTMLInputElement>('night').checked;
   night.set(on, p && { x: p.x, y: p.y, r: objs[k].light_radius_m ?? 1.5 }, stepLightList);
   for (const s of splats) s.updateVersion();
-  hemi.intensity = on ? 0.25 : 2.2;
+  hemi.intensity = scene.environment ? (on ? 0.1 : HEMI_ENV) : on ? 0.25 : 2.2;
+  scene.environmentIntensity = on ? 0.07 : 1;   // the room's light, captured by day (ground.ts); night.ts scales the scan by 0.07
+  nightLamp.intensity = on && p ? 1.2 : 0;   // the nightlight lights the walker and mannequin too, not only the scan
+  if (p) { nightLamp.position.set(p.x, p.y, 0.15); nightLamp.distance = objs[k].light_radius_m ?? 1.5; }
   scene.background = new THREE.Color(on ? 0x050607 : 0x1d2126);
 }
 $('night').onchange = updateNight;
@@ -1729,6 +1739,7 @@ function nearestS(x: number, y: number) {
 const mannequin = buildMannequin(persona.eye_height_m / 0.94);
 mannequin.group.visible = false;
 scene.add(mannequin.group);
+const manShadows = GROUND ? footShadows(mannequin.group) : null;
 let heroSteps: Step[] = [];
 /** The hero trip's footsteps, moved from the walker frame's centre line (where the simulation puts the route) back to
  *  the user's own feet, each with its arc length along the route. */
@@ -1793,6 +1804,7 @@ function step(dt: number, t: number) {
   if (showMan) {
     const f = feetAt(heroSteps, autoS, persona.stride_m ?? 0.35), hy = walkerCfg.width_m / 2 - walkerCfg.leg_radius_m, gx = walkerCfg.user_gap_m + 0.05;
     mannequin.update(body, [f[1], f[0]], [[gx, hy], [gx, -hy]], walkerCfg.handle_height_m);   // sim side 1 = left
+    manShadows?.(body, [f[0].pos, f[1].pos]);
   }
   pulseSpots(t);
   replayStep(dt);
@@ -1919,6 +1931,16 @@ setWalk('auto');
 await replan();
 if ((current as Eval | null)?.error === undefined && current) Object.assign(body, routePose(0, 0, Infinity));
 else { const [sx, sy] = routes[selRoute].start; Object.assign(body, { x: sx - centreOffset, y: sy, yaw: 0 }); }
+// ---------- room light on the meshes (ground.ts) ----------
+// the splat rendered into an env map from the room's middle, 1 m up, before the loop (it sorts the splats for the cube
+// camera; the loop would re-sort them for the main one mid-capture). Capped wait: a slow load keeps the old flat light.
+if (GROUND) {
+  const ready = await Promise.race([Promise.all(splats.map(s => s.initialized)).then(() => true), new Promise<boolean>(r => setTimeout(() => r(false), 10000))]);
+  if (ready) {
+    await roomEnvironment(sparkR, scene, new THREE.Vector3(g.origin_xy[0] + (g.shape[0] * g.cell_m) / 2, g.origin_xy[1] + (g.shape[1] * g.cell_m) / 2, 1.0));
+    updateNight();
+  }
+}
 renderer.setAnimationLoop(frame);   // not requestAnimationFrame: in a headset session only the XR frame loop runs
 
 const ctx = { RUN, sc, objs, layout: () => layout, applied: () => applied, current: () => current, routePose, routeS: () => routeS,
