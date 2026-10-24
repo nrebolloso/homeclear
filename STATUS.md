@@ -1,9 +1,9 @@
 # Status
 
 ## Demo push (2026-10-24)
-- **Done:** steps 1-6, 9, 10. Step 10: OT report gains "Recommended fixes, ranked" (each unapplied fix rolled out from the live layout: contacts/month saved, passage gained, cost, time, effort; as-is: mat -1.1, nightlight -0.4, cord -0.1, chair -0.02/+6 cm); accuracy/scale numbers removed from the report; `proof/demo/shot6_report.mp4`. Step 7 so far: nightlight object + fix (night route 1.12 -> 0.75 from the darkness rule), contacts/month headline tile with hand-rule baseline, shots 1/3/4 frame-stepped. All six storyboard shots in `proof/demo/`. npm test 131/131, build ok, e2e 37/37 (report check now waits for the tab to leave about:blank). Backup `proof/demo/backup_v5.mp4`. Steps 1-6/9 detail in git log; tag `demo-safe` moves with each step.
-- **Next:** step 7 rest (demo mode with debug UI hidden, ghost/heat colour pass, night shot with the nightlight), then feature freeze and `proof/demo/final.mp4`; step 8 VR with the VR team.
-- **Risks:** Cosmos clip lists as "other scenario" with a magenta chair fill (layout key differs from the live as-is layout); opening the report now waits ~2 s for the fix rollouts (blank tab meanwhile); backup_v3 untracked and choppy (superseded).
+- **Done:** steps 1-6, 9, 10 (OT report with ranked fixes). Then: the classic two-panel UI is the default again (`?planning` keeps the drawer); demo mode (`?demo=1` or H) hides debug rows, ranges, the "measured height error" line and the fps HUD, and `e2e/shot.ts` records in it on its own server with hot reload off; the fps HUD shows outside demo mode; one palette for ghosts, heatmap and hazards (cyan footsteps, orange to red contacts, white hand rule); the night shot with the nightlight (`proof/demo/shot7_night.mp4`); the optimize test timeout raised to 60 s.
+- **Next:** feature freeze at [TIME - 3h], then record `proof/demo/final.mp4` in demo mode at [TIME - 2h] following the storyboard. Judging is at [TIME]; the actual time is still needed (BLOCKERS.md). Step 8 VR with the VR team.
+- **Risks:** on battery with power-saver, e2e measures about 20 fps and fails the fps check (BLOCKERS 8: plug in). Storyboard clips 1-6 were recorded in the old drawer UI with debug text, so re-record them in demo mode before final.mp4. Cosmos clip still lists as "other scenario".
 
 Each result counts once it is reproduced here, with proof in `proof/`.
 

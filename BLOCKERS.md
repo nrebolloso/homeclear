@@ -1,5 +1,8 @@
 # Blockers: things only you can do
 
+**Schedule:** judging at [TIME] (actual time still needed). Feature freeze at [TIME - 3h]; record
+`proof/demo/final.mp4` at [TIME - 2h]. After the freeze: fixes and polish only.
+
 1. **Re-measure the kitchen table's width** (short side of the top, edge to edge). In the kitchen1 splat the width is
    14.5% short of the 41 in in `data/measurements.yaml` while the height agrees (+1.7%); kitchen2_nofar is within 2.6% on
    both. If the table really is 41 in, kitchen1 (and so `kitchen1_dvapp`) is distorted and should not be the measured demo scene.
@@ -24,3 +27,8 @@
    with one corner folded up 2-3 cm (10 head-on, 10 at about 45°), across the kitchen mat (10), and into a kitchen
    chair (10 head-on, 10 grazing). Film from the side with a tape measure in view, count catches, folds, slides and
    moves (more than 2 cm), and weigh the chair. Full protocol: `proof/physics/README.md`.
+8. **Real-GPU fps check on the demo laptop (Nicolas).** Open `http://localhost:5173/` (not `?demo=1`) and read the
+   fps in the HUD at the bottom. The laptop is on battery with the power-saver profile right now. That alone drops
+   headless fps to about 16-22 (it was 60 plugged in), and the e2e fps check fails. Plug in and switch to the
+   balanced or performance profile first.
+9. **Quest 2 test with taped controllers: fps + tracking (VR team).**
