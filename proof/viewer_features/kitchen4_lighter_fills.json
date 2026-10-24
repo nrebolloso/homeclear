@@ -1,7 +1,7 @@
 {
  "chair": {
-  "pixels": 4377,
-  "seen_around_pct": 13.0,
+  "pixels": 4374,
+  "seen_around_pct": 11.0,
   "backends": [
    "lama",
    "median",
@@ -12,8 +12,8 @@
   "default": "lama"
  },
  "chair2": {
-  "pixels": 3555,
-  "seen_around_pct": 17.7,
+  "pixels": 3561,
+  "seen_around_pct": 15.6,
   "backends": [
    "lama",
    "median",
@@ -25,7 +25,7 @@
  },
  "bedside_table": {
   "pixels": 3003,
-  "seen_around_pct": 23.5,
+  "seen_around_pct": 20.3,
   "backends": [
    "lama",
    "median",
@@ -36,8 +36,8 @@
   "default": "lama"
  },
  "bedside_table2": {
-  "pixels": 3109,
-  "seen_around_pct": 31.8,
+  "pixels": 3129,
+  "seen_around_pct": 30.0,
   "backends": [
    "lama",
    "median",
@@ -49,7 +49,7 @@
  },
  "rug": {
   "pixels": 6612,
-  "seen_around_pct": 38.1,
+  "seen_around_pct": 37.6,
   "backends": [
    "lama",
    "median",
@@ -60,8 +60,8 @@
   "default": "lama"
  },
  "chair3": {
-  "pixels": 3542,
-  "seen_around_pct": 34.7,
+  "pixels": 3580,
+  "seen_around_pct": 18.1,
   "backends": [
    "lama",
    "median",
@@ -72,8 +72,8 @@
   "default": "lama"
  },
  "chair4": {
-  "pixels": 5366,
-  "seen_around_pct": 23.4,
+  "pixels": 5369,
+  "seen_around_pct": 9.3,
   "backends": [
    "lama",
    "median",
@@ -84,8 +84,8 @@
   "default": "lama"
  },
  "chair5": {
-  "pixels": 3015,
-  "seen_around_pct": 31.5,
+  "pixels": 3209,
+  "seen_around_pct": 15.9,
   "backends": [
    "lama",
    "median",
@@ -96,8 +96,8 @@
   "default": "lama"
  },
  "table": {
-  "pixels": 15048,
-  "seen_around_pct": 30.5,
+  "pixels": 15383,
+  "seen_around_pct": 21.0,
   "backends": [
    "lama",
    "median",
@@ -109,7 +109,7 @@
  },
  "chair7": {
   "pixels": 4543,
-  "seen_around_pct": 20.8,
+  "seen_around_pct": 6.4,
   "backends": [
    "lama",
    "median",
@@ -120,8 +120,8 @@
   "default": "lama"
  },
  "chair8": {
-  "pixels": 3151,
-  "seen_around_pct": 36.8,
+  "pixels": 3358,
+  "seen_around_pct": 25.2,
   "backends": [
    "lama",
    "median",
@@ -168,8 +168,8 @@
   "default": "lama"
  },
  "trash_can": {
-  "pixels": 2469,
-  "seen_around_pct": 40.5,
+  "pixels": 2518,
+  "seen_around_pct": 39.9,
   "backends": [
    "lama",
    "median",

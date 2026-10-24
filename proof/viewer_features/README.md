@@ -89,3 +89,9 @@ room, not object: the counter under the basket (never filmed, a blur), and a dar
 trash can (every Gaussian there is 15-33 cm from any trash-can label: the unseen wall behind it). Close up (< 1 m) the
 table top and seats render patchy and see-through with or without removals; from normal distance they are solid.
 `npm test` 74 / 74, `tests/run_py.sh` all OK.
+Third follow-up: two yellow bars stayed in chair7's box after removing the table and chair7 (user screenshot). They were
+chair7's runners, lying flat at 0-3 mm (under the 4 mm floor band) and 14-28 cm from any label, so no rule took them.
+An object labelled from below 30 cm now takes everything unlabelled in its outline from 3 cm below the floor (the fill
+replaces that floor anyway). Yellow Gaussians left on the floor in chair7's box: ~183 -> 0
+(`kitchen4_lighter_chair7_runners_gone.jpg`; the leg still standing there is chair4's and goes with chair4). Cost: a moved
+chair carries a thin dark strip of floor under its runners. Fills re-run (job 47409131).
