@@ -106,7 +106,7 @@ export async function setupXR(host: XrHost) {
   function wandUp() {
     if (btnPressed >= 0) { const i = btnPressed; btnPressed = -1; if (btnHover === i) btns[i].b.press(); return; }
     if (grab) { const { k, valid } = grab; grab = null; if (valid) host.commit(k, valid); return; }
-    if (aiming && tpRing.visible) { xrRig.x += tpRing.position.x - head.x; xrRig.y += tpRing.position.y - head.y; placeRig(); }
+    if (aiming && tpRing.visible) { xrRig.x += tpRing.position.x - head.x; xrRig.y += tpRing.position.y - head.y; placeRig(); anchor.set = false; }
     aiming = false; tpRing.visible = false;
   }
   function dropWand() {   // wand lost mid-gesture (hand out of view): put a dragged object back where the layout has it
@@ -193,7 +193,7 @@ export async function setupXR(host: XrHost) {
   function placeDash(yaw: number) {
     const turned = Math.abs(Math.atan2(Math.sin(yaw - anchor.yaw), Math.cos(yaw - anchor.yaw))) > 0.7;
     if (!anchor.set || turned || Math.hypot(head.x - anchor.x, head.y - anchor.y) > 0.6) Object.assign(anchor, { x: head.x, y: head.y, yaw, set: true });
-    const a = anchor.yaw + 0.5, d = 0.62;   // 0.62 m out, about 29 deg to the left of where you faced: off the line you look along
+    const a = anchor.yaw + 0.5, d = 0.7;   // 0.7 m out, about 29 deg to the left of where you faced: off the line you look along
     dash.position.set(anchor.x + Math.cos(a) * d, anchor.y + Math.sin(a) * d, Math.max(0.8, head.z - 0.3));   // the top button; the rest stack down
     dash.lookAt(head.x, head.y, head.z);   // three's lookAt points +z at the eyes (tilted back, read square-on); -y faces you after:
     dash.rotateX(-Math.PI / 2);
@@ -220,6 +220,7 @@ export async function setupXR(host: XrHost) {
     const a = yaw - readHead(), c = Math.cos(a), s = Math.sin(a), rx = xrRig.x - head.x, ry = xrRig.y - head.y;
     Object.assign(xrRig, { x: x + c * rx - s * ry, y: y + s * rx + c * ry, yaw: xrRig.yaw + a });   // turn about the head, then move it
     placeRig();
+    anchor.set = false;   // the card comes along: a short hop can stay inside the follow thresholds and leave it on the hazard
   }
 
   new SparkXr({   // adds the Enter VR button; "VR not supported" where WebXR isn't available
@@ -249,6 +250,8 @@ export async function setupXR(host: XrHost) {
       inputs: [...renderer.xr.getSession()?.inputSources ?? []].map(s => `${s.handedness}:${s.hand ? 'hand' : 'controller'}`), pinching: pinching.size }),
     /** the button card: each button's text and where its centre is (floor frame), for scripted presses */
     buttons: () => btns.map(x => ({ text: x.b.text(), at: dash.visible ? w(x.mesh) : null })),
+    /** press a card button as a pinch on it would (scripted checks on a headset nobody wears) */
+    press: (i: number) => btns[i]?.b.press(),
     wand: () => ({ hover: hover >= 0 ? host.names[hover] : null, button: btnHover, grab: grab ? host.names[grab.k] : null, aiming, teleport: tpRing.visible,
       drag: grab?.drag, valid: grab?.valid ?? null }),
   };

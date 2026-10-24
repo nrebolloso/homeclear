@@ -174,12 +174,13 @@ try {
     await wait(400);
     stops.push(await G(p, `const h = game.xrPose().head, c = game.debug.renderer.xr.getCamera(), V = game.debug.rig.position.constructor, d = c.getWorldDirection(new V()),
       s = game.spots()[${Math.min(k, nSpots - 1)}]; return { hv: ${hv}, text: game.debug.xrButtons()[0].text, head: h, cell: game.cell(h[0], h[1]),
+      card: (b => b.at ? Math.atan2(Math.sin(Math.atan2(b.at[1] - h[1], b.at[0] - h[0]) - Math.atan2(d.y, d.x)), Math.cos(Math.atan2(b.at[1] - h[1], b.at[0] - h[0]) - Math.atan2(d.y, d.x))) : 9)(game.debug.xrButtons()[0]),
       dist: Math.hypot(s.xy[0] - h[0], s.xy[1] - h[1]), off: Math.atan2(Math.sin(Math.atan2(s.xy[1] - h[1], s.xy[0] - h[0]) - Math.atan2(d.y, d.x)), Math.cos(Math.atan2(s.xy[1] - h[1], s.xy[0] - h[0]) - Math.atan2(d.y, d.x))) }`));
   }
   const tourOk = nSpots > 0 && stops.slice(0, nSpots).every((s, k) => s.text[0].startsWith(`${k + 1} of ${nSpots}:`) && s.cell.floor && !s.cell.obst && s.cell.cov > 0 &&
-    s.dist > 0.4 && s.dist < 2.1 && Math.abs(s.off) < 0.35) && stops[nSpots].text[0] === 'Show me the dangers';
-  check('"Show me the dangers" stands you in front of each hazard', tourOk,
-    stops.slice(0, nSpots).map(s => `"${s.text[0]}" ${s.dist.toFixed(2)} m, ${(s.off * 180 / Math.PI).toFixed(0)} deg off`).join('; ') + ` -> "${stops[nSpots]?.text[0]}"`);
+    s.dist > 0.4 && s.dist < 2.1 && Math.abs(s.off) < 0.17 && s.card > 0.3 && s.card < 0.7) && stops[nSpots].text[0] === 'Show me the dangers';
+  check('"Show me the dangers" stands you in front of each hazard, the card off to the left', tourOk,
+    stops.slice(0, nSpots).map(s => `"${s.text[0]}" ${s.dist.toFixed(2)} m, ${(s.off * 180 / Math.PI).toFixed(0)} deg off, card ${(s.card * 180 / Math.PI).toFixed(0)} deg left`).join('; ') + ` -> "${stops[nSpots]?.text[0]}"`);
 
   // 8c. "Night walk": the lights go down and the button offers them back
   await press('right', 1); await wait(300);
