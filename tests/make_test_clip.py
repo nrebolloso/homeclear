@@ -7,8 +7,9 @@ to known frames and checks its overlay markers sit on the dots and its frame ind
 import json, subprocess, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "cosmos"))
+sys.path[:0] = [str(ROOT), str(ROOT / "cosmos")]
 from render_controls import project
+from common import FFMPEG
 
 import cv2
 import numpy as np
@@ -23,7 +24,7 @@ def main(job_dir):
     out = ROOT / "viewer" / "public" / "clips"
     out.mkdir(parents=True, exist_ok=True)
     pos = np.array([h["position"] for h in job["hazards"]], float)
-    p = subprocess.Popen(["ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(job["fps"]),
+    p = subprocess.Popen([FFMPEG, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(job["fps"]),
                           "-i", "-", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-g", "1", "-pix_fmt", "yuv420p",
                           "-movflags", "+faststart", str(out / f"{name}.mp4")], stdin=subprocess.PIPE)
     expected = {}

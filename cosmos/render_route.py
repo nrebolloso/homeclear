@@ -12,7 +12,9 @@ import importlib, json, subprocess, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / "stages")]
-from common import run_stage, read_ply, ply_xyz
+from common import run_stage, read_ply, ply_xyz, FFMPEG
+sys.path.insert(0, str(ROOT / "cosmos"))
+import shell_depth
 
 import numpy as np
 from scipy import ndimage
@@ -49,7 +51,7 @@ def floor_depth(w2c):
 
 
 def write_mp4(path, frames):
-    p = subprocess.Popen(["ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", "16",
+    p = subprocess.Popen([FFMPEG, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", "16",
                           "-i", "-", "-c:v", "mpeg4", "-q:v", "2", "-pix_fmt", "yuv420p", str(path)], stdin=subprocess.PIPE)
     for f in frames:
         p.stdin.write(np.ascontiguousarray(f, np.uint8).tobytes())
@@ -118,6 +120,7 @@ def main(cfg):
     deg = int(np.sqrt(K_rest + 1)) - 1
     V = {k: [] for k in ("rgb", "depth", "seg", "moved_rgb", "moved_depth", "moved_seg", "moved_mask")}
     cover, imagined = [], []
+    shell = shell_depth.load(w / "shell.json")   # stage 5c: where the capture saw nothing, the walls continue
     with torch.no_grad():
         for view in views:
             rgb, d, a = render(means, sh, deg, view)
@@ -134,9 +137,13 @@ def main(cfg):
             imagined.append(float(mask.mean()))
             u8 = lambda x: (x * 255).astype(np.uint8)
             V["rgb"].append(u8(rgb)); V["seg"].append(u8(s_img)); V["moved_rgb"].append(u8(mrgb)); V["moved_seg"].append(u8(ms_img))
-            V["depth"].append(np.where(a > 0.1, d, np.inf).astype(np.float32))
-            V["moved_depth"].append(np.where(ma > 0.1, md, np.inf).astype(np.float32))
-            V["moved_mask"].append(np.repeat(u8(mask)[..., None], 3, -1))
+            d0, s0, _, _ = shell_depth.fill_empty(np.where(a > 0.1, d, np.inf), V["seg"][-1] / 255.0, np.zeros(d.shape, bool), view, Kmat[0].cpu().numpy(), shell)
+            V["seg"][-1] = (s0 * 255).astype(np.uint8)
+            V["depth"].append(d0.astype(np.float32))
+            md0, ms0, mm0, _ = shell_depth.fill_empty(np.where(ma > 0.1, md, np.inf), V["moved_seg"][-1] / 255.0, mask, view, Kmat[0].cpu().numpy(), shell)
+            V["moved_seg"][-1] = (ms0 * 255).astype(np.uint8)
+            V["moved_depth"].append(md0.astype(np.float32))
+            V["moved_mask"].append(np.repeat(u8(mm0)[..., None], 3, -1))   # shell-filled space is imagined too
 
     disp = 1 / np.maximum(np.stack(V["depth"]), 0.1)                     # inf -> 0 = black, like the far end of the scale
     lo, hi = np.percentile(disp[disp > 0], [2, 98])

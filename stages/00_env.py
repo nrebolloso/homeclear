@@ -2,14 +2,14 @@
 import subprocess, sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from common import run_stage
+from common import run_stage, FFMPEG
 
 
 def main(cfg):
     import torch, gsplat, pycolmap, cv2
     m = {"torch": torch.__version__, "torch_cuda": torch.version.cuda, "gsplat": gsplat.__version__,
          "pycolmap": pycolmap.__version__, "opencv": cv2.__version__}
-    m["ffmpeg"] = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True).stdout.split("\n")[0]
+    m[FFMPEG] = subprocess.run([FFMPEG, "-version"], capture_output=True, text=True).stdout.split("\n")[0]
     m["driver"] = subprocess.run(["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
                                  capture_output=True, text=True).stdout.strip()
     assert torch.cuda.is_available(), "torch.cuda.is_available() is False"
@@ -25,7 +25,7 @@ def main(cfg):
         torch.full((N, 3), 0.05, device=d), torch.ones(N, device=d), torch.rand(N, 3, device=d),
         torch.eye(4, device=d)[None], torch.tensor([[200.0, 0, 64], [0, 200, 64], [0, 0, 1]], device=d)[None], 128, 128)
     m["gsplat_render_alpha_mean"] = round(alpha.mean().item(), 3)
-    return alpha.mean().item() > 0 and m["ffmpeg"].startswith("ffmpeg"), m
+    return alpha.mean().item() > 0 and m[FFMPEG].startswith("ffmpeg"), m
 
 
 if __name__ == "__main__":
