@@ -120,3 +120,11 @@ test('a curled corner is found in the mat splat points, held at its curl, and fo
   assert.ok(kinds.includes('corner_caught'), `events: ${kinds}`);
   assert.ok(kinds.includes('corner_folded'), `events: ${kinds}; flap ${JSON.stringify(r.flap)}`);
 });
+
+test('a door leaf is bumped but never slides (hinged; the swing is not modelled)', async () => {
+  await initPhysics();
+  const leaf = obj('door', 'door', [2.0, 1.5], new Float32Array(box(-0.02, 0.02, -0.4, 0.4, 0, 2.0)), 0.4, 2.0);
+  const r = drive([leaf], ranges());
+  assert.ok(r.events.some(e => e.kind === 'bumped'), `events: ${r.events.map(e => e.kind)}`);
+  assert.ok(!r.events.some(e => e.kind === 'moved') && r.poses.length === 0, `door moved: ${JSON.stringify(r.events)}`);
+});
