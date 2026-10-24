@@ -133,7 +133,8 @@
 .frontend th, .frontend td { text-align: left; padding: 10px 6px; border-bottom: 1px solid var(--line); }
 .frontend td small { display: block; color: var(--muted); }
 #frontend canvas { background: var(--canvas); border-radius: 4px; }
-#viewer-toolbar { position: absolute; bottom: 30px; left: calc((100% - var(--scene-right)) / 2); transform: translateX(-50%); padding: 6px; }
+#viewer-toolbar { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); padding: 6px; }   /* centred on the screen; beside a wide planning panel it centres on the scene instead (below) */
+@media (max-width: 1400px) { #viewer-toolbar { left: calc((100% - var(--scene-right)) / 2); } }
 #viewer-toolbar nav button { padding: 10px 12px; }
 #viewer-toolbar nav span { margin-right: 5px; font-size: calc(1.125rem * var(--fs)); }
 #route-playback { justify-content: center; padding: 6px 0 0; }
@@ -191,7 +192,7 @@
 .frontend { --tone-move: #6fd08c; --tone-edit: #49d4c7; --tone-mark: #ffc857; --tone-spectate: #c9a3ff; --tone-view: #8fb8ff; }
 .frontend[data-theme="light"] #frontend { --tone-move: #0a6b32; --tone-edit: #0b6b63; --tone-mark: #8a5a00; --tone-spectate: #5a2aa0; --tone-view: #1a4fa0; }
 .frontend[data-theme="contrast"] #frontend { --tone-move: #fff; --tone-edit: #fff; --tone-mark: #ffe14d; --tone-spectate: #ffb3ff; --tone-view: #fff; }
-#controls-strip { --tone: var(--tone-move); position: absolute; bottom: 46px; left: 20px; display: flex; flex-direction: column; gap: 6px; padding: 9px 12px 10px; border-left: 4px solid var(--tone); width: max-content; max-width: max(230px, calc((100% - var(--scene-right)) / 2 - 285px)); pointer-events: none; }
+#controls-strip { --tone: var(--tone-move); position: absolute; bottom: 46px; left: 20px; display: flex; flex-direction: column; gap: 6px; padding: 9px 12px 10px; border-left: 4px solid var(--tone); width: max-content; max-width: max(230px, calc(50% - 320px)); pointer-events: none; }
 #controls-strip[data-tone="edit"] { --tone: var(--tone-edit); } #controls-strip[data-tone="mark"] { --tone: var(--tone-mark); }
 #controls-strip[data-tone="spectate"] { --tone: var(--tone-spectate); } #controls-strip[data-tone="view"] { --tone: var(--tone-view); }
 #strip-mode { font-size: calc(0.75rem * var(--fs)); font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--tone); }
@@ -214,8 +215,8 @@ button.pill { cursor: pointer; } button.pill:hover { border-color: var(--btn-hov
 #mark-controls h2 { margin-top: 0; } #mark-buttons button { flex: 1 1 auto; }
 body.demo #controls-strip, body.demo #status-pills { display: none; }
 #status-pills .pill { min-height: 0; padding: 3px 11px; border-radius: 999px; }
-.frontend #keyhelp-chip { right: calc(var(--scene-right) + 6px); }
-@media (max-width: 760px) { .frontend #keyhelp-chip { display: none; } }
+.frontend #keyhelp-chip { display: none; }   /* F1 · keys is the button in the controls strip (bottom left) */
+#strip-keys { align-self: flex-start; pointer-events: auto; min-height: 0; padding: 3px 10px; font-size: calc(0.75rem * var(--fs)); }
 
 /* ---------- drag-to-widen planning panel (panel-size.ts) ---------- */
 #panel-resize { position: absolute; left: 0; top: 0; bottom: 0; width: 12px; cursor: col-resize; z-index: 3; touch-action: none; }
@@ -225,3 +226,6 @@ body.demo #controls-strip, body.demo #status-pills { display: none; }
 #panel-pin[aria-pressed="true"] { color: var(--pressed-fg); background: var(--pressed-bg); border-color: var(--pressed-line); }
 body[data-motion="full"] #planning-panel:not(.resizing) { transition: width .18s ease; }
 @media (max-width: 760px) { #panel-resize, #panel-pin { display: none; } }
+
+/* narrower screens: the controls strip sits above the toolbar instead of beside it (the 720px rules below it win on phones) */
+@media (min-width: 721px) and (max-width: 1400px) { #controls-strip { bottom: 175px; } #inspect-card { bottom: 310px; } }
