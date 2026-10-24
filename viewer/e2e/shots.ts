@@ -10,8 +10,8 @@ const [scene, outdir] = a, [W, H] = opt('--size', '1280x720').split('x').map(Num
 const poses = a.slice(2).filter((v, i, all) => !v.startsWith('--') && !(all[i - 1] ?? '').startsWith('--'));
 mkdirSync(outdir, { recursive: true });
 
-const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true,
-  args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ channel: 'chrome', headless: true,
+  args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 const p = await browser.newPage({ viewport: { width: W, height: H } });
 p.on('pageerror', e => console.error('pageerror', e));
 await p.goto(`${opt('--url', 'http://localhost:5179')}/?scene=${scene}${opt('--query', '')}`);

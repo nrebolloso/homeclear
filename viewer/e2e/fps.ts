@@ -5,8 +5,8 @@ import { chromium } from 'playwright-core';
 const a = process.argv.slice(2);
 const opt = (k: string, d: string) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : d; };
 const [W, H] = opt('--size', '1280x720').split('x').map(Number), secs = +opt('--secs', '10');
-const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: !a.includes('--headed'),
-  args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ channel: 'chrome', headless: !a.includes('--headed'),
+  args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 const p = await browser.newPage({ viewport: { width: W, height: H } });
 await p.goto(`http://localhost:5179/?scene=${a[0]}`);
 await p.waitForFunction(() => (window as any).game?.ready, null, { timeout: 180000 });

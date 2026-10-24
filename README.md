@@ -50,11 +50,11 @@ Stage 0 prints the versions it actually found, the GPU, and the driver, and chec
 
 ## Laptop setup
 
-Ubuntu/Mint with Python 3.12, ffmpeg, Google Chrome (headless checks), Node, and rsync.
+Ubuntu/Mint or macOS with Python 3.12, ffmpeg, Google Chrome (headless checks), Node, and rsync.
 
 ```bash
-python3 -m venv --system-site-packages .venv
-.venv/bin/pip install numpy scipy opencv-python pillow plyfile pyyaml
+python3.12 -m venv --system-site-packages .venv
+.venv/bin/pip install .                               # dependencies from pyproject.toml
 .venv/bin/python tests/test_synthetic.py --viewer     # should end with SYNTHETIC OK
 cd viewer && npm ci && npm test
 ```

@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 const PUB = join(import.meta.dirname, 'public');
 
 export default defineConfig({
+  server: { port: 5179, strictPort: true },   // README, e2e/ and scripts/ all use 5179
   worker: { format: 'es' },
   plugins: [{
     name: 'rehearsal-api',

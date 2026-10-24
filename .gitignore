@@ -11,3 +11,4 @@ viewer/public/exports/
 viewer/public/clips/
 cosmos/inputs/
 cosmos/results_local/
+*.egg-info/

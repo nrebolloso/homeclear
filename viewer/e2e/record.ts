@@ -13,8 +13,8 @@ const fps = +opt('--fps', '30'), [W, H] = opt('--size', '1280x720').split('x').m
 const at = a.flatMap((v, i) => (v === '--at' ? [a[i + 1]] : [])).map(s => { const k = s.indexOf(':'); return { t: +s.slice(0, k), js: s.slice(k + 1), done: false }; });
 const BASE = opt('--url', 'http://localhost:5179');
 
-const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true,
-  args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ channel: 'chrome', headless: true,
+  args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 const p = await browser.newPage({ viewport: { width: W, height: H } });
 p.on('pageerror', e => console.error('pageerror', e));
 await p.goto(`${BASE}/?scene=${scene}${opt('--query', '')}`);

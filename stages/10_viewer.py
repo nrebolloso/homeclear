@@ -26,7 +26,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 def main(cfg):
-    chrome = shutil.which("google-chrome") or shutil.which("chromium")
+    mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    chrome = shutil.which("google-chrome") or shutil.which("chromium") or (mac if Path(mac).exists() else None)
     assert chrome, "google-chrome/chromium not found"
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Handler, directory=str(ROOT)))
     threading.Thread(target=srv.serve_forever, daemon=True).start()

@@ -13,8 +13,8 @@ const check = (name: string, pass: boolean, detail: string) => { results.push({ 
 const shot = (p: Page, name: string) => process.env.SHOTS ? p.screenshot({ path: `${process.env.SHOTS}/${name}.png` }) : null;
 const G = (p: Page, f: string) => p.evaluate(`(async () => { const game = window.game; ${f} })()`) as Promise<any>;
 
-const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', headless: true,
-  args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
+const browser = await chromium.launch({ channel: 'chrome', headless: true,
+  args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
     '--disable-accelerated-video-decode'] });   // headless: HW decode + ANGLE stalls seeks and loses the WebGL context
 async function open(scene: string) {
   const p = await browser.newPage({ viewport: { width: 1600, height: 900 } });
