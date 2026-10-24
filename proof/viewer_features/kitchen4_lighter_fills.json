@@ -1,0 +1,218 @@
+{
+ "chair": {
+  "pixels": 4049,
+  "seen_around_pct": 11.6,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "chair2": {
+  "pixels": 3164,
+  "seen_around_pct": 18.3,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "bedside_table": {
+  "pixels": 2742,
+  "seen_around_pct": 25.9,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "bedside_table2": {
+  "pixels": 2180,
+  "seen_around_pct": 34.8,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "rug": {
+  "pixels": 6612,
+  "seen_around_pct": 39.2,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "chair3": {
+  "pixels": 2853,
+  "seen_around_pct": 42.5,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "chair4": {
+  "pixels": 4417,
+  "seen_around_pct": 26.9,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "chair5": {
+  "pixels": 2872,
+  "seen_around_pct": 35.0,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "chair6": {
+  "pixels": 554,
+  "seen_around_pct": 39.4,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "table": {
+  "pixels": 14508,
+  "seen_around_pct": 37.3,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "chair7": {
+  "pixels": 3696,
+  "seen_around_pct": 25.4,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "chair8": {
+  "pixels": 2990,
+  "seen_around_pct": 39.1,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "basket": {
+  "pixels": 2531,
+  "seen_around_pct": 15.7,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "box": {
+  "pixels": 710,
+  "seen_around_pct": 18.9,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "box2": {
+  "pixels": 792,
+  "seen_around_pct": 16.6,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "trash_can": {
+  "pixels": 1917,
+  "seen_around_pct": 41.2,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "box3": {
+  "pixels": 941,
+  "seen_around_pct": 14.9,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ },
+ "box4": {
+  "pixels": 994,
+  "seen_around_pct": 10.5,
+  "backends": [
+   "lama",
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "lama"
+ }
+}
