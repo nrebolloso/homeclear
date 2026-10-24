@@ -1776,6 +1776,25 @@ function setHeroSteps(steps: { xy: XY; side: number; hit: boolean }[], walker?: 
     return { ...p, xy: [p.xy[0] - Math.cos(h) * centreOffset, p.xy[1] - Math.sin(h) * centreOffset] as XY, s };
   });
 }
+// ---------- next-step cloud + future trail (third person): where the 200 trips put the mannequin's next step, and its own next steps ----------
+const stepCloud = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0xffe08a, size: 5, sizeAttenuation: false, transparent: true, opacity: 0.6, depthWrite: false, depthTest: false }));
+const futureSteps = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0x3ee6b0, size: 12, sizeAttenuation: false, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false }));
+stepCloud.renderOrder = futureSteps.renderOrder = 2;   // over the mannequin: the steps it is about to take sit under its body
+scene.add(stepCloud, futureSteps);
+let cloudK = -1, cloudFor: unknown = null;
+function stepCloudUpdate(show: boolean) {
+  stepCloud.visible = futureSteps.visible = show;
+  const k = show ? heroSteps.findIndex(p => p.s > autoS) : -1;
+  if (k < 0 || (k === cloudK && cloudFor === current) || !current) return;
+  cloudK = k; cloudFor = current;
+  // every trip's step k, shifted so trip 0's lands on the mannequin's own step (heels vs centre line differ per model)
+  const g0 = current.ghosts[0]?.pts[k], hx = heroSteps[k].xy;
+  const cloud = g0 ? current.ghosts.flatMap(gh => gh.pts[k] ? [new THREE.Vector3(gh.pts[k][0] - g0[0] + hx[0], gh.pts[k][1] - g0[1] + hx[1], 0.03)] : []) : [];
+  stepCloud.geometry.dispose(); stepCloud.geometry = new THREE.BufferGeometry().setFromPoints(cloud);
+  const next = heroSteps.slice(k, k + 6);
+  futureSteps.geometry.dispose(); futureSteps.geometry = new THREE.BufferGeometry().setFromPoints(next.map(p => new THREE.Vector3(p.xy[0], p.xy[1], 0.035)));
+}
+
 const view = { third: false, back: 1.0, up: 0.4 };   // third person: behind, just above the user (higher looks through a real splat's low-opacity haze and hides the walker)
 function placeCamera(cam: THREE.PerspectiveCamera, b: typeof body) {
   if (view.third && cam === camera) {
@@ -1820,6 +1839,7 @@ function step(dt: number, t: number) {
   markStep();
   const showMan = view.third && mode === 'auto' && heroSteps.length > 0;
   mannequin.group.visible = showMan;
+  stepCloudUpdate(showMan);
   if (showMan) {
     const f = feetAt(heroSteps, autoS, persona.stride_m ?? 0.35), hy = walkerCfg.width_m / 2 - walkerCfg.leg_radius_m, gx = walkerCfg.user_gap_m + 0.05;
     mannequin.update(body, [f[1], f[0]], [[gx, hy], [gx, -hy]], walkerCfg.handle_height_m);   // sim side 1 = left
@@ -1982,6 +2002,7 @@ Object.assign(game, {
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); Object.assign(body, { x, y, yaw }); },
   setFly(x: number, y: number, z: number, yawDeg: number, pitchDeg: number) { setWalk('fly'); Object.assign(fly, { x, y, z }); body.yaw = (yawDeg * Math.PI) / 180; body.pitch = (pitchDeg * Math.PI) / 180; },
+  setThird(on: boolean) { const h = $<HTMLInputElement>('third'); h.checked = on; h.dispatchEvent(new Event('change')); },
   layout: () => layout, current: () => current, routes,
   spots: () => spotList, startTour, endTour, tourState: () => ({ ...tour }), replayState: () => ({ on: replay.on, t: replay.t }), startReplay, stopReplay, showPhysics,
   setPersona, physicsPass, personas: () => Object.keys(personas), persona: () => personaKey, suggest, applyOption, setFillBackend,
