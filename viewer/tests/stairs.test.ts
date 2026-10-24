@@ -102,7 +102,7 @@ test('landing, light and the walker at the top', () => {
 
 test('stair fixes: a rail only where none is seen; through evaluate() each clears its check', () => {
   const fx = stairFixes(base);
-  assert.deepEqual(fx.map(f => f.id), ['stair_rail:stairs:right', 'stair_lights:stairs', 'stair_walker:stairs', 'stair_rail_ext:stairs', 'stair_grab:stairs', 'stair_nosing:stairs']);
+  assert.deepEqual(fx.map(f => f.id), ['stair_rail:stairs:right', 'stair_lights:stairs', 'stair_walker:stairs', 'stair_rail_ext:stairs', 'stair_grab:stairs', 'stair_nosing:stairs', 'stair_lift:stairs']);
   const { init, poses } = loadScene('game_synth');
   const S = { ...init, interventions: [...init.interventions, ...fx], stairs: [base], strong_side: 'left' as const, device: 'walker' };
   let lay = { poses, flattened: [] as [XY, XY][] };

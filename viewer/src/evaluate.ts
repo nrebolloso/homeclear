@@ -11,6 +11,7 @@ import { objectRisk, type BatchResults, type ObjEvent } from './objrisk.ts';
 import batch from '../../physics/batch_results.json' with { type: 'json' };
 import { stairChecks, type Stair, type Side, type WalkerDims } from './stairs.ts';
 import { doorChecks, doorFixes, doorGain, doorOnRoute, needWidth, type Door } from './doors.ts';
+import { wheelchairChecks, ADA } from './wheelchair.ts';
 
 /** One walk the patient makes: night trips get the darkness multiplier, daytime ones don't. start_with: the start
  *  rides on that object (the bed): move the bed and the patient gets up from the same spot beside it. */
@@ -113,7 +114,8 @@ export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: nu
   for (const st of S.stairs ?? []) out.checks.push(...stairChecks(st, { g, L, fixtures: [...(S.fixtures ?? []), ...added], margin: S.rules.margin_m,
     strong_side: S.strong_side !== undefined ? S.strong_side : (S.persona as { strong_side?: Side }).strong_side ?? null, device: S.device ?? 'walker', walker: S.walker }));
   for (const d of S.doors ?? []) {
-    const need = needWidth(S.plan.walker_width_m, S.rules.clearance_margin_m), gain = doorGain(lay, d.name);
+    // a wheelchair needs ADA's 815 mm clear opening even where its own width plus margins would be less
+    const need = Math.max(needWidth(S.plan.walker_width_m, S.rules.clearance_margin_m), S.device === 'wheelchair' ? ADA.door_clear_m : 0), gain = doorGain(lay, d.name);
     let on = doorOnRoute(d, paths, false, gain);
     // A failed plan has no path. Open just this door and retry the blocked routes: an unrelated closet stays off-route.
     if (!on && out.routes.some(r => r.error)) {
@@ -129,6 +131,8 @@ export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: nu
     }
     out.checks.push(...doorChecks(d, { gain, need_m: need, margin: S.rules.margin_m, on_route: S.routes.length ? on : null }));
   }
+  if (S.device === 'wheelchair' && out.dist_m) out.checks.push(...wheelchairChecks(g, out.dist_m,
+    S.routes.flatMap(rd => [{ name: `${rd.name} start`, at: routeStart(rd, O, lay.poses) }, { name: `${rd.name} end`, at: rd.goal }]), out.hazards, S.rules.margin_m.width));
   // a route this walker can't make at all is the error to show, whichever route is selected
   const blocked = out.routes.find(r => r.error);
   if (blocked && !out.error) out.error = `${blocked.name}: ${blocked.error}`;
