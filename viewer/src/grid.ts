@@ -6,7 +6,14 @@ export interface GridMeta { origin_xy: XY; cell_m: number; shape: [number, numbe
 export interface Layers { floor: Uint8Array; obst: Uint8Array; bump: Float32Array }
 export interface Footprinted { footprint: XY[]; pivot: number[]; layer: 'obstacle' | 'bump' | 'none'; height_m: number }
 export interface Pose { x: number; y: number; yaw: number; removed?: boolean }
-export interface PlanParams { walker_width_m: number; preferred_clearance_m: number; clearance_weight: number }
+export interface PlanParams {
+  walker_width_m: number; preferred_clearance_m: number; clearance_weight: number;
+  /** extra cost (metres of walking) per 90 degrees of turning: > 0 plans with heading (8 directions), e.g. freezing of
+   *  gait at turns. 0 / absent = the plain planner, identical to stage 7. */
+  turn_weight_m?: number;
+  /** cost multiplier on cells with less than narrow_m to spare each side (doorways): freezing of gait. */
+  narrow_weight?: number; narrow_m?: number;
+}
 export interface Plan {
   cells: number[]; xy: XY[]; side: number[]; length_m: number; error?: string;
   min_side_clearance_m?: number; dist_m: Float32Array;
@@ -145,6 +152,12 @@ export function plan(g: GridMeta, L: Layers, start: XY, goal: XY, pp: PlanParams
   const empty = { cells: [], xy: [], side: [], length_m: 0, dist_m: dist };
   const s = snap(start), t = snap(goal);
   if (s < 0) return { ...empty, error: `no cell has ${half} m clearance; walker cannot fit anywhere` };
+  const narrowW = pp.narrow_weight ?? 0, narrowM = pp.narrow_m ?? 0.15;
+  const stepCost = (n: number, len: number) => {
+    const sd = dist[n] - half;
+    return len * (1 + pp.clearance_weight * Math.max(pref - sd, 0) / pref + (narrowW && sd < narrowM ? narrowW : 0));
+  };
+  if (pp.turn_weight_m) return planHeading(g, dist, free, s, t, stepCost, pp.turn_weight_m / 2 / cell, half, empty);
   const ti = Math.floor(t / ny), tj = t % ny;
   const h = (k: number) => Math.hypot(Math.floor(k / ny) - ti, (k % ny) - tj);
   const gs = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), done = new Uint8Array(N);
@@ -162,8 +175,7 @@ export function plan(g: GridMeta, L: Layers, start: XY, goal: XY, pp: PlanParams
       if (i < 0 || j < 0 || i >= nx || j >= ny) continue;
       const n = i * ny + j;
       if (!free(n) || done[n]) continue;
-      const sd = dist[n] - half;
-      const ng = gs[c] + Math.hypot(di, dj) * (1 + pp.clearance_weight * Math.max(pref - sd, 0) / pref);
+      const ng = gs[c] + stepCost(n, Math.hypot(di, dj));
       if (ng < gs[n]) { gs[n] = ng; prev[n] = c; heap.push(ng + h(n), n); }
     }
   }
@@ -171,11 +183,49 @@ export function plan(g: GridMeta, L: Layers, start: XY, goal: XY, pp: PlanParams
   const cells: number[] = [];
   for (let c = t; c >= 0; c = prev[c]) cells.push(c);
   cells.reverse();
+  return finishPlan(g, cells, dist, half);
+}
+
+function finishPlan(g: GridMeta, cells: number[], dist: Float32Array, half: number): Plan {
   const xy = cells.map(c => cellXY(g, c));
   const side = cells.map(c => dist[c] - half);
   let length_m = 0;
   for (let k = 1; k < xy.length; k++) length_m += Math.hypot(xy[k][0] - xy[k - 1][0], xy[k][1] - xy[k - 1][1]);
   return { cells, xy, side, length_m, min_side_clearance_m: Math.min(...side), dist_m: dist };
+}
+
+const DIRS: [number, number][] = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+/** A* over (cell, heading): each 45 degrees of change costs turnCells. Any start heading is free. */
+function planHeading(g: GridMeta, dist: Float32Array, free: (k: number) => boolean, s: number, t: number,
+                     stepCost: (n: number, len: number) => number, turnCells: number, half: number, empty: Plan): Plan {
+  const [nx, ny] = g.shape, N = nx * ny * 8, ti = Math.floor(t / ny), tj = t % ny;
+  const h = (k: number) => Math.hypot(Math.floor(k / ny) - ti, (k % ny) - tj);
+  const gs = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), done = new Uint8Array(N), heap = new Heap();
+  for (let d = 0; d < 8; d++) { gs[s * 8 + d] = 0; heap.push(h(s), s * 8 + d); }
+  let goal = -1;
+  while (heap.size) {
+    const st = heap.pop();
+    if (done[st]) continue;
+    done[st] = 1;
+    const c = st >> 3, d0 = st & 7;
+    if (c === t) { goal = st; break; }
+    const ci = Math.floor(c / ny), cj = c % ny;
+    for (let d = 0; d < 8; d++) {
+      const turn = Math.min((d - d0 + 8) % 8, (d0 - d + 8) % 8);
+      if (turn > 2) continue;   // no turning on the spot by more than 90 degrees in one step
+      const i = ci + DIRS[d][0], j = cj + DIRS[d][1];
+      if (i < 0 || j < 0 || i >= nx || j >= ny) continue;
+      const n = i * ny + j, ns = n * 8 + d;
+      if (!free(n) || done[ns]) continue;
+      const ng = gs[st] + stepCost(n, Math.hypot(DIRS[d][0], DIRS[d][1])) + turn * turnCells;
+      if (ng < gs[ns]) { gs[ns] = ng; prev[ns] = st; heap.push(ng + h(n), ns); }
+    }
+  }
+  if (goal < 0) return { ...empty, error: 'no path: start and goal not connected for this walker width' };
+  const cells: number[] = [];
+  for (let st = goal; st >= 0; st = prev[st]) cells.push(st >> 3);
+  cells.reverse();
+  return finishPlan(g, cells, dist, half);
 }
 
 /** Connected components (8-way) of bump cells: one id per rug/threshold/cable, 0 = none. */
@@ -239,15 +289,29 @@ export function routeHazards(g: GridMeta, L: Layers, P: Plan, walkerWidth: numbe
   return out;
 }
 
-export interface Intervention { id: string; label: string; kind: 'remove' | 'move' | 'flatten'; object?: string; to?: number[]; box_xy?: [XY, XY] }
-export interface Layout { poses: Pose[]; flattened: [XY, XY][] }
+export interface Intervention {
+  id: string; label: string; kind: 'remove' | 'move' | 'flatten' | 'raise' | 'add'; object?: string; to?: number[]; box_xy?: [XY, XY];
+  /** raise: a seat/bed/toilet surface (object or fixture name) goes up by by_m (raised toilet seat, bed risers) */
+  target?: string; by_m?: number;
+  /** add: a new fixture (a touch lamp on the nightstand = a switch within reach); checks treat it like a marked one */
+  fixture?: { name: string; kind: string; attach?: string; xyz?: number[] };
+  /** what it takes (fix card, optimizer effort): dollars, minutes, 1 (anyone) .. 5 (two people, heavy furniture) */
+  cost_usd?: number; minutes?: number; effort?: number; product?: string;
+}
+export interface Layout {
+  poses: Pose[]; flattened: [XY, XY][];
+  /** surface raises by object/fixture name (m), and ids of 'add' fixes in place: no footprint, checks only */
+  raised?: Record<string, number>; added?: string[];
+}
 
 /** A fix applied to a layout (new object, the input is untouched). Move targets are [x, y, yaw_deg]. */
 export function applyIntervention(objs: { name: string }[], lay: Layout, iv: Intervention): Layout {
-  const poses = lay.poses.map(p => ({ ...p })), flattened = [...lay.flattened];
+  const poses = lay.poses.map(p => ({ ...p })), flattened = [...lay.flattened], raised = { ...lay.raised }, added = [...(lay.added ?? [])];
   const k = objs.findIndex(o => o.name === iv.object);
   if (iv.kind === 'remove') poses[k].removed = true;
   else if (iv.kind === 'move') poses[k] = { x: iv.to![0], y: iv.to![1], yaw: (iv.to![2] * Math.PI) / 180 };
+  else if (iv.kind === 'raise') raised[iv.target!] = (raised[iv.target!] ?? 0) + iv.by_m!;
+  else if (iv.kind === 'add') { if (!added.includes(iv.id)) added.push(iv.id); }
   else flattened.push(iv.box_xy!);
-  return { poses, flattened };
+  return { poses, flattened, raised, added };
 }
