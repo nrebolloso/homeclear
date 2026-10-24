@@ -64,11 +64,11 @@ Stage 0 prints the versions it actually found, the GPU, and the driver, and chec
 
 ## Laptop setup
 
-Ubuntu/Mint with Python 3.12, ffmpeg, Google Chrome (headless checks), Node, and rsync.
+Ubuntu/Mint or macOS with Python 3.12, ffmpeg, Google Chrome (headless checks), Node, and rsync.
 
 ```bash
-python3 -m venv --system-site-packages .venv
-.venv/bin/pip install numpy scipy opencv-python pillow plyfile pyyaml
+python3.12 -m venv --system-site-packages .venv
+.venv/bin/pip install .                               # dependencies from pyproject.toml
 .venv/bin/python tests/test_synthetic.py --viewer     # should end with SYNTHETIC OK
 tests/run_py.sh                                       # every Python self-check, synthetic scenes first
 cd viewer && npm ci && npm test && node e2e/run.ts   # e2e: headless Chrome against the dev server
@@ -129,6 +129,22 @@ Read start/goal points off `out/<run>/occupancy.png` (1 m grid lines, metres in 
 
 Viewer: `cd viewer && npm run dev`, then http://localhost:5179/?scene=<name> (`?step=learned` uses the learned step model).
 
+VR (Quest 2/3 over USB): enable developer mode, plug in, allow USB debugging, then `cd viewer && npm run dev:quest`
+(`adb reverse` so the headset's `localhost:5179` is the laptop; IPv4 because adb forwards to 127.0.0.1). Open
+`http://localhost:5179/?scene=<name>` in the Quest Browser (the headset needs some Wi-Fi or it shows "no internet") and
+press ENTER VR. Walk for real (1:1, floor at your floor); left stick or a held pinch walks where you look, right stick
+snap-turns. Labels are flat-view only for now.
+Full-detail scenes from a Windows PC over Quest Link / Air Link: `VR_WINDOWS.md`.
+Watch the headset on the laptop: `npm run mirror:quest` (needs `brew install scrcpy`): a 16:9 crop centred on the left
+eye's lens centre (about x 870, y 960 of 3664x1920; edges are lens pre-distortion, so a smaller crop looks straighter). `npm run mirror:quest:both` shows the
+whole panel (both eyes, as the headset draws them).
+VR without a headset: `npm run e2e:xr` (with `npm run dev` running) enters VR on an emulated Quest 2 (Meta's IWER,
+`?emulate=quest2`), moves the head, points and presses controllers and hands, and checks walking, teleport, drag, turn
+and delete. On a real Quest nobody is wearing: `npm run quest:sweep -- <scene> --hz 72` enters VR from the laptop,
+puts the head every 0.75 m along the route facing 4 ways and prints the fps at each (needs the DevTools forward:
+`adb forward tcp:9223 localabstract:chrome_devtools_remote`). Mirroring
+costs the headset frames (kitchen 200K at 72 Hz: 72 -> ~50 fps), so mirror the 150K copy for demos.
+
 ## Walker game
 
 `python stages/12_export_scene.py <config>` (+ `12b_fills.py`) exports a scene to `viewer/public/scene/<run>/`; then the
@@ -151,7 +167,7 @@ viewer above opens it (add `--host` to `vite` for phones on the Wi-Fi).
 | Imagined floor + backend | the tinted fill where moved furniture stood (median / telea / ns / lama) |
 | Cosmos clips | pre-rendered clips, "this layout" first (matched by layout key); Export for Cosmos (whole route or hero chunk) |
 
-`?xr=1` adds an Enter VR button (Quest: `adb reverse tcp:5179 tcp:5179`, then localhost). Pre-rendering a scene's
+The Enter VR button is always there (see VR above). Pre-rendering a scene's
 scenarios: `python cosmos/prerender.py cosmos/prerender.yaml --scene <run>` (prints the B200 time; `--submit` runs them as
 one Slurm array), then `cosmos/fetch_cosmos.sh`.
 

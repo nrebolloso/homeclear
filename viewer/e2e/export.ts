@@ -5,7 +5,7 @@
 import { CHROME } from './env.ts';
 import { chromium } from 'playwright-core';
 const a = process.argv.slice(2), opt = (k: string, d: string) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : d; }, flag = (k: string) => a.includes(k);
-const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 const p = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 p.on('pageerror', e => console.error('pageerror', e));
 await p.goto(`http://localhost:5179/?scene=${a[0]}${opt('--query', '')}`);

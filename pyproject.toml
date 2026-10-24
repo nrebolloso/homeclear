@@ -1,0 +1,23 @@
+# Laptop dependencies. The HiPerGator env (torch cu130, gsplat, pycolmap) is built by slurm/setup_env.sbatch.
+# Not an installable package: stages run as scripts, so `pip install .` only pulls in the dependencies.
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "homeclear"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy",
+    "scipy",
+    "opencv-python",
+    "pillow",
+    "plyfile",
+    "pyyaml",
+    "matplotlib",  # stages/, tools/, worldmodel/, motion/
+    "pandas",      # motion/
+]
+
+[tool.setuptools]
+packages = []

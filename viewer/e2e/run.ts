@@ -15,7 +15,7 @@ const shot = (p: Page, name: string) => process.env.SHOTS ? p.screenshot({ path:
 const G = (p: Page, f: string) => p.evaluate(`(async () => { const game = window.game; ${f} })()`) as Promise<any>;
 
 const browser = await chromium.launch({ executablePath: CHROME, headless: true,
-  args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
+  args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
     '--disable-accelerated-video-decode'] });   // headless: HW decode + ANGLE stalls seeks and loses the WebGL context
 async function open(scene: string) {
   const p = await browser.newPage({ viewport: { width: 1600, height: 900 } });
@@ -137,13 +137,15 @@ try {
     const t = clip.test, busy = Object.keys(t.expected).filter(k => t.expected[k].length).map(Number);
     const picks = [busy[0], busy[Math.floor(busy.length / 2)], busy[busy.length - 1]];
     const video = game.openClip(clip);
-    await new Promise(r => video.readyState >= 1 ? r() : video.addEventListener('loadedmetadata', r, { once: true }));
+    // a stalled decoder never fires these events (seen on macOS headless): fail with a reason instead of hanging
+    const within = (pr, what) => Promise.race([pr, new Promise((_, no) => setTimeout(() => no(new Error(what + ' timed out after 10 s')), 10000))]);
+    await within(new Promise(r => video.readyState >= 1 ? r() : video.addEventListener('loadedmetadata', r, { once: true })), 'clip metadata');
     video.pause();
     const cv = document.createElement('canvas'); cv.width = clip.width; cv.height = clip.height;
     const ctx = cv.getContext('2d', { willReadFrequently: true });
     const out = [];
     for (const k of picks) {
-      await new Promise(r => { video.addEventListener('seeked', r, { once: true }); video.currentTime = (k + 0.5) / clip.fps; });
+      await within(new Promise(r => { video.addEventListener('seeked', r, { once: true }); video.currentTime = (k + 0.5) / clip.fps; }), 'seek to frame ' + k);
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       ctx.drawImage(video, 0, 0);
       let shown = 0;
@@ -214,10 +216,6 @@ try {
     li: document.querySelectorAll('#snags li').length, ms: Math.round(r.reduce((n, x) => n + x.ms, 0)) }`);
   check('physics pass (Rapier): the walker reaches every goal, snags listed', ph.done && ph.li >= 2, JSON.stringify(ph));
   await q.p.close();
-  const x = await open('game_synth&xr=1');
-  check('?xr=1 loads (VR button, render loop on the renderer)', await G(x.p, 'return game.xr()') && !!(await x.p.$('#vrbutton')) && x.errors.length === 0,
-    `errors: ${x.errors.join('; ') || 'none'}`);
-  await x.p.close();
   // 9. reimagined room: the room morphs into the safest suggested layout, each change costed, undo takes one back
   const ri = await open('game_synth');
   const R = (f: string) => G(ri.p, f);

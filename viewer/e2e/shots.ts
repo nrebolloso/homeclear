@@ -12,7 +12,7 @@ const poses = a.slice(2).filter((v, i, all) => !v.startsWith('--') && !(all[i - 
 mkdirSync(outdir, { recursive: true });
 
 const browser = await chromium.launch({ executablePath: CHROME, headless: true,
-  args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'] });
+  args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 const p = await browser.newPage({ viewport: { width: W, height: H } });
 p.on('pageerror', e => console.error('pageerror', e));
 await p.goto(`${opt('--url', 'http://localhost:5179')}/?scene=${scene}${opt('--query', '')}`);
