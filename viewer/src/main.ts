@@ -44,7 +44,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 // model and scene text (Cosmos Reason notes, hazard details) goes into innerHTML escaped; same as report.ts's, which can't
 // be imported: that module renders the report page when loaded
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
-const RUN = new URLSearchParams(location.search).get('scene') ?? 'game_synth';
+const RUN = new URLSearchParams(location.search).get('scene') ?? 'kitchen4_lighter';
 const BASE = `scene/${RUN}/`;
 const json = (f: string) => fetch(BASE + f).then(r => { if (!r.ok) throw new Error(`${BASE}${f}: ${r.status}`); return r.json(); });
 const bin = (f: string) => fetch(BASE + f).then(r => r.arrayBuffer());

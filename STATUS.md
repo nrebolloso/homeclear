@@ -1,9 +1,9 @@
 # Status
 
 ## Demo push (2026-10-24)
-- **Done:** step 1. Local work backed up on `backup/pre-merge-2026-10-24`, origin/main (51 commits) merged into main, new configs moved into `configs/`; Python suites, 131 viewer tests, optimize.test.ts alone and the build all pass. Not pushed.
-- **Next:** step 2, kitchen4_lighter as the viewer default, route reversed to fridge -> kitchen entrance.
-- **Risks:** e2e (`node e2e/run.ts`) not rerun yet, so `viewer/e2e/results.json` is still origin's copy; `merge-juan` (1 unpushed newell_stair commit) left alone.
+- **Done:** steps 1-2. Merge as before (Python, 131 viewer tests, build pass; not pushed). Viewer default is now kitchen4_lighter (no game_synth fallback); route pinned in `configs/kitchen4.yaml` as fridge (-0.44, 1.83) -> entrance (2.82, -0.39), loads clean at 60 fps headless.
+- **Next:** step 3, `demo-safe` tag + `proof/demo/backup_v1.mp4`.
+- **Risks:** `viewer/public/scene/` is gitignored, so the demo kitchen's route.json/routes.json edits (and the whole export) are not in git or the tag; autoplay starts on load, so the fridge turn is already over by the first frame (fix with the scripted camera, step 7); e2e not rerun.
 
 Each result counts once it is reproduced here, with proof in `proof/`.
 
