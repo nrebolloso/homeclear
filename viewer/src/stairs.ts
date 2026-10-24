@@ -28,6 +28,8 @@ export interface Stair {
   trips_per_day?: number;
   /** what waits at the top: a folding walker or a rollator (it has a seat: a rest after the climb) */
   top_device?: 'walker' | 'rollator';
+  /** the scan goes on above the last tread measured (measureStair's more_above_z): the flight was only partly seen */
+  scan_continues_above?: boolean;
 }
 export type Side = 'left' | 'right';
 /** The walking aid's frame (walker.ts WalkerCfg): x forward from the user's body, the frame from user_gap_m to +depth_m. */
@@ -37,6 +39,11 @@ export interface ParkPose { x: number; y: number; yaw: number }
 /** IRC R311.7 (riser max 7 3/4 in, variation 3/8 in, tread min 10 in, width 36 in, rail 34-38 in); check local code */
 export const CODE = { riser_max_m: 0.197, riser_var_m: 0.0095, tread_min_m: 0.254, width_min_m: 0.91, rail_m: [0.86, 0.97] as [number, number] };
 const DEFAULT_PITCH = 0.18 / 0.27;
+/** A straight-rail stairlift, typical spec sheet values (ASSUMED until a model is picked): folded depth from the wall
+ *  side, the narrowest flight makers fit, and the installed price range. */
+export const STAIRLIFT = { folded_m: 0.33, min_flight_m: 0.7, usd: [2000, 5000] as [number, number] };
+/** The wall side a stairlift rail runs on: away from the one seen handrail, so that rail stays free for others. */
+export const liftSide = (st: Stair): Side => (st.rails?.left === 'seen' && st.rails?.right !== 'seen' ? 'right' : 'left');
 
 const sub = (a: XY, b: XY): XY => [a[0] - b[0], a[1] - b[1]];
 const dot = (a: XY, b: XY) => a[0] * b[0] + a[1] * b[1];
@@ -184,21 +191,26 @@ export function stairChecks(st: Stair, c: StairCtx): CheckOut[] {
     out.push({ id: id(w), kind: 'stairs', label, verdict, note, position, ...extra });
   const mine = c.fixtures.filter(f => f.attach === st.name);
   const z = st.treads_z ?? [];
+  // A flight the scan only partly resolved (the landing well above the last tread found, or more scan above it) can't
+  // fail on riser or tread numbers: those come from a few steps of blur. Say so and send it to the tape (MEASURING.md).
+  const thin = st.measured === 'splat' && z.length > 0 && (!!st.scan_continues_above || (st.top_z != null && st.top_z - z[z.length - 1] > 0.3));
+  const scanOnly = (v: Verdict): Verdict => (thin && v !== 'ok' ? 'OT to verify' : v);
+  const thinNote = thin ? ` · the scan resolves only ${z.length} step${z.length === 1 ? '' : 's'} of this flight: tape-measure it (MEASURING.md)` : '';
   // 1-2. risers: each one, and how much they differ (uneven risers trip people who learned the first step)
   if (z.length) {
     const risers = z.map((v, k) => v - (k ? z[k - 1] : 0)), hi = Math.max(...risers), lo = Math.min(...risers);
     add('risers', `${st.name}: risers ${cm(lo)}–${cm(hi)} (code max ${(CODE.riser_max_m * 100).toFixed(1)} cm)`,
-      hi > CODE.riser_max_m + e ? 'fail' : hi > CODE.riser_max_m - e ? 'borderline, OT to verify' : 'ok',
-      `${z.length} tread${z.length === 1 ? '' : 's'} ${src}${st.measured === 'splat' ? ' (treads the scan missed are not counted)' : ''}`, { value_m: hi, limit_m: [0, CODE.riser_max_m] });
+      scanOnly(hi > CODE.riser_max_m + e ? 'fail' : hi > CODE.riser_max_m - e ? 'borderline, OT to verify' : 'ok'),
+      `${z.length} tread${z.length === 1 ? '' : 's'} ${src}${st.measured === 'splat' ? ' (treads the scan missed are not counted)' : ''}${thinNote}`, { value_m: hi, limit_m: [0, CODE.riser_max_m] });
     if (risers.length >= 2)
       add('riser_var', `${st.name}: risers differ by ${((hi - lo) * 100).toFixed(1)} cm (code max ${(CODE.riser_var_m * 100).toFixed(2)} cm)`,
-        hi - lo > CODE.riser_var_m + e ? 'fail' : hi - lo > CODE.riser_var_m - e ? 'borderline, OT to verify' : 'ok',
-        'an uneven step catches a foot that expects the same height', { value_m: hi - lo, limit_m: [0, CODE.riser_var_m] });
+        scanOnly(hi - lo > CODE.riser_var_m + e ? 'fail' : hi - lo > CODE.riser_var_m - e ? 'borderline, OT to verify' : 'ok'),
+        `an uneven step catches a foot that expects the same height${thinNote}`, { value_m: hi - lo, limit_m: [0, CODE.riser_var_m] });
   } else add('risers', `${st.name}: steps not captured`, 'OT to verify', 'the scan saw no treads: film the stairs from the bottom, or tape-measure them');
   // 3-4. tread depth and width
   if (st.tread_depth_m) add('tread', `${st.name}: treads ${cm(st.tread_depth_m)} deep (code min ${(CODE.tread_min_m * 100).toFixed(1)} cm)`,
-    st.tread_depth_m < CODE.tread_min_m - e ? 'fail' : st.tread_depth_m < CODE.tread_min_m + e ? 'borderline, OT to verify' : 'ok',
-    'a short tread leaves the heel hanging, worse coming down', { value_m: st.tread_depth_m, limit_m: [CODE.tread_min_m, 1] });
+    scanOnly(st.tread_depth_m < CODE.tread_min_m - e ? 'fail' : st.tread_depth_m < CODE.tread_min_m + e ? 'borderline, OT to verify' : 'ok'),
+    `a short tread leaves the heel hanging, worse coming down${thinNote}`, { value_m: st.tread_depth_m, limit_m: [CODE.tread_min_m, 1] });
   const w = st.width_m ?? F.width, ew = Math.max(c.margin.width, 0.03);   // marked by clicks: a few cm
   add('width', `${st.name}: ${cm(w)} wide (code min ${cm(CODE.width_min_m)})`, w < CODE.width_min_m - ew ? 'fail' : w < CODE.width_min_m + ew ? 'borderline, OT to verify' : 'ok',
     'room for a person and a rail on each side', { value_m: w, limit_m: [CODE.width_min_m, 9] });
@@ -260,6 +272,14 @@ export function stairChecks(st: Stair, c: StairCtx): CheckOut[] {
       add('walker', r.label, r.verdict, r.note, { value_m: r.reach_m, limit_m: [0, PARK_REACH_M] });
     }
   }
+  // 8b. a wheelchair can't climb at all: a stairlift (with a second chair waiting at the top), or one-floor living
+  if (c.device === 'wheelchair') {
+    const lift = mine.find(f => f.kind === 'stair_lift'), left = w - STAIRLIFT.folded_m;
+    if (!lift) add('chair', `${st.name}: a wheelchair can't use these stairs`, 'fail', 'a stairlift with a second wheelchair at the top, or a bedroom and bathroom on this floor');
+    else if (w < STAIRLIFT.min_flight_m - ew) add('chair', `${st.name}: ${cm(w)} wide, too narrow for a typical stairlift (${cm(STAIRLIFT.min_flight_m)})`, 'fail', 'a narrow-rail model or a platform lift: ask a fitter to measure');
+    else add('chair', `${st.name}: stairlift, ${cm(left)} of the ${cm(w)} flight left beside it folded`, 'borderline, OT to verify',
+      `the patient must transfer from the chair to the lift seat and back at the top: OT to check the transfer (folded depth ${cm(STAIRLIFT.folded_m)} is a typical spec value)`, { value_m: w, limit_m: [STAIRLIFT.min_flight_m, 9] });
+  }
   // 9. the top: between letting go of the rail and the walker (or the landing floor), something to hold
   const grab = mine.some(f => f.kind === 'grab_bar'), ext = mine.some(f => f.kind === 'rail_extension'), drawn = mine.some(f => f.kind === 'handrail' && !f.surface_m);
   if (has('left') || has('right'))
@@ -308,6 +328,10 @@ export function stairFixes(st: Stair): Intervention[] {
   if ((st.treads_z?.length ?? 0) >= 2) out.push({ id: `stair_nosing:${st.name}`, kind: 'add', label: `Contrasting non-slip strip on each step edge of the ${st.name}`,
     fixture: { name: `${st.name} edge strips`, kind: 'nosing_strip', attach: st.name, xyz: at(mid, 0, pitch(mid)) },
     cost_usd: 40, minutes: 30, effort: 1, product: 'contrasting anti-slip stair nosing tape' });
+  const ls = liftSide(st);
+  out.push({ id: `stair_lift:${st.name}`, kind: 'add', label: `Stairlift on the ${ls} of the ${st.name}, a second wheelchair at the top`,
+    fixture: { name: `${st.name} stairlift`, kind: 'stair_lift', attach: st.name, side: ls, xyz: at(mid, (ls === 'left' ? 1 : -1) * (F.width / 2 - 0.2), pitch(mid) + 0.5) },
+    cost_usd: 3500, minutes: 240, effort: 4, product: `straight-rail stairlift (typical $${STAIRLIFT.usd[0]}–${STAIRLIFT.usd[1]} installed) and a second wheelchair kept upstairs` });
   return out;
 }
 

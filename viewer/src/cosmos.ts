@@ -27,6 +27,7 @@ export function listClips(key: string, route: string) {
     li.append(b);
     li.insertAdjacentHTML('beforeend', ` ${tag} ${c.title ?? c.file}${c.condition ? ` · ${c.condition}` : ''}${c.mode === 'hero' ? ' · hero' : ''} · ${c.layout ?? ''}`);
     li.title = c.prompt ?? '';
+    if (c.layout === 'test') li.className = 'dbg';   // overlay-alignment test pattern: hidden in demo mode
     $('clips').appendChild(li);
   }
   return rankClips(clips, key, route).filter(c => c.exact).length;

@@ -69,5 +69,24 @@ export function buildMannequin(heightM = 1.65) {
       place(arms[n].upper, sh, elbow); place(arms[n].lower, elbow, grip);
     });
   }
-  return { group: g, update };
+  /** Seated in the wheelchair (wheelchair.ts frame): hips on the seat, feet on the footplates, hands on the rims. */
+  function seated(body: { x: number; y: number; yaw: number }, seatZ: number, rimY: number) {
+    const c = Math.cos(body.yaw), s = Math.sin(body.yaw);
+    const W = (px: number, py: number, pz: number) => v(body.x + c * px - s * py, body.y + s * px + c * py, pz);
+    const hipZ = seatZ + 0.08, sh = hipZ + (shoulderZ - 0.88 * k);
+    place(torso, W(0, 0, hipZ), W(-0.03, 0, sh));
+    hips.position.copy(W(0, 0, hipZ));
+    head.position.copy(W(-0.01, 0, sh + 0.16 * k));
+    [1, -1].forEach((side, n) => {
+      const hip = W(0, side * 0.1 * k, hipZ), knee = W(thigh, side * 0.11 * k, hipZ + 0.02), foot = W(thigh + 0.08, side * 0.09, 0.15);
+      place(legs[n].thigh, hip, knee); place(legs[n].shin, knee, foot);
+      legs[n].foot.position.copy(foot).add(W(0.06, 0, 0).sub(W(0, 0, 0)));
+      legs[n].foot.rotation.set(0, 0, body.yaw);
+      (legs[n].foot.material as THREE.MeshStandardMaterial).color.setHex(SKIN);
+      const shoulder = W(-0.03, side * 0.19 * k, sh - 0.04), grip = W(0.02, side * rimY, seatZ - 0.02);
+      const elbow = shoulder.clone().lerp(grip, 0.5).add(W(-0.08, side * 0.04, 0).sub(W(0, 0, 0)));
+      place(arms[n].upper, shoulder, elbow); place(arms[n].lower, elbow, grip);
+    });
+  }
+  return { group: g, update, seated };
 }

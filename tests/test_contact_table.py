@@ -20,7 +20,7 @@ s = np.sort(np.random.default_rng(0).lognormal(np.log(0.0141) - np.log(1 + (0.00
                                                 np.sqrt(np.log(1 + (0.0083 / 0.0141) ** 2)), 400_000))
 assert abs(s.mean() - 0.0141) < 2e-4 and abs(np.searchsorted(s, 0.010) / len(s) - float(mtc_cdf(0.010))) < 5e-3
 
-for cfg in sorted(ROOT.glob("config*.yaml")):
+for cfg in sorted(ROOT.glob("configs/*.yaml")):
     c = yaml.safe_load(cfg.read_text())
     if "game" not in c:
         continue

@@ -111,7 +111,7 @@ if __name__ == "__main__":
     W.mkdir(parents=True, exist_ok=True)
     make_ply(scene())
     make_cameras_and_images()
-    cfg = yaml.safe_load((ROOT / "config.yaml").read_text())
+    cfg = yaml.safe_load((ROOT / "configs" / "home.yaml").read_text())
     cfg.update(run_name="synthetic", work_dir=str(W))
     cfg["scale"]["assume_camera_height_m"] = None   # this test checks the marker path
     cfg_path = W / "config.yaml"

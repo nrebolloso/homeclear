@@ -3,7 +3,7 @@
 # Chrome won't play mpeg4/mp4v):  cosmos/fetch_cosmos.sh [job ...]    (no args = every finished job)
 set -euo pipefail
 cd "$(dirname "$0")/.."
-source ./hpg.sh && hpg_load config.yaml   # PY, HOST REPO HPG_ROOT, hpg_ssh / hpg_rsync (WSL on Windows)
+source ./hpg.sh && hpg_load configs/home.yaml   # PY, HOST REPO HPG_ROOT, hpg_ssh / hpg_rsync (WSL on Windows)
 C=$HPG_ROOT/cosmos
 JOBS=${*:-$(hpg_ssh "cd $C/outputs && ls -d */clip 2>/dev/null | cut -d/ -f1")}
 mkdir -p viewer/public/clips

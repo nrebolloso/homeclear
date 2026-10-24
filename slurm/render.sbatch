@@ -8,4 +8,4 @@
 #SBATCH --output=logs/%x-%j.log
 # Stage 9: render the splat at each hazard (gsplat needs CUDA) and run the image-edit backend.
 source slurm/env.sh
-python stages/09_fix_render.py "${1:-config.yaml}"
+python stages/09_fix_render.py "${1:-configs/home.yaml}"

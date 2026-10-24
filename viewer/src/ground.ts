@@ -48,7 +48,8 @@ export function groundDevice(group: THREE.Group, w: WalkerCfg) {
 export function footShadows(parent: THREE.Object3D) {
   const feet = [blob(0.16, 0.08, 0.75), blob(0.16, 0.08, 0.75)], body = blob(0.3, 0.26, 0.35);
   parent.add(...feet, body);
-  return (bodyPose: { x: number; y: number; yaw: number }, pos: [number, number, number][]) => {
+  const fn = (bodyPose: { x: number; y: number; yaw: number }, pos: [number, number, number][]) => {
+    for (const b of [...feet, body]) b.visible = true;
     feet.forEach((b, n) => {
       const [x, y, lift] = pos[n], k = Math.max(0.4, 1 - lift * 10);
       b.position.set(x + 0.05 * Math.cos(bodyPose.yaw), y + 0.05 * Math.sin(bodyPose.yaw), 0.002);   // the foot box sits ahead of the ankle
@@ -59,6 +60,8 @@ export function footShadows(parent: THREE.Object3D) {
     body.position.set(bodyPose.x, bodyPose.y, 0.002);
     body.rotation.z = bodyPose.yaw;
   };
+  /** off while the mannequin sits (in a wheelchair the chair's own blobs ground it); the next update turns them on */
+  return Object.assign(fn, { hide: () => { for (const b of [...feet, body]) b.visible = false; } });
 }
 
 /** Render the splat into an environment map from `at` (meshes hidden, so they don't reflect themselves) and light every

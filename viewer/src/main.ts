@@ -3,9 +3,13 @@ import * as THREE from 'three';
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { stamp, carvedPolys, placementOk, polyCells, worldFootprint, toCell, applyIntervention, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
+import { stamp, carvedPolys, placementOk, polyCells, edt, worldFootprint, toCell, applyIntervention, placedFixtures, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
 import { buildDevice as deviceMesh, type WalkerCfg } from './walker.ts';
 import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
+import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z } from './wheelchair.ts';
+import { pathLights, createLights3d } from './lights.ts';
+import { strokePersona } from './stroke.ts';
+import { bathroomFixes, createBathroom3d } from './bathroom.ts';
 import { nightShader } from './night.ts';
 import { createVision, PROFILES, type Profile } from './vision.ts';
 import { createHeatOverlay, nights, drawTimeline } from './heat.ts';
@@ -35,6 +39,7 @@ import QRCode from 'qrcode';
 import { mountFrontend, type FrontendAdapter } from './frontend.ts';
 import { createFrontendXR } from './frontend-xr.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
+import type { Ghost } from './sim.ts';
 import type { WorldModel } from './worldmodel.ts';
 import { setupXR, type XrEditor } from './xr.ts';
 import { plainSpot, tourStand } from './xrtour.ts';
@@ -44,7 +49,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 // model and scene text (Cosmos Reason notes, hazard details) goes into innerHTML escaped; same as report.ts's, which can't
 // be imported: that module renders the report page when loaded
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
-const RUN = new URLSearchParams(location.search).get('scene') ?? 'game_synth';
+const RUN = new URLSearchParams(location.search).get('scene') ?? 'kitchen4_lighter';
 const BASE = `scene/${RUN}/`;
 const json = (f: string) => fetch(BASE + f).then(r => { if (!r.ok) throw new Error(`${BASE}${f}: ${r.status}`); return r.json(); });
 const bin = (f: string) => fetch(BASE + f).then(r => r.arrayBuffer());
@@ -58,6 +63,10 @@ persona.step_model = STEP ?? persona.step_model ?? 'hand';
 const personas: Record<string, { label: string; walker: WalkerCfg; gait: any; plan: any; vision?: string }> = sc.personas ? await json(sc.personas)
   : { patient: { label: 'This patient', walker: walkerCfg, gait: persona, plan: {}, vision: persona.vision } };
 let personaKey = 'patient';
+// ---------- wheelchair (wheelchair.ts): one more comparison persona in every scene; a chair has no fall model, so its
+// contact table is all zeros and the ADA checks (turning space, level changes, door width, stairs) carry the result
+if (!personas.wheelchair) personas.wheelchair = wheelchairPersona(personas.patient);
+if (!personas.stroke) personas.stroke = strokePersona(personas.patient);   // stroke.ts: the stronger hand flips to the right
 const stepModel = persona.step_model === 'learned' ? await fetch('models/step_model.json').then(r => r.json()) : undefined;
 const worldModel: WorldModel | undefined = persona.step_model === 'world' ? await fetch('models/world_model.json').then(r => r.json()) : undefined;
 if (worldModel) worldModel.shift = walkerCfg.user_gap_m + walkerCfg.depth_m / 2 - worldModel.mean_gap_m;   // learned.py Learned.shift
@@ -69,7 +78,9 @@ const coverage = new Uint8Array(await bin(sc.grid.coverage));
 const est = sc.grid.bump_estimated ? new Uint8Array(await bin(sc.grid.bump_estimated)) : new Uint8Array(nx * ny);
 const objs: any[] = sc.objects;
 const interventions: Intervention[] = sc.interventions;
+let pathLightIvs: Intervention[] = [];   // "Light the path" (lights.ts): kept in the fix list like the stair and door fixes
 const risk = sc.risk;
+risk.contact_table.wheelchair ??= ZERO_CONTACTS;
 // every walk the patient makes (stage 12 routes.json); older exports have only route.json: one night route
 const routes: RouteDef[] = sc.routes ? await json(sc.routes) : [{ name: 'route', ...route, trips_per_night: risk.trips_per_night, night: true }];
 let selRoute = 0;
@@ -127,12 +138,21 @@ const label = (text: string, cls = '') => {
 };
 
 // movable objects: splat in a group at its pivot (PLY is pivot-local), invisible box proxy for picking, tinted fill
-const original: Pose[] = objs.map(o => ({ x: o.pivot[0], y: o.pivot[1], yaw: 0 }));
+// scanned = where the piece was filmed (its fill, its never-filmed floor); original = where the walk starts: the scanned
+// spot, or a staged `start` [x, y, yaw deg] (tools/stage_demo_hazards.py pulls a chair into the path)
+const scanned: Pose[] = objs.map(o => ({ x: o.pivot[0], y: o.pivot[1], yaw: 0 }));
+const original: Pose[] = objs.map((o, k) => (o.start ? { x: o.start[0], y: o.start[1], yaw: (o.start[2] * Math.PI) / 180 } : scanned[k]));
 // the floor under each object was never filmed, and specks inside its box are its own splat leftovers, but it stands
 // there now: count its own spot as clear floor for placement only (planning still sees the measured layers), else every
 // drag that still overlaps that spot snaps back (the kitchen rug couldn't move at all otherwise)
 const placeBase: Layers = { ...base, floor: base.floor.slice(), obst: base.obst.slice() };
-objs.forEach((o, k) => { for (const c of polyCells(g, worldFootprint(o, original[k]))) { placeBase.floor[c] = 1; placeBase.obst[c] = 0; } });
+objs.forEach((o, k) => { for (const c of polyCells(g, worldFootprint(o, scanned[k]))) { placeBase.floor[c] = 1; placeBase.obst[c] = 0; } });
+// free walk keeps to filmed floor, but the floor under the furniture was never filmed: once a piece is moved or removed
+// you can walk onto its spot (only where it is floor: a box on a cabinet doesn't open the cabinet top). Unfilmed seams
+// up to 12 cm wide (beside a chair leg, between two outlines) count as filmed too, else they stop you mid-room
+const seen = coverage.map(v => +(v > 0));
+objs.forEach((o, k) => { for (const c of polyCells(g, worldFootprint(o, scanned[k]))) if (base.floor[c]) seen[c] = 1; });
+const unseen = edt(seen, nx, ny).map(d => +(d * g.cell_m > 0.06));
 // objects filmed overlapping (a chair pushed in under the table) share floor cells but not space: they may keep overlapping
 // shortcut: 2D footprints, so once apart they may also be dropped into each other; a height-aware check would fix that
 const startCells = objs.map((o, k) => new Set(polyCells(g, worldFootprint(o, original[k]))));
@@ -156,7 +176,7 @@ const items = objs.map(o => {
   const fill = splat(o.fill);
   fill.recolor = new THREE.Color(1, 0.75, 1);      // tint: imagined, not measured (light, so a generated floor texture still reads)
   fill.visible = false;
-  const tag = label('imagined, not measured', 'imag');
+  const tag = o.placed ? new THREE.Object3D() : label('imagined, not measured', 'imag');   // staged for the demo: the floor under it was filmed
   tag.position.set(o.pivot[0], o.pivot[1], 0.15);
   tag.visible = false;
   scene.add(fill, tag);
@@ -212,11 +232,17 @@ scene.add(verifyGroup);
 // ---------- grid overlays: route, hazards, ghosts, fog, taped strips ----------
 const routeLine = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0x55c7ef, size: 3, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
 // ghost walkers as one dot per step (WebGL lines are 1 px: trails hugging the route vanished); red = a toe contact
-const ghostDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ vertexColors: true, size: 5, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
+// one palette: cyan = footsteps (ghosts, heatmap, next-step cloud), orange -> red = bumps and contacts (rings, heat, leg flash), white = hand-rule baseline
+const DOT = (() => { const c = document.createElement('canvas'); c.width = c.height = 32; const x = c.getContext('2d')!; const g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, '#fff'); g.addColorStop(0.6, '#fffd'); g.addColorStop(1, '#fff0'); x.fillStyle = g; x.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(c); })();   // round soft dots, not square pixels
+const ghostDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: DOT, vertexColors: true, size: 5, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
 const hazardGroup = new THREE.Group(), tapeGroup = new THREE.Group();
 // overlays draw after the splats: splats don't write depth, so drawn first they'd be painted over (rings, ghosts, fog would vanish)
-for (const o of [routeLine, ghostDots, hazardGroup, tapeGroup]) o.renderOrder = 1;
-scene.add(routeLine, ghostDots, hazardGroup, tapeGroup);
+// the hand-rule baseline's ghosts (when a learned model walks): white, toggled apart, to show where the two disagree
+const handDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: DOT, vertexColors: true, size: 4, sizeAttenuation: false, transparent: true, opacity: 0.7, depthWrite: false }));
+handDots.visible = false;
+for (const o of [routeLine, ghostDots, handDots, hazardGroup, tapeGroup]) o.renderOrder = 1;
+scene.add(routeLine, ghostDots, handDots, hazardGroup, tapeGroup);
 { // fog where the capture saw a cell from fewer than coverage_good cameras: we don't trust the splat there
   const cv = document.createElement('canvas');
   cv.width = nx; cv.height = ny;
@@ -249,6 +275,11 @@ const gapTag = label('', 'red');
 gapTag.visible = false;
 scene.add(gapTag);
 const body = { x: 0, y: 0, yaw: 0, pitch: -(+(PARAMS.get('pitch') ?? 28)) * Math.PI / 180 };   // ?pitch=<deg down>: more walker, less room
+// Explore (the toolbar button) is for looking around, not for testing the walker: the walker stays parked where you
+// left it and nothing collides with you (walls, furniture, live physics), so the camera can't snag or shove a chair.
+// Free walk (keys / game.setFree) keeps the walker on you and stays fenced; that's what the physics and e2e checks use.
+const explore = { on: false, parked: null as null | { x: number; y: number; yaw: number } };
+function setExplore(on: boolean) { explore.on = on; explore.parked = on ? { x: body.x, y: body.y, yaw: body.yaw } : null; }
 let mode: 'auto' | 'free' | 'fly' = 'auto', autoS = 0, autoPause = 0;
 let routePaused = false, routeSpeed = 1, frontendVR: ReturnType<typeof createFrontendXR> | null = null, xrFollowRoute = false;
 
@@ -307,15 +338,19 @@ async function replan(): Promise<number> {
 function drawPlan(r: Eval) {
   routeLine.geometry.dispose();
   routeLine.geometry = new THREE.BufferGeometry().setFromPoints(r.xy.map(p => new THREE.Vector3(p[0], p[1], 0.035)));
-  const pos: number[] = [], col: number[] = [];
-  r.ghosts.forEach((gh, n) => {
-    const z = 0.04 + n * 0.0004;
-    gh.pts.forEach((q, k) => { pos.push(q[0], q[1], z); col.push(...(gh.hit[k] ? [1, 0.15, 0.15] : [0.45, 0.7, 1])); });
-  });
-  ghostDots.geometry.dispose();
-  ghostDots.geometry = new THREE.BufferGeometry();
-  ghostDots.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  ghostDots.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const dots = (pts: THREE.Points, ghosts: Ghost[], rgb: number[]) => {
+    const pos: number[] = [], col: number[] = [];
+    ghosts.forEach((gh, n) => {
+      const z = 0.04 + n * 0.0004;
+      gh.pts.forEach((q, k) => { pos.push(q[0], q[1], z); col.push(...(gh.hit[k] ? [1, 0.19, 0.19] : rgb)); });
+    });
+    pts.geometry.dispose();
+    pts.geometry = new THREE.BufferGeometry();
+    pts.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    pts.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  };
+  dots(ghostDots, r.ghosts, [0.3, 0.79, 0.94]);
+  dots(handDots, r.hand?.ghosts ?? [], [0.92, 0.92, 0.96]);
   for (const c of [...hazardGroup.children]) {
     hazardGroup.remove(c);
     c.traverse(x => {
@@ -342,11 +377,12 @@ function renderPanels() {
   const r = current!;
   const d = r.per_month - (baselinePerMonth ?? r.per_month);
   const perRoute = r.routes.map((q, k) => `<li class="${k === r.sel ? 'sel' : ''}">${q.name}${q.night ? ' (night)' : ''}, ${q.trips_per_night}/night: ` +
-    (q.error ? '<span class="delta-bad">no route</span>' : `<span class="measured">${fmt(q.per_month)}</span> (${fmt(q.lo)}–${fmt(q.hi)})`) + '</li>').join('');
+    (q.error ? '<span class="delta-bad">no route</span>' : `<span class="measured">${fmt(q.per_month)}</span><span class="dbg"> (${fmt(q.lo)}–${fmt(q.hi)})</span>`) + '</li>').join('');
   $('risk').innerHTML = r.error ? `<span class="delta-bad">no route for this walker</span><ul>${perRoute}</ul>` :
-    `<div class="big measured">${fmt(r.per_month)}</div><div class="range">likely ${fmt(r.per_month_lo)}–${fmt(r.per_month_hi)}</div>` +
-    `expected toe contacts / month, all routes (${risk.rollouts} simulated trips per route; steps: ${persona.step_model === 'world' ? 'world model (heels + walker)' : persona.step_model === 'learned' ? 'learned model' : 'hand rule'}; ` +
-    `range = measured height error ±${(100 * sc.hazard_rules.margin_m.height).toFixed(1)} cm + simulation noise)` +
+    `<div class="big measured">${fmt(r.per_month)}</div><div class="range dbg">likely ${fmt(r.per_month_lo)}–${fmt(r.per_month_hi)}</div>` +
+    `expected toe contacts / month, all routes (${risk.rollouts} simulated trips per route; steps: ${persona.step_model === 'world' ? 'world model (heels + walker)' : persona.step_model === 'learned' ? 'learned model' : 'hand rule'})` +
+    `<span class="dbg"> range = measured height error ±${(100 * sc.hazard_rules.margin_m.height).toFixed(1)} cm + simulation noise</span>` +
+    (r.hand ? `<div class="range">hand-rule baseline on the same route: ${fmt(r.hand.per_month)}</div>` : '') +
     `<ul class="routes">${perRoute}</ul>` +
     `original layout: ${fmt(baselinePerMonth!)} → now ${fmt(r.per_month)} <span class="${d <= 0 ? 'delta-good' : 'delta-bad'}">(${d <= 0 ? '' : '+'}${fmt(d)})</span>`;
   const geo = r.hazards.map(h => `<li><span class="measured">${h.type === 'floor_bump' ? (h.estimated ? `${h.name}: thin cable/cord, ~${(h.height_m! * 100).toFixed(1)} cm ESTIMATED (classified, not measured)` : `${h.name}: ${(h.height_m! * 100).toFixed(1)} cm bump`) : `tight passage: ${(h.min_side_clearance_m! * 100).toFixed(0)} cm each side`}</span>` +
@@ -506,7 +542,7 @@ tc.addEventListener('dragging-changed', e => { if (!e.value && selected >= 0) co
 
 function syncObjects() {
   items.forEach((it, k) => {
-    const p = layout.poses[k], o = original[k];
+    const p = layout.poses[k], o = scanned[k];
     it.group.position.set(p.x, p.y, 0); it.group.rotation.set(0, 0, p.yaw);   // upright (live physics re-tilts a tipped one)
     it.group.visible = !p.removed;
     it.mesh.opacity = 1;
@@ -572,9 +608,10 @@ const costOf = (id: string) => {   // what a fix takes: money, time, product (co
   return ` <small class="cost">$${iv.cost_usd}${iv.minutes ? ` · ${iv.minutes} min` : ''}${iv.product ? ` · ${iv.product}` : ''}</small>`;
 };
 $('planfixes').onclick = async () => {
-  $('fixes').innerHTML = '<li>rolling out each fix…</li>';
+  // an Apply re-runs this: keep the old list up until the new one is ready (a one-line placeholder shrinks the pane and snaps its scroll to the top)
+  if (!$('fixes').childElementCount) $('fixes').innerHTML = '<li>rolling out each fix…</li>';
   const { before, fixes } = await ask({ type: 'fixes', layout, sel: selRoute });
-  $('fixes').innerHTML = '';
+  const items: HTMLLIElement[] = [];
   for (const f of fixes) {
     const li = document.createElement('li');
     li.innerHTML = f.error ? `${f.label}: <span class="delta-bad">blocks the route</span> ` :
@@ -584,8 +621,9 @@ $('planfixes').onclick = async () => {
     b.textContent = 'Apply'; b.disabled = !!f.error || applied.includes(f.id);
     b.onclick = () => applyFix(f.id);
     li.appendChild(b);
-    $('fixes').appendChild(li);
+    items.push(li);
   }
+  $('fixes').replaceChildren(...items);
   game.fixes = fixes;
 };
 function applyFix(id: string) {
@@ -655,7 +693,7 @@ $('replay').onclick = () => (replay.on ? stopReplay() : startReplay());
 
 async function physicsPass() {
   clearGroup(snagGroup);
-  if (walkerCfg.device === 'cane') { $('snags').innerHTML = '<li>walker only (this persona uses a cane)</li>'; game.physics = null; showPhysics(); return null; }
+  if (walkerCfg.device === 'cane' || walkerCfg.device === 'wheelchair') { $('snags').innerHTML = `<li>walker only (this persona uses a ${walkerCfg.device})</li>`; game.physics = null; showPhysics(); return null; }
   $('snags').innerHTML = '<li>pushing the walker along each route…</li>';
   const { routes: res } = await ask({ type: 'physics', layout, walker: walkerCfg, cfg: game.physicsCfg });   // game.physicsCfg = { push_max_n: 60, ... } to try other people
   const ot = '<span class="ot">estimate, OT to verify</span>';
@@ -814,7 +852,9 @@ function scanRail(st: Stair, side: Side): SplatMesh | null {
   return mesh;
 }
 const parkedWalkerCfg = { ...personas.patient.walker, device: 'walker' as const };
-const stairs3d = createStairs3d(scene, () => buildDevice(parkedWalkerCfg).group, scanRail);
+const stairs3d = createStairs3d(scene, () => buildDevice(parkedWalkerCfg).group, scanRail, () => buildDevice(WHEELCHAIR).group);
+const lights3d = createLights3d(scene), bath3d = createBathroom3d(scene);
+let pathLightKey = '';
 const doors3d = createDoors3d(scene, mainSplat);
 const STAIR_KEY = `homeclear:stairs:${RUN}`, DOOR_KEY = `homeclear:doors:${RUN}`, baseIvCount = interventions.length;
 let stairs: Stair[] = [], marked: Stair[] = [];
@@ -823,6 +863,7 @@ const cfgDoors: Door[] = sc.doors ?? [];
 try { markedDoors = JSON.parse(localStorage.getItem(DOOR_KEY) ?? '[]'); } catch { markedDoors = []; }
 let stepLightList: PointLight[] = [];
 let strongSide: Side | null = persona.strong_side ?? null;
+const patientStrong = strongSide;   // a comparison persona may bring its own (stroke.ts); back to this on the patient
 // the marking tool's state (its hook block is below the doorways): a marking in progress, or handles shown to drag
 const mk3d = createMarker3d(scene);
 let mk: Marking | null = null, editing = false;
@@ -843,7 +884,7 @@ const moreAbove = new Map<string, number>();   // stairs whose top was marked be
 const measured = (st: Stair): Stair => {
   const { flat_points: _, more_above_z, ...m } = measureStair(splatPoints(st), st);
   if (more_above_z !== null) moreAbove.set(st.name, more_above_z); else moreAbove.delete(st.name);
-  return m;
+  return { ...m, scan_continues_above: more_above_z !== null };
 };
 const cfgStairs: Stair[] = (sc.stairs ?? []).map((st: Stair) => (st.treads_z ? st : measured(st)));
 try { marked = JSON.parse(localStorage.getItem(STAIR_KEY) ?? '[]'); } catch { marked = []; }
@@ -855,9 +896,10 @@ function setupStairs() {
   // a door-leaf object next to a jamb marks the hinge side (widening grows the other way) and brings its own fixes
   const leaves = objs.flatMap((o, k) => (o.kind === 'door' ? [worldFootprint(o, original[k])] : []));
   doors = [...cfgDoors.filter(c => !markedDoors.some(m => m.name === c.name)), ...markedDoors].map(d => ({ ...d, hinge: d.hinge ?? hingeSide(d, leaves) }));
-  const need = needWidth(walkerCfg.width_m, init.rules.clearance_margin_m);
-  interventions.splice(baseIvCount, Infinity, ...stairs.flatMap(stairFixes), ...doors.flatMap(d => doorFixes(d, need, { leafObject: hingeSide(d, leaves) !== null })));
-  const ids = new Set(interventions.map(i => i.id)), keep = (id: string) => !/^(stair|door)_/.test(id) || ids.has(id);
+  const need = Math.max(needWidth(walkerCfg.width_m, init.rules.clearance_margin_m), walkerCfg.device === 'wheelchair' ? ADA.door_clear_m : 0);
+  interventions.splice(baseIvCount, Infinity, ...stairs.flatMap(stairFixes), ...doors.flatMap(d => doorFixes(d, need, { leafObject: hingeSide(d, leaves) !== null })), ...pathLightIvs,
+    ...bathroomFixes(sc.fixtures ?? [], g, base, strongSide));   // a grab bar beside each toilet, on its side wall (bathroom.ts)
+  const ids = new Set(interventions.map(i => i.id)), keep = (id: string) => !/^(stair_|door_|path_light:|grab_bar_toilet:)/.test(id) || ids.has(id);
   applied = applied.filter(keep);
   layout = { ...layout, added: layout.added?.filter(keep), ...(layout.carved ? { carved: layout.carved.filter(c => ids.has(c.id)) } : {}),
     ...(layout.placed ? { placed: Object.fromEntries(Object.entries(layout.placed).filter(([id]) => ids.has(id))) } : {}) };
@@ -878,7 +920,12 @@ function drawStairs(lay = layout) {
   const change = (d: Door) => { const c = lay.carved?.find(x => x.target === d.name); return c ? { gain: c.by_m, grow: growOf(d, c.id.split(':')[0].slice('door_'.length)) } : { gain: 0, grow: 'both' as const }; };
   doors3d.build(doors, Object.fromEntries(doors.map(d => [d.name, change(d)])), Object.fromEntries(doors.map(d => [d.name, verdict(d)])));
   // motion step lights light the scan itself at night (night.ts); only re-light when they change: it regenerates every splat
-  const L = stairs.filter(st => lay.added?.includes(`stair_lights:${st.name}`)).flatMap(st => stepLights(st).map(p => ({ ...p, r: 0.7 }))).slice(0, MAX_EXTRA_LIGHTS);
+  // added nightlights (lights.ts): a bulb, and at night a point light and a halo; they light the scan like the step lights
+  const pl = placedFixtures(interventions, lay).filter(f => f.light_r && f.xyz), plKey = JSON.stringify(pl);
+  if (plKey !== pathLightKey) { pathLightKey = plKey; lights3d.build(pl); }
+  bath3d.build(placedFixtures(interventions, lay).filter(f => f.kind === 'grab_bar' && (sc.fixtures ?? []).some((t: any) => t.kind === 'toilet' && t.name === f.attach)));
+  const L = [...stairs.filter(st => lay.added?.includes(`stair_lights:${st.name}`)).flatMap(st => stepLights(st).map(p => ({ ...p, r: 0.7 }))),
+    ...pl.map(f => ({ x: f.xyz![0], y: f.xyz![1], z: f.xyz![2], r: f.light_r! }))].slice(0, MAX_EXTRA_LIGHTS);
   if (JSON.stringify(L) !== JSON.stringify(stepLightList)) { stepLightList = L; updateNight(); }
 }
 function saveMarked() { try { localStorage.setItem(STAIR_KEY, JSON.stringify(marked)); } catch { /* private window: kept for this visit only */ } }
@@ -931,7 +978,7 @@ $('copystairs').onclick = () => copyStairsYaml();
 {
   const sel = $<HTMLSelectElement>('strongside');
   sel.value = strongSide ?? '';
-  sel.onchange = () => { strongSide = (sel.value || null) as Side | null; init = { ...init, strong_side: strongSide }; worker.postMessage({ type: 'init', init }); replan(); };
+  sel.onchange = () => { strongSide = (sel.value || null) as Side | null; setupStairs(); replan(); };   // setupStairs posts init (the toilet grab bar's side note follows too)
 }
 /** What is really at each side of a stair (the first by default), set by hand over what the scan saw (kept with the stair). */
 function setRail(side: Side, v: 'seen' | 'none' | null, name = stairs[0]?.name) {
@@ -1347,8 +1394,15 @@ function topdownURL() {
     route: current?.xy, hazards: current?.hazards });
   return cv.toDataURL('image/png');
 }
-function openReport() {
+async function openReport() {
+  const w = window.open('about:blank', '_blank');   // opened before the await so the click still counts as a user gesture
   const p = personas[personaKey], c = current!;
+  const { before, fixes } = await ask({ type: 'fixes', layout, sel: selRoute });   // the fixes not yet applied, each rolled out from this layout
+  const ranked_fixes = fixes.filter((f: any) => !applied.includes(f.id)).map((f: any) => {
+    const iv = interventions.find(i => i.id === f.id);
+    return { label: f.label, error: f.error, reduction: Math.max(0, f.reduction), share: before > 0 ? f.reduction / before : 0, clearance_gain_m: f.clearance_gain_m,
+      cost_usd: iv?.cost_usd, minutes: iv?.minutes, effort: iv?.effort, product: iv?.product };
+  }).sort((a: any, b: any) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.clearance_gain_m - a.clearance_gain_m) || ((a.cost_usd ?? 0) - (b.cost_usd ?? 0)));
   const payload: ReportPayload = {
     scene: RUN, created: new Date().toISOString(), synthetic: (sc.synthetic ?? []).length > 0 || /synth/.test(RUN), scale_note: sc.scale_note,
     route: routes[selRoute].name,
@@ -1359,10 +1413,13 @@ function openReport() {
     margins: sc.hazard_rules.margin_m, actions: describeChanges(), suggestions,
     reason: hzFile.hazards.filter(h => h.source === 'cosmos_reason'),
     clips: (game.clips ?? []).filter((k: any) => k.layout_key === layoutKey(objs, layout)).map((k: any) => k.title ?? k.file),
-    topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85),
+    topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85), ranked_fixes,
   };
   sessionStorage.setItem(`report:${RUN}`, JSON.stringify(payload));
-  return window.open(`report.html?scene=${encodeURIComponent(RUN)}`, '_blank');
+  if (!w) return window.open(`report.html?scene=${encodeURIComponent(RUN)}`, '_blank');
+  w.sessionStorage.setItem(`report:${RUN}`, JSON.stringify(payload));   // about:blank shares our origin; its storage survives the navigation
+  w.location.href = `report.html?scene=${encodeURIComponent(RUN)}`;
+  return w;
 }
 const LOCAL = /^(localhost|127\.)/;
 async function openFixCard() {
@@ -1429,6 +1486,7 @@ function updateNight() {
   const p = k >= 0 && !layout.poses[k].removed ? layout.poses[k] : null;
   const on = $<HTMLInputElement>('night').checked;
   night.set(on, p && { x: p.x, y: p.y, r: objs[k].light_radius_m ?? 1.5 }, stepLightList);
+  lights3d.setNight(on);
   for (const s of splats) s.updateVersion();
   hemi.intensity = scene.environment ? (on ? 0.1 : HEMI_ENV) : on ? 0.25 : 2.2;
   scene.environmentIntensity = on ? 0.07 : 1;   // the room's light, captured by day (ground.ts); night.ts scales the scan by 0.07
@@ -1437,6 +1495,30 @@ function updateNight() {
   scene.background = new THREE.Color(on ? 0x050607 : 0x1d2126);
 }
 $('night').onchange = updateNight;
+// ---------- light the path (lights.ts): nightlights where the selected route is dark, applied as fixes ----------
+async function lightPath() {
+  if (!current?.xy?.length) return { added: 0, note: 'no route to light' };
+  const k = objs.findIndex(o => o.kind === 'nightlight');
+  const have = [...(k >= 0 && !layout.poses[k].removed ? [{ x: layout.poses[k].x, y: layout.poses[k].y, r: objs[k].light_radius_m ?? 1.5 }] : []),
+    ...placedFixtures(interventions, layout).flatMap(f => (f.light_r && f.xyz ? [{ x: f.xyz[0], y: f.xyz[1], r: f.light_r }] : []))];
+  const before = current.per_month, fresh = pathLights(g, base, current.xy, have, routes[selRoute].name, 0.75, pathLightIvs.length + 1);   // fixed walls only: never on a door leaf or furniture
+  if (!fresh.length) return { added: 0, note: 'this route is already lit end to end' };
+  pathLightIvs = [...pathLightIvs, ...fresh];
+  setupStairs();
+  for (const iv of fresh) { layout = applyIntervention(objs, layout, iv); applied.push(iv.id); }
+  syncObjects(); await replan(); drawStairs();
+  const pct = before > 0 && current ? Math.round((100 * (before - current.per_month)) / before) : 0;
+  return { added: fresh.length, note: `${fresh.length} motion nightlight${fresh.length === 1 ? '' : 's'} added along the ${routes[selRoute].name}` +
+    (pct > 0 ? `: simulated toe contacts down ${pct}%` : '') + ` (darkness raises contacts ${risk.dark_contact_multiplier}×, an assumed number). Designed, not built.` };
+}
+async function clearPathLights() {
+  const ids = new Set(pathLightIvs.map(iv => iv.id));
+  layout = { ...layout, added: layout.added?.filter(id => !ids.has(id)) };
+  applied = applied.filter(id => !ids.has(id));
+  pathLightIvs = [];
+  setupStairs(); syncObjects(); await replan(); drawStairs();
+}
+game.lights = { lightPath, clear: clearPathLights, list: () => pathLightIvs.map(iv => ({ id: iv.id, ...iv.fixture })) };
 const heat = createHeatOverlay(g, scene);
 $('heat').onchange = () => replan();
 $('third').onchange = () => { view.third = $<HTMLInputElement>('third').checked; if (view.third) Object.assign(view, { back: 1.8, up: 0.5 }); };
@@ -1472,10 +1554,13 @@ async function setPersona(key: string) {
   centreOffset = walkerCfg.user_gap_m + walkerCfg.depth_m / 2;
   if (worldModel) worldModel.shift = centreOffset - worldModel.mean_gap_m;   // learned.py Learned.shift, for this walker
   init = { ...init, persona, plan: { ...sc.plan, ...p.plan, walker_width_m: walkerCfg.width_m }, device: walkerCfg.device };
-  worker.postMessage({ type: 'init', init });
+  strongSide = p.gait.strong_side ?? patientStrong; $<HTMLSelectElement>('strongside').value = strongSide ?? '';
+  setupStairs();   // posts init; door fixes widen to this device's need (ADA 815 mm for a wheelchair)
+  night.setReach(walkerCfg.device === 'wheelchair'); for (const s of splats) s.updateVersion();   // reach lens (night.ts)
   baselinePerMonth = null; baseEvals = [];
   if (p.vision) game.setVision(p.vision);
-  $('personanote').textContent = key === 'patient' ? '' : 'comparison: gait and planner numbers for this persona are assumptions, not this patient';
+  $('personanote').textContent = key === 'patient' ? '' : walkerCfg.device === 'wheelchair' ? 'comparison: a typical chair (assumed size); no trip model for a wheelchair, so trips read zero: see the ADA checks. Green: within seated reach (38-122 cm); red: out of reach'
+    : 'comparison: gait and planner numbers for this persona are assumptions, not this patient';
   const ms = await replan();
   if (!current?.error) Object.assign(body, routePose(0, 0, Infinity));
   return ms;
@@ -1528,6 +1613,7 @@ async function setFillBackend(b: string) {
   return b;
 }
 $('ghosts').onchange = () => { ghostDots.visible = $<HTMLInputElement>('ghosts').checked; };
+$('handghosts').onchange = () => { handDots.visible = $<HTMLInputElement>('handghosts').checked; };
 
 // ---------- performance mode (perf.ts) ----------
 // One switch thins what is drawn: no ghost walkers, heatmap, imagined ceiling, bump heights or fog, fewer splat pixels, a
@@ -1607,7 +1693,7 @@ function setWalk(m: 'auto' | 'free' | 'fly') {
   if (m !== 'fly') body.pitch = THREE.MathUtils.clamp(body.pitch, -1.2, 0.6);
   mode = m;
   $('autoplay').classList.toggle('on', m === 'auto'); $('free').classList.toggle('on', m === 'free'); $('fly').classList.toggle('on', m === 'fly');
-  if (m === 'auto') { autoS = 0; autoPause = 0; }
+  if (m === 'auto') { autoS = 0; autoPause = 0; setExplore(false); }
 }
 $('autoplay').onclick = () => setWalk('auto');
 $('free').onclick = () => setWalk('free');
@@ -1620,7 +1706,7 @@ const walkerPoint = (b: { x: number; y: number; yaw: number }, [px, py]: number[
 function canStand(b: { x: number; y: number; yaw: number }) {
   const c = cellAt(b.x, b.y);
   const S = live ? placeBase : L;   // with live physics the walker meets furniture as bodies, not as a wall on the grid
-  if (!S.floor[c] || S.obst[c] || coverage[c] === 0) return false;           // only where the capture actually saw floor
+  if (!S.floor[c] || S.obst[c] || unseen[c]) return false;           // only where the capture actually saw floor
   return walker.probes.every(p => { const k = cellAt(...walkerPoint(b, p)); return S.floor[k] && !S.obst[k]; });
 }
 /** Route point + heading at arc length s (the route is the walker frame's centre). */
@@ -1682,6 +1768,12 @@ function freeStep(dt: number) {
   const k = (c: string) => keys.has(c);
   const turn = (+(k('KeyA') || k('ArrowLeft')) - +(k('KeyD') || k('ArrowRight'))) * 1.1 * dt;
   const fwd = (+(k('KeyW') || k('ArrowUp')) - +(k('KeyS') || k('ArrowDown'))) * 0.5 * dt;
+  if (explore.on) {   // no fence: through walls and furniture, kept inside the scanned grid
+    const [x0, y0] = g.origin_xy, x1 = x0 + g.shape[0] * g.cell_m, y1 = y0 + g.shape[1] * g.cell_m;
+    body.yaw += turn;
+    body.x = THREE.MathUtils.clamp(body.x + Math.cos(body.yaw) * fwd, x0, x1); body.y = THREE.MathUtils.clamp(body.y + Math.sin(body.yaw) * fwd, y0, y1);
+    return;
+  }
   // sub-steps of at most half a cell, so a slow frame can't step over a one-cell-thin wall
   const n = Math.max(1, Math.ceil(Math.abs(fwd) / (g.cell_m / 2)));
   for (let i = 0; i < n; i++) {
@@ -1701,10 +1793,11 @@ function flyStep(dt: number) {
 
 const state = { legs: [] as { x: number; y: number; h: number; flash: boolean; est: boolean }[], gap: Infinity, red: false };
 function liveChecks(t: number) {
+  const wb = explore.parked ?? body;   // the walker, wherever it stands (parked while exploring)
   // measured, per frame: bump under each leg, frame clearance from the obstacle distance field
   legTags.forEach((t, n) => { if (n >= walkerCfg.legs.length) t.visible = false; });
   state.legs = walkerCfg.legs.map((p, n) => {
-    const [x, y] = walkerPoint(body, p), c = cellAt(x, y), h = L.bump[c] || 0, e = !!est[c] && h > 0, flash = h >= risk.leg_flash_m || e;
+    const [x, y] = walkerPoint(wb, p), c = cellAt(x, y), h = L.bump[c] || 0, e = !!est[c] && h > 0, flash = h >= risk.leg_flash_m || e;
     walker.setLegRed(n, flash && Math.floor(t * 6) % 2 === 0);
     legTags[n].visible = flash;
     if (flash) { legTags[n].position.set(x, y, 0.25); legTags[n].element.textContent = e ? `cable ~${(h * 100).toFixed(1)} cm (estimated)` : `${(h * 100).toFixed(1)} cm bump`; legTags[n].element.className = 'label3d red'; }
@@ -1712,7 +1805,7 @@ function liveChecks(t: number) {
   });
   let gap = Infinity, at: XY = [0, 0];
   if (current?.dist_m) for (const p of walker.probes) {
-    const q = walkerPoint(body, p), d = current.dist_m[cellAt(...q)] - walkerCfg.leg_radius_m;
+    const q = walkerPoint(wb, p), d = current.dist_m[cellAt(...q)] - walkerCfg.leg_radius_m;
     if (d < gap) { gap = d; at = q; }
   }
   state.gap = gap; state.red = gap < sc.hazard_rules.clearance_margin_m;
@@ -1720,7 +1813,7 @@ function liveChecks(t: number) {
   gapTag.visible = state.red;
   if (state.red) { gapTag.position.set(at[0], at[1], walkerCfg.handle_height_m + 0.1); gapTag.element.textContent = `${Math.max(0, gap * 100).toFixed(0)} cm gap`; }
   // upcoming hazards (next 2.5 m of the route) glow
-  const sNow = mode === 'auto' ? autoS : nearestS(...walkerPoint(body, [centreOffset, 0]));
+  const sNow = mode === 'auto' ? autoS : nearestS(...walkerPoint(wb, [centreOffset, 0]));
   for (const ring of hazardGroup.children as THREE.Mesh[]) {
     const ahead = ring.userData.s - sNow, mat = ring.material as THREE.MeshBasicMaterial;
     const glow = ahead > -0.3 && ahead < 2.5;
@@ -1757,6 +1850,25 @@ function setHeroSteps(steps: { xy: XY; side: number; hit: boolean }[], walker?: 
     return { ...p, xy: [p.xy[0] - Math.cos(h) * centreOffset, p.xy[1] - Math.sin(h) * centreOffset] as XY, s };
   });
 }
+// ---------- next-step cloud + future trail (third person): where the 200 trips put the mannequin's next step, and its own next steps ----------
+const stepCloud = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: DOT, color: 0x4cc9f0, size: 6, sizeAttenuation: false, transparent: true, opacity: 0.6, depthWrite: false, depthTest: false }));
+const futureSteps = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: DOT, color: 0x9ff0ff, size: 14, sizeAttenuation: false, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false }));
+stepCloud.renderOrder = futureSteps.renderOrder = 2;   // over the mannequin: the steps it is about to take sit under its body
+scene.add(stepCloud, futureSteps);
+let cloudK = -1, cloudFor: unknown = null;
+function stepCloudUpdate(show: boolean) {
+  stepCloud.visible = futureSteps.visible = show;
+  const k = show ? heroSteps.findIndex(p => p.s > autoS) : -1;
+  if (k < 0 || (k === cloudK && cloudFor === current) || !current) return;
+  cloudK = k; cloudFor = current;
+  // every trip's step k, shifted so trip 0's lands on the mannequin's own step (heels vs centre line differ per model)
+  const g0 = current.ghosts[0]?.pts[k], hx = heroSteps[k].xy;
+  const cloud = g0 ? current.ghosts.flatMap(gh => gh.pts[k] ? [new THREE.Vector3(gh.pts[k][0] - g0[0] + hx[0], gh.pts[k][1] - g0[1] + hx[1], 0.03)] : []) : [];
+  stepCloud.geometry.dispose(); stepCloud.geometry = new THREE.BufferGeometry().setFromPoints(cloud);
+  const next = heroSteps.slice(k, k + 6);
+  futureSteps.geometry.dispose(); futureSteps.geometry = new THREE.BufferGeometry().setFromPoints(next.map(p => new THREE.Vector3(p.xy[0], p.xy[1], 0.035)));
+}
+
 const view = { third: false, back: 1.0, up: 0.4 };   // third person: behind, just above the user (higher looks through a real splat's low-opacity haze and hides the walker)
 function placeCamera(cam: THREE.PerspectiveCamera, b: typeof body) {
   if (view.third && cam === camera) {
@@ -1787,11 +1899,12 @@ function step(dt: number, t: number) {
   if (xr.presenting()) return xrFrame(dt, t);
   if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
   tourStep(dt);
-  walker.group.position.set(body.x, body.y, 0);
-  walker.group.rotation.z = body.yaw;
+  const wb = explore.parked ?? body;
+  walker.group.position.set(wb.x, wb.y, 0);
+  walker.group.rotation.z = wb.yaw;
   reim.update(dt);
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
-  if (mode !== 'fly') live?.frame(dt, body, mode === 'free', walker.group);
+  if (mode !== 'fly') live?.frame(dt, wb, mode === 'free' && !explore.on, walker.group);
   labelStep();
   if (mode === 'fly') {
     const c = Math.cos(body.pitch);
@@ -1801,10 +1914,14 @@ function step(dt: number, t: number) {
   markStep();
   const showMan = view.third && mode === 'auto' && heroSteps.length > 0;
   mannequin.group.visible = showMan;
+  stepCloudUpdate(showMan);
   if (showMan) {
     const f = feetAt(heroSteps, autoS, persona.stride_m ?? 0.35), hy = walkerCfg.width_m / 2 - walkerCfg.leg_radius_m, gx = walkerCfg.user_gap_m + 0.05;
-    mannequin.update(body, [f[1], f[0]], [[gx, hy], [gx, -hy]], walkerCfg.handle_height_m);   // sim side 1 = left
-    manShadows?.(body, [f[0].pos, f[1].pos]);
+    if (walkerCfg.device === 'wheelchair') { mannequin.seated(body, SEAT_Z, walkerCfg.legs[0][1] + 0.025); manShadows?.hide(); }   // the chair's own blobs ground it
+    else {
+      mannequin.update(body, [f[1], f[0]], [[gx, hy], [gx, -hy]], walkerCfg.handle_height_m);   // sim side 1 = left
+      manShadows?.(body, [f[0].pos, f[1].pos]);
+    }
   }
   pulseSpots(t);
   replayStep(dt);
@@ -1839,7 +1956,7 @@ const comparison = createXRComparison({
       const alpha = (a.removed ? 0 : 1) * (1 - u) + (b.removed ? 0 : 1) * u;
       it.group.position.set(p.x, p.y, 0); it.group.rotation.set(0, 0, p.yaw);
       it.group.visible = alpha > 0.001; it.mesh.opacity = alpha;
-      const moved = alpha < 0.999 || Math.hypot(p.x - original[k].x, p.y - original[k].y) > 0.01 || Math.abs(p.yaw - original[k].yaw) > 0.01;
+      const moved = alpha < 0.999 || Math.hypot(p.x - scanned[k].x, p.y - scanned[k].y) > 0.01 || Math.abs(p.yaw - scanned[k].yaw) > 0.01;
       it.fill.visible = it.tag.visible = moved && $<HTMLInputElement>('imagfill').checked;
     });
     const side = t >= 0.5 ? 1 : 0;
@@ -1891,10 +2008,14 @@ const xr = await setupXR({
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
   commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m,
   resetObject, resetAll, editor: markerXR, readOnly: comparison.previewing,
-  startPose() {   // the first point along the route with filmed floor
+  startPose() {   // stay if this floor is seen as well as the route's median spot; else the first such point along the route
     if (!current || current.error) return null;
-    for (let s = 0; s < routeS[routeS.length - 1]; s += 0.05) { const p = routePose(s, body.yaw, Infinity); if (standable(p.x, p.y)) return p; }
-    return null;
+    const poses: { x: number; y: number; yaw: number }[] = [];
+    for (let s = 0; s < routeS[routeS.length - 1]; s += 0.05) { const p = routePose(s, body.yaw, Infinity); if (standable(p.x, p.y)) poses.push(p); }
+    const cov = (p: { x: number; y: number }) => coverage[cellAt(p.x, p.y)];
+    const sorted = poses.map(cov).sort((a, b) => a - b), median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+    if (standable(body.x, body.y) && cov(body) >= median) return null;
+    return poses.find(p => cov(p) >= median) ?? poses[0] ?? null;
   },
   enter(t) {   // a standalone headset turns performance mode on; hazard labels become scene cards
     select(-1); inXR = true; game.xr = true; perfBeforeXR = perfOn;
@@ -1915,9 +2036,10 @@ const xr = await setupXR({
  *  without holding the body back: in VR the body is wherever the person physically stands. */
 function xrFrame(dt: number, t: number) {
   xr.step(dt);
-  walker.group.position.set(body.x, body.y, 0);
-  walker.group.rotation.z = body.yaw;
-  if (!comparison.previewing()) live?.frame(dt, body, false, walker.group);
+  const wb = explore.parked ?? body;
+  walker.group.position.set(wb.x, wb.y, 0);
+  walker.group.rotation.z = wb.yaw;
+  if (!comparison.previewing()) live?.frame(dt, wb, false, walker.group);
   pulseSpots(t);
   reim.update(dt);
   comparison.step(dt);
@@ -1958,10 +2080,13 @@ Object.assign(game, {
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
   debug: { renderer, scene, camera, marker: mk3d.root, stairs: stairs3d.root, spark: sparkR, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup],
-    rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrTier: xr.tier, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press },
+    rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrTier: xr.tier, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
-  setFree(x: number, y: number, yaw: number) { setWalk('free'); Object.assign(body, { x, y, yaw }); },
+  setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); Object.assign(body, { x, y, yaw }); },
+  explore: () => ({ on: explore.on, parked: explore.parked && { ...explore.parked } }),
+  setFly(x: number, y: number, z: number, yawDeg: number, pitchDeg: number) { setWalk('fly'); Object.assign(fly, { x, y, z }); body.yaw = (yawDeg * Math.PI) / 180; body.pitch = (pitchDeg * Math.PI) / 180; },
+  setThird(on: boolean) { const h = $<HTMLInputElement>('third'); h.checked = on; h.dispatchEvent(new Event('change')); },
   layout: () => layout, current: () => current, routes,
   spots: () => spotList, startTour, endTour, tourState: () => ({ ...tour }), replayState: () => ({ on: replay.on, t: replay.t }), startReplay, stopReplay, showPhysics,
   setPersona, physicsPass, personas: () => Object.keys(personas), persona: () => personaKey, suggest, applyOption, setFillBackend,
@@ -1998,7 +2123,7 @@ const frontendAdapter: FrontendAdapter = {
   navigate(m) {
     endTour(); select(-1);
     if (m === 'inspect') { inspectReturn ??= { body: { ...body }, fly: { ...fly }, mode, rig: xr.rigState() }; setWalk(renderer.xr.isPresenting ? 'free' : 'fly'); }
-    else { xrFollowRoute = renderer.xr.isPresenting && m === 'route'; setWalk(m === 'route' ? 'auto' : 'free'); routePaused = false; }
+    else { xrFollowRoute = renderer.xr.isPresenting && m === 'route'; setWalk(m === 'route' ? 'auto' : 'free'); routePaused = false; if (m === 'explore' && !explore.on) setExplore(true); }
   },
   focus(item) {
     const p = vantage(item.at, current?.xy ?? [item.at], 1.2, 1.1);
@@ -2012,9 +2137,17 @@ const frontendAdapter: FrontendAdapter = {
   suggest, async apply(index) { await applyOption(index); setWalk('free'); reim.setT(1); },
   undo: undoReimagined, select,
   path(on) { routeLine.visible = on; },
+  async lightPath() { const r = await lightPath(); game.setNight(true); return r; },
   highlights(on) { hazardGroup.visible = on; }, improvements(on) { reim.setParts({ rings: on, ringLabels: on }); },
 };
+// classic two-panel UI with ?classic (the planning drawer is the default): the shell still mounts for VR, then every control it reparented goes home
+const homes = [...document.querySelectorAll('#left *, #right *')].map(n => [n, n.parentNode!, n.nextSibling] as const).reverse();
 const frontend = mountFrontend(frontendAdapter);
+// demo mode (?demo=1, H toggles; shot.ts records with it): debug rows, ranges and the fps line hidden (style.css .demo)
+document.body.classList.toggle('demo', PARAMS.get('demo') === '1');
+addEventListener('keydown', e => { if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) document.body.classList.toggle('demo'); });
+game.setDemo = (on: boolean) => document.body.classList.toggle('demo', on);
+if (PARAMS.has('classic')) { for (const [n, p, s] of homes) p.insertBefore(n, s); document.body.classList.remove('frontend'); document.getElementById('frontend')!.hidden = true; document.getElementById('left')!.hidden = document.getElementById('right')!.hidden = false; }
 frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
 game.frontend = frontend;
 game.frontendXR = frontendVR;

@@ -300,7 +300,9 @@ export interface Intervention {
   /** raise: a seat/bed/toilet surface (object or fixture name) goes up by by_m (raised toilet seat, bed risers) */
   target?: string; by_m?: number;
   /** add: a new fixture (a touch lamp on the nightstand = a switch within reach); checks treat it like a marked one */
-  fixture?: { name: string; kind: string; attach?: string; xyz?: number[]; side?: 'left' | 'right'; yaw?: number; surface_m?: number };
+  fixture?: { name: string; kind: string; attach?: string; xyz?: number[]; side?: 'left' | 'right'; yaw?: number; surface_m?: number;
+    /** a light source: the simulation counts floor within this radius as lit (lights.ts) */
+    light_r?: number };
   /** what it takes (fix card, optimizer effort): dollars, minutes, 1 (anyone) .. 5 (two people, heavy furniture) */
   cost_usd?: number; minutes?: number; effort?: number; product?: string;
 }

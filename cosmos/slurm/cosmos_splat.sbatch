@@ -8,10 +8,10 @@
 #SBATCH --output=logs/%x-%j.log
 # Cosmos on the splat: render RGB + depth + seg along the stage-7 walker route from the splat (pipeline env, gsplat),
 # then Cosmos Transfer twice: the route at 3 AM, and the route with the nearest furniture moved (revealed floor imagined).
-#   sbatch slurm/cosmos_splat.sbatch [config.yaml]        (needs stages 5-7 done for that config)
+#   sbatch slurm/cosmos_splat.sbatch [configs/<scene>.yaml]        (needs stages 5-7 done for that config)
 # RENDER_ONLY=1 stops after the renders (tests the splat side without Cosmos).
 set -uo pipefail
-CFG=${1:-config.yaml}
+CFG=${1:-configs/home.yaml}
 R=$HPG_ROOT/Homeclear
 cd $R && source slurm/env.sh && python cosmos/render_route.py $CFG || exit 1
 WORK=$(python -c "import sys; sys.path.insert(0, '.'); from common import load_cfg; print(load_cfg('$CFG')['work'])")

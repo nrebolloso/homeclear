@@ -21,7 +21,7 @@ from gait_data import features, turn_deg, AHEAD, TURN_DEG
 
 SPLIT = {"train": list(range(10)), "val": [10, 11], "test": [12, 13]}   # participant ids, fixed before training
 K, HIDDEN, EPOCHS, SEED = 5, 128, int(__import__("os").environ.get("EPOCHS", 400)), 0
-CFG_HAND = {"stride_m": 0.35, "foot_sep_m": 0.20, "step_jitter_m": 0.04, "stride_cv": 0.10}   # config.yaml persona as shipped
+CFG_HAND = {"stride_m": 0.35, "foot_sep_m": 0.20, "step_jitter_m": 0.04, "stride_cv": 0.10}   # configs/home.yaml persona as shipped
 
 
 # ---------- baseline ----------

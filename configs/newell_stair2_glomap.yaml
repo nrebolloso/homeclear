@@ -1,18 +1,19 @@
-# Same take as config.bedroom2.yaml, poses from GLOMAP global mapping (slurm/glomap.sbatch) on stage 2's features + matches:
-# the incremental GPU mapper was cancelled by the system at 2h21m (1050/1165 placed); 30k splat from slurm/train_best.sbatch (out/bedroom2_glomap_best).
-# Bedroom + bathroom (REAL), NOT the `bedroom` scene's room (user, 2026-10-24): ONE continuous 529.5 s take,
-# iPhone 14 1080p 30 fps HEVC 10-bit HLG (+ Dolby Vision layer, ignored). ~2.2 frames/s as kitchen4 -> 1165 frames, exhaustive.
-# Scale from the printed ArUco markers on the floor; size from the sheet's printed ruler (fit-to-page, see marker_size_m).
-run_name: bedroom2_glomap
-video: data/bedroom2.mov
-work_dir: out/bedroom2_glomap
+# Same take as configs/newell_stair2.yaml, poses from GLOMAP global mapping (slurm/glomap.sbatch: 1393/1500 frames in one model,
+# where incremental mapping kept 789) and the 30k splat from slurm/train_best.sbatch (out/newell_stair2_glomap_best).
+# Newell Hall stairwell, SECOND take (REAL, user re-record 2026-10-24 04:29): ONE continuous 448 s take, Samsung 4K 60 fps
+# HLG (data/newell_stair2.mp4), printed markers in view. Same frames/matching as the newell_stair retry (1500 frames at
+# 2400 px, sequential: near-identical floors). First scene through slurm/sfm_gpu.sbatch.
+run_name: newell_stair2_glomap
+video: data/newell_stair2.mp4
+work_dir: out/newell_stair2_glomap
 frames:
-  target: 1165
-  min: 870
-  exclude_s: [[489, 492]]   # user: a hand is in frame for ~1 s at 8:10; +-1 s margin
-  max_side: 1600
+  # retry: 990 frames at 1600 px split into 19 models (scattered gaps all through the take: plain walls, blur), so denser
+  # frames (smaller steps between them) at higher resolution (more features on plain walls); still sequential
+  target: 1500
+  min: 1125
+  max_side: 2400
 colmap:
-  matcher: exhaustive
+  matcher: sequential
   min_registered: 0.8
 splat:
   steps: 7000
@@ -20,17 +21,19 @@ splat:
   min_psnr: 20.0
 scale:
   manual_factor: null
+  assume_camera_height_m: null  # unset: stage 4 checks this before markers, so a value here would override them
+  # TODO after stage 2: known_object {name: stair_sign, meters: 0.5588, points: <sign top/bottom corner picks, >= 2 frames>}
   marker_dict: DICT_4X4_50
-  marker_id: [0, 1, 2]   # all three floor prints seen in the frames (id 0: 95, id 1: 47, id 2: 67 frames); scale = median, spread reported
+  marker_id: [0, 1, 2]   # all three floor prints seen in a 2 fps scan of the video (id 0: 94, id 1: 37, id 2: 39 frames); scale = median, spread reported
   marker_size_m: 0.1425  # 150 mm sheets printed fit-to-page: the sheet's 100 mm ruler reads ~95 mm (user), so 0.95 x 150 mm (MEASURED via ruler, ~0.5 mm reading)
   tolerance_pct: 3.0
-  ground_truth: []       # markers lie on the floor, so the marker-height check doesn't apply; stage 4 reports SKIP (unverified)
+  ground_truth: []
 clean:
   min_opacity: 0.05
   max_scale_m: 0.5
   room_margin_m: 0.6
-  below_floor_m: 0.15
-  ceiling_m: 2.9
+  below_floor_m: 9.0   # 2-floor stairwell: stage 5 may pick either landing as "floor", so keep everything below it too
+  ceiling_m: 9.0      # 2 floors (user) at ~4 m floor-to-floor (ASSUMED) + headroom
   floater_voxel_m: 0.05
   floater_min_neighbours: 8
 floor:
@@ -58,7 +61,7 @@ grid:
   speck: {max_cells: 6, min_span_m: 0.10, floor_gap_m: 0.15}   # mid-air floaters of ~3 Gaussians each would block the walker
   bump_link_cells: 3
 plan:
-  # start/goal unset: stage 7 picks two far-apart cells of the largest walker-reachable region (set bed -> toilet once the splat exists)
+  # start/goal unset: stage 7 picks two far-apart cells of the largest walker-reachable region (no bed or bathroom in this scene)
   walker_width_m: 0.61
   preferred_clearance_m: 0.3
   clearance_weight: 5.0

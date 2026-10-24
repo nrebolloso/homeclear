@@ -1,19 +1,16 @@
-# Same take as config.newell_stair2.yaml, poses from GLOMAP global mapping (slurm/glomap.sbatch: 1393/1500 frames in one model,
-# where incremental mapping kept 789) and the 30k splat from slurm/train_best.sbatch (out/newell_stair2_glomap_best).
-# Newell Hall stairwell, SECOND take (REAL, user re-record 2026-10-24 04:29): ONE continuous 448 s take, Samsung 4K 60 fps
-# HLG (data/newell_stair2.mp4), printed markers in view. Same frames/matching as the newell_stair retry (1500 frames at
-# 2400 px, sequential: near-identical floors). First scene through slurm/sfm_gpu.sbatch.
-run_name: newell_stair2_glomap
-video: data/newell_stair2.mp4
-work_dir: out/newell_stair2_glomap
+# BACKUP copy of configs/night2.yaml: same settings, stages 1-2 through the CPU slurm/sfm.sbatch. Own work_dir: out/night2 untouched.
+# Garden path beside a brick building at NIGHT (REAL, user 2026-10-24 05:18): ONE continuous 567 s take, Samsung 4K 60 fps HLG
+# (data/night2.mp4). Doors, steps, plaques, low path lights. ~2.2 frames/s -> 1250 frames, exhaustive (the walk loops).
+# Risks: wind-moved palms/shrubs, dark sky. Scale ASSUMED until a known size is picked.
+run_name: night2_cpu
+video: data/night2.mp4
+work_dir: out/night2_cpu
 frames:
-  # retry: 990 frames at 1600 px split into 19 models (scattered gaps all through the take: plain walls, blur), so denser
-  # frames (smaller steps between them) at higher resolution (more features on plain walls); still sequential
-  target: 1500
-  min: 1125
-  max_side: 2400
+  target: 1250
+  min: 937
+  max_side: 1600
 colmap:
-  matcher: sequential
+  matcher: exhaustive
   min_registered: 0.8
 splat:
   steps: 7000
@@ -21,19 +18,18 @@ splat:
   min_psnr: 20.0
 scale:
   manual_factor: null
-  assume_camera_height_m: null  # unset: stage 4 checks this before markers, so a value here would override them
-  # TODO after stage 2: known_object {name: stair_sign, meters: 0.5588, points: <sign top/bottom corner picks, >= 2 frames>}
+  assume_camera_height_m: 1.4   # ASSUMED (no known size picked yet); stage 4 uses this before markers, so null it if markers are added
   marker_dict: DICT_4X4_50
-  marker_id: [0, 1, 2]   # all three floor prints seen in a 2 fps scan of the video (id 0: 94, id 1: 37, id 2: 39 frames); scale = median, spread reported
-  marker_size_m: 0.1425  # 150 mm sheets printed fit-to-page: the sheet's 100 mm ruler reads ~95 mm (user), so 0.95 x 150 mm (MEASURED via ruler, ~0.5 mm reading)
+  marker_id: 0
+  marker_size_m: 0.1
   tolerance_pct: 3.0
   ground_truth: []
 clean:
   min_opacity: 0.05
   max_scale_m: 0.5
   room_margin_m: 0.6
-  below_floor_m: 9.0   # 2-floor stairwell: stage 5 may pick either landing as "floor", so keep everything below it too
-  ceiling_m: 9.0      # 2 floors (user) at ~4 m floor-to-floor (ASSUMED) + headroom
+  below_floor_m: 0.15
+  ceiling_m: 4.0
   floater_voxel_m: 0.05
   floater_min_neighbours: 8
 floor:

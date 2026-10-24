@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Whole pipeline from the laptop: ./run_all.sh [config.yaml]
+# Whole pipeline from the laptop: ./run_all.sh [configs/<scene>.yaml]
 #   CLUSTER  stages 1-2  (frames, COLMAP) - CPU job on burst QOS
 #   CLUSTER  stages 0, 3-6 (env, splat, scale, floor, occupancy) - one GPU job on HiPerGator
 #   LAPTOP   stages 7-8  (route planning, hazards)
@@ -9,7 +9,7 @@
 # SKIP_CLUSTER=1 reruns only the laptop part on what was already pulled back.
 set -uo pipefail
 cd "$(dirname "$0")"
-CFG=${1:-config.yaml}
+CFG=${1:-configs/home.yaml}
 source ./hpg.sh && hpg_load "$CFG"   # PY, HOST REPO ENV HPG_ROOT (config + cluster.local.yaml), hpg_ssh / hpg_rsync
 cfg() { $PY -c "import os, sys, yaml; c = yaml.safe_load(open('$CFG')); print(os.path.expandvars(str(eval(sys.argv[1], {}, c))))" "$1"; }
 WORK=$(cfg work_dir); VIDEO=$(cfg video)
