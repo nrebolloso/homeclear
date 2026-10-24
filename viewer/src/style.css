@@ -16,6 +16,8 @@ textarea { width: 100%; box-sizing: border-box; background: #1b1f24; color: var(
 .label3d { background: rgba(0,0,0,.75); color: #fff; padding: 2px 6px; border-radius: 4px; font: 600 12px system-ui; white-space: nowrap; pointer-events: none; }
 .label3d.red { background: var(--red); } .label3d.imag { background: transparent; color: var(--imag); border: 1px dashed var(--imag); }
 .label3d.synth { background: #6b3fa0; border: 1px dashed #ffb35c; }
+#tourcap { position: fixed; bottom: 44px; left: 50%; transform: translateX(-50%); max-width: 560px; background: rgba(0,0,0,.8); color: #fff; padding: 8px 14px; border-radius: 8px; font: 13px/1.35 system-ui; text-align: center; pointer-events: none; }
+#pushchart { display: block; width: 100%; background: rgba(0,0,0,.25); border-radius: 4px; margin-top: 4px; }
 #hud { position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%); background: var(--panel); padding: 4px 10px; border-radius: 6px; color: var(--dim); }
 #player { position: fixed; inset: 40px 320px; background: #000; border: 2px dashed var(--imag); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; }
 #player[hidden] { display: none; }

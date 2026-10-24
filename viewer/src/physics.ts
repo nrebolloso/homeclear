@@ -24,10 +24,12 @@ export interface PhysicsCfg {
   stall_s: number;
   /** heightfield spacing (m): finer than the 2 cm grid so a step stays a step, not a ramp */
   sample_m: number;
+  /** record the walker's pose, speed, push and the floor under each leg every this many seconds (0 = off) */
+  trace_dt_s: number;
 }
 export const PHYSICS: PhysicsCfg = {
   speed_mps: 0.35, push_max_n: 40, hand_load_n: 30, grip_torque_nm: 20, frame_mass_kg: 3, wheel_radius_m: 0.0635,
-  glide_radius_m: 0.033, glide_friction: 0.25, stall_s: 0.25, sample_m: 0.005,
+  glide_radius_m: 0.033, glide_friction: 0.25, stall_s: 0.25, sample_m: 0.005, trace_dt_s: 0.05,
 };
 
 export interface Snag {
@@ -36,12 +38,27 @@ export interface Snag {
   /** push needed to get going again, at the limit by definition; `tipped` if the frame rolled or pitched past 10 deg */
   push_n: number; tipped: boolean;
 }
+/** One sample of the pushed walker (floor frame), for replay and the debug chart. `legs` = the bump height under each
+ *  leg's centre, in `PhysicsResult.leg_names` order; `push` is what the person is giving at that moment. */
+export interface TracePoint {
+  t: number; x: number; y: number; yaw: number; s: number; v: number; push: number; tilt_deg: number; legs: number[];
+}
+/** The walker never reached the goal and no snag was called: it sat against something (stall_s longer than the run, or
+ *  the push limit too low to ever look "stalled"). Without this a stuck walker would read as "no snags". */
+export interface Stuck { position: XY; s_m: number; push_n: number; sim_s: number }
 export interface PhysicsResult {
   snags: Snag[];
   /** hardest push on each bump component the walker crossed (N), snag or not */
   peak_push_n: Record<number, number>;
   /** the walker reached the goal */
   done: boolean; sim_s: number; ms: number;
+  /** set when `done` is false: where the walker ended up */
+  stuck: Stuck | null;
+  trace: TracePoint[]; leg_names: Snag['leg'][];
+  /** each leg's [x, y] from the frame centre (along / left of the heading), and the frame centre's distance ahead of the user's body centre */
+  leg_local: XY[]; frame_off_m: number;
+  /** the push limit the chart draws as a ceiling (N) */
+  limit_n: number;
 }
 
 let ready: Promise<void> | null = null;
@@ -109,12 +126,16 @@ export function pushAlong(g: GridMeta, bump: Float32Array, comps: Int32Array, ro
   });
   const grip = { x: -w.depth_m / 2 + 0.05, z: w.handle_height_m };   // hands on the grips, user side
 
-  const out: PhysicsResult = { snags: [], peak_push_n: {}, done: false, sim_s: 0, ms: 0 };
+  const out: PhysicsResult = { snags: [], peak_push_n: {}, done: false, sim_s: 0, ms: 0, stuck: null, trace: [], leg_names: legs.map(l => l.kind), leg_local: legs.map(l => [l.lx, l.ly]), frame_off_m: off, limit_n: P.push_max_n };
   const dt = world.timestep, tMax = Ltot / P.speed_mps * 3 + 5;
-  let u = 0, slow = 0, quiet = 0, integ = 0;
+  let u = 0, slow = 0, quiet = 0, integ = 0, lastPush = 0, nextRec = 0;
   const local = (yaw: number, lx: number, ly: number, p: { x: number; y: number }): XY =>
     [p.x + Math.cos(yaw) * lx - Math.sin(yaw) * ly, p.y + Math.sin(yaw) * lx + Math.cos(yaw) * ly];
   const cellAt = (xy: XY) => { const [ci, cj] = toCell(g, xy); return ci * g.shape[1] + cj; };
+  const rec = (t: number, p: { x: number; y: number }, yaw: number, v: number, push: number, tiltRad: number) => {
+    out.trace.push({ t: +t.toFixed(3), x: +p.x.toFixed(4), y: +p.y.toFixed(4), yaw: +yaw.toFixed(4), s: +u.toFixed(4), v: +v.toFixed(4), push: +push.toFixed(2),
+      tilt_deg: +((tiltRad * 180) / Math.PI).toFixed(2), legs: legs.map(l => bump[cellAt(local(yaw, l.lx, l.ly, p))]) });
+  };
   // arc length of the walker's closest point on the route, searched a little ahead of the last one (never backwards)
   // (from u's own segment: `seg` is already past the steering look-ahead, and searching from there walks u away from the walker)
   let pseg = 0;
@@ -132,7 +153,7 @@ export function pushAlong(g: GridMeta, bump: Float32Array, comps: Int32Array, ro
     const p = body.translation(), v = body.linvel(), rot = body.rotation();
     const yaw = Math.atan2(2 * (rot.w * rot.z + rot.x * rot.y), 1 - 2 * (rot.y * rot.y + rot.z * rot.z));
     u = project(p.x, p.y);
-    if (u >= Ltot - 0.02) { out.done = true; out.sim_s = t; break; }
+    if (u >= Ltot - 0.02) { out.done = true; out.sim_s = t; if (P.trace_dt_s > 0) rec(t, p, yaw, v.x * Math.cos(at(u)[2]) + v.y * Math.sin(at(u)[2]), lastPush, 0); break; }
     const [cx, cy, h0] = at(u), [, , th] = at(Math.min(u + 0.15, Ltot));   // steer toward the route a little ahead
     const ax = Math.cos(h0), ay = Math.sin(h0);
     // the person: a steady push that builds up while the walker is slower than their walking speed (PI on speed),
@@ -140,6 +161,7 @@ export function pushAlong(g: GridMeta, bump: Float32Array, comps: Int32Array, ro
     const vAlong = v.x * ax + v.y * ay, err = P.speed_mps - vAlong;
     integ = Math.min(P.push_max_n, Math.max(0, integ + 120 * err * dt));
     const push = Math.min(P.push_max_n, Math.max(0, 40 * err + integ));
+    lastPush = push;
     const ex = p.x - cx, ey = p.y - cy, side = -ay * ex + ax * ey, vSide = -ay * v.x + ax * v.y;
     const fSide = -300 * side - 40 * vSide;
     const fx = push * ax - fSide * ay, fy = push * ay + fSide * ax;
@@ -176,6 +198,7 @@ export function pushAlong(g: GridMeta, bump: Float32Array, comps: Int32Array, ro
     slow = push >= P.push_max_n - 1e-6 && vAlong < 0.3 * P.speed_mps ? slow + dt : 0;
     quiet = Math.max(0, quiet - Math.max(vAlong, 0) * dt);
     const tipped = tilt > (10 * Math.PI) / 180;
+    if (P.trace_dt_s > 0 && t >= nextRec) { rec(t, p, yaw, vAlong, push, tilt); nextRec = t + P.trace_dt_s; }
     if ((slow >= P.stall_s || tipped) && quiet === 0) {
       const k = worst.k >= 0 ? worst.k : 0, l = legs[k];
       out.snags.push({ position: worst.k >= 0 ? worst.xy : [p.x, p.y], s_m: u, leg: l.kind, height_m: worst.h, comp: worst.c, push_n: push, tipped });
@@ -188,6 +211,7 @@ export function pushAlong(g: GridMeta, bump: Float32Array, comps: Int32Array, ro
     }
     out.sim_s = t;
   }
+  if (!out.done) out.stuck = { position: [body.translation().x, body.translation().y], s_m: u, push_n: lastPush, sim_s: out.sim_s };
   world.free();
   out.ms = performance.now() - t0;
   return out;

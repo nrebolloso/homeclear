@@ -218,6 +218,22 @@ try {
   check('?xr=1 loads (VR button, render loop on the renderer)', await G(x.p, 'return game.xr()') && !!(await x.p.$('#vrbutton')) && x.errors.length === 0,
     `errors: ${x.errors.join('; ') || 'none'}`);
   await x.p.close();
+  // 9. reimagined room: the room morphs into the safest suggested layout, each change costed, undo takes one back
+  const ri = await open('game_synth');
+  const R = (f: string) => G(ri.p, f);
+  const run = await R(`const cs = await game.reimagine.run(); const m = cs.find(c => c.kind === 'move');
+    game.reimagine.setT(0); const at0 = m && game.reimagine.pose(m.name);
+    game.reimagine.setT(1); const at1 = m && game.reimagine.pose(m.name);
+    return { n: cs.length, m: m && { from: m.from, to: m.to, name: m.name }, at0, at1, costed: cs.every(c => c.cost && c.cost.minutes > 0),
+      li: document.querySelectorAll('#receipt li').length, total: document.getElementById('reimtotal').textContent }`);
+  const near = (a: any, b: any) => !!a && !!b && Math.hypot(a.x - b.x, a.y - b.y) < 1e-3;
+  check('reimagine: morphs into the safest layout, every change costed in the receipt',
+    run.n >= 1 && run.costed && run.li === run.n && (!run.m || (near(run.at0, run.m.from) && near(run.at1, run.m.to))), JSON.stringify(run).slice(0, 300));
+  await R('game.reimagine.setT(0.5)'); await shot(ri.p, 'reimagine_half'); await R('game.reimagine.setT(1)'); await shot(ri.p, 'reimagine_full');
+  const un = await R('await game.reimagine.undo(0); return game.reimagine.changes().length');
+  check('reimagine: undo takes one change back', un === run.n - 1, `${run.n} -> ${un}; page errors: ${ri.errors.join(' | ') || 'none'}`);
+  check('reimagine: no page errors', ri.errors.length === 0, ri.errors.join(' | ') || 'none');
+  await ri.p.close();
 } finally {
   await browser.close();
   writeFileSync(new URL('results.json', import.meta.url), JSON.stringify(results, null, 1));
