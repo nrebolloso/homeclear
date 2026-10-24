@@ -153,13 +153,13 @@ export async function setupXR(host: XrHost) {
   // ---------- buttons: a card at chest height, ahead and to the left; it stays put while you look around and catches up
   // when you turn past 40 deg or walk off, so it's always one point-and-pinch away. Canvas text on a plane (a mesh, so the
   // wand's ray hits it), drawn over the splats like the other overlays.
-  const BW = 0.42, BH = 0.13, GAP = 0.03;
+  const BW = 0.46, BH = 0.15, GAP = 0.025;   // up to three lines: headline, a plain sentence, a small hint
   const dash = new THREE.Group();
   dash.visible = false;
   scene.add(dash);
   const btns = (host.buttons ?? []).map((b, i) => {
     const cv = document.createElement('canvas');
-    cv.width = 640; cv.height = 200;
+    cv.width = 768; cv.height = 250;
     const tex = new THREE.CanvasTexture(cv);
     tex.colorSpace = THREE.SRGBColorSpace;
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(BW, BH), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
@@ -179,10 +179,13 @@ export async function setupXR(host: XrHost) {
       c.clearRect(0, 0, W, H);
       c.fillStyle = 'rgba(14,20,28,0.88)'; c.strokeStyle = TONE[tone]; c.lineWidth = hot === i ? 14 : 6;
       c.beginPath(); c.roundRect(8, 8, W - 16, H - 16, 36); c.fill(); c.stroke();
-      c.fillStyle = '#f2f7fb'; c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.font = `600 ${lines.length > 1 ? 56 : 64}px system-ui, sans-serif`;
-      c.fillText(lines[0], W / 2, lines.length > 1 ? H * 0.38 : H / 2, W - 48);
-      if (lines[1]) { c.font = '400 38px system-ui, sans-serif'; c.fillStyle = '#b9c7d3'; c.fillText(lines[1], W / 2, H * 0.72, W - 48); }
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      const rows = [[[64], [0.5]], [[56, 40], [0.38, 0.72]], [[50, 38, 32], [0.27, 0.56, 0.81]]][Math.min(3, lines.length) - 1];
+      lines.slice(0, 3).forEach((ln, r) => {
+        c.font = `${r ? 400 : 600} ${rows[0][r]}px system-ui, sans-serif`;
+        c.fillStyle = r === 0 ? '#f2f7fb' : r === 1 ? '#c6d3de' : TONE[tone];
+        c.fillText(ln, W / 2, H * rows[1][r], W - 56);
+      });
       x.tex.needsUpdate = true;
     });
   }
@@ -190,9 +193,9 @@ export async function setupXR(host: XrHost) {
   function placeDash(yaw: number) {
     const turned = Math.abs(Math.atan2(Math.sin(yaw - anchor.yaw), Math.cos(yaw - anchor.yaw))) > 0.7;
     if (!anchor.set || turned || Math.hypot(head.x - anchor.x, head.y - anchor.y) > 0.6) Object.assign(anchor, { x: head.x, y: head.y, yaw, set: true });
-    const a = anchor.yaw + 0.45, d = 0.55;   // 0.55 m out, about 26 deg to the left of where you faced
-    dash.position.set(anchor.x + Math.cos(a) * d, anchor.y + Math.sin(a) * d, Math.max(0.6, head.z - 0.45));
-    dash.lookAt(head.x, head.y, dash.position.z);   // three's lookAt points +z; the card turns so its -y faces you
+    const a = anchor.yaw + 0.5, d = 0.62;   // 0.62 m out, about 29 deg to the left of where you faced: off the line you look along
+    dash.position.set(anchor.x + Math.cos(a) * d, anchor.y + Math.sin(a) * d, Math.max(0.8, head.z - 0.3));   // the top button; the rest stack down
+    dash.lookAt(head.x, head.y, head.z);   // three's lookAt points +z at the eyes (tilted back, read square-on); -y faces you after:
     dash.rotateX(-Math.PI / 2);
   }
   let btnHover = -1, btnPressed = -1;

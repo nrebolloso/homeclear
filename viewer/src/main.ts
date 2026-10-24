@@ -28,6 +28,7 @@ import QRCode from 'qrcode';
 import type { Eval, Init, RouteDef } from './worker.ts';
 import type { WorldModel } from './worldmodel.ts';
 import { setupXR } from './xr.ts';
+import { plainSpot, tourStand } from './xrtour.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 // model and scene text (Cosmos Reason notes, hazard details) goes into innerHTML escaped; same as report.ts's, which can't
@@ -1453,6 +1454,39 @@ const reimButton = {
     reimVR.goal = game.reimagine.t() > 0.5 ? 0 : 1;
   },
 };
+// "Night walk": the lights go down (the night shader, as the Night box does), lit only by a nightlight if the room has one
+const nightOn = () => $<HTMLInputElement>('night').checked;
+const nightButton = {
+  text() {
+    const k = objs.findIndex(o => o.kind === 'nightlight'), lit = k >= 0 && !layout.poses[k].removed;
+    return nightOn() ? ['Turn the lights back on', lit ? 'a nightlight is on' : 'no nightlight in this room'] : ['Night walk', 'the lights go down, like at 3 a.m.'];
+  },
+  tone: () => (nightOn() ? 'plain' as const : 'go' as const),
+  press: () => game.setNight(!nightOn()),
+};
+// "Show me the dangers": stand in front of each hazard spot (worst first, the desktop tour's order) facing it, the spot
+// glowing, with what it is in plain words; each press goes to the next, at the person's pace (no timer)
+const dangerVR = { k: -1, none: false };
+function dangerGo(k: number) {
+  const s = spotList[k], at = s && current && !current.error ? tourStand(s, current.xy, standable) : null;
+  if (!at) { dangerVR.k = -1; tourSpot = -1; return; }
+  dangerVR.k = k; tourSpot = k;
+  xr.place(at.x, at.y, at.yaw);
+}
+const dangersButton = {
+  text() {
+    const n = spotList.length;
+    if (dangerVR.k < 0) return dangerVR.none ? ['No dangers found', 'on this walk'] : ['Show me the dangers', n ? `${n} place${n === 1 ? '' : 's'} to look at` : 'none on this walk'];
+    const { title, why } = plainSpot(spotList[dangerVR.k]);
+    return [`${dangerVR.k + 1} of ${n}: ${title}`, why, dangerVR.k + 1 < n ? 'pinch for the next one' : 'pinch to finish'];
+  },
+  tone: () => (dangerVR.k >= 0 ? 'busy' as const : 'go' as const),
+  press() {
+    if (dangerVR.k < 0) { dangerVR.none = !spotList.length; if (!dangerVR.none) dangerGo(0); return; }
+    if (dangerVR.k + 1 < spotList.length) dangerGo(dangerVR.k + 1);
+    else { dangerVR.k = -1; tourSpot = -1; }
+  },
+};
 const xr = await setupXR({
   renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses,
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
@@ -1467,8 +1501,8 @@ const xr = await setupXR({
     if (t === 'quest') applyPerf(true, false);
     if (current) drawPlan(current);
   },
-  exit() { inXR = false; game.xr = false; applyPerf(perfBeforeXR, false); if (current) drawPlan(current); },
-  buttons: [reimButton],
+  exit() { inXR = false; game.xr = false; dangerVR.k = -1; tourSpot = -1; applyPerf(perfBeforeXR, false); if (current) drawPlan(current); },
+  buttons: [dangersButton, nightButton, reimButton],   // the story for a family: what's risky, how night feels, the fix
 });
 /** One headset frame: the monitor's world updates (walker, glow, the reimagined room, stairs, live checks), but no camera
  *  placement (the headset is the camera), no DOM labels and no post pass (it can't run per eye). Live physics follows
