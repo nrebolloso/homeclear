@@ -177,6 +177,7 @@ export function createReimagine(D: ReimagineDeps) {
   const ringMat = { fixed: new THREE.MeshBasicMaterial({ color: 0x2fbf5f, transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide }),
     new: new THREE.MeshBasicMaterial({ color: 0xff3b3b, transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide }) };
   let parts: Parts = { ...ALL_PARTS }, picked = -1;
+  let pickedFix: string | undefined;
   root.renderOrder = 3;
   D.scene.add(root);
   let changes: Change[] = [], t = 1, anim: { dur: number } | null = null;
@@ -208,9 +209,10 @@ export function createReimagine(D: ReimagineDeps) {
         arrow.traverse(x => { const m = (x as THREE.Mesh).material as THREE.Material | undefined; if (m) { m.depthTest = false; m.transparent = true; } x.renderOrder = 3; });
         arrows.add(arrow);
       }
-      const tag = card([c.label, costText(c.cost)], c.kind === 'remove' ? '#ffd27a' : '#8fe3ff', undefined, 0.055);
+      const tag = card([c.label, c.cost.source === 'placeholder' ? 'Cost & setup: pending estimate' : costText(c.cost)], c.kind === 'remove' ? '#ffd27a' : '#8fe3ff', undefined, 0.055);
       tag.position.set(c.at[0], c.at[1], Math.max(0.65, (o?.height_m ?? 0) + 0.35, (c.z ?? 0) + 0.4));   // above the hazard labels (0.15)
       tag.userData.k = c.k;
+      tag.userData.iv = c.iv;
       tags.add(tag);
     }
     resolved = []; added = [];
@@ -245,7 +247,7 @@ export function createReimagine(D: ReimagineDeps) {
   function applyParts() {
     ghosts.visible = parts.ghosts; arrows.visible = parts.arrows; receipt.visible = parts.receipt; marks.visible = parts.rings;
     tags.visible = parts.tags !== 'off';
-    for (const s of tags.children) s.visible = parts.tags === 'all' || s.userData.k < 0 || s.userData.k === picked;   // a fix with no object has nothing to click: its tag stays
+    for (const s of tags.children) s.visible = parts.tags === 'all' || (picked >= 0 && s.userData.k === picked) || (!!pickedFix && s.userData.iv === pickedFix);
   }
 
   /** 0 = the room as it is, 1 = reimagined. */
@@ -311,7 +313,7 @@ export function createReimagine(D: ReimagineDeps) {
     },
     parts: () => parts,
     /** the object whose cost tag shows when tags are 'selected' (-1: none) */
-    selectChange(k: number) { picked = k; applyParts(); },
+    selectChange(k: number, fixId?: string) { picked = k; pickedFix = fixId; applyParts(); },
   };
 }
 export type Reimagine = ReturnType<typeof createReimagine>;

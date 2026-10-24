@@ -1,0 +1,46 @@
+// UI integration against existing synthetic geometry. No teammate backend or fabricated results required.
+import { chromium } from 'playwright-core';
+import { CHROME } from './env.ts';
+import assert from 'node:assert/strict';
+import { mkdirSync } from 'node:fs';
+const base = process.argv[2] ?? 'http://127.0.0.1:5180';
+const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
+const errors: string[] = []; page.on('pageerror', e => errors.push(String(e)));
+const game = (code: string) => page.evaluate(`(async () => { const game = window.game; ${code} })()`);
+const check = (name: string) => console.log('PASS ' + name);
+try {
+  await page.goto(`${base}/?scene=game_synth`);
+  await page.waitForFunction(() => (window as any).game?.frontend, null, { timeout: 60000 });
+  assert.equal(await page.locator('#left').isVisible(), false); assert.equal(await page.locator('#right').isVisible(), false);
+  assert.equal(await page.locator('#planning-panel').isVisible(), true); check('single planning panel replaces both legacy sidebars');
+  await page.click('#mode-explore'); await page.click('#mode-inspect');
+  assert.equal(await page.locator('#inspect-card').isVisible(), true); assert.match(await page.locator('#inspect-position').innerText(), /\d+ \/ \d+/);
+  await page.click('#inspect-next'); await page.click('#inspect-exit'); check('manual inspection steps and exits');
+  await page.click('#mode-route'); await page.click('#route-pause');
+  const before = await game('return game.autoS()'); await page.waitForTimeout(400); const after = await game('return game.autoS()');
+  assert.ok(Math.abs(after - before) < .001); await page.selectOption('#route-speed', '1.5'); await page.click('#route-pause'); check('route pause and speed controls');
+  await page.click('#filter-toggle'); await page.check('#night'); await page.selectOption('#vision', { index: 1 });
+  await page.uncheck('#particle-path'); assert.equal(await game('return game.debug.overlays[0].visible'), false);
+  await page.keyboard.press('Escape'); await page.click('#mode-explore');
+  assert.equal(await page.isChecked('#night'), true); assert.equal(await page.locator('#active-filters').isVisible(), true); check('visual filters persist across modes and control particle path');
+  await page.click('#filter-toggle'); await page.click('#filter-reset'); assert.equal(await page.isChecked('#night'), false); await page.keyboard.press('Escape');
+  await game("await game.applyFix('remove_rug')");
+  await page.click('#tab-changes'); await page.waitForFunction(() => document.querySelector('#change-count')?.textContent === '1');
+  assert.match(await page.locator('#change-summary').innerText(), /Pending/); assert.match(await page.locator('#change-list').innerText(), /Placeholder model/);
+  await page.click('#cost-breakdown'); assert.match(await page.locator('#change-list').innerText(), /Setup time/); check('placeholder cost and setup time never masquerade as confirmed totals');
+  await page.click('#show-original'); assert.equal(await page.getAttribute('#show-original', 'aria-pressed'), 'true');
+  assert.match(await page.locator('#view-caption').innerText(), /metrics describe proposed/); await page.click('#show-proposed'); check('comparison labels distinguish visual preview from evaluated endpoint');
+  await page.locator('[data-undo-change]').first().click(); await page.waitForFunction(() => (window as any).game.reimagine.changes().length === 0); check('unified change list undo uses existing layout actions');
+  await page.click('#tab-reimagine'); await page.click('#generate-proposals');
+  await page.waitForSelector('[data-preview]', { timeout: 120000 });
+  await page.locator('[data-preview]').first().click(); await page.waitForSelector('[data-use]:not([disabled])'); await page.locator('[data-use]:not([disabled])').click();
+  assert.equal(await page.getAttribute('#tab-changes', 'aria-selected'), 'true'); check('unified proposal generation, preview and use');
+  await page.click('#panel-close'); assert.equal(await page.locator('#planning-panel').isVisible(), false); await page.click('#panel-open');
+  await page.click('#tab-reimagine'); await page.locator('summary').filter({ hasText: 'Improve nighttime visibility' }).click();
+  assert.match(await page.locator('#lighting-ideas').innerText(), /Concept · verify on site/); check('lighting concepts carry explicit verification and pending estimates');
+  mkdirSync('e2e/artifacts', { recursive: true }); await page.screenshot({ path: 'e2e/artifacts/frontend-desktop.png' });
+  await page.setViewportSize({ width: 390, height: 844 }); await page.screenshot({ path: 'e2e/artifacts/frontend-mobile.png' });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false); check('mobile layout has no horizontal overflow');
+  assert.deepEqual(errors, []); check('no browser exceptions');
+} finally { await browser.close(); }

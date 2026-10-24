@@ -44,6 +44,13 @@ export interface XrHost {
   editor?: XrEditor;
   /** A visual comparison is read-only; only the story-card buttons remain interactive. */
   readOnly?(): boolean;
+  /** The planning shell (frontend-xr.ts) lays a menu over the wand: it can swallow a trigger press, freeze locomotion while
+   *  its menu is open, drive the body along the route, and hears which furniture the wand points at. */
+  shell?: XrShell;
+}
+export interface XrShell {
+  activate(controller: THREE.XRTargetRaySpace): boolean; release(controller: THREE.XRTargetRaySpace): boolean;
+  open(): boolean; follow(dt: number): boolean; hover(k: number): void;
 }
 export interface XrButton { text(): string[]; press(): unknown; tone?(): 'go' | 'busy' | 'plain' }
 export interface XrEditor {
@@ -101,8 +108,8 @@ export async function setupXR(host: XrHost) {
     const c: Ctl = { group, ray };
     group.addEventListener('connected', e => { c.source = e.data; });
     group.addEventListener('disconnected', () => { if (isWand(c)) dropWand(); pinching.delete(c); c.source = undefined; });
-    group.addEventListener('selectstart', () => (isWand(c) ? wandDown(c) : pinching.add(c)));
-    group.addEventListener('selectend', () => (isWand(c) ? wandUp() : pinching.delete(c)));
+    group.addEventListener('selectstart', () => { if (host.shell?.activate(group)) return; isWand(c) ? wandDown(c) : pinching.add(c); });
+    group.addEventListener('selectend', () => { if (host.shell?.release(group)) return; isWand(c) ? wandUp() : pinching.delete(c); });
     return c;
   });
   // tracked hands drawn in the rig like the controllers; models served locally (models/hands/, webxr-input-profiles, MIT)
@@ -176,6 +183,7 @@ export async function setupXR(host: XrHost) {
         if (!host.readOnly?.() && !bh && hover < 0 && aiming && f && host.standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
       }
       c.ray.scale.z = len;
+      if (hover >= 0 && !grab) host.shell?.hover(hover);
     } else { hover = -1; btnHover = -1; host.editor?.frame(null, null); }
     items.forEach((it, k) => {   // blue = pointed at, yellow = held, turning red = about to be deleted
       const held = grab?.k === k, m = it.outline.material as THREE.LineBasicMaterial;
@@ -265,7 +273,9 @@ export async function setupXR(host: XrHost) {
 
   // ---------- per frame ----------
   function step(dt: number) {
+    if (host.shell?.open()) return;
     const yaw = readHead();
+    if (host.shell?.follow(dt)) { xrRig.x += body.x - head.x; xrRig.y += body.y - head.y; placeRig(); wandStep(); return; }   // the route drives the body
     const pads: Record<string, Gamepad> = {};
     for (const source of renderer.xr.getSession()?.inputSources ?? []) if (source.gamepad) pads[source.handedness] = source.gamepad;
     if (pinching.size && !host.readOnly?.()) {   // glide forward in sub-steps of at most half a cell, as in free walk
@@ -289,6 +299,11 @@ export async function setupXR(host: XrHost) {
     placeRig();
   }
 
+  /** Slide the rig so the head stands at floor-frame (x, y), keeping its heading; and save/restore the whole rig pose. */
+  function moveHead(x: number, y: number) { readHead(); xrRig.x += x - head.x; xrRig.y += y - head.y; placeRig(); }
+  const rigState = () => ({ ...xrRig });
+  function restoreRig(r: { x: number; y: number; yaw: number }) { Object.assign(xrRig, r); placeRig(); }
+
   new SparkXr({   // adds the Enter VR button; "VR not supported" where WebXR isn't available
     renderer, mode: 'vr', referenceSpaceType: 'local-floor', enableHands: true,
     frameBufferScaleFactor: cfg.scale, fixedFoveation: cfg.foveation,
@@ -310,7 +325,7 @@ export async function setupXR(host: XrHost) {
 
   const w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3));
   return {
-    tier, device, rig, place, step,
+    tier, device, rig, place, step, moveHead, rigState, restoreRig,
     presenting: () => renderer.xr.isPresenting,
     /** where the XR camera and the user camera in its rig are (floor frame), and what is tracked */
     pose: () => ({ xr: renderer.xr.isPresenting, head: w(renderer.xr.getCamera()), userCam: w(camera), rig: { ...xrRig },
