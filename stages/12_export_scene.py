@@ -135,11 +135,14 @@ def coverage(w, lo, shape, cell, walls):
     return np.minimum(n, 255).reshape(shape).astype(np.uint8)
 
 
-def rug_outline(w, lo, cell, shape, box_xy, grow=0.03):
-    """Rotated rectangle (floor frame) around the largest stage 6 bump patch inside box_xy, grown for the blurry edge."""
-    (i0, j0), (i1, j1) = np.clip(np.round((np.sort(np.array(box_xy, float), 0) - lo) / cell).astype(int), 0, shape)
+def rug_outline(w, lo, cell, shape, o, grow=0.03):
+    """Rotated rectangle (floor frame) around the largest stage 6 bump patch inside the rug's box_xy, grown for the blurry
+    edge. No bump there (a thin mat on a textureless floor): a stage 6c rug's own outline, from its labelled points."""
+    (i0, j0), (i1, j1) = np.clip(np.round((np.sort(np.array(o["box_xy"], float), 0) - lo) / cell).astype(int), 0, shape)
     lab, n = ndimage.label(np.load(w / "bumps.npy")[i0:i1, j0:j1])
-    assert n, "rug: no measured bump cells in its box"
+    if not n:
+        assert "poly_xy" in o, f"{o['name']}: no measured bump cells in its box"   # a hand box would take bare floor
+        return o["poly_xy"]
     i, j = np.nonzero(lab == 1 + np.argmax(ndimage.sum(lab > 0, lab, range(1, n + 1))))
     xy = (np.stack([i + i0, j + j0], 1) + 0.5) * cell + lo
     (cx, cy), (bw, bh), ang = cv2.minAreaRect(xy.astype(np.float32))
@@ -202,7 +205,7 @@ def object_parts(o, xyz, g, w, lo, cell, shape):
     # parts: the object is only these height-limited boxes (a table = top slab + legs; chairs pushed in under it stay put)
     parts = o.get("parts") or [{"box_xy": o["box_xy"], "z": [g["bump_z"][0], o.get("z_max", 2.0)]}]
     if o.get("kind") == "rug":   # a rug lies at an angle: its box takes bare floor too, so cut the measured bump patch instead
-        parts = [{**q, "poly_xy": rug_outline(w, lo, cell, shape, o["box_xy"])} for q in parts]
+        parts = [{**q, "poly_xy": rug_outline(w, lo, cell, shape, o)} for q in parts]
     # a part is a box_xy or a poly_xy outline (a table turned off the axes: its bounding box would take the chair backs),
     # taken with a margin: an object's sides sit on or just past its outline (a bed's sides 1-3 cm out stayed in the
     # room when it was moved). A rug has none: its edge Gaussians are floor-height, the margin would take floor.
@@ -250,7 +253,7 @@ def main(cfg):
             fv[f"f_dc_{k}"], fv[f"scale_{k}"] = dc[k], np.log(0.012 if k < 2 else 0.002)
         fv["opacity"], fv["rot_0"] = 4.0, 1.0
         if o.get("kind") == "rug":   # only where the rug was cut out
-            fv = fv[Path2d(rug_outline(w, lo, cell, shape, o["box_xy"])).contains_points(np.stack([fv["x"], fv["y"]], 1))]
+            fv = fv[Path2d(rug_outline(w, lo, cell, shape, o)).contains_points(np.stack([fv["x"], fv["y"]], 1))]
         write_ply(out / "objects" / f"fill_{o['name']}.ply", fv)
         surface = surface_height(xyz[sel & solid, 2], o.get("surface_z") or SURFACE_Z[o.get("kind")]) if o.get("kind") in SURFACE_Z else None
         objects.append({"name": o["name"], "kind": o.get("kind", "other"), "splat": f"objects/{o['name']}.ply",
