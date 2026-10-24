@@ -48,6 +48,7 @@ More stages, all optional, each writing next to the others in `out/<run>/`:
 | `14_rescan_diff.py before.yaml after.yaml` | film again after the fixes: 2-D ICP alignment, each hazard resolved / remaining, new bumps on the route | `verification.json` |
 | `cosmos/reason.py` | Cosmos Reason 2 on capture frames along the route, proposals lifted to 3-D and checked against the grids | `reason.json` |
 | `tools/contact_table.py` | the toe-contact table, calibrated to ~1 in 578 strides at 1 cm | rewrites `contact_table` in configs |
+| `tools/score_proposals.py proposed.yaml --truth <config or labels>` | stage 6c scored against boxes a person drew: found / fragmented (a merge would fix it) / missed, kind, unmatched proposals | table + `-o score.json` |
 
 ## Versions
 
@@ -141,7 +142,8 @@ viewer above opens it (add `--host` to `vite` for phones on the Wi-Fi).
 | Toe contacts per month | expected contacts with a likely range (the measured height error + simulation noise), per route |
 | A month of nights | 30 nights drawn at that rate; scrub to see where each night's contacts happen |
 | Transfers, reach, emergencies | bed/toilet/chair heights vs knee height (hip precautions), switch and phone reach from the bed, grab bars, stretcher path, phone after a fall |
-| Physics pass (walker) | Rapier: the walker pushed along each route over one heightfield of the measured floor; where a front wheel or glide catches, or the frame tips (push, grip and wheel sizes are assumptions, `viewer/src/physics.ts`) |
+| Physics pass (walker) | Rapier: the walker pushed along each route over one heightfield of the measured floor; where a front wheel or glide catches, or the frame tips (push, grip and wheel sizes are assumptions, `viewer/src/physics.ts`). A walker that never reaches the goal is listed as STUCK, not as "no snags". Below it: hardest push after the first 0.5 m run-up, a push-against-distance chart (snags marked), a push-coloured trail on the floor, and **Replay walker** (the pushed frame at its recorded pose, legs red on an edge). `game.physicsCfg = { push_max_n: 60 }` in the console tries another person |
+| Highlight hazards, Bump heights, Hazard tour | the object behind each measured hazard glows (strength = its share of the risk); Cosmos Reason proposals are pins marked *proposed* (teal: the measured grids agree, violet: OT should check); the height overlay colours every bump cell (hatched = typical value, not measured); the tour flies to each hazard, worst first, with its caption |
 | Plan fixes | each configured fix rolled out alone: contacts saved, clearance gained, cost / minutes / product |
 | Suggest layouts | the optimizer: furniture to wall or bedside slots + fixes, three options (quick / moderate / full), Apply and walk it |
 | OT report / Fix card (QR) | printable report of the layout on screen; the family's checklist on a phone, pins on the map |

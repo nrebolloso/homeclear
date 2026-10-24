@@ -39,8 +39,15 @@
     <div id="nightinfo" class="hint"></div>
     <h2>Hazards on the route</h2>
     <ul id="hazards"></ul>
+    <label title="the object behind each measured hazard glows; Cosmos Reason proposals are pins marked proposed"><input type="checkbox" id="spot" checked /> Highlight hazards</label>
+    <label title="measured bump heights on the floor: blue low, amber near a centimetre, red tall; hatched where the height is only a typical value"><input type="checkbox" id="heights" /> Bump heights</label>
+    <button id="tour" title="fly to each hazard, worst first">Hazard tour</button>
     <button id="physics" title="Rapier: the walker pushed along each route over the measured floor; where a wheel or glide catches">Physics pass (walker)</button>
     <ul id="snags"></ul>
+    <div id="physinfo" class="hint"></div>
+    <canvas id="pushchart" width="266" height="96" hidden title="push against distance: blue = what the person gives, dashed = their limit, grey = tallest edge under a leg, orange = snags"></canvas>
+    <button id="replay" hidden title="the pushed walker at its recorded pose; legs red on an edge">Replay walker</button>
+    <div id="replaycap" class="hint"></div>
     <h2>Transfers, reach, emergencies</h2>
     <ul id="checks"></ul>
     <div class="legend">
@@ -74,6 +81,7 @@
   </div>
   <div id="qr" hidden><img id="qrimg" alt="QR code for the family fix card" /><a id="qrlink" target="_blank"></a>
     <div id="qrnote" class="hint"></div><button id="closeqr">Close</button></div>
+  <div id="tourcap" hidden></div>
   <div id="hud"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>

@@ -13,6 +13,8 @@ import { setupXR } from './xr.ts';
 import { initClips, exportForCosmos, listClips, type ExportOpts } from './cosmos.ts';
 import { layoutKey } from './prerender.ts';
 import { drawTopdown } from './topdown.ts';
+import { spots, vantage, heightTexels, type Spot } from './spotlight.ts';
+import { summarize, drawPushChart, poseAt, pushColor, sampleText } from './physdebug.ts';
 import { cardState, encodeCard, type ActionOut, type ReportPayload } from './share.ts';
 import QRCode from 'qrcode';
 import type { Eval, Init, RouteDef } from './worker.ts';
@@ -233,11 +235,13 @@ const game: any = { ready: false, fps: 0, evals: 0 };
 
 function replanRoute(k: number) {
   selRoute = k; autoS = 0;
+  showPhysics();
   return replan().then(ms => { if (!current?.error) Object.assign(body, routePose(0, 0, Infinity)); return ms; });
 }
 async function replan(): Promise<number> {
   const t = performance.now();
   L = stamp(g, base, objs, layout.poses, layout.flattened);
+  updateHeights();
   const id = seq + 1;
   latestEval = id;
   const { r } = await ask({ type: 'eval', layout, sel: selRoute, heat: $<HTMLInputElement>('heat').checked });
@@ -282,6 +286,7 @@ function drawPlan(r: Eval) {
     ring.add(t);
     hazardGroup.add(ring);
   }
+  drawSpots(r);
   renderPanels();
 }
 
@@ -307,6 +312,111 @@ function renderPanels() {
   $('checks').innerHTML = r.checks.map(c => `<li><span class="${vcls(c.verdict)}">${c.verdict}</span> ${c.label}<br><small>${c.note}</small></li>`).join('')
     || '<li>no fixtures marked for this home</li>';
 }
+
+// ---------- hazard spotlights (spotlight.ts): the object behind each measured hazard glows, proposals get pins ----------
+// Measured hazards pulse orange on the object that makes them; Cosmos Reason proposals are pins in their own colours and
+// always say "proposed": teal when the measured grids agree, violet when only an OT can check.
+const spotGroup = new THREE.Group();
+spotGroup.renderOrder = 2;
+scene.add(spotGroup);
+const glow = items.map(it => {
+  const m = new THREE.Mesh(it.proxy.geometry, new THREE.MeshBasicMaterial({ color: 0xff8a1f, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+  m.position.copy(it.proxy.position); m.rotation.copy(it.proxy.rotation); m.visible = false; m.renderOrder = 2;
+  it.group.add(m);
+  return m;
+});
+const SPOT_RGB = { measured: 0xff8a1f, 'reason-confirmed': 0x2fd6a8, 'reason-ot': 0xb48cff };
+let spotList: Spot[] = [], tourSpot = -1;
+function clearGroup(grp: THREE.Group) { for (const c of [...grp.children]) { grp.remove(c); c.traverse(x => { if (x instanceof CSS2DObject) x.element.remove(); }); } }
+function drawSpots(r: Eval) {
+  clearGroup(spotGroup);
+  glow.forEach(m => { m.visible = false; m.userData.sev = 0; });
+  spotList = r.error ? [] : spots(r.hazards, objs, hzFile.hazards, sc.hazard_rules?.margin_m?.height ?? 0);
+  if (!$<HTMLInputElement>('spot').checked) return;
+  for (const s of spotList) {
+    if (s.object >= 0 && !layout.poses[s.object].removed) { glow[s.object].visible = true; glow[s.object].userData.sev = s.severity; }
+    if (s.kind === 'measured') continue;
+    const hz = hzFile.hazards.find(h => h.source === 'cosmos_reason' && Math.abs(h.position_m[0] - s.xy[0]) < 1e-6 && Math.abs(h.position_m[1] - s.xy[1]) < 1e-6);
+    const z = Math.max(0.05, hz?.position_m[2] ?? 0.05), col = SPOT_RGB[s.kind];
+    const pin = new THREE.Group();
+    pin.position.set(s.xy[0], s.xy[1], 0);
+    pin.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0.02), new THREE.Vector3(0, 0, z + 0.4)]), new THREE.LineBasicMaterial({ color: col })));
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.05, 14, 10), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.9, depthWrite: false }));
+    head.position.set(0, 0, z + 0.4);
+    const t = label(s.label, 'imag');
+    t.position.set(0, 0, z + 0.55);
+    pin.add(head, t);
+    spotGroup.add(pin);
+  }
+}
+$('spot').onchange = () => current && drawSpots(current);
+/** pulse the glow (tour stop stronger); called every frame from step() */
+function pulseSpots(t: number) {
+  glow.forEach((m, k) => {
+    if (!m.visible) return;
+    const sev = m.userData.sev as number, here = tourSpot >= 0 && spotList[tourSpot]?.object === k;
+    (m.material as THREE.MeshBasicMaterial).opacity = (0.08 + 0.16 * sev + (here ? 0.12 : 0)) * (0.65 + 0.35 * Math.sin(t * 3.2));
+  });
+}
+
+// the measured bump heights as a floor overlay: colour = height, hatched where the height is only a typical value
+const heightTex = new THREE.DataTexture(new Uint8Array(nx * ny * 4), nx, ny, THREE.RGBAFormat);
+heightTex.magFilter = heightTex.minFilter = THREE.NearestFilter;
+const heightMesh = new THREE.Mesh(new THREE.PlaneGeometry(nx * g.cell_m, ny * g.cell_m), new THREE.MeshBasicMaterial({ map: heightTex, transparent: true, depthWrite: false }));
+heightMesh.position.set(g.origin_xy[0] + (nx * g.cell_m) / 2, g.origin_xy[1] + (ny * g.cell_m) / 2, 0.024);
+heightMesh.renderOrder = 1; heightMesh.visible = false;
+scene.add(heightMesh);
+function updateHeights() {
+  heightMesh.visible = $<HTMLInputElement>('heights').checked;
+  if (!heightMesh.visible) return;
+  (heightTex.image.data as Uint8Array).set(heightTexels(g, L.bump, est));
+  heightTex.needsUpdate = true;
+}
+$('heights').onchange = updateHeights;
+
+// hazard tour: fly to each spot (worst first), hold with its caption; any key or a drag in the view ends it
+const tour = { on: false, k: 0, t: 0, phase: 'fly' as 'fly' | 'hold', from: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 }, to: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 } };
+const TOUR_FLY_S = 1.4, TOUR_HOLD_S = 3;
+function tourGo(k: number) {
+  const s = spotList[k];
+  tour.k = k; tour.t = 0; tour.phase = 'fly'; tourSpot = k;
+  tour.from = { x: fly.x, y: fly.y, z: fly.z, yaw: body.yaw, pitch: body.pitch };
+  tour.to = vantage(s.xy, current!.xy);
+  $('tourcap').hidden = true;
+}
+function startTour() {
+  if (tour.on) return endTour();
+  if (!spotList.length || !current || current.error) { $('status').textContent = 'no hazards on this route to tour'; return; }
+  setWalk('fly');
+  tour.on = true; $('tour').textContent = 'Stop tour';
+  tourGo(0);
+}
+function endTour() {
+  if (!tour.on) return;
+  tour.on = false; tourSpot = -1; $('tour').textContent = 'Hazard tour'; $('tourcap').hidden = true;
+}
+function tourStep(dt: number) {
+  if (!tour.on) return;
+  tour.t += dt;
+  if (tour.phase === 'fly') {
+    const f = Math.min(1, tour.t / TOUR_FLY_S), e = f * f * (3 - 2 * f), a = tour.from, b = tour.to;
+    fly.x = a.x + e * (b.x - a.x); fly.y = a.y + e * (b.y - a.y); fly.z = a.z + e * (b.z - a.z);
+    body.yaw = a.yaw + e * Math.atan2(Math.sin(b.yaw - a.yaw), Math.cos(b.yaw - a.yaw));
+    body.pitch = a.pitch + e * (b.pitch - a.pitch);
+    if (f >= 1) {
+      tour.phase = 'hold'; tour.t = 0;
+      const s = spotList[tour.k], cap = $('tourcap');
+      cap.hidden = false;
+      cap.innerHTML = `<b>${tour.k + 1}/${spotList.length}</b> · ${s.kind === 'measured' ? 'measured' : '<span class="imagined">proposed by Cosmos Reason, not measured</span>'}<br>${s.detail}`;
+    }
+  } else if (tour.t >= TOUR_HOLD_S) {
+    if (tour.k + 1 < spotList.length) tourGo(tour.k + 1);
+    else { endTour(); setWalk('auto'); }
+  }
+}
+$('tour').onclick = startTour;
+renderer.domElement.addEventListener('pointerdown', endTour);
+addEventListener('keydown', e => { if (tour.on && (e.target as HTMLElement).tagName !== 'BUTTON') endTour(); });
 
 // ---------- furniture editing ----------
 const tc = new TransformControls(camera, renderer.domElement);
@@ -407,25 +517,94 @@ function applyFix(id: string) {
 const snagGroup = new THREE.Group();
 snagGroup.renderOrder = 1;
 scene.add(snagGroup);
+const trail = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ vertexColors: true }));
+trail.renderOrder = 1; trail.visible = false;
+scene.add(trail);
+const replay = { on: false, t: 0, dev: null as null | ReturnType<typeof buildDevice> };
+const PHYS_TEXT = (r: any) => {
+  const sm = summarize(r);
+  return `${r.name}: hardest push after the run-up ${sm.peak_push_n.toFixed(0)}/${sm.limit_n.toFixed(0)} N` + (sm.peak_push_n > 0 ? ` at ${sm.peak_at_s.toFixed(1)} m` : '') +
+    `, ${sm.at_limit_s.toFixed(1)} s at the limit, tallest edge under a leg ${(sm.max_leg_height_m * 100).toFixed(1)} cm, tilt ≤ ${sm.max_tilt_deg.toFixed(1)}°, mean ${(sm.mean_speed_mps * 100).toFixed(0)} cm/s`;
+};
+/** chart, push-coloured trail and replay for the selected route's physics run */
+function showPhysics() {
+  const res: any[] | null = game.physics, r = res?.[selRoute], cv = $<HTMLCanvasElement>('pushchart');
+  stopReplay();
+  const ok = !!r && !r.error && r.trace?.length;
+  cv.hidden = !ok; $('replay').hidden = !ok; trail.visible = false;
+  $('physinfo').textContent = ok ? PHYS_TEXT(r) : '';
+  if (!ok) return;
+  drawPushChart(cv, r);
+  trail.geometry.dispose();
+  trail.geometry = new THREE.BufferGeometry().setFromPoints(r.trace.map((p: any) => new THREE.Vector3(p.x, p.y, 0.06)));
+  trail.geometry.setAttribute('color', new THREE.Float32BufferAttribute(r.trace.flatMap((p: any) => pushColor(p.push, r.limit_n)), 3));
+  trail.visible = true;
+}
+function stopReplay() {
+  replay.on = false;
+  if (replay.dev) replay.dev.group.visible = false;
+  walker.group.visible = true;
+  $('replay').textContent = 'Replay walker'; $('replaycap').textContent = '';
+}
+function startReplay() {
+  const r = game.physics?.[selRoute];
+  if (!r?.trace?.length) return;
+  if (replay.dev) scene.remove(replay.dev.group);
+  replay.dev = buildDevice(walkerCfg);
+  scene.add(replay.dev.group);
+  replay.on = true; replay.t = 0; walker.group.visible = false;
+  $('replay').textContent = 'Stop replay';
+}
+/** one frame of the replay: the pushed walker at its recorded pose, legs red while standing on an edge, frame red when tipped */
+function replayStep(dt: number) {
+  const r = game.physics?.[selRoute];
+  if (!replay.on || !r?.trace?.length || !replay.dev) return;
+  const last = r.trace[r.trace.length - 1];
+  replay.t += dt;
+  if (replay.t > last.t + 1) replay.t = 0;
+  const p = poseAt(r.trace, replay.t)!;
+  replay.dev.group.position.set(p.x - Math.cos(p.yaw) * r.frame_off_m, p.y - Math.sin(p.yaw) * r.frame_off_m, 0);
+  replay.dev.group.rotation.z = p.yaw;
+  p.legs.forEach((h, k) => replay.dev!.setLegRed(k, h >= 0.003));
+  replay.dev.setFrameRed(p.tilt_deg > 10);
+  $('replaycap').textContent = sampleText(p, r.limit_n);
+  drawPushChart($<HTMLCanvasElement>('pushchart'), r, p.s);
+}
+$('replay').onclick = () => (replay.on ? stopReplay() : startReplay());
+
 async function physicsPass() {
-  for (const c of [...snagGroup.children]) { snagGroup.remove(c); c.traverse(x => { if (x instanceof CSS2DObject) x.element.remove(); }); }
-  if (walkerCfg.device === 'cane') { $('snags').innerHTML = '<li>walker only (this persona uses a cane)</li>'; return (game.physics = null); }
+  clearGroup(snagGroup);
+  if (walkerCfg.device === 'cane') { $('snags').innerHTML = '<li>walker only (this persona uses a cane)</li>'; game.physics = null; showPhysics(); return null; }
   $('snags').innerHTML = '<li>pushing the walker along each route…</li>';
-  const { routes: res } = await ask({ type: 'physics', layout, walker: walkerCfg });
-  const items = res.flatMap((r: any) => r.error ? [`<li>${r.name}: no route</li>`] : r.snags.length === 0
-    ? [`<li>${r.name}: <span class="delta-good">no snags</span> <small>(hardest push ${Math.max(0, ...Object.values(r.peak_push_n) as number[]).toFixed(0)} N)</small></li>`]
-    : r.snags.map((s: any) => `<li>${r.name}: <span class="measured">${s.leg} ${s.tipped ? 'tips the frame' : 'catches'} on ${r.names[s.comp] ?? 'a floor edge'}` +
-      ` (${(s.height_m * 100).toFixed(1)} cm edge)</span> at ${s.s_m.toFixed(1)} m · <span class="ot">estimate, OT to verify</span></li>`));
+  const { routes: res } = await ask({ type: 'physics', layout, walker: walkerCfg, cfg: game.physicsCfg });   // game.physicsCfg = { push_max_n: 60, ... } to try other people
+  const ot = '<span class="ot">estimate, OT to verify</span>';
+  const items = res.flatMap((r: any) => {
+    if (r.error) return [`<li>${r.name}: no route</li>`];
+    // a walker that never got to the goal and was not called stalled is neither "no snags" nor fine: say where it sat
+    const stuck = r.done ? [] : [`<li><span class="delta-bad">${r.name}: walker STUCK ${r.stuck ? `at ${r.stuck.s_m.toFixed(1)} m` : 'before the goal'}, never reached the end</span> ` +
+      `<small>(push ${r.stuck?.push_n.toFixed(0) ?? '?'} N after ${r.sim_s.toFixed(0)} s; it was not called a snag, so the stall time may be longer than the run)</small> · ${ot}</li>`];
+    const snags = r.snags.map((s: any) => `<li>${r.name}: <span class="measured">${s.leg} ${s.tipped ? 'tips the frame' : 'catches'} on ${r.names[s.comp] ?? 'a floor edge'}` +
+      ` (${(s.height_m * 100).toFixed(1)} cm edge)</span> at ${s.s_m.toFixed(1)} m · ${ot}</li>`);
+    const clear = r.done && !r.snags.length
+      ? [`<li>${r.name}: <span class="delta-good">no snags</span> <small>(hardest push ${Math.max(0, ...Object.values(r.peak_push_n) as number[]).toFixed(0)} N)</small></li>`] : [];
+    return [...stuck, ...snags, ...clear];
+  });
   $('snags').innerHTML = items.join('') + `<li><small>Rapier: the measured floor; the walker's push (${PHYS_NOTE}) is assumed</small></li>`;
-  for (const r of res) for (const s of r.snags ?? []) {
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.1, 24), new THREE.MeshBasicMaterial({ color: 0xff3030, transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide }));
-    ring.position.set(s.position[0], s.position[1], 0.032);
-    const t = label(`snag: ${s.leg}`);
-    t.position.set(0, 0, 0.25);
-    ring.add(t);
-    snagGroup.add(ring);
+  for (const r of res) {
+    const marks = [...(r.snags ?? []).map((s: any) => ({ xy: s.position, text: `snag: ${s.leg}`, col: 0xff3030 })),
+      ...(r.stuck ? [{ xy: r.stuck.position, text: 'STUCK', col: 0xff2fd0 }] : [])];
+    for (const m of marks) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.1, 24), new THREE.MeshBasicMaterial({ color: m.col, transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide }));
+      ring.position.set(m.xy[0], m.xy[1], 0.032);
+      const t = label(m.text);
+      t.position.set(0, 0, 0.25);
+      ring.add(t);
+      snagGroup.add(ring);
+    }
   }
-  return (game.physics = res);
+  game.physics = res;
+  showPhysics();
+  return res;
 }
 const PHYS_NOTE = 'up to 40 N, 30 N leaned on the grips, 5 in front wheels, glides behind';
 $('physics').onclick = () => physicsPass();
@@ -861,6 +1040,7 @@ function xrFrame(now: number) {
 }
 function step(dt: number, t: number) {
   if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
+  tourStep(dt);
   walker.group.position.set(body.x, body.y, 0);
   walker.group.rotation.z = body.yaw;
   if (mode === 'fly') {
@@ -875,6 +1055,8 @@ function step(dt: number, t: number) {
     const f = feetAt(heroSteps, autoS, persona.stride_m ?? 0.35), hy = walkerCfg.width_m / 2 - walkerCfg.leg_radius_m, gx = walkerCfg.user_gap_m + 0.05;
     mannequin.update(body, [f[1], f[0]], [[gx, hy], [gx, -hy]], walkerCfg.handle_height_m);   // sim side 1 = left
   }
+  pulseSpots(t);
+  replayStep(dt);
   liveChecks(t);
   if (xr?.presenting()) renderer.render(scene, camera);   // the post pass can't run per eye: plain render in the headset
   else vision.render();
@@ -904,6 +1086,7 @@ Object.assign(game, {
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); Object.assign(body, { x, y, yaw }); },
   layout: () => layout, current: () => current, routes,
+  spots: () => spotList, startTour, endTour, tourState: () => ({ ...tour }), replayState: () => ({ on: replay.on, t: replay.t }), startReplay, stopReplay, showPhysics,
   setPersona, physicsPass, personas: () => Object.keys(personas), persona: () => personaKey, suggest, applyOption, setFillBackend,
   /** a layout from configured fixes, in order (pre-render scenarios); one re-plan */
   applyFixes(ids: string[]) {
