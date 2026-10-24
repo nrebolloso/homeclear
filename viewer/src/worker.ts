@@ -11,6 +11,10 @@ self.onmessage = async (e: MessageEvent) => {
   if (m.type === 'init') { S = m.init; return; }
   if (m.type === 'eval') {
     const r = evaluate(S, m.layout, { ghosts: true, sel: m.sel, heat: m.heat });
+    if (S.persona.step_model !== 'hand' && !r.error) {   // hand-rule baseline over the same route: ~50 ms, drawn as a second ghost set
+      const h = evaluate({ ...S, persona: { ...S.persona, step_model: 'hand' }, stepModel: undefined, worldModel: undefined }, m.layout, { ghosts: true, sel: m.sel });
+      r.hand = { per_month: h.per_month, ghosts: h.ghosts };
+    }
     const transfer: ArrayBuffer[] = [r.dist_m.buffer as ArrayBuffer];
     if (r.heat) transfer.push(r.heat.steps.buffer as ArrayBuffer, r.heat.hits.buffer as ArrayBuffer);
     postMessage({ type: 'eval', id: m.id, r }, { transfer });

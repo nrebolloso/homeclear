@@ -89,3 +89,30 @@ room, not object: the counter under the basket (never filmed, a blur), and a dar
 trash can (every Gaussian there is 15-33 cm from any trash-can label: the unseen wall behind it). Close up (< 1 m) the
 table top and seats render patchy and see-through with or without removals; from normal distance they are solid.
 `npm test` 74 / 74, `tests/run_py.sh` all OK.
+Third follow-up: two yellow bars stayed in chair7's box after removing the table and chair7 (user screenshot). They were
+chair7's runners, lying flat at 0-3 mm (under the 4 mm floor band) and 14-28 cm from any label, so no rule took them.
+An object labelled from below 30 cm now takes everything unlabelled in its outline from 3 cm below the floor (the fill
+replaces that floor anyway). Yellow Gaussians left on the floor in chair7's box: ~183 -> 0
+(`kitchen4_lighter_chair7_runners_gone.jpg`; the leg still standing there is chair4's and goes with chair4). Cost: a moved
+chair carries a thin dark strip of floor under its runners. Fills re-run (job 47409131).
+Fourth follow-up: two legs still stood in chair7's box after removing it (user screenshot). They were chair7's leg bottoms:
+6c labels chair7 only from 22 cm up, so they were nearest to no label, and unlabelled points inside overlapping outlines
+went to whichever object came first (chair4, then the table). An unlabelled point now goes only to the object whose labels
+it stands under (nearest with height counted at 30%). Low points in chair7's box: table 159 -> 1, chair4 44 yellow -> 2
+(the rest of chair4's 29 there are faint wall-edge Gaussians), chair7 209 -> 721. Room Gaussians left per footprint
+barely change (largest: bedside tables +20 each, chair7 +16). Fills re-run (job 47411688). Not live-checked in the
+browser (extension disconnected).
+Fifth follow-up: the trash can carried part of the white wall behind and above its lid (user report). 6c's mask spilt onto
+the wall, and the grow and on-top rules took the rest (1290 Gaussians, a sheet up to 98 cm). Stage 12 now cuts each
+object against stage 5c's walls (fitted in memory when the run has no shell.json, so nothing else reads them): only walls
+the object's labels lie wholly on one side of (5c finds 30 lines here, some running through the trash and basket), and
+everything on or past the line goes back to the room: within 2 cm up to the object's top, within 10 cm above it. Trash
+can 26977 -> 25687 Gaussians, height 0.768 -> 0.664 m; boxes lose 10-86 stray Gaussians from behind the wall; basket and
+all chairs/tables unchanged. Fills re-run (job 47413830). Not live-checked in the browser (extension disconnected).
+Sixth follow-up: the trash can still took some wall (user report). Moved into the room it carried white sheets beside its
+lid and down one side: big wall Gaussians centred inside the can, so the per-centre wall cut kept them. An object that
+stands against a wall (50+ labels within 10 cm of it) now also gives back every Gaussian whose 2-sigma ellipsoid reaches
+5 cm past its own box (1-99%). Trash can -466 (mostly grey/white), boxes -25 to -69; chairs, tables and the basket
+unchanged. (Applied to every object, the table and chairs gave back 3-5% as blurry edge splats that would stay as a halo
+where they stood, so it is limited to objects against a wall.) Checked in headless Chrome (playwright, fly camera): the
+moved can's white sheet is gone, and the wall behind the removed can is intact. Fills re-run (job 47419642).

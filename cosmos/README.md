@@ -31,7 +31,7 @@ sbatch slurm/cosmos_download.sbatch     # 3   CPU: checkpoints -> hf/hub (needs 
 sbatch slurm/cosmos_example.sbatch      # 4   B200: repo's robot edge example               outputs/example_edge/
 # laptop: .venv/bin/python cosmos/prepare_hallway.py --start <sec>   (93 frames, 1280x720, 16 fps + spec), rsync cosmos/inputs
 sbatch slurm/cosmos_hallway.sbatch      # 5   B200: hallway, edge + blur from RGB          outputs/hallway/
-sbatch slurm/cosmos_splat.sbatch config.yaml   # 6 B200: Cosmos on splat renders (see below)
+sbatch slurm/cosmos_splat.sbatch configs/home.yaml   # 6 B200: Cosmos on splat renders (see below)
 python3 make_report.py                  # -> cosmos_smoke_report.md
 ```
 Each inference job logs the exact command, model load vs generation wall time, peak VRAM (`nvidia-smi` at 2 Hz
@@ -40,7 +40,7 @@ and torch's own peak), and writes `results/<run>.json`.
 Guardrails stay on: the NVIDIA Open Model License does not allow bypassing them.
 
 ## Cosmos on the splat (the hackathon path)
-`sbatch slurm/cosmos_splat.sbatch config.yaml` (from this folder, once stages 5-7 have run for that config):
+`sbatch slurm/cosmos_splat.sbatch configs/home.yaml` (from this folder, once stages 5-7 have run for that config):
 1. `render_route.py` (pipeline env, gsplat) renders the splat along the stage-7 walker route at 1.2 m eye height,
    93 frames 1280x720: RGB, depth (inverse, near = bright) and segmentation (one colour per obstacle component of the
    stage-6 grid, floor, rug layer). It also moves the obstacle nearest the route 0.6 m away and renders that scene:

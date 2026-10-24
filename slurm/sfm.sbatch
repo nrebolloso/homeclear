@@ -15,7 +15,7 @@ export OPENBLAS_NUM_THREADS=1
 # That alone did not hold (myhome_living_b crashed again on 64 cores): the callers are the 64 COLMAP matcher threads, so also keep FAISS
 # single-threaded and submit with --cpus-per-task=16 (stage 02 sizes its matcher threads from the job's cores; <= 24 stays inside the table).
 export OMP_NUM_THREADS=1
-CFG=${1:-config.yaml}
+CFG=${1:-configs/home.yaml}
 for s in 01_frames 02_poses; do
   python stages/$s.py "$CFG" || { echo "stopping after $s FAILED"; exit 1; }
 done

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { stamp, carvedPolys, placementOk, polyCells, worldFootprint, toCell, applyIntervention, placedFixtures, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
+import { stamp, carvedPolys, placementOk, polyCells, edt, worldFootprint, toCell, applyIntervention, placedFixtures, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
 import { buildDevice as deviceMesh, type WalkerCfg } from './walker.ts';
 import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
 import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z } from './wheelchair.ts';
@@ -40,6 +40,7 @@ import QRCode from 'qrcode';
 import { mountFrontend, type FrontendAdapter } from './frontend.ts';
 import { createFrontendXR } from './frontend-xr.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
+import type { Ghost } from './sim.ts';
 import type { WorldModel } from './worldmodel.ts';
 import { setupXR, type XrEditor } from './xr.ts';
 import { plainSpot, tourStand } from './xrtour.ts';
@@ -49,7 +50,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 // model and scene text (Cosmos Reason notes, hazard details) goes into innerHTML escaped; same as report.ts's, which can't
 // be imported: that module renders the report page when loaded
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
-const RUN = new URLSearchParams(location.search).get('scene') ?? 'game_synth';
+const RUN = new URLSearchParams(location.search).get('scene') ?? 'kitchen4_lighter';
 const BASE = `scene/${RUN}/`;
 const json = (f: string) => fetch(BASE + f).then(r => { if (!r.ok) throw new Error(`${BASE}${f}: ${r.status}`); return r.json(); });
 const bin = (f: string) => fetch(BASE + f).then(r => r.arrayBuffer());
@@ -138,12 +139,21 @@ const label = (text: string, cls = '') => {
 };
 
 // movable objects: splat in a group at its pivot (PLY is pivot-local), invisible box proxy for picking, tinted fill
-const original: Pose[] = objs.map(o => ({ x: o.pivot[0], y: o.pivot[1], yaw: 0 }));
+// scanned = where the piece was filmed (its fill, its never-filmed floor); original = where the walk starts: the scanned
+// spot, or a staged `start` [x, y, yaw deg] (tools/stage_demo_hazards.py pulls a chair into the path)
+const scanned: Pose[] = objs.map(o => ({ x: o.pivot[0], y: o.pivot[1], yaw: 0 }));
+const original: Pose[] = objs.map((o, k) => (o.start ? { x: o.start[0], y: o.start[1], yaw: (o.start[2] * Math.PI) / 180 } : scanned[k]));
 // the floor under each object was never filmed, and specks inside its box are its own splat leftovers, but it stands
 // there now: count its own spot as clear floor for placement only (planning still sees the measured layers), else every
 // drag that still overlaps that spot snaps back (the kitchen rug couldn't move at all otherwise)
 const placeBase: Layers = { ...base, floor: base.floor.slice(), obst: base.obst.slice() };
-objs.forEach((o, k) => { for (const c of polyCells(g, worldFootprint(o, original[k]))) { placeBase.floor[c] = 1; placeBase.obst[c] = 0; } });
+objs.forEach((o, k) => { for (const c of polyCells(g, worldFootprint(o, scanned[k]))) { placeBase.floor[c] = 1; placeBase.obst[c] = 0; } });
+// free walk keeps to filmed floor, but the floor under the furniture was never filmed: once a piece is moved or removed
+// you can walk onto its spot (only where it is floor: a box on a cabinet doesn't open the cabinet top). Unfilmed seams
+// up to 12 cm wide (beside a chair leg, between two outlines) count as filmed too, else they stop you mid-room
+const seen = coverage.map(v => +(v > 0));
+objs.forEach((o, k) => { for (const c of polyCells(g, worldFootprint(o, scanned[k]))) if (base.floor[c]) seen[c] = 1; });
+const unseen = edt(seen, nx, ny).map(d => +(d * g.cell_m > 0.06));
 // objects filmed overlapping (a chair pushed in under the table) share floor cells but not space: they may keep overlapping
 // shortcut: 2D footprints, so once apart they may also be dropped into each other; a height-aware check would fix that
 const startCells = objs.map((o, k) => new Set(polyCells(g, worldFootprint(o, original[k]))));
@@ -167,7 +177,7 @@ const items = objs.map(o => {
   const fill = splat(o.fill);
   fill.recolor = new THREE.Color(1, 0.75, 1);      // tint: imagined, not measured (light, so a generated floor texture still reads)
   fill.visible = false;
-  const tag = label('imagined, not measured', 'imag');
+  const tag = o.placed ? new THREE.Object3D() : label('imagined, not measured', 'imag');   // staged for the demo: the floor under it was filmed
   tag.position.set(o.pivot[0], o.pivot[1], 0.15);
   tag.visible = false;
   scene.add(fill, tag);
@@ -223,11 +233,17 @@ scene.add(verifyGroup);
 // ---------- grid overlays: route, hazards, ghosts, fog, taped strips ----------
 const routeLine = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0x55c7ef, size: 3, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
 // ghost walkers as one dot per step (WebGL lines are 1 px: trails hugging the route vanished); red = a toe contact
-const ghostDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ vertexColors: true, size: 5, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
+// one palette: cyan = footsteps (ghosts, heatmap, next-step cloud), orange -> red = bumps and contacts (rings, heat, leg flash), white = hand-rule baseline
+const DOT = (() => { const c = document.createElement('canvas'); c.width = c.height = 32; const x = c.getContext('2d')!; const g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+  g.addColorStop(0, '#fff'); g.addColorStop(0.6, '#fffd'); g.addColorStop(1, '#fff0'); x.fillStyle = g; x.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(c); })();   // round soft dots, not square pixels
+const ghostDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: DOT, vertexColors: true, size: 5, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
 const hazardGroup = new THREE.Group(), tapeGroup = new THREE.Group();
 // overlays draw after the splats: splats don't write depth, so drawn first they'd be painted over (rings, ghosts, fog would vanish)
-for (const o of [routeLine, ghostDots, hazardGroup, tapeGroup]) o.renderOrder = 1;
-scene.add(routeLine, ghostDots, hazardGroup, tapeGroup);
+// the hand-rule baseline's ghosts (when a learned model walks): white, toggled apart, to show where the two disagree
+const handDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: DOT, vertexColors: true, size: 4, sizeAttenuation: false, transparent: true, opacity: 0.7, depthWrite: false }));
+handDots.visible = false;
+for (const o of [routeLine, ghostDots, handDots, hazardGroup, tapeGroup]) o.renderOrder = 1;
+scene.add(routeLine, ghostDots, handDots, hazardGroup, tapeGroup);
 { // fog where the capture saw a cell from fewer than coverage_good cameras: we don't trust the splat there
   const cv = document.createElement('canvas');
   cv.width = nx; cv.height = ny;
@@ -323,15 +339,19 @@ async function replan(): Promise<number> {
 function drawPlan(r: Eval) {
   routeLine.geometry.dispose();
   routeLine.geometry = new THREE.BufferGeometry().setFromPoints(r.xy.map(p => new THREE.Vector3(p[0], p[1], 0.035)));
-  const pos: number[] = [], col: number[] = [];
-  r.ghosts.forEach((gh, n) => {
-    const z = 0.04 + n * 0.0004;
-    gh.pts.forEach((q, k) => { pos.push(q[0], q[1], z); col.push(...(gh.hit[k] ? [1, 0.15, 0.15] : [0.45, 0.7, 1])); });
-  });
-  ghostDots.geometry.dispose();
-  ghostDots.geometry = new THREE.BufferGeometry();
-  ghostDots.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  ghostDots.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const dots = (pts: THREE.Points, ghosts: Ghost[], rgb: number[]) => {
+    const pos: number[] = [], col: number[] = [];
+    ghosts.forEach((gh, n) => {
+      const z = 0.04 + n * 0.0004;
+      gh.pts.forEach((q, k) => { pos.push(q[0], q[1], z); col.push(...(gh.hit[k] ? [1, 0.19, 0.19] : rgb)); });
+    });
+    pts.geometry.dispose();
+    pts.geometry = new THREE.BufferGeometry();
+    pts.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    pts.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  };
+  dots(ghostDots, r.ghosts, [0.3, 0.79, 0.94]);
+  dots(handDots, r.hand?.ghosts ?? [], [0.92, 0.92, 0.96]);
   for (const c of [...hazardGroup.children]) {
     hazardGroup.remove(c);
     c.traverse(x => {
@@ -358,11 +378,12 @@ function renderPanels() {
   const r = current!;
   const d = r.per_month - (baselinePerMonth ?? r.per_month);
   const perRoute = r.routes.map((q, k) => `<li class="${k === r.sel ? 'sel' : ''}">${q.name}${q.night ? ' (night)' : ''}, ${q.trips_per_night}/night: ` +
-    (q.error ? '<span class="delta-bad">no route</span>' : `<span class="measured">${fmt(q.per_month)}</span> (${fmt(q.lo)}–${fmt(q.hi)})`) + '</li>').join('');
+    (q.error ? '<span class="delta-bad">no route</span>' : `<span class="measured">${fmt(q.per_month)}</span><span class="dbg"> (${fmt(q.lo)}–${fmt(q.hi)})</span>`) + '</li>').join('');
   $('risk').innerHTML = r.error ? `<span class="delta-bad">no route for this walker</span><ul>${perRoute}</ul>` :
-    `<div class="big measured">${fmt(r.per_month)}</div><div class="range">likely ${fmt(r.per_month_lo)}–${fmt(r.per_month_hi)}</div>` +
-    `expected toe contacts / month, all routes (${risk.rollouts} simulated trips per route; steps: ${persona.step_model === 'world' ? 'world model (heels + walker)' : persona.step_model === 'learned' ? 'learned model' : 'hand rule'}; ` +
-    `range = measured height error ±${(100 * sc.hazard_rules.margin_m.height).toFixed(1)} cm + simulation noise)` +
+    `<div class="big measured">${fmt(r.per_month)}</div><div class="range dbg">likely ${fmt(r.per_month_lo)}–${fmt(r.per_month_hi)}</div>` +
+    `expected toe contacts / month, all routes (${risk.rollouts} simulated trips per route; steps: ${persona.step_model === 'world' ? 'world model (heels + walker)' : persona.step_model === 'learned' ? 'learned model' : 'hand rule'})` +
+    `<span class="dbg"> range = measured height error ±${(100 * sc.hazard_rules.margin_m.height).toFixed(1)} cm + simulation noise</span>` +
+    (r.hand ? `<div class="range">hand-rule baseline on the same route: ${fmt(r.hand.per_month)}</div>` : '') +
     `<ul class="routes">${perRoute}</ul>` +
     `original layout: ${fmt(baselinePerMonth!)} → now ${fmt(r.per_month)} <span class="${d <= 0 ? 'delta-good' : 'delta-bad'}">(${d <= 0 ? '' : '+'}${fmt(d)})</span>`;
   const geo = r.hazards.map(h => `<li><span class="measured">${h.type === 'floor_bump' ? (h.estimated ? `${h.name}: thin cable/cord, ~${(h.height_m! * 100).toFixed(1)} cm ESTIMATED (classified, not measured)` : `${h.name}: ${(h.height_m! * 100).toFixed(1)} cm bump`) : `tight passage: ${(h.min_side_clearance_m! * 100).toFixed(0)} cm each side`}</span>` +
@@ -523,7 +544,7 @@ tc.addEventListener('dragging-changed', e => { if (!e.value && selected >= 0) co
 
 function syncObjects() {
   items.forEach((it, k) => {
-    const p = layout.poses[k], o = original[k];
+    const p = layout.poses[k], o = scanned[k];
     it.group.position.set(p.x, p.y, 0); it.group.rotation.set(0, 0, p.yaw);   // upright (live physics re-tilts a tipped one)
     it.group.visible = !p.removed;
     it.mesh.opacity = 1;
@@ -1387,8 +1408,15 @@ function topdownURL() {
     route: current?.xy, hazards: current?.hazards });
   return cv.toDataURL('image/png');
 }
-function openReport() {
+async function openReport() {
+  const w = window.open('about:blank', '_blank');   // opened before the await so the click still counts as a user gesture
   const p = personas[personaKey], c = current!;
+  const { before, fixes } = await ask({ type: 'fixes', layout, sel: selRoute });   // the fixes not yet applied, each rolled out from this layout
+  const ranked_fixes = fixes.filter((f: any) => !applied.includes(f.id)).map((f: any) => {
+    const iv = interventions.find(i => i.id === f.id);
+    return { label: f.label, error: f.error, reduction: Math.max(0, f.reduction), share: before > 0 ? f.reduction / before : 0, clearance_gain_m: f.clearance_gain_m,
+      cost_usd: iv?.cost_usd, minutes: iv?.minutes, effort: iv?.effort, product: iv?.product };
+  }).sort((a: any, b: any) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.clearance_gain_m - a.clearance_gain_m) || ((a.cost_usd ?? 0) - (b.cost_usd ?? 0)));
   const payload: ReportPayload = {
     scene: RUN, created: new Date().toISOString(), synthetic: (sc.synthetic ?? []).length > 0 || /synth/.test(RUN), scale_note: sc.scale_note,
     route: routes[selRoute].name,
@@ -1399,10 +1427,13 @@ function openReport() {
     margins: sc.hazard_rules.margin_m, actions: describeChanges(), suggestions,
     reason: hzFile.hazards.filter(h => h.source === 'cosmos_reason'),
     clips: (game.clips ?? []).filter((k: any) => k.layout_key === layoutKey(objs, layout)).map((k: any) => k.title ?? k.file),
-    topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85),
+    topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85), ranked_fixes,
   };
   sessionStorage.setItem(`report:${RUN}`, JSON.stringify(payload));
-  return window.open(`report.html?scene=${encodeURIComponent(RUN)}`, '_blank');
+  if (!w) return window.open(`report.html?scene=${encodeURIComponent(RUN)}`, '_blank');
+  w.sessionStorage.setItem(`report:${RUN}`, JSON.stringify(payload));   // about:blank shares our origin; its storage survives the navigation
+  w.location.href = `report.html?scene=${encodeURIComponent(RUN)}`;
+  return w;
 }
 const LOCAL = /^(localhost|127\.)/;
 async function openFixCard() {
@@ -1600,6 +1631,7 @@ async function setFillBackend(b: string) {
   return b;
 }
 $('ghosts').onchange = () => { ghostDots.visible = $<HTMLInputElement>('ghosts').checked; };
+$('handghosts').onchange = () => { handDots.visible = $<HTMLInputElement>('handghosts').checked; };
 
 // ---------- performance mode (perf.ts) ----------
 // One switch thins what is drawn: no ghost walkers, heatmap, imagined ceiling, bump heights or fog, fewer splat pixels, a
@@ -1819,7 +1851,7 @@ const walkerPoint = (b: { x: number; y: number; yaw: number }, [px, py]: number[
 function canStand(b: { x: number; y: number; yaw: number }) {
   const c = cellAt(b.x, b.y);
   const S = live ? placeBase : L;   // with live physics the walker meets furniture as bodies, not as a wall on the grid
-  if (!S.floor[c] || S.obst[c] || coverage[c] === 0) return false;           // only where the capture actually saw floor
+  if (!S.floor[c] || S.obst[c] || unseen[c]) return false;           // only where the capture actually saw floor
   return walker.probes.every(p => { const k = cellAt(...walkerPoint(b, p)); return S.floor[k] && !S.obst[k]; });
 }
 /** Route point + heading at arc length s (the route is the walker frame's centre). */
@@ -1963,6 +1995,25 @@ function setHeroSteps(steps: { xy: XY; side: number; hit: boolean }[], walker?: 
     return { ...p, xy: [p.xy[0] - Math.cos(h) * centreOffset, p.xy[1] - Math.sin(h) * centreOffset] as XY, s };
   });
 }
+// ---------- next-step cloud + future trail (third person): where the 200 trips put the mannequin's next step, and its own next steps ----------
+const stepCloud = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: DOT, color: 0x4cc9f0, size: 6, sizeAttenuation: false, transparent: true, opacity: 0.6, depthWrite: false, depthTest: false }));
+const futureSteps = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ map: DOT, color: 0x9ff0ff, size: 14, sizeAttenuation: false, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false }));
+stepCloud.renderOrder = futureSteps.renderOrder = 2;   // over the mannequin: the steps it is about to take sit under its body
+scene.add(stepCloud, futureSteps);
+let cloudK = -1, cloudFor: unknown = null;
+function stepCloudUpdate(show: boolean) {
+  stepCloud.visible = futureSteps.visible = show;
+  const k = show ? heroSteps.findIndex(p => p.s > autoS) : -1;
+  if (k < 0 || (k === cloudK && cloudFor === current) || !current) return;
+  cloudK = k; cloudFor = current;
+  // every trip's step k, shifted so trip 0's lands on the mannequin's own step (heels vs centre line differ per model)
+  const g0 = current.ghosts[0]?.pts[k], hx = heroSteps[k].xy;
+  const cloud = g0 ? current.ghosts.flatMap(gh => gh.pts[k] ? [new THREE.Vector3(gh.pts[k][0] - g0[0] + hx[0], gh.pts[k][1] - g0[1] + hx[1], 0.03)] : []) : [];
+  stepCloud.geometry.dispose(); stepCloud.geometry = new THREE.BufferGeometry().setFromPoints(cloud);
+  const next = heroSteps.slice(k, k + 6);
+  futureSteps.geometry.dispose(); futureSteps.geometry = new THREE.BufferGeometry().setFromPoints(next.map(p => new THREE.Vector3(p.xy[0], p.xy[1], 0.035)));
+}
+
 const view = { third: false, back: 1.0, up: 0.4 };   // third person: behind, just above the user (higher looks through a real splat's low-opacity haze and hides the walker)
 function placeCamera(cam: THREE.PerspectiveCamera, b: typeof body) {
   if (view.third && cam === camera) {
@@ -2008,6 +2059,7 @@ function step(dt: number, t: number) {
   markStep(); grabStep();
   const showMan = view.third && mode === 'auto' && heroSteps.length > 0;
   mannequin.group.visible = showMan;
+  stepCloudUpdate(showMan);
   if (showMan) {
     const f = feetAt(heroSteps, autoS, persona.stride_m ?? 0.35), hy = walkerCfg.width_m / 2 - walkerCfg.leg_radius_m, gx = walkerCfg.user_gap_m + 0.05;
     if (walkerCfg.device === 'wheelchair') { mannequin.seated(body, SEAT_Z, walkerCfg.legs[0][1] + 0.025); manShadows?.hide(); }   // the chair's own blobs ground it
@@ -2049,7 +2101,7 @@ const comparison = createXRComparison({
       const alpha = (a.removed ? 0 : 1) * (1 - u) + (b.removed ? 0 : 1) * u;
       it.group.position.set(p.x, p.y, 0); it.group.rotation.set(0, 0, p.yaw);
       it.group.visible = alpha > 0.001; it.mesh.opacity = alpha;
-      const moved = alpha < 0.999 || Math.hypot(p.x - original[k].x, p.y - original[k].y) > 0.01 || Math.abs(p.yaw - original[k].yaw) > 0.01;
+      const moved = alpha < 0.999 || Math.hypot(p.x - scanned[k].x, p.y - scanned[k].y) > 0.01 || Math.abs(p.yaw - scanned[k].yaw) > 0.01;
       it.fill.visible = it.tag.visible = moved && $<HTMLInputElement>('imagfill').checked;
     });
     const side = t >= 0.5 ? 1 : 0;
@@ -2178,6 +2230,8 @@ Object.assign(game, {
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); Object.assign(body, { x, y, yaw }); },
   explore: () => ({ on: explore.on, parked: explore.parked && { ...explore.parked } }),
+  setFly(x: number, y: number, z: number, yawDeg: number, pitchDeg: number) { setWalk('fly'); Object.assign(fly, { x, y, z }); body.yaw = (yawDeg * Math.PI) / 180; body.pitch = (pitchDeg * Math.PI) / 180; },
+  setThird(on: boolean) { const h = $<HTMLInputElement>('third'); h.checked = on; h.dispatchEvent(new Event('change')); },
   layout: () => layout, current: () => current, routes,
   spots: () => spotList, startTour, endTour, tourState: () => ({ ...tour }), replayState: () => ({ on: replay.on, t: replay.t }), startReplay, stopReplay, showPhysics,
   setPersona, physicsPass, personas: () => Object.keys(personas), persona: () => personaKey, suggest, applyOption, setFillBackend,
@@ -2231,7 +2285,14 @@ const frontendAdapter: FrontendAdapter = {
   async lightPath() { const r = await lightPath(); game.setNight(true); return r; },
   highlights(on) { hazardGroup.visible = on; }, improvements(on) { reim.setParts({ rings: on, ringLabels: on }); },
 };
+// classic two-panel UI with ?classic (the planning drawer is the default): the shell still mounts for VR, then every control it reparented goes home
+const homes = [...document.querySelectorAll('#left *, #right *')].map(n => [n, n.parentNode!, n.nextSibling] as const).reverse();
 const frontend = mountFrontend(frontendAdapter);
+// demo mode (?demo=1, H toggles; shot.ts records with it): debug rows, ranges and the fps line hidden (style.css .demo)
+document.body.classList.toggle('demo', PARAMS.get('demo') === '1');
+addEventListener('keydown', e => { if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) document.body.classList.toggle('demo'); });
+game.setDemo = (on: boolean) => document.body.classList.toggle('demo', on);
+if (PARAMS.has('classic')) { for (const [n, p, s] of homes) p.insertBefore(n, s); document.body.classList.remove('frontend'); document.getElementById('frontend')!.hidden = true; document.getElementById('left')!.hidden = document.getElementById('right')!.hidden = false; }
 frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
 game.frontend = frontend;
 game.frontendXR = frontendVR;

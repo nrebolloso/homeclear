@@ -26,6 +26,8 @@ scenes:
     - {name: night_quick_fixes, condition: night, night: true, fixes: [remove_rug, raised_toilet_seat]}
     - {name: night_suggested_moderate, condition: night, night: true, option: 1}
     - {name: dusk_suggested_moderate_hero, condition: dusk, option: 1, hero: true}
-  bedroom:   # the real capture: fill in once its objects and fixes are in config.bedroom.yaml
+  bedroom:   # the real capture: fill in once its objects and fixes are in configs/bedroom.yaml
     - {name: night_as_is, condition: night, night: true}
+    - {name: night_as_is_hero, condition: night, night: true, hero: true}
+  kitchen4_lighter:   # the demo kitchen: worst case = the as-is route (mat, cord, chair) at night, hero chunk
     - {name: night_as_is_hero, condition: night, night: true, hero: true}

@@ -66,7 +66,7 @@ def main():
     if not a.submit:
         print(f"jobs listed in {listing.relative_to(ROOT)}; --submit to run them")
         return
-    sh = (f'source ./hpg.sh && hpg_load config.yaml && '
+    sh = (f'source ./hpg.sh && hpg_load configs/home.yaml && '
           f'hpg_ssh "mkdir -p $REPO/viewer/public/exports $REPO/viewer/public/scene" && '
           f'hpg_rsync -a common.py "$HOST:$REPO/" && hpg_rsync -a cosmos/ "$HOST:$REPO/cosmos/" && '
           f'hpg_rsync -a cosmos/ "$HOST:$HPG_ROOT/cosmos/" && '

@@ -59,7 +59,9 @@ grid:
   speck: {max_cells: 6, min_span_m: 0.10, floor_gap_m: 0.15}   # mid-air floaters of ~3 Gaussians each would block the walker
   bump_link_cells: 3
 plan:
-  # start/goal unset: stage 7 picks two far-apart cells of the largest walker-reachable region (no bed or bathroom in this scene)
+  # demo route: fridge -> kitchen entrance (stage 7's auto pick, reversed)
+  start: [-0.44, 1.83]
+  goal: [2.82, -0.39]
   walker_width_m: 0.61
   preferred_clearance_m: 0.3
   clearance_weight: 5.0

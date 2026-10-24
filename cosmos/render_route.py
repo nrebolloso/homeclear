@@ -1,5 +1,5 @@
 """Splat -> Cosmos Transfer inputs along the planned walker route (gsplat + CUDA: runs in cosmos_splat.sbatch).
-  python cosmos/render_route.py config.yaml        -> <work>/route/
+  python cosmos/render_route.py configs/home.yaml        -> <work>/route/
 
 Two 93-frame 1280x720 clips, each as RGB + depth + segmentation rendered from the splat:
   route_*        the route as captured (Cosmos: same geometry at 3 AM)

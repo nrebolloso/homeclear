@@ -204,6 +204,7 @@ try {
   check('suggest layouts, apply the full option, walkable', opts.length >= 2 && !applied.err && applied.pm <= pmNow + 1e-9 && applied.key !== 'original',
     `${opts.map((o: any) => `${o.n} ${o.pm.toFixed(2)}`).join(', ')} in ${((Date.now() - t0) / 1000).toFixed(1)} s; now ${applied.pm.toFixed(2)} (${applied.key.slice(0, 60)})`);
   const [rep] = await Promise.all([q.p.context().waitForEvent('page'), Q('game.openReport()')]);
+  await rep.waitForURL(/report\.html/, { timeout: 60000 });   // the tab opens blank while the fixes roll out
   await rep.waitForLoadState('networkidle');
   const repText = await rep.textContent('body');
   check('OT report renders the live layout', /Expected toe contacts/.test(repText ?? '') && /Changes in this layout/.test(repText ?? '') && (await rep.$$('img')).length >= 2,

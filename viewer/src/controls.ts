@@ -88,7 +88,7 @@ const GROUPS: [string, [string, string][]][] = [
     ['Right click, Backspace, Ctrl+Z', 'undo the last point'],
     ['Esc / Enter', 'cancel marking / finish editing marks'],
   ]],
-  ['Anywhere', [['F1 or ?', 'this list']]],
+  ['Anywhere', [['H', 'demo mode (hides the panels)'], ['F1 or ?', 'this list']]],
 ];
 
 const CSS = `
