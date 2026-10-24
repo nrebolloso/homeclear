@@ -298,7 +298,7 @@ export interface Intervention {
   /** raise: a seat/bed/toilet surface (object or fixture name) goes up by by_m (raised toilet seat, bed risers) */
   target?: string; by_m?: number;
   /** add: a new fixture (a touch lamp on the nightstand = a switch within reach); checks treat it like a marked one */
-  fixture?: { name: string; kind: string; attach?: string; xyz?: number[]; side?: 'left' | 'right' };
+  fixture?: { name: string; kind: string; attach?: string; xyz?: number[]; side?: 'left' | 'right'; yaw?: number; surface_m?: number };
   /** what it takes (fix card, optimizer effort): dollars, minutes, 1 (anyone) .. 5 (two people, heavy furniture) */
   cost_usd?: number; minutes?: number; effort?: number; product?: string;
 }
@@ -308,6 +308,15 @@ export interface Layout {
   raised?: Record<string, number>; added?: string[];
   /** carve fixes in place: which fix, on which door (target), the wall it opens, and how much wider the opening gets */
   carved?: { id: string; target: string; poly: XY[]; by_m: number }[];
+  /** added fixtures moved by hand (the second walker on the landing), by fix id; else they stand where the fix puts them */
+  placed?: Record<string, Pose>;
+}
+/** The added fixtures in place, each at its hand-placed pose if it has one (x, y, yaw; z stays the fix's). */
+export function placedFixtures(ivs: Intervention[], lay: Layout) {
+  return ivs.filter(iv => iv.kind === 'add' && lay.added?.includes(iv.id)).map(iv => {
+    const f = { ...iv.fixture!, note: iv.label }, p = lay.placed?.[iv.id];
+    return p ? { ...f, xyz: [p.x, p.y, f.xyz?.[2] ?? 0], yaw: p.yaw } : f;
+  });
 }
 export const carvedPolys = (lay: Layout): XY[][] => (lay.carved ?? []).map(c => c.poly);
 
@@ -322,5 +331,5 @@ export function applyIntervention(objs: { name: string }[], lay: Layout, iv: Int
   else if (iv.kind === 'add') { if (!added.includes(iv.id)) added.push(iv.id); }
   else if (iv.kind === 'carve') carved = [...carved.filter(c => c.target !== iv.target), { id: iv.id, target: iv.target!, poly: iv.poly_xy!, by_m: iv.by_m ?? 0 }];   // a door gets one option at a time
   else flattened.push(iv.box_xy!);
-  return { poses, flattened, raised, added, ...(carved.length ? { carved } : {}) };
+  return { poses, flattened, raised, added, ...(carved.length ? { carved } : {}), ...(lay.placed ? { placed: { ...lay.placed } } : {}) };
 }

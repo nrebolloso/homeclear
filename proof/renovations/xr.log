@@ -1,0 +1,12 @@
+PASS  enter VR on filmed floor, walker at your feet: head (1.95, 3.00, 1.60), cell floor=1 cov=6, walker (1.95, 3.00, 0.00), inputs left:controller right:controller
+PASS  physical step is 1:1 along your heading: moved 0.500 m at -41 deg, heading -41 deg
+PASS  looking left turns the walker: walker yaw 49 deg, expected 49
+PASS  left trigger walks forward on filmed floor: walked 0.60 m to (2.78, 2.27, 1.60)
+PASS  teleport lands where the wand points: ring shown=true, landed (2.60, 0.50, 1.60) for target (2.60, 0.50, 0.00)
+PASS  wand hovers, grabs, drags and turns the bed; the route re-plans: hover=bed grab=bed; bed (0.90, 2.92, 0) -> (2.00, 1.00, 90 deg), route 3.91 -> 4.14 m
+PASS  hold still on furniture deletes it (outline reddens first): at 1.0 s outline rgb (1.00, 0.33, 0.05), removed then=false; after 1.9 s removed=true
+PASS  hand pinch teleports like the trigger: inputs left:hand right:hand; landed (3.60, 1.50, 1.60) for target (3.60, 1.50, 0.00)
+PASS  grip puts the pointed-at object back: bed (0.90, 2.92) vs original (0.90, 2.92)
+PASS  A removes the pointed-at object: removed: bed, nightstand
+PASS  both grips held reset everything: removed: [], bed (0.90, 2.92)
+PASS  no page errors: none

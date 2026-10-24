@@ -26,8 +26,13 @@ export interface Stair {
   rails_set?: { left?: 'seen' | 'none'; right?: 'seen' | 'none' };
   measured?: 'splat' | 'tape';
   trips_per_day?: number;
+  /** what waits at the top: a folding walker or a rollator (it has a seat: a rest after the climb) */
+  top_device?: 'walker' | 'rollator';
 }
 export type Side = 'left' | 'right';
+/** The walking aid's frame (walker.ts WalkerCfg): x forward from the user's body, the frame from user_gap_m to +depth_m. */
+export interface WalkerDims { width_m: number; depth_m: number; user_gap_m: number }
+export interface ParkPose { x: number; y: number; yaw: number }
 
 /** IRC R311.7 (riser max 7 3/4 in, variation 3/8 in, tread min 10 in, width 36 in, rail 34-38 in); check local code */
 export const CODE = { riser_max_m: 0.197, riser_var_m: 0.0095, tread_min_m: 0.254, width_min_m: 0.91, rail_m: [0.86, 0.97] as [number, number] };
@@ -66,13 +71,15 @@ export function pitchAt(st: Stair) {
 /** Measure a marked stair from splat points: `pts` is x, y, z, |nz| (z of the Gaussian's normal, i.e. its shortest
  *  axis; flat surfaces have |nz| near 1). Treads = peaks of the flat points' heights; rails = what stands 0.7-1.1 m
  *  over the nosing line along each side. Sparse scans give fewer treads, never invented ones. */
-export function measureStair(pts: Float32Array, st: Stair): Stair & { flat_points: number } {
+export function measureStair(pts: Float32Array, st: Stair): Stair & { flat_points: number; more_above_z: number | null } {
   const F = stairFrame(st), half = F.width / 2;
-  const H = new Float32Array(320), flat: { s: number; z: number }[] = [];
+  const H = new Float32Array(320), flat: { s: number; z: number }[] = [], beyond: number[] = [];
   for (let i = 0; i < pts.length; i += 4) {
     if (pts[i + 3] < 0.8) continue;
     const { s, t } = F.local([pts[i], pts[i + 1]]), z = pts[i + 2];
-    if (s < -0.03 || s > F.run + 0.05 || Math.abs(t) > half - 0.03 || z < 0.06 || z > 3.1) continue;
+    if (Math.abs(t) > half - 0.03 || z < 0.06 || z > 3.1) continue;
+    if (s > F.run + 0.08 && s < F.run + 0.45) beyond.push(z);   // just past the marked top: more steps, or the landing
+    if (s < -0.03 || s > F.run + 0.05) continue;
     H[Math.round(z * 100)]++; flat.push({ s, z });
   }
   const S = H.map((_, k) => { let a = 0; for (let d = -2; d <= 2; d++) a += H[k + d] ?? 0; return a; });
@@ -89,6 +96,16 @@ export function measureStair(pts: Float32Array, st: Stair): Stair & { flat_point
   const treads_z = levels.map(l => +l.z.toFixed(3)), tread_fronts_m = levels.map(l => +Math.max(0, l.front).toFixed(3));
   const gaps = tread_fronts_m.slice(1).map((f, i) => f - tread_fronts_m[i]).filter(d => d > 0.1 && d < 0.6);
   const out: Stair = { ...st, treads_z, tread_fronts_m, tread_depth_m: gaps.length ? +median(gaps).toFixed(3) : null, width_m: +F.width.toFixed(3), measured: 'splat' };
+  // just past the top: the densest flat level is the landing (when the top wasn't clicked on it) or, well above what
+  // was marked, the steps the mark left out
+  const B = new Map<number, number>();
+  for (const z of beyond) B.set(Math.round(z * 50), (B.get(Math.round(z * 50)) ?? 0) + 1);
+  const [mode, nMode] = [...B.entries()].reduce((a, b) => (b[1] > a[1] ? b : a), [0, 0]);
+  const nextZ = nMode >= 5 ? median(beyond.filter(z => Math.abs(z - mode / 50) <= 0.03)) : null;
+  // with the top's height clicked, anything a step above it; without, more than one riser over the last tread seen
+  const topZ = st.top_z ?? treads_z.at(-1) ?? null, step = st.top_z != null ? 0.1 : 0.3;
+  const more_above_z = nextZ !== null && topZ !== null && nextZ > topZ + step ? +nextZ.toFixed(3) : null;
+  if (out.top_z == null && nextZ !== null && more_above_z === null && nextZ >= (treads_z.at(-1) ?? 0) - 0.03) out.top_z = +nextZ.toFixed(3);
   const pitch = pitchAt(out), bins = Math.max(1, Math.ceil(F.run / 0.1));
   const rail = (side: Side) => {
     const tS = side === 'left' ? half : -half, any = new Set<number>(), at = new Set<number>(), hs: number[] = [], peak = new Array(10).fill(0);
@@ -110,7 +127,7 @@ export function measureStair(pts: Float32Array, st: Stair): Stair & { flat_point
   const L = rail('left'), R = rail('right');
   out.rails = { left: L.seen, right: R.seen, height_m: { ...(L.h ? { left: L.h } : {}), ...(R.h ? { right: R.h } : {}) },
     peak_m: { ...(L.peak ? { left: L.peak } : {}), ...(R.peak ? { right: R.peak } : {}) } };
-  return { ...out, flat_points: flat.length };
+  return { ...out, flat_points: flat.length, more_above_z };
 }
 
 /** The stair with the rails as set by hand (rails_set) over what the scan saw; a rail set by hand runs at the scan's
@@ -129,9 +146,35 @@ export function withRails(st: Stair): Stair {
 export interface StairCtx {
   g: GridMeta; L: Layers; fixtures: Fixture[]; strong_side?: Side | null; device: string;
   margin: { width: number; height: number };
+  /** the walking aid's frame, for where the second one is parked (walker.json; a typical frame if not given) */
+  walker?: WalkerDims;
 }
 const cm = (m: number) => `${(m * 100).toFixed(0)} cm`;
 const other = (s: Side): Side => (s === 'left' ? 'right' : 'left');
+export const WALKER_DEFAULT: WalkerDims = { width_m: 0.62, depth_m: 0.45, user_gap_m: 0.2 };
+/** OT rule of thumb: from the top step the patient reaches the grips without letting go of the rail */
+export const PARK_REACH_M = 0.6;
+
+/** Where the second walker waits unless moved: the user's spot 5 cm onto the landing, frame ahead, open back to the stairs. */
+export function parkedPose(st: Stair): ParkPose {
+  const F = stairFrame(st), [x, y] = F.world(F.run + 0.05, 0);
+  return { x, y, yaw: Math.atan2(F.u[1], F.u[0]) };
+}
+/** Is the parked walker somewhere the patient can use it: on the landing (no corner over the stairs), the grips within
+ *  reach of the top step, its open back toward the stairs. The landing itself is upstairs, never in the floor map. */
+export function walkerPlacement(st: Stair, p: ParkPose, w: WalkerDims = WALKER_DEFAULT): { verdict: Verdict; label: string; note: string; reach_m: number } {
+  const F = stairFrame(st), half = F.width / 2, c = Math.cos(p.yaw), s = Math.sin(p.yaw), what = st.top_device === 'rollator' ? 'rollator' : 'second walker';
+  const at = (x: number, y: number): XY => [p.x + c * x - s * y, p.y + s * x + c * y];
+  const hw = w.width_m / 2, x0 = w.user_gap_m, x1 = x0 + w.depth_m;
+  const over = [at(x0, hw), at(x0, -hw), at(x1, hw), at(x1, -hw)].map(F.local).some(q => q.s < F.run + 0.02 && Math.abs(q.t) < half + 0.02);
+  const g = F.local(at(x0, 0)), reach = Math.hypot(Math.max(0, g.s - F.run), Math.max(0, Math.abs(g.t) - half));
+  const facing = c * F.u[0] + s * F.u[1];
+  const r = (verdict: Verdict, label: string, note: string) => ({ verdict, label: `${st.name}: ${label}`, note, reach_m: reach });
+  if (over) return r('fail', `the ${what} stands over the stairs`, 'it can be knocked down the flight, and the patient steps onto it instead of the landing: park it on the landing');
+  if (reach > PARK_REACH_M) return r('fail', `the ${what} is ${cm(reach)} from the top step`, `more than about ${cm(PARK_REACH_M)}: steps with neither the rail nor the walker; park it closer`);
+  if (facing < 0.5) return r('borderline, OT to verify', `the ${what} faces away from the stairs`, 'turn it so its open back faces the top step: the patient walks straight into it');
+  return r('borderline, OT to verify', `${what} waiting ${cm(reach)} from the top step`, 'up holding the rail, then straight into the frame; the landing was not filmed: OT to verify there is room to turn');
+}
 
 /** The stair checks, on the current layout and fixtures (added rails, lights and the parked walker count). */
 export function stairChecks(st: Stair, c: StairCtx): CheckOut[] {
@@ -171,14 +214,15 @@ export function stairChecks(st: Stair, c: StairCtx): CheckOut[] {
     const dir = one === S ? 'coming down' : 'going up';
     add('rails', `${st.name}: ${dir}, the stronger (${S}) hand has no rail`, unsure(missing) ? 'borderline, OT to verify' : 'fail',
       `rail only on the ${one}; a rail on the ${missing} gives the ${S} hand one ${dir} (${railNote})`);
-  } else if (one) add('rails', `${st.name}: rail on the ${one} only`, 'OT to verify',
+  } else if (one) add('rails', `${st.name}: rail on the ${one} only`, 'borderline, OT to verify',   // one direction or the other lacks the strong hand
     `fine only if the ${one} hand is the stronger one going up; set the stronger side, or add a second rail (${railNote})`);
   else add('rails', `${st.name}: no handrail seen`, unsure('left') || unsure('right') ? 'OT to verify' : 'fail', railNote);
   const hm = st.rails?.height_m ?? {};
   for (const s of ['left', 'right'] as Side[]) {
-    const h = hm[s];
+    const h = hm[s], up = mine.find(f => f.kind === 'handrail' && f.side === s && f.surface_m);
     if (h === undefined) continue;
     const [a, b] = CODE.rail_m;
+    if (up) { add(`rail_h_${s}`, `${st.name}: ${s} rail refitted at ${cm(up.surface_m!)} (was ${cm(h)})`, 'ok', 'designed, not built', { value_m: up.surface_m!, limit_m: [a, b] }); continue; }
     add(`rail_h_${s}`, `${st.name}: ${s} rail ${cm(h)} above the nosings (code ${cm(a)}–${cm(b)})`,
       h < a - e || h > b + e ? 'fail' : h < a + e || h > b - e ? 'borderline, OT to verify' : 'ok', 'measured from the splat', { value_m: h, limit_m: [a, b] });
   }
@@ -205,14 +249,28 @@ export function stairChecks(st: Stair, c: StairCtx): CheckOut[] {
   const switches = c.fixtures.some(f => f.kind === 'switch');
   if (lights) add('light', `${st.name}: motion lights on every step`, 'ok', 'they come on before the first step, at either end');
   else if (near(F.o) && near(st.top)) add('light', `${st.name}: light switch at the top and the bottom`, 'ok', 'switch positions placed by hand');
-  else add('light', `${st.name}: no light switch marked at ${near(F.o) ? 'the top' : near(st.top) ? 'the bottom' : 'either end'}`, switches ? 'fail' : 'OT to verify',
-    switches ? 'climbing to reach a switch in the dark is the classic night fall' : 'no switches are marked in this home: check both ends');
-  // 8. the walker can't climb: with only one, the patient is unaided at the top
+  else add('light', `${st.name}: no light switch marked at ${near(F.o) ? 'the top' : near(st.top) ? 'the bottom' : 'either end'}`, switches ? 'fail' : 'borderline, OT to verify',
+    switches ? 'climbing to reach a switch in the dark is the classic night fall' : 'no switches are marked in this home: check both ends (a stair at night without one is the classic fall)');
+  // 8. the walker can't climb: with only one, the patient is unaided at the top; a second one only helps within reach
   if (c.device === 'walker') {
-    const parked = mine.some(f => f.kind === 'walker_parked');
-    add('walker', parked ? `${st.name}: second walker waiting at the top` : `${st.name}: the walker stays at the bottom`, parked ? 'ok' : 'fail',
-      parked ? 'up holding the rail, then straight onto the second walker' : `${z.length ? `${z.length}+ steps` : 'the flight'} holding the rail, then walking unaided at the top`);
+    const parked = mine.find(f => f.kind === 'walker_parked');
+    if (!parked) add('walker', `${st.name}: the walker stays at the bottom`, 'fail', `${z.length ? `${z.length}+ steps` : 'the flight'} holding the rail, then walking unaided at the top`);
+    else {
+      const def = parkedPose(st), p = parked.xyz ? { x: parked.xyz[0], y: parked.xyz[1], yaw: parked.yaw ?? def.yaw } : def, r = walkerPlacement(st, p, c.walker);
+      add('walker', r.label, r.verdict, r.note, { value_m: r.reach_m, limit_m: [0, PARK_REACH_M] });
+    }
   }
+  // 9. the top: between letting go of the rail and the walker (or the landing floor), something to hold
+  const grab = mine.some(f => f.kind === 'grab_bar'), ext = mine.some(f => f.kind === 'rail_extension'), drawn = mine.some(f => f.kind === 'handrail' && !f.surface_m);
+  if (has('left') || has('right'))
+    add('top_hold', grab || ext || drawn ? `${st.name}: something to hold past the top step` : `${st.name}: the rail ends at the top step`, grab || ext || drawn ? 'ok' : 'borderline, OT to verify',
+      grab ? 'grab bar at the top, where the rail ends' : ext || drawn ? 'the rail runs on 30 cm level past the top and bottom step' :
+        'the hand lets go of the rail before the feet reach the landing: extend the rail 30 cm past the top step (ADA 505.10), or a grab bar there');
+  // 10. uneven steps: a contrasting edge shows where each one really is (worst coming down, at night)
+  const uneven = out.some(o => (o.id === id('risers') || o.id === id('riser_var')) && (o.verdict === 'fail' || o.verdict === 'borderline, OT to verify'));
+  if (mine.some(f => f.kind === 'nosing_strip')) add('edges', `${st.name}: contrast strip on every step edge`, 'ok', 'non-slip, contrasting: the edge shows even where the steps differ');
+  else if (uneven) add('edges', `${st.name}: uneven steps, edges not marked`, 'borderline, OT to verify',
+    'a foot that expects the same step finds the edge late: a contrasting non-slip strip on each nose shows it');
   return out;
 }
 
@@ -221,21 +279,40 @@ export function stairChecks(st: Stair, c: StairCtx): CheckOut[] {
 export function stairFixes(st: Stair): Intervention[] {
   const F = stairFrame(st), pitch = pitchAt(st), mid = F.run / 2, top = st.top_z ?? pitch(F.run);
   const at = (s: number, t: number, z: number) => [...F.world(s, t), z];
-  const out: Intervention[] = [];
+  const out: Intervention[] = [], [lo, hi] = CODE.rail_m, seen = (['left', 'right'] as Side[]).filter(s => st.rails?.[s] === 'seen');
   for (const side of ['left', 'right'] as Side[]) {
-    if (st.rails?.[side] === 'seen') continue;
-    out.push({ id: `stair_rail:${st.name}:${side}`, kind: 'add', label: `Handrail on the ${side} of the ${st.name}, 30 cm past both ends`,
-      fixture: { name: `${st.name} ${side} rail`, kind: 'handrail', attach: st.name, side, xyz: at(mid, (side === 'left' ? 1 : -1) * F.width / 2, pitch(mid) + 0.9) },
+    const t = (side === 'left' ? 1 : -1) * F.width / 2, h = st.rails?.height_m?.[side];
+    if (st.rails?.[side] !== 'seen') out.push({ id: `stair_rail:${st.name}:${side}`, kind: 'add', label: `Handrail on the ${side} of the ${st.name}, 30 cm past both ends`,
+      fixture: { name: `${st.name} ${side} rail`, kind: 'handrail', attach: st.name, side, xyz: at(mid, t, pitch(mid) + 0.9) },
       cost_usd: 250, minutes: 120, effort: 3, product: 'handrail with returns, brackets into the studs' });
+    else if (h !== undefined && (h < lo || h > hi))   // a rail is there, at the wrong height: refit it at 90 cm
+      out.push({ id: `stair_rail_up:${st.name}:${side}`, kind: 'add', label: `Refit the ${side} rail of the ${st.name} at 90 cm (now ${cm(h)})`,
+        fixture: { name: `${st.name} ${side} rail, refitted`, kind: 'handrail', attach: st.name, side, surface_m: 0.9, xyz: at(mid, t, pitch(mid) + 0.9) },
+        cost_usd: 120, minutes: 90, effort: 2, product: 'new brackets (or a rail on the wall side) at code height' });
   }
   out.push({ id: `stair_lights:${st.name}`, kind: 'add', label: `Motion-sensor lights on each step of the ${st.name}`,
     fixture: { name: `${st.name} step lights`, kind: 'stair_light', attach: st.name, xyz: at(mid, 0, pitch(mid)) },
     cost_usd: 60, minutes: 30, effort: 1, product: 'battery motion-sensor LED step lights' });
-  out.push({ id: `stair_walker:${st.name}`, kind: 'add', label: `Second walker kept at the top of the ${st.name}`,
-    fixture: { name: `${st.name} top walker`, kind: 'walker_parked', attach: st.name, xyz: at(F.run + 0.4, 0, top) },
-    cost_usd: 70, minutes: 5, effort: 1, product: 'folding walker' });
+  const p = parkedPose(st), roll = st.top_device === 'rollator';
+  out.push({ id: `stair_walker:${st.name}`, kind: 'add', label: `${roll ? 'Rollator' : 'Second walker'} kept at the top of the ${st.name}`,
+    fixture: { name: `${st.name} top ${roll ? 'rollator' : 'walker'}`, kind: 'walker_parked', attach: st.name, xyz: [p.x, p.y, top], yaw: p.yaw },
+    cost_usd: roll ? 120 : 70, minutes: 5, effort: 1, product: roll ? 'rollator with a seat (a rest after the climb)' : 'folding walker' });
+  // the top, where the hand leaves the rail: extend the scanned rail, or a grab bar on the side it runs
+  const gs = grabSide(st);
+  if (seen.length) out.push({ id: `stair_rail_ext:${st.name}`, kind: 'add', label: `Extend the ${st.name} rail 30 cm level past the top and bottom step`,
+    fixture: { name: `${st.name} rail extensions`, kind: 'rail_extension', attach: st.name, side: gs, xyz: at(F.run + 0.15, (gs === 'left' ? 1 : -1) * F.width / 2, top + 0.9) },
+    cost_usd: 90, minutes: 60, effort: 2, product: 'rail extension returns, matched to the rail' });
+  out.push({ id: `stair_grab:${st.name}`, kind: 'add', label: `Grab bar at the top of the ${st.name}, where the rail ends`,
+    fixture: { name: `${st.name} top grab bar`, kind: 'grab_bar', attach: st.name, side: gs, xyz: at(F.run + 0.2, (gs === 'left' ? 1 : -1) * (F.width / 2 + 0.03), top + 0.9) },
+    cost_usd: 45, minutes: 40, effort: 2, product: '45 cm vertical grab bar into a stud' });
+  if ((st.treads_z?.length ?? 0) >= 2) out.push({ id: `stair_nosing:${st.name}`, kind: 'add', label: `Contrasting non-slip strip on each step edge of the ${st.name}`,
+    fixture: { name: `${st.name} edge strips`, kind: 'nosing_strip', attach: st.name, xyz: at(mid, 0, pitch(mid)) },
+    cost_usd: 40, minutes: 30, effort: 1, product: 'contrasting anti-slip stair nosing tape' });
   return out;
 }
+
+/** The side the top grab bar and the rail extensions go on: where a rail was seen (the hand is already on it), else right. */
+export const grabSide = (st: Stair): Side => (['left', 'right'] as Side[]).find(s => st.rails?.[s] === 'seen') ?? 'right';
 
 /** Splat records for mirrorRail: x y z, sx sy sz, qx qy qz qw, opacity, r g b (14 floats each). */
 export const SPLAT_STRIDE = 14;
@@ -296,7 +373,9 @@ export function stairYaml(st: Stair): string {
   if (st.tread_fronts_m?.length) lines.push(`  tread_fronts_m: [${st.tread_fronts_m.map(r).join(', ')}]`);
   if (st.tread_depth_m) lines.push(`  tread_depth_m: ${r(st.tread_depth_m)}`);
   if (st.width_m) lines.push(`  width_m: ${r(st.width_m)}`);
-  if (st.rails) lines.push(`  rails: {left: ${st.rails.left}, right: ${st.rails.right}}`);
+  if (st.rails) lines.push(`  rails: ${JSON.stringify(st.rails)}`);
+  if (st.rails_set) lines.push(`  rails_set: ${JSON.stringify(st.rails_set)}`);
+  if (st.top_device) lines.push(`  top_device: ${st.top_device}`);
   lines.push(`  measured: ${st.measured ?? 'tape'}`);
   return lines.join('\n');
 }

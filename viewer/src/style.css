@@ -1,6 +1,9 @@
 :root { --bg: #111418; --panel: rgba(17, 20, 24, 0.86); --fg: #e8e6e1; --dim: #9aa0a6; --red: #ff4d4d; --imag: #e070ff; --ok: #6fd08c; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
 #view { position: fixed; inset: 0; }
+#markhud { position: fixed; z-index: 5; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: min(650px, 80vw); padding: 10px 14px; border: 1px solid var(--ok); border-radius: 8px; background: var(--panel); pointer-events: none; text-align: center; }
+#markhud.bad { border-color: var(--red); }
+#markcross { position: fixed; z-index: 4; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #ffe27a; font-size: 24px; pointer-events: none; }
 .panel { position: fixed; top: 8px; width: 290px; max-height: calc(100% - 16px); overflow: auto; background: var(--panel); padding: 10px 12px; border-radius: 8px; box-sizing: border-box; }
 #left { left: 8px; } #right { right: 8px; }
 h1 { font-size: 15px; margin: 0 0 8px; } h2 { font-size: 13px; margin: 12px 0 4px; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }

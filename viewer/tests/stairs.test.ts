@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { measureStair, stairChecks, stairFixes, stairFrame, stairYaml, mirrorRail, inRailBand, stepLights, withRails, type Stair, type StairCtx } from '../src/stairs.ts';
+import { measureStair, stairChecks, stairFixes, stairFrame, stairYaml, mirrorRail, inRailBand, stepLights, withRails, parkedPose, walkerPlacement, type Stair, type StairCtx } from '../src/stairs.ts';
 import { evaluate } from '../src/evaluate.ts';
-import { applyIntervention, type GridMeta, type XY } from '../src/grid.ts';
+import { applyIntervention, placedFixtures, type GridMeta, type XY, type Layout } from '../src/grid.ts';
+import { diffLayouts, undoChange } from '../src/reimagine.ts';
 import { rng } from '../src/sim.ts';
 import { loadScene } from './scene.ts';
 
@@ -77,7 +78,7 @@ test('rails: the stronger hand needs one going up AND coming down', () => {
   assert.match(L.label, /coming down/);
   const R = stairChecks(base, ctx({ strong_side: 'right' })).find(c => c.id === 'stairs:stairs:rails')!;
   assert.match(R.label, /going up/);
-  assert.equal(verdict(stairChecks(base, ctx({ strong_side: null })), 'rails'), 'OT to verify', 'unknown side: the OT decides');
+  assert.equal(verdict(stairChecks(base, ctx({ strong_side: null })), 'rails'), 'borderline, OT to verify', 'unknown side: one direction lacks the strong hand, the OT decides which');
   const added = [{ name: 'r', kind: 'handrail', attach: 'stairs', side: 'right' as const, measured: false }];
   assert.equal(verdict(stairChecks(base, ctx({ strong_side: 'left', fixtures: added })), 'rails'), 'ok', 'a second rail fixes it');
   assert.equal(verdict(stairChecks({ ...base, rails: { left: 'none', right: 'none' } }, ctx()), 'rails'), 'fail');
@@ -91,7 +92,7 @@ test('landing, light and the walker at the top', () => {
   assert.equal(verdict(stairChecks(base, ctx({ L })), 'landing'), 'fail', 'a bin parked in front of the first step');
   const unseen = open(); unseen.floor.fill(0);
   assert.equal(verdict(stairChecks(base, ctx({ L: unseen })), 'landing'), 'OT to verify', 'floor never captured is not "blocked"');
-  assert.equal(verdict(stairChecks(base, ctx()), 'light'), 'OT to verify', 'no switches marked anywhere');
+  assert.equal(verdict(stairChecks(base, ctx()), 'light'), 'borderline, OT to verify', 'no switches marked anywhere');
   const sw = (xy: XY) => ({ name: 'sw', kind: 'switch', xyz: [...xy, 1.1], measured: false });
   assert.equal(verdict(stairChecks(base, ctx({ fixtures: [sw([0.45, -0.3])] })), 'light'), 'fail', 'bottom only');
   assert.equal(verdict(stairChecks(base, ctx({ fixtures: [sw([0.45, -0.3]), sw([0.45, 2.9])] })), 'light'), 'ok');
@@ -101,7 +102,7 @@ test('landing, light and the walker at the top', () => {
 
 test('stair fixes: a rail only where none is seen; through evaluate() each clears its check', () => {
   const fx = stairFixes(base);
-  assert.deepEqual(fx.map(f => f.id), ['stair_rail:stairs:right', 'stair_lights:stairs', 'stair_walker:stairs']);
+  assert.deepEqual(fx.map(f => f.id), ['stair_rail:stairs:right', 'stair_lights:stairs', 'stair_walker:stairs', 'stair_rail_ext:stairs', 'stair_grab:stairs', 'stair_nosing:stairs']);
   const { init, poses } = loadScene('game_synth');
   const S = { ...init, interventions: [...init.interventions, ...fx], stairs: [base], strong_side: 'left' as const, device: 'walker' };
   let lay = { poses, flattened: [] as [XY, XY][] };
@@ -109,7 +110,39 @@ test('stair fixes: a rail only where none is seen; through evaluate() each clear
   for (const w of ['rails', 'light', 'walker']) assert.notEqual(before.find(c => c.id === `stairs:stairs:${w}`)!.verdict, 'ok', w);
   for (const f of fx) lay = applyIntervention(init.objects, lay, f);
   const after = evaluate(S, lay, { ghosts: false }).checks.filter(c => c.kind === 'stairs');
-  for (const w of ['rails', 'light', 'walker']) assert.equal(after.find(c => c.id === `stairs:stairs:${w}`)!.verdict, 'ok', w);
+  for (const w of ['rails', 'light']) assert.equal(after.find(c => c.id === `stairs:stairs:${w}`)!.verdict, 'ok', w);
+  assert.equal(after.find(c => c.id.endsWith(':walker'))!.verdict, 'borderline, OT to verify', 'upper landing has no measured clearance map');
+});
+
+test('a parked device must stay off the flight and within reach; unseen turning space stays unverified', () => {
+  const p = parkedPose(base), F = stairFrame(base);
+  assert.equal(walkerPlacement(base, p).verdict, 'borderline, OT to verify');
+  const [x, y] = F.world(F.run - 0.4, 0);
+  assert.equal(walkerPlacement(base, { ...p, x, y }).verdict, 'fail');
+  assert.match(walkerPlacement(base, { ...p, x: p.x + F.u[0] * 2, y: p.y + F.u[1] * 2 }).label, /from the top step/);
+  assert.match(walkerPlacement(base, { ...p, yaw: p.yaw + Math.PI }).label, /stairs|faces away/);
+});
+
+test('moving the added walker carries its height, receipt position and undo with it', () => {
+  const fx = stairFixes({ ...base, top_z: 1.8 }), iv = fx.find(f => f.id.startsWith('stair_walker:'))!;
+  const original: Layout = { poses: [], flattened: [] }, p = parkedPose(base);
+  const lay = { ...applyIntervention([], original, iv), placed: { [iv.id]: { ...p, x: p.x + 0.1 } } };
+  assert.equal(placedFixtures(fx, lay)[0].xyz![2], 1.8);
+  const changes = diffLayouts([], original, lay, fx, [iv.id]);
+  assert.equal(changes.length, 1); assert.equal(changes[0].at[0], p.x + 0.1);
+  assert.match(changes[0].label, /parked 0.1 m/);
+  const undone = undoChange(lay, [], changes[0], fx);
+  assert.deepEqual(undone.added, []); assert.deepEqual(undone.placed, {});
+});
+
+test('low rail refitting and top additions improve their own checks without inventing tread measurements', () => {
+  const st: Stair = { ...base, rails: { left: 'seen', right: 'none', height_m: { left: 0.75 } } }, fx = stairFixes(st);
+  const iv = fx.find(f => f.id === 'stair_rail_up:stairs:left')!;
+  assert.ok(iv); assert.equal(iv.fixture!.surface_m, 0.9);
+  const before = stairChecks(st, ctx()), after = stairChecks(st, ctx({ fixtures: fx.flatMap(f => f.fixture ? [{ ...f.fixture, measured: false }] : []) }));
+  assert.equal(before.find(c => c.id.endsWith('rail_h_left'))!.verdict, 'fail');
+  for (const id of ['rail_h_left', 'top_hold', 'edges']) assert.equal(after.find(c => c.id.endsWith(`:${id}`))!.verdict, 'ok');
+  assert.equal(after.find(c => c.id.endsWith(':risers'))!.value_m, before.find(c => c.id.endsWith(':risers'))!.value_m);
 });
 
 test('mirrorRail: the rail band lands on the other side, 7 cm in, with each splat shape reflected', () => {
@@ -144,13 +177,15 @@ test('rails set by hand: over the scan, at the densest rail height; the rail fix
   const flipped = withRails({ ...m, rails_set: { left: 'none', right: 'seen' } });
   assert.equal(flipped.rails!.left, 'none'); assert.equal(flipped.rails!.right, 'seen');
   assert.equal(flipped.rails!.height_m!.left, undefined, 'no rail, no height');
-  assert.deepEqual(stairFixes(flipped).filter(f => f.id.startsWith('stair_rail')).map(f => f.id), ['stair_rail:stairs:left']);
+  assert.deepEqual(stairFixes(flipped).filter(f => f.id.startsWith('stair_rail:')).map(f => f.id), ['stair_rail:stairs:left']);
   assert.equal(withRails(m), m, 'nothing set: the scan as is');
 });
 
 test('stairYaml round-trips the numbers a config needs', () => {
-  const y = stairYaml(base);
+  const y = stairYaml({ ...base, rails: { ...base.rails!, height_m: { left: 0.75 } }, rails_set: { right: 'seen' }, top_device: 'rollator' });
   assert.match(y, /^- name: stairs/);
   assert.match(y, /treads_z: \[0\.18, 0\.36, 0\.54\]/);
-  assert.match(y, /rails: \{left: seen, right: none\}/);
+  assert.match(y, /rails: .*"left":"seen".*"right":"none".*"height_m":\{"left":0.75\}/);
+  assert.match(y, /rails_set: \{"right":"seen"\}/);
+  assert.match(y, /top_device: rollator/);
 });

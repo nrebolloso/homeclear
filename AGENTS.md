@@ -34,6 +34,11 @@ Fill in the names.
   reimagined), `play(seconds)`, `run()`, `refresh()`, `changes()`. Bind a controller button or thumbstick to these;
   don't reach into `reimagine.ts`.
 - **In-headset UI is scene objects** (sprites, meshes), never DOM or `CSS2DObject`: those don't render in WebXR.
+- **Guided marking** (`viewer/src/marker.ts`, `marker3d.ts`, Juan): `game.marker.begin('stairs' | 'door')`,
+  `place([x,y,z])`, `undo()`, `cancel()`, `edit(on)`, `done()`, `state()`, `dragHandle(owner,key,xyz)`,
+  `toggleRail(name,side)`, `moveWalker(name,poseOrNull)`, `setTopDevice('walker' | 'rollator')`. Await changes that
+  remeasure/replan. Desktop and the VR wand use this shared state. `Layout.placed[interventionId]` overrides an added
+  fixture's x/y/yaw; its z remains the landing height. See `HANDOFF_RENOVATIONS.md` for controls and verification.
 - **Stairs** (`viewer/src/stairs.ts`): `scene.json` `stairs` (additive; from config `game.stairs` via stage 12) is a list of
   `{ name, bottom: [[x,y],[x,y]], top: [x,y], top_z?, treads_z?, tread_fronts_m?, tread_depth_m?, width_m?, rails?: {left, right}, measured: 'tape' | 'splat' }`.
   An entry with only `bottom`/`top` is measured from the splat in the viewer; "Copy as config YAML" in the Stairs panel
