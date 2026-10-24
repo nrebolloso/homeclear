@@ -7,6 +7,7 @@ import { stamp, carvedPolys, placementOk, polyCells, edt, worldFootprint, toCell
 import { buildDevice as deviceMesh, type WalkerCfg } from './walker.ts';
 import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
 import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z } from './wheelchair.ts';
+import { chairGeometry, clearOf, driveStep, spinBy, type Chair } from './drive.ts';
 import { keyIntent, createHistory, createKeyOverlay } from './controls.ts';
 import { pathLights, createLights3d } from './lights.ts';
 import { strokePersona } from './stroke.ts';
@@ -281,6 +282,8 @@ const body = { x: 0, y: 0, yaw: 0, pitch: -(+(PARAMS.get('pitch') ?? 28)) * Math
 // Free walk (keys / game.setFree) keeps the walker on you and stays fenced; that's what the physics and e2e checks use.
 const explore = { on: false, parked: null as null | { x: number; y: number; yaw: number } };
 function setExplore(on: boolean) { explore.on = on; explore.parked = on ? { x: body.x, y: body.y, yaw: body.yaw } : null; }
+const chairVel = { v: 0, w: 0 };   // the wheelchair's speed and turn rate (driving: see "wheelchair driving" below)
+const isChair = () => walkerCfg.device === 'wheelchair';
 let mode: 'auto' | 'free' | 'fly' = 'auto', autoS = 0, autoPause = 0;
 let routePaused = false, routeSpeed = 1, frontendVR: ReturnType<typeof createFrontendXR> | null = null, xrFollowRoute = false;
 
@@ -1570,6 +1573,7 @@ async function setPersona(key: string) {
   walker = buildDevice(walkerCfg);
   scene.add(walker.group);
   centreOffset = walkerCfg.user_gap_m + walkerCfg.depth_m / 2;
+  chairVel.v = chairVel.w = 0; $('free').textContent = isChair() ? 'Drive' : 'Free walk';
   if (worldModel) worldModel.shift = centreOffset - worldModel.mean_gap_m;   // learned.py Learned.shift, for this walker
   init = { ...init, persona, plan: { ...sc.plan, ...p.plan, walker_width_m: walkerCfg.width_m }, device: walkerCfg.device };
   strongSide = p.gait.strong_side ?? patientStrong; $<HTMLSelectElement>('strongside').value = strongSide ?? '';
@@ -1577,11 +1581,17 @@ async function setPersona(key: string) {
   night.setReach(walkerCfg.device === 'wheelchair'); for (const s of splats) s.updateVersion();   // reach lens (night.ts)
   baselinePerMonth = null; baseEvals = [];
   if (p.vision) game.setVision(p.vision);
-  $('personanote').textContent = key === 'patient' ? '' : walkerCfg.device === 'wheelchair' ? 'comparison: a typical chair (assumed size); no trip model for a wheelchair, so trips read zero: see the ADA checks. Green: within seated reach (38-122 cm); red: out of reach'
+  $('personanote').textContent = key === 'patient' ? '' : walkerCfg.device === 'wheelchair' ? 'comparison: a typical chair (assumed size); no trip model for a wheelchair, so trips read zero: see the ADA checks. Green: within seated reach (38-122 cm); red: out of reach. Drive: W/S roll, A/D steer while rolling, Q/E spin on the spot'
     : 'comparison: gait and planner numbers for this persona are assumptions, not this patient';
   const ms = await replan();
   if (!current?.error) Object.assign(body, routePose(0, 0, Infinity));
   return ms;
+}
+/** P: the next persona in the Who list, with the keys that drive it. */
+async function cyclePersona() {
+  const ks = Object.keys(personas), next = ks[(ks.indexOf(personaKey) + 1) % ks.length];
+  await setPersona(next);
+  keyHelp.toast(`${personas[next].label}${isChair() ? ': W/S roll · A/D steer while rolling · Q/E spin' : ''}`, 4000);
 }
 {
   const sel = $<HTMLSelectElement>('persona');
@@ -1754,6 +1764,8 @@ addEventListener('keydown', e => {
   else if (it === 'grab-cancel') cancelGrab();
   else if (it === 'grab-turn') turnGrab();
   else if (it === 'lock') toggleLock();
+  else if (it === 'persona') cyclePersona();
+  else if (it === 'recenter' && isChair()) { if (mode === 'free') { headTurn.yaw -= spinBy(body, headTurn.yaw, chairOf(), chairOk()); keyHelp.toast(Math.abs(headTurn.yaw) < 0.01 ? 'Chair turned to face your view' : 'No room to turn the chair further'); } }
   else if (it === 'recenter') { if (mode === 'free') { const was = body.yaw; body.yaw = viewYaw(); if (!canStand(body)) body.yaw = was; else headTurn.yaw = 0; keyHelp.toast('Walker turned to face your view'); } }
 });
 
@@ -1828,7 +1840,7 @@ function dolly(d: number) {
   const n = Math.max(1, Math.ceil(Math.abs(d) / (g.cell_m / 2)));
   for (let i = 0; i < n; i++) {
     const next = { x: body.x + cy * d / n, y: body.y + sy * d / n, yaw: body.yaw };
-    if (!canStand(next)) break;
+    if (!(isChair() ? chairOk()(next) : canStand(next))) break;
     Object.assign(body, next);
   }
 }
@@ -1836,7 +1848,7 @@ renderer.domElement.addEventListener('wheel', e => {
   if (renderer.xr.isPresenting || tour.on) return;
   e.preventDefault();   // also stops a pinch (ctrl + wheel) from zooming the page
   const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;   // lines and pages to pixels
-  if (e.deltaX) { if (mode === 'auto') setWalk('free'); body.yaw -= e.deltaX * unit * 0.002; }
+  if (e.deltaX) { if (mode === 'auto') setWalk('free'); if (isChair() && mode === 'free') spinBy(body, -e.deltaX * unit * 0.002, chairOf(), chairOk()); else body.yaw -= e.deltaX * unit * 0.002; }
   if (e.deltaY) dolly(-e.deltaY * unit * (e.ctrlKey ? 0.01 : 0.0015));   // a pinch sends small deltas: more gain
 }, { passive: false });
 function setWalk(m: 'auto' | 'free' | 'fly') {
@@ -1845,7 +1857,7 @@ function setWalk(m: 'auto' | 'free' | 'fly') {
   mode = m;
   $('autoplay').classList.toggle('on', m === 'auto'); $('free').classList.toggle('on', m === 'free'); $('fly').classList.toggle('on', m === 'fly');
   if (m === 'auto') { autoS = 0; autoPause = 0; setExplore(false); }
-  if (m !== 'free') headTurn.yaw = 0;   // the head is the walker's in route-follow and fly
+  if (m !== 'free') { headTurn.yaw = 0; chairVel.v = chairVel.w = 0; }   // the head is the walker's in route-follow and fly
 }
 $('autoplay').onclick = () => setWalk('auto');
 $('free').onclick = () => setWalk('free');
@@ -1916,7 +1928,24 @@ function routePose(s: number, prevYaw: number, dt: number) {
   const yaw = dt === Infinity ? want : prevYaw + Math.atan2(Math.sin(want - prevYaw), Math.cos(want - prevYaw)) * Math.min(1, dt * 4);
   return { x: x - Math.cos(yaw) * centreOffset, y: y - Math.sin(yaw) * centreOffset, yaw };
 }
+// ---------- wheelchair driving (drive.ts): arcs about the axle, speed that builds, the whole frame swept against the walls ----------
+let chairGeo: { cfg: WalkerCfg; chair: Chair } | null = null;
+const chairOf = () => (chairGeo?.cfg === walkerCfg ? chairGeo : (chairGeo = { cfg: walkerCfg, chair: chairGeometry(walkerCfg, g.cell_m / 2) })).chair;
+/** Where the chair may be: Explore is unfenced; otherwise the walker's own check plus its frame's outline on clear floor
+ *  (with live physics furniture are bodies, so only the walls count here). */
+function chairOk(): (p: { x: number; y: number; yaw: number }) => boolean {
+  if (explore.on) return p => inGridXY(p.x, p.y);
+  const S = live ? placeBase : L, clear = clearOf(chairOf(), (x, y) => { const c = cellAt(x, y); return !!S.floor[c] && !S.obst[c]; });
+  return p => canStand(p) && clear(p);
+}
+function driveFree(dt: number) {
+  const k = (c: string) => keys.has(c), axis = (a: string[], b: string[]) => +a.some(k) - +b.some(k);
+  driveStep(body, chairVel, { throttle: axis(['KeyW', 'ArrowUp'], ['KeyS', 'ArrowDown']), steer: axis(['KeyA', 'ArrowLeft'], ['KeyD', 'ArrowRight']), spin: axis(['KeyQ'], ['KeyE']) }, dt, chairOf(), chairOk());
+}
+addEventListener('blur', () => keys.clear());   // a key released in another window must not leave the chair rolling
+
 function freeStep(dt: number) {
+  if (isChair()) return driveFree(dt);
   const k = (c: string) => keys.has(c);
   const turn = (+(k('KeyA') || k('ArrowLeft')) - +(k('KeyD') || k('ArrowRight'))) * 1.1 * dt;
   const fwd = (+(k('KeyW') || k('ArrowUp')) - +(k('KeyS') || k('ArrowDown'))) * 0.5 * dt;
@@ -2043,7 +2072,7 @@ function frame(now: number) {
   frames++;
   if (now - fpsT > 1000) {
     game.fps = (frames * 1000) / (now - fpsT); frames = 0; fpsT = now;
-    $('hud').textContent = `${game.fps.toFixed(0)} fps · ${mode === 'auto' ? 'autoplay' : mode === 'fly' ? 'fly (noclip)' : 'free walk'} · ${RUN}${sc.scale_note ? ` · ${sc.scale_note}` : ""}`;
+    $('hud').textContent = `${game.fps.toFixed(0)} fps · ${mode === 'auto' ? 'autoplay' : mode === 'fly' ? 'fly (noclip)' : isChair() ? 'drive' : 'free walk'} · ${RUN}${sc.scale_note ? ` · ${sc.scale_note}` : ""}`;
   }
 }
 function step(dt: number, t: number) {
@@ -2065,15 +2094,15 @@ function step(dt: number, t: number) {
   } else placeCamera(camera, body);
   markStep(); grabStep();
   const showMan = view.third && mode === 'auto' && heroSteps.length > 0;
-  mannequin.group.visible = showMan;
+  const seatedMan = isChair() && mode === 'free' && !explore.on;   // driving: the person sits in the chair; first person has no head in the way
+  mannequin.group.visible = showMan || seatedMan;
+  mannequin.head.visible = !seatedMan || view.third;
   stepCloudUpdate(showMan);
-  if (showMan) {
+  if (isChair() && (showMan || seatedMan)) { mannequin.seated(body, SEAT_Z, walkerCfg.legs[0][1] + 0.025); manShadows?.hide(); }   // the chair's own blobs ground it
+  else if (showMan) {
     const f = feetAt(heroSteps, autoS, persona.stride_m ?? 0.35), hy = walkerCfg.width_m / 2 - walkerCfg.leg_radius_m, gx = walkerCfg.user_gap_m + 0.05;
-    if (walkerCfg.device === 'wheelchair') { mannequin.seated(body, SEAT_Z, walkerCfg.legs[0][1] + 0.025); manShadows?.hide(); }   // the chair's own blobs ground it
-    else {
-      mannequin.update(body, [f[1], f[0]], [[gx, hy], [gx, -hy]], walkerCfg.handle_height_m);   // sim side 1 = left
-      manShadows?.(body, [f[0].pos, f[1].pos]);
-    }
+    mannequin.update(body, [f[1], f[0]], [[gx, hy], [gx, -hy]], walkerCfg.handle_height_m);   // sim side 1 = left
+    manShadows?.(body, [f[0].pos, f[1].pos]);
   }
   pulseSpots(t);
   replayStep(dt);
@@ -2235,7 +2264,7 @@ Object.assign(game, {
     rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrTier: xr.tier, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
-  setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); headTurn.yaw = 0; Object.assign(body, { x, y, yaw }); },
+  setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); headTurn.yaw = 0; chairVel.v = chairVel.w = 0; Object.assign(body, { x, y, yaw }); },
   explore: () => ({ on: explore.on, parked: explore.parked && { ...explore.parked } }),
   setFly(x: number, y: number, z: number, yawDeg: number, pitchDeg: number) { setWalk('fly'); Object.assign(fly, { x, y, z }); body.yaw = (yawDeg * Math.PI) / 180; body.pitch = (pitchDeg * Math.PI) / 180; },
   setThird(on: boolean) { const h = $<HTMLInputElement>('third'); h.checked = on; h.dispatchEvent(new Event('change')); },
@@ -2275,7 +2304,7 @@ const frontendAdapter: FrontendAdapter = {
   navigate(m) {
     endTour(); select(-1);
     if (m === 'inspect') { inspectReturn ??= { body: { ...body }, fly: { ...fly }, mode, rig: xr.rigState() }; setWalk(renderer.xr.isPresenting ? 'free' : 'fly'); }
-    else { xrFollowRoute = renderer.xr.isPresenting && m === 'route'; setWalk(m === 'route' ? 'auto' : 'free'); routePaused = false; if (m === 'explore' && !explore.on) setExplore(true); }
+    else { xrFollowRoute = renderer.xr.isPresenting && m === 'route'; setWalk(m === 'route' ? 'auto' : 'free'); routePaused = false; if (m === 'explore' && !explore.on && !isChair()) setExplore(true); }   // the chair drives fenced here: the noclip camera would hide "no room to turn" (Fly, F, is still noclip)
   },
   focus(item) {
     const p = vantage(item.at, current?.xy ?? [item.at], 1.2, 1.1);

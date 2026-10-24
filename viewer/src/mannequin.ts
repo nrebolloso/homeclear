@@ -88,5 +88,5 @@ export function buildMannequin(heightM = 1.65) {
       place(arms[n].upper, shoulder, elbow); place(arms[n].lower, elbow, grip);
     });
   }
-  return { group: g, update, seated };
+  return { group: g, head, update, seated };
 }

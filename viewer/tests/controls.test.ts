@@ -11,7 +11,9 @@ test('hotkeys map to intents', () => {
   assert.equal(keyIntent(k('KeyG'), ctx()), 'grab');
   assert.equal(keyIntent(k('KeyL'), ctx()), 'lock');
   assert.equal(keyIntent(k('KeyC'), ctx()), 'recenter');
-  assert.equal(keyIntent(k('KeyW'), ctx()), null);
+  assert.equal(keyIntent(k('KeyP'), ctx()), 'persona');
+  assert.equal(keyIntent(k('KeyP'), ctx({ typing: true })), null, 'not while typing in a field');
+  for (const drive of ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE']) assert.equal(keyIntent(k(drive), ctx()), null, `${drive} stays with the driving keys`);
   assert.equal(keyIntent(k('KeyZ'), ctx()), null, 'plain Z stays with the existing reset handler');
 });
 test('F1 and ? open the key list, even F1 while typing', () => {
