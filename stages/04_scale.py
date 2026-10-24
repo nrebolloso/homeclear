@@ -72,16 +72,26 @@ def main(cfg):
     if np.median(centers @ n + d) < 0:
         n, d = -n, -d
     m = {"marker_frames": len(Ps), "scale": round(float(s), 5), "marker_edge_spread_pct": round(100 * edges.std() / edges.mean(), 2)}
-    errs = []
+    if sc.get("marker_size_estimated"):
+        m["marker_size"] = f"ESTIMATED {sc['marker_size_m']} m ({sc.get('marker_size_source', 'not taped')})"
+    # ground truth marked estimated: true (a guess, a standard size) is reported but can't verify the scale: it can only
+    # catch a gross error (more than estimate_tolerance_pct off)
+    errs, est = [], []
     for gt in sc["ground_truth"]:
         assert gt["kind"] == "marker_height", f"unsupported ground_truth kind {gt['kind']}"
         meas = float(X.mean(0) * s @ n + d)
-        errs.append(100 * abs(meas - gt["meters"]) / gt["meters"])
-        m[f"{gt['name']}_measured_m"], m[f"{gt['name']}_tape_m"] = round(meas, 4), gt["meters"]
+        (est if gt.get("estimated") else errs).append(100 * abs(meas - gt["meters"]) / gt["meters"])
+        m[f"{gt['name']}_measured_m"] = round(meas, 4)
+        m[f"{gt['name']}_{'estimate' if gt.get('estimated') else 'tape'}_m"] = gt["meters"]
     m["scale_error_pct"] = round(max(errs), 2) if errs else None
-    (w / "scale.json").write_text(json.dumps({"scale": s, "source": "aruco", "marker_center_colmap": X.mean(0).tolist(), **m}))
+    if est:
+        m["estimate_error_pct"] = round(max(est), 2)
+    (w / "scale.json").write_text(json.dumps({"scale": s, "source": "aruco", "verified": bool(errs),
+                                              "marker_center_colmap": X.mean(0).tolist(), **m}))
     if not errs:   # scale applied, but nothing tape-measured to check it against
-        return None, m | {"note": "UNVERIFIED: no ground_truth in config"}
+        if est and max(est) > sc.get("estimate_tolerance_pct", 15.0):
+            return False, m | {"note": f"scale off by {max(est):.1f}% even against an ESTIMATE: check marker_size_m and the marker detections"}
+        return None, m | {"note": f"UNVERIFIED: within {max(est):.1f}% of an ESTIMATE, no tape measurement" if est else "UNVERIFIED: no ground_truth in config"}
     return m["scale_error_pct"] <= sc["tolerance_pct"], m
 
 
