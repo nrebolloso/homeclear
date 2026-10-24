@@ -1365,8 +1365,15 @@ function topdownURL() {
     route: current?.xy, hazards: current?.hazards });
   return cv.toDataURL('image/png');
 }
-function openReport() {
+async function openReport() {
+  const w = window.open('about:blank', '_blank');   // opened before the await so the click still counts as a user gesture
   const p = personas[personaKey], c = current!;
+  const { before, fixes } = await ask({ type: 'fixes', layout, sel: selRoute });   // the fixes not yet applied, each rolled out from this layout
+  const ranked_fixes = fixes.filter((f: any) => !applied.includes(f.id)).map((f: any) => {
+    const iv = interventions.find(i => i.id === f.id);
+    return { label: f.label, error: f.error, reduction: Math.max(0, f.reduction), share: before > 0 ? f.reduction / before : 0, clearance_gain_m: f.clearance_gain_m,
+      cost_usd: iv?.cost_usd, minutes: iv?.minutes, effort: iv?.effort, product: iv?.product };
+  }).sort((a: any, b: any) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.clearance_gain_m - a.clearance_gain_m) || ((a.cost_usd ?? 0) - (b.cost_usd ?? 0)));
   const payload: ReportPayload = {
     scene: RUN, created: new Date().toISOString(), synthetic: (sc.synthetic ?? []).length > 0 || /synth/.test(RUN), scale_note: sc.scale_note,
     route: routes[selRoute].name,
@@ -1377,10 +1384,13 @@ function openReport() {
     margins: sc.hazard_rules.margin_m, actions: describeChanges(), suggestions,
     reason: hzFile.hazards.filter(h => h.source === 'cosmos_reason'),
     clips: (game.clips ?? []).filter((k: any) => k.layout_key === layoutKey(objs, layout)).map((k: any) => k.title ?? k.file),
-    topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85),
+    topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85), ranked_fixes,
   };
   sessionStorage.setItem(`report:${RUN}`, JSON.stringify(payload));
-  return window.open(`report.html?scene=${encodeURIComponent(RUN)}`, '_blank');
+  if (!w) return window.open(`report.html?scene=${encodeURIComponent(RUN)}`, '_blank');
+  w.sessionStorage.setItem(`report:${RUN}`, JSON.stringify(payload));   // about:blank shares our origin; its storage survives the navigation
+  w.location.href = `report.html?scene=${encodeURIComponent(RUN)}`;
+  return w;
 }
 const LOCAL = /^(localhost|127\.)/;
 async function openFixCard() {

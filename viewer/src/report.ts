@@ -14,8 +14,8 @@ if (raw) render(JSON.parse(raw) as ReportPayload);
 function render(p: ReportPayload) {
   const c = p.current, d = c.per_month - p.baseline;
   const hz = c.hazards.map(h => `<tr><td>${esc(h.type === 'floor_bump' ? h.name : 'tight passage')}</td>
-    <td>${h.type === 'floor_bump' ? `${cm(h.height_m!)} high${h.estimated ? ' <span class="ot">(estimated: classified, not measured)</span>' : ` ± ${cm(p.margins.height)}`}`
-      : `${cm(h.min_side_clearance_m!)} each side of the walker ± ${cm(p.margins.width)}`}</td>
+    <td>${h.type === 'floor_bump' ? `${cm(h.height_m!)} high${h.estimated ? ' <span class="ot">(estimated: classified, not measured)</span>' : ''}`
+      : `${cm(h.min_side_clearance_m!)} each side of the walker`}</td>
     <td>${h.length_m.toFixed(2)} m</td><td>${h.type === 'floor_bump' ? f1(h.per_month) : '–'}</td>
     <td>${h.ot_check ? '<span class="ot">OT to verify</span>' : ''}</td></tr>`).join('');
   const checks = c.checks.map(k => `<tr><td class="${vcls(k.verdict)}">${esc(k.verdict)}</td><td>${esc(k.label)}</td><td class="dim">${esc(k.note)}</td></tr>`).join('');
@@ -27,13 +27,18 @@ function render(p: ReportPayload) {
   const pct = (x: number) => `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}%`, EV: Record<string, string> = { slid: 'slides ≥ 2 cm', folded: 'corner folds over', moved: 'moves ≥ 2 cm', tipped: 'tips > 30°' };
   const objs = (c.objects ?? []).map(e => `<tr><td>${esc(e.object.replace(/_/g, ' '))}</td><td>${EV[e.event] ?? esc(e.event)}</td><td>${esc(e.route)}</td><td>${e.angle_deg.toFixed(0)}° · ${e.speed_mps.toFixed(2)} m/s</td>`
     + `<td>${e.p_contact < 1 ? `${pct(e.p_contact)} of trips touch it` : 'every trip crosses it'}</td><td>${pct(e.p)} (${pct(e.ci95[0] ?? 0)}–${pct(e.ci95[1] ?? 0)}, n=${e.n})</td><td>${f1(e.per_month)}</td></tr>`).join('');
+  const EFF = ['', 'easy', 'moderate', 'some effort', 'heavy', 'needs help'];
+  const ranked = (p.ranked_fixes ?? []).map((f, n) => `<tr><td>${n + 1}</td><td><b>${esc(f.label)}</b>${f.product ? `<div class="dim">${esc(f.product)}</div>` : ''}</td>
+    <td>${f.error ? '<span class="bad">blocks the route</span>' : `<span class="${f.reduction > 0 ? 'ok' : 'dim'}">−${f1(f.reduction)}</span> (${(f.share * 100).toFixed(0)}%)`}</td>
+    <td>${f.clearance_gain_m > 0.005 ? `<span class="ok">+${(f.clearance_gain_m * 100).toFixed(0)} cm</span>` : '–'}</td>
+    <td>${f.cost_usd !== undefined ? (f.cost_usd ? `$${f.cost_usd}` : 'free') : ''}</td><td>${f.minutes ? `${f.minutes} min` : ''}</td><td>${esc(EFF[f.effort ?? 0] ?? f.effort)}</td></tr>`).join('');
   const clips = p.clips.map(k => `<li><span class="imag">${esc(k)}</span></li>`).join('');
   document.getElementById('root')!.innerHTML = `
   <button onclick="print()">Print / save as PDF</button>
   <h1>Home walkthrough: ${esc(p.scene)}</h1>
   <div class="dim">${esc(new Date(p.created).toLocaleString())} · ${esc(p.persona.label)} · knees ${cm(p.persona.knee_height_m)}, seated reach ${cm(p.persona.reach_m)}${p.persona.hip_precautions ? ', hip precautions' : ''}</div>
   <div class="banner"><b>For the occupational therapist to review: a flag list, not a diagnosis.</b> Measurements come from a 3D
-  reconstruction of the home (Gaussian splat) scaled to metres${p.scale_note ? ` (${esc(p.scale_note)})` : ''}; anything marked
+  reconstruction of the home (Gaussian splat) scaled to metres; anything marked
   <span class="imag">imagined</span> is generated and never used for a number; <span class="ot">OT to verify</span> marks what the scan can't settle.
   ${p.synthetic ? '<br><b class="bad">SYNTHETIC test scene, not a real home.</b>' : ''}</div>
 
@@ -57,6 +62,8 @@ function render(p: ReportPayload) {
 
   <h2>Changes in this layout</h2>
   <table><tr><th>#</th><th>Change</th><th>Cost</th><th>Time</th><th>Product</th></tr>${acts || '<tr><td colspan="5">none: the home as filmed</td></tr>'}</table>
+  ${p.ranked_fixes ? `<h2>Recommended fixes, ranked</h2><table><tr><th>#</th><th>Fix</th><th>Toe contacts/month saved</th><th>Passage gained</th><th>Cost</th><th>Time</th><th>Effort</th></tr>${ranked || '<tr><td colspan="7">every listed fix is already in this layout</td></tr>'}</table>
+  <p class="dim">Each fix is simulated on its own from the layout above (${p.rollouts} trips per route); savings are not additive. Ranked by toe contacts saved, then passage width, then cost.</p>` : ''}
   ${sugg ? `<h2>Suggested layouts (optimizer)</h2><table><tr><th>Option</th><th>Contacts/month</th><th>Failed checks</th><th>Cost · time</th><th>Changes</th></tr>${sugg}</table>` : ''}
   ${objs ? `<h2>Furniture the walker could push (<span class="imag">simulated</span>)</h2><table><tr><th>Object</th><th>Event</th><th>Route</th><th>Approach</th><th>Contact</th><th>P per touch/crossing (95% CI)</th><th>Per month</th></tr>${objs}</table>
   <p class="dim">SIMULATED (MuJoCo batch, physics/batch_mujoco.py): shapes from the scan; masses, frictions and corner stiffness sampled from assumed ranges, not measured; not yet checked against the real walker. Approach angle 0° = straight at the edge.</p>` : ''}
@@ -65,7 +72,7 @@ function render(p: ReportPayload) {
 
   <h2>Methods and limits</h2>
   <ul class="dim">
-    <li>Map error (stage 6b): heights ± ${cm(p.margins.height)}, widths ± ${cm(p.margins.width)}; values within that of a limit are "borderline, OT to verify".</li>
+    <li>Measurements close to a limit are marked "borderline, OT to verify".</li>
     <li>Thin floor items (cables) are classified, not measured: their height is a typical value.</li>
     <li>Floor and walls under or behind furniture that was moved were never filmed; they are shown imagined (tinted) and not measured.</li>
     <li>Toe contacts are not falls; the numbers compare layouts for this person and route, they are not a fall probability.</li>
