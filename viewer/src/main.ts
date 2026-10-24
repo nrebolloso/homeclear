@@ -10,6 +10,7 @@ import { createVision, PROFILES, type Profile } from './vision.ts';
 import { createHeatOverlay, nights, drawTimeline } from './heat.ts';
 import { buildMannequin, feetAt, type Step } from './mannequin.ts';
 import { setupXR } from './xr.ts';
+import { createLivePhys, type LivePhys } from './livephys.ts';
 import { initClips, exportForCosmos, listClips, type ExportOpts } from './cosmos.ts';
 import { layoutKey } from './prerender.ts';
 import { drawTopdown } from './topdown.ts';
@@ -465,7 +466,7 @@ tc.addEventListener('dragging-changed', e => { if (!e.value && selected >= 0) co
 function syncObjects() {
   items.forEach((it, k) => {
     const p = layout.poses[k], o = original[k];
-    it.group.position.set(p.x, p.y, 0); it.group.rotation.z = p.yaw;
+    it.group.position.set(p.x, p.y, 0); it.group.rotation.set(0, 0, p.yaw);   // upright (live physics re-tilts a tipped one)
     it.group.visible = !p.removed;
     const moved = !!p.removed || Math.hypot(p.x - o.x, p.y - o.y) > 0.01 || Math.abs(p.yaw - o.yaw) > 0.01;
     it.fill.visible = it.tag.visible = moved && $<HTMLInputElement>('imagfill').checked;   // the spot it used to cover was never filmed
@@ -486,6 +487,7 @@ function syncObjects() {
     li.appendChild(b); $('inventory').appendChild(li);
   }
   updateNight();
+  live?.sync(layout);
 }
 const ICONS: Record<string, string> = {   // line drawings for the Removed list, by kind or name
   chair: '<path d="M7 3v18M7 12h10v9M7 12V3m0 0h3"/>',
@@ -730,6 +732,18 @@ game.reimagine = { run: reimagineRoom, setT: reim.setT, t: reim.t, play: reim.pl
   changes: reim.changes, resolved: reim.resolved, undo: (n: number) => undoReimagined(reim.changes()[n]),
   pose: (name: string) => { const gr = items[objs.findIndex(o => o.name === name)].group; return { x: gr.position.x, y: gr.position.y, yaw: gr.rotation.z, visible: gr.visible }; } };
 
+// ---------- live object physics (livephys.ts, Rapier in its own worker): objects the walker pushes, slides, tips ----------
+const live: LivePhys | null = PARAMS.has('nophys') ? null : createLivePhys({ base: BASE, g, objs, items, scene, renderer, obst: placeBase.obst, bump: base.bump,
+  walker: () => walkerCfg, layout: () => layout, overlap: overlapOk.flatMap((s, k) => [...s].filter(n => n > k).map(n => [k, n] as [number, number])),
+  hold: k => reim.t() < 1 || ((tc as any).dragging && k === selected), log: $('physevents'), sampledEl: $('physsampled'),
+  settled: moves => {   // the layout follows where the walker left things (no yaw snap: it lies as it fell)
+    layout = { ...layout, poses: layout.poses.map((q, n) => { const m = moves.find(v => v.k === n); return m ? { ...m.pose, removed: q.removed } : q; }) };
+    syncObjects(); replan();
+  } });
+$('physresample').onclick = () => live?.resample();
+if (!live) $('physpanel').hidden = true;
+game.livephys = live;
+
 // ---------- what leaves the game: OT report, family fix card ----------
 /** Every change in the layout on screen, in order, with what it takes and where (for the card's numbered pins). */
 function describeChanges(): ActionOut[] {
@@ -847,6 +861,7 @@ async function setPersona(key: string) {
   personaKey = key;
   $<HTMLSelectElement>('persona').value = key;
   walkerCfg = p.walker;
+  live?.resample();   // the physics walker takes the new frame
   persona = { ...p.gait, step_model: STEP ?? p.gait.step_model ?? 'hand' };
   scene.remove(walker.group);
   walker = buildDevice(walkerCfg);
@@ -959,8 +974,9 @@ const walkerPoint = (b: { x: number; y: number; yaw: number }, [px, py]: number[
   [b.x + Math.cos(b.yaw) * px - Math.sin(b.yaw) * py, b.y + Math.sin(b.yaw) * px + Math.cos(b.yaw) * py];
 function canStand(b: { x: number; y: number; yaw: number }) {
   const c = cellAt(b.x, b.y);
-  if (!L.floor[c] || L.obst[c] || coverage[c] === 0) return false;           // only where the capture actually saw floor
-  return walker.probes.every(p => { const k = cellAt(...walkerPoint(b, p)); return L.floor[k] && !L.obst[k]; });
+  const S = live ? placeBase : L;   // with live physics the walker meets furniture as bodies, not as a wall on the grid
+  if (!S.floor[c] || S.obst[c] || coverage[c] === 0) return false;           // only where the capture actually saw floor
+  return walker.probes.every(p => { const k = cellAt(...walkerPoint(b, p)); return S.floor[k] && !S.obst[k]; });
 }
 /** Route point + heading at arc length s (the route is the walker frame's centre). */
 function routeAt(s: number): [number, number, number] {
@@ -1135,6 +1151,7 @@ function step(dt: number, t: number) {
   tourStep(dt);
   walker.group.position.set(body.x, body.y, 0);
   walker.group.rotation.z = body.yaw;
+  if (mode !== 'fly') live?.frame(dt, body, mode === 'free', walker.group);
   if (mode === 'fly') {
     const c = Math.cos(body.pitch);
     camera.position.set(fly.x, fly.y, fly.z);

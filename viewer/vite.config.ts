@@ -8,6 +8,7 @@ const PUB = join(import.meta.dirname, 'public');
 
 export default defineConfig({
   worker: { format: 'es' },
+  server: { fs: { allow: ['.', '../physics_ranges.json'] } },   // the object-physics ranges, shared with the offline batch; nothing else outside viewer/
   build: { rollupOptions: { input: { main: 'index.html', report: 'report.html', fixcard: 'fixcard.html' } } },
   plugins: [{
     name: 'rehearsal-api',
