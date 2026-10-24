@@ -1754,6 +1754,7 @@ addEventListener('keydown', e => {
   else if (it === 'grab-cancel') cancelGrab();
   else if (it === 'grab-turn') turnGrab();
   else if (it === 'lock') toggleLock();
+  else if (it === 'recenter') { if (mode === 'free') { const was = body.yaw; body.yaw = viewYaw(); if (!canStand(body)) body.yaw = was; else headTurn.yaw = 0; keyHelp.toast('Walker turned to face your view'); } }
 });
 
 // ---------- input ----------
@@ -1791,8 +1792,13 @@ renderer.domElement.addEventListener('dblclick', e => {   // double-click an obj
   const hit = ray.intersectObjects(items.filter((_, k) => !layout.poses[k].removed).map(i => i.proxy))[0];
   if (hit) resetObject(items.findIndex(i => i.proxy === hit.object));
 });
+/** The head turns on the walker's body (limited, like a neck); the walker keeps its heading, so W/S push it where it points
+ *  while you look around. ?look=coupled: the old behaviour, looking turns the walker. Fly always looks with the body. */
+const headTurn = { yaw: 0 }, HEAD_MAX = 2.1, COUPLED = PARAMS.get('look') === 'coupled';
+const viewYaw = () => body.yaw + headTurn.yaw;
 function lookBy(dx: number, dy: number) {
-  body.yaw -= dx * 0.004; body.pitch = THREE.MathUtils.clamp(body.pitch - dy * 0.004, mode === 'fly' ? -1.5 : -1.2, mode === 'fly' ? 1.5 : 0.6);
+  if (mode !== 'fly' && !COUPLED) headTurn.yaw = THREE.MathUtils.clamp(headTurn.yaw - dx * 0.004, -HEAD_MAX, HEAD_MAX); else body.yaw -= dx * 0.004;
+  body.pitch = THREE.MathUtils.clamp(body.pitch - dy * 0.004, mode === 'fly' ? -1.5 : -1.2, mode === 'fly' ? 1.5 : 0.6);
 }
 addEventListener('pointermove', e => {
   if (document.pointerLockElement === renderer.domElement) {   // L: the locked mouse looks without a button held
@@ -1839,6 +1845,7 @@ function setWalk(m: 'auto' | 'free' | 'fly') {
   mode = m;
   $('autoplay').classList.toggle('on', m === 'auto'); $('free').classList.toggle('on', m === 'free'); $('fly').classList.toggle('on', m === 'fly');
   if (m === 'auto') { autoS = 0; autoPause = 0; setExplore(false); }
+  if (m !== 'free') headTurn.yaw = 0;   // the head is the walker's in route-follow and fly
 }
 $('autoplay').onclick = () => setWalk('auto');
 $('free').onclick = () => setWalk('free');
@@ -2022,8 +2029,8 @@ function placeCamera(cam: THREE.PerspectiveCamera, b: typeof body) {
     return;
   }
   cam.position.set(b.x, b.y, persona.eye_height_m);
-  const c = Math.cos(b.pitch);
-  cam.lookAt(b.x + Math.cos(b.yaw) * c, b.y + Math.sin(b.yaw) * c, persona.eye_height_m + Math.sin(b.pitch));
+  const c = Math.cos(b.pitch), yaw = b.yaw + (cam === camera ? headTurn.yaw : 0);
+  cam.lookAt(b.x + Math.cos(yaw) * c, b.y + Math.sin(yaw) * c, persona.eye_height_m + Math.sin(b.pitch));
 }
 
 // ---------- loop ----------
@@ -2228,7 +2235,7 @@ Object.assign(game, {
     rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrTier: xr.tier, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
-  setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); Object.assign(body, { x, y, yaw }); },
+  setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); headTurn.yaw = 0; Object.assign(body, { x, y, yaw }); },
   explore: () => ({ on: explore.on, parked: explore.parked && { ...explore.parked } }),
   setFly(x: number, y: number, z: number, yawDeg: number, pitchDeg: number) { setWalk('fly'); Object.assign(fly, { x, y, z }); body.yaw = (yawDeg * Math.PI) / 180; body.pitch = (pitchDeg * Math.PI) / 180; },
   setThird(on: boolean) { const h = $<HTMLInputElement>('third'); h.checked = on; h.dispatchEvent(new Event('change')); },

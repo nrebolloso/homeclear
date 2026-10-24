@@ -3,7 +3,7 @@
 // The pure parts (keyIntent, createHistory) touch no DOM so tests/controls.test.ts can run them.
 
 export type Intent = 'help' | 'undo' | 'redo' | 'mark' | 'mark-stairs' | 'mark-door' | 'choose-cancel' | 'remove' | 'grab'
-  | 'grab-drop' | 'grab-cancel' | 'grab-turn' | 'lock' | null;
+  | 'grab-drop' | 'grab-cancel' | 'grab-turn' | 'lock' | 'recenter' | null;
 export interface KeyLike { code: string; key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }
 /** typing: focus is in a text field; grabbing: G is carrying an object; choosing: M was pressed and 1/2 is awaited */
 export interface KeyCtx { typing: boolean; grabbing: boolean; choosing: boolean }
@@ -25,7 +25,7 @@ export function keyIntent(e: KeyLike, c: KeyCtx): Intent {
   }
   if (c.grabbing) return e.code === 'Escape' ? 'grab-cancel' : e.code === 'Enter' || e.code === 'KeyG' ? 'grab-drop' : e.code === 'KeyR' ? 'grab-turn' : null;
   if (e.shiftKey) return null;
-  return ({ KeyM: 'mark', KeyX: 'remove', KeyG: 'grab', KeyL: 'lock' } as Record<string, Intent>)[e.code] ?? null;
+  return ({ KeyM: 'mark', KeyX: 'remove', KeyG: 'grab', KeyL: 'lock', KeyC: 'recenter' } as Record<string, Intent>)[e.code] ?? null;
 }
 
 /** Undo/redo over snapshots S. An entry only applies while the room is still exactly as that edit left it (same key): a fix
@@ -68,9 +68,11 @@ export const MENU_HOLD_S = 0.4;
 
 const GROUPS: [string, [string, string][]][] = [
   ['Move and look', [
-    ['W A S D / arrows', 'walk (switches to free walk)'],
+    ['W / S, A / D', 'push the walker forward and back, turn it (arrows too)'],
     ['Drag, left or right button', 'look around'],
     ['Scroll / two-finger scroll / pinch', 'walk forward and back (sideways scroll turns)'],
+    ['Mouse', 'looks around; the walker keeps its heading, W/S push it that way'],
+    ['C', 'turn the walker to face where you are looking'],
     ['L', 'lock the mouse to look freely; Esc lets go'],
     ['F', 'fly (spectator): Q / E down and up, Shift fast'],
   ]],

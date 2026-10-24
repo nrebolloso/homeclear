@@ -10,6 +10,7 @@ test('hotkeys map to intents', () => {
   assert.equal(keyIntent(k('KeyX'), ctx()), 'remove');
   assert.equal(keyIntent(k('KeyG'), ctx()), 'grab');
   assert.equal(keyIntent(k('KeyL'), ctx()), 'lock');
+  assert.equal(keyIntent(k('KeyC'), ctx()), 'recenter');
   assert.equal(keyIntent(k('KeyW'), ctx()), null);
   assert.equal(keyIntent(k('KeyZ'), ctx()), null, 'plain Z stays with the existing reset handler');
 });
