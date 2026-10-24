@@ -56,6 +56,7 @@
 .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; margin: 14px 0; background: var(--line); }
 .metric-grid > div { background: #1a252e; padding: 14px 12px; }
 .metric-grid small { display: block; font-size: 10px; color: #acbeca; }
+.metric-grid > .wide { grid-column: 1 / -1; }
 .metric-grid strong { display: block; font-size: 23px; letter-spacing: -.7px; margin-top: 5px; font-weight: 600; }
 .frontend details { border-top: 1px solid var(--line); padding: 14px 0; margin-top: 14px; }
 .frontend summary { cursor: pointer; font-size: 13px; color: #d7e4ec; font-weight: 600; }
