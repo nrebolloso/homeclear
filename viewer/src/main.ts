@@ -8,6 +8,7 @@ import { buildWalker, type WalkerCfg } from './walker.ts';
 import { nightShader } from './night.ts';
 import { initClips, exportForCosmos } from './cosmos.ts';
 import type { Eval, Init } from './worker.ts';
+import { floorHit, twistAngle, snapQuarter, holdProgress, DELETE_HOLD_S, DELETE_SHOW_S, DRAG_DEADZONE_M } from './wand.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const RUN = new URLSearchParams(location.search).get('scene') ?? 'game_synth';
@@ -515,8 +516,8 @@ function step(dt: number, t: number) {
 // WebXR's local-floor space is y-up with the floor at y=0; the scene is the +z-up floor frame. The camera rides in a
 // rig: +90 deg about x maps XR up (+y) to +z, then a turn about z by yaw - 90 deg points XR forward (-z) along yaw.
 // Room-scale walking is 1:1. Left stick walks along the floor, only where free walk could stand (walls, furniture and
-// unfilmed floor block it: no noclip); right stick snap-turns 30 deg about the head. Without controllers, holding a
-// pinch on either hand (any "select": a trigger too) walks forward where you look. The walker stays at your feet.
+// unfilmed floor block it: no noclip); right stick snap-turns 30 deg about the head. Holding a pinch or trigger on the
+// non-wand hand walks forward where you look (the wand hand edits: see below). The walker stays at your feet.
 const rig = new THREE.Group();
 scene.add(rig);
 const xrRig = { x: 0, y: 0, yaw: 0 };
@@ -526,7 +527,7 @@ function placeRig() {
   rig.quaternion.setFromAxisAngle(UP, xrRig.yaw - Math.PI / 2).multiply(TILT);
 }
 let snapReady = true;
-const pinching = new Set<XRInputSource>();
+const pinching = new Set<object>();   // non-wand hands/controllers holding select: walk
 const head = new THREE.Vector3(), headDir = new THREE.Vector3();
 function xrStep(dt: number) {
   // the user camera, not renderer.xr.getCamera(): before render() that one still holds the raw y-up headset pose
@@ -554,17 +555,100 @@ function xrStep(dt: number) {
   placeRig();
   body.x = head.x; body.y = head.y;
   body.yaw += Math.atan2(Math.sin(yaw - body.yaw), Math.cos(yaw - body.yaw)) * Math.min(1, dt * 4);
+  wandStep();
 }
+
+// ---------- VR wand: point at furniture and hold to drag it (twist the wrist to turn it), hold still to delete it;
+// point at the floor and release to teleport. A hand pinch and a controller trigger are the same WebXR "select", so
+// hands stand in for the controllers. Moves go through the desktop editor's placement check and commitPose re-plan.
+const WAND: XRHandedness = PARAMS.get('wand') === 'left' ? 'left' : 'right';   // ?wand=left for left-handed users
+type Ctl = { group: THREE.XRTargetRaySpace; source?: XRInputSource; ray: THREE.Line };
+const wandRay = new THREE.Raycaster(), RED3 = new THREE.Color(0xff3030);
+const tpRing = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.24, 32),
+  new THREE.MeshBasicMaterial({ color: 0x44ff88, transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide }));
+tpRing.renderOrder = 1; tpRing.visible = false;
+scene.add(tpRing);
+let grab: { k: number; off: XY; start: XY; drag: number; t0: number; yaw0: number; q0: THREE.Quaternion; valid?: Pose } | null = null;
+let aiming = false, hover = -1;
+const isWand = (c: Ctl) => c.source?.handedness === WAND;
+const ctls: Ctl[] = [0, 1].map(i => {
+  const group = renderer.xr.getController(i);
+  const ray = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x66ccff }));
+  ray.visible = false;
+  group.add(ray); rig.add(group);
+  const c: Ctl = { group, ray };
+  group.addEventListener('connected', e => { c.source = e.data; });
+  group.addEventListener('disconnected', () => { if (isWand(c)) dropWand(); pinching.delete(c); c.source = undefined; });
+  group.addEventListener('selectstart', () => (isWand(c) ? wandDown(c) : pinching.add(c)));
+  group.addEventListener('selectend', () => (isWand(c) ? wandUp() : pinching.delete(c)));
+  return c;
+});
+function aim(c: Ctl) {   // the controller's pose is rig-local (reference space): refresh its world matrix through the rig
+  c.group.updateWorldMatrix(true, false);
+  return wandRay.setFromXRController(c.group), wandRay.ray;
+}
+const inGrid = (x: number, y: number) => x >= g.origin_xy[0] && y >= g.origin_xy[1] && x < g.origin_xy[0] + nx * g.cell_m && y < g.origin_xy[1] + ny * g.cell_m;
+const standable = (x: number, y: number) => { const c = cellAt(x, y); return inGrid(x, y) && !!L.floor[c] && !L.obst[c] && coverage[c] > 0; };
+function wandDown(c: Ctl) {
+  if (hover < 0) { aiming = true; return; }
+  const r = aim(c), f = floorHit(r.origin, r.direction), p = layout.poses[hover], at: XY = f ? [f.x, f.y] : [p.x, p.y];
+  grab = { k: hover, off: [p.x - at[0], p.y - at[1]], start: at, drag: 0, t0: performance.now(), yaw0: p.yaw, q0: c.group.getWorldQuaternion(new THREE.Quaternion()) };
+}
+function wandUp() {
+  if (grab) { const { k, valid } = grab; grab = null; if (valid) commitPose(k, valid); return; }
+  if (aiming && tpRing.visible) { xrRig.x += tpRing.position.x - head.x; xrRig.y += tpRing.position.y - head.y; placeRig(); }
+  aiming = false; tpRing.visible = false;
+}
+function dropWand() {   // wand lost mid-gesture (hand out of view): put a dragged object back where the layout has it
+  if (grab) syncObjects();
+  grab = null; aiming = false; tpRing.visible = false;
+}
+function wandStep() {
+  const c = ctls.find(isWand);
+  for (const o of ctls) o.ray.visible = o === c;
+  tpRing.visible = false;
+  let prog = -1;
+  if (c) {
+    const r = aim(c), f = floorHit(r.origin, r.direction);
+    let len = f ? r.origin.distanceTo(f) : 5;
+    if (grab) {
+      const it = items[grab.k], twist = snapQuarter(twistAngle(grab.q0, c.group.getWorldQuaternion(new THREE.Quaternion())));
+      if (f) grab.drag = Math.max(grab.drag, Math.hypot(f.x - grab.start[0], f.y - grab.start[1]));
+      if (twist) grab.drag = Math.max(grab.drag, DRAG_DEADZONE_M * 2);   // a turn is an edit too: never a delete
+      if (f && grab.drag > DRAG_DEADZONE_M) {
+        const p: Pose = { x: f.x + grab.off[0], y: f.y + grab.off[1], yaw: grab.yaw0 - twist };
+        if (placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === grab!.k ? p : q)), grab.k)) {
+          it.group.position.set(p.x, p.y, 0); it.group.rotation.z = p.yaw; grab.valid = p;
+        }
+      }
+      prog = holdProgress((performance.now() - grab.t0) / 1000, grab.drag);
+      if (prog >= 1) { const k = grab.k; grab = null; removeObject(k); prog = -1; }
+    } else {
+      const hit = wandRay.intersectObjects(items.filter((_, k) => !layout.poses[k].removed).map(i => i.proxy))[0];
+      hover = hit ? items.findIndex(i => i.proxy === hit.object) : -1;
+      if (hit) len = hit.distance;
+      if (hover < 0 && aiming && f && standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
+    }
+    c.ray.scale.z = len;
+  } else hover = -1;
+  items.forEach((it, k) => {   // blue = pointed at, yellow = held, turning red = about to be deleted
+    const held = grab?.k === k, m = it.outline.material as THREE.LineBasicMaterial;
+    it.outline.visible = held || (!grab && k === hover);
+    m.color.setHex(held ? 0xffd84d : 0x66ccff);
+    if (held && prog > 0) m.color.lerp(RED3, THREE.MathUtils.clamp((prog * DELETE_HOLD_S - DELETE_SHOW_S) / (DELETE_HOLD_S - DELETE_SHOW_S), 0, 1));
+  });
+}
+
 new SparkXr({   // adds the Enter VR button; "VR not supported" where WebXR isn't available
   renderer, mode: 'vr', referenceSpaceType: 'local-floor', enableHands: true,
   onEnterXr: () => {
     Object.assign(xrRig, { x: body.x, y: body.y, yaw: body.yaw }); placeRig(); rig.add(camera); snapReady = true; game.xr = true;
-    const s = renderer.xr.getSession()!;
-    s.addEventListener('selectstart', e => pinching.add(e.inputSource));
-    s.addEventListener('selectend', e => pinching.delete(e.inputSource));
-    s.addEventListener('inputsourceschange', e => e.removed.forEach(r => pinching.delete(r)));   // a hand lost mid-pinch
+    select(-1);   // the desktop gizmo has no place in the headset
   },
-  onExitXr: () => { camera.removeFromParent(); pinching.clear(); game.xr = false; },
+  onExitXr: () => {
+    camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1; game.xr = false;
+    for (const it of items) { it.outline.visible = false; (it.outline.material as THREE.LineBasicMaterial).color.setHex(0x66ccff); }
+  },
 });
 
 // ---------- start ----------
