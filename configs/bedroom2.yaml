@@ -1,6 +1,6 @@
 # Bedroom + bathroom (REAL), NOT the `bedroom` scene's room (user, 2026-10-24): ONE continuous 529.5 s take,
 # iPhone 14 1080p 30 fps HEVC 10-bit HLG (+ Dolby Vision layer, ignored). ~2.2 frames/s as kitchen4 -> 1165 frames, exhaustive.
-# Scale from the printed ArUco markers on the floor; their size is NOT taped here (see marker_size_m).
+# Scale from the printed ArUco markers on the floor; size from the sheet's printed ruler (fit-to-page, see marker_size_m).
 run_name: bedroom2
 video: data/bedroom2.mov
 work_dir: out/bedroom2
@@ -20,7 +20,7 @@ scale:
   manual_factor: null
   marker_dict: DICT_4X4_50
   marker_id: [0, 1, 2]   # all three floor prints seen in the frames (id 0: 95, id 1: 47, id 2: 67 frames); scale = median, spread reported
-  marker_size_m: 0.145   # ASSUMED same prints as the `bedroom` scene (itself an estimate, not taped); tape the black square to replace this
+  marker_size_m: 0.1425  # 150 mm sheets printed fit-to-page: the sheet's 100 mm ruler reads ~95 mm (user), so 0.95 x 150 mm (MEASURED via ruler, ~0.5 mm reading)
   tolerance_pct: 3.0
   ground_truth: []       # markers lie on the floor, so the marker-height check doesn't apply; stage 4 reports SKIP (unverified)
 clean:

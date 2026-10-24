@@ -5,7 +5,7 @@ Validation: tape-measured height of the marker centre above the floor must match
 import json, sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from common import run_stage, read_ply, write_ply, transform_ply, ply_xyz, solid_mask, fit_plane_ransac, camera_up, fit_floor, triangulate, triangulate_picks
+from common import run_stage, read_ply, write_ply, transform_ply, ply_xyz, solid_mask, fit_plane_ransac, camera_up, fit_floor, triangulate_robust, triangulate_picks
 
 import cv2
 import numpy as np
@@ -65,7 +65,8 @@ def main(cfg):
 
     hits = {i: h for i, h in detect_marker(cfg, cams).items() if len(h[0]) >= 2}
     assert hits, f"marker id(s) {sc['marker_id']} not found in >= 2 frames"
-    X = {i: np.array([triangulate(Ps, [c[k] for c in cs]) for k in range(4)]) for i, (Ps, cs) in hits.items()}
+    tri = {i: [triangulate_robust(Ps, [c[k] for c in cs]) for k in range(4)] for i, (Ps, cs) in hits.items()}
+    X = {i: np.array([x for x, _ in t]) for i, t in tri.items()}
     edges = {i: np.linalg.norm(x - np.roll(x, 1, 0), axis=1) for i, x in X.items()}
     per = {i: sc["marker_size_m"] / e.mean() for i, e in edges.items()}  # shortcut: one print size for every id; add a per-id size if prints differ
     s = float(np.median(list(per.values())))
@@ -80,7 +81,8 @@ def main(cfg):
     m = {"marker_frames": sum(len(h[0]) for h in hits.values()), "scale": round(s, 5),
          "marker_edge_spread_pct": round(max(100 * e.std() / e.mean() for e in edges.values()), 2)}
     if isinstance(sc["marker_id"], list):
-        m["marker_ids"] = {str(i): {"frames": len(hits[i][0]), "scale": round(float(per[i]), 5)} if i in hits else "not found" for i in sc["marker_id"]}
+        m["marker_ids"] = {str(i): {"frames": len(hits[i][0]), "scale": round(float(per[i]), 5),
+                                    "inlier_pct": round(100 * float(np.mean([k.mean() for _, k in tri[i]])), 1)} if i in hits else "not found" for i in sc["marker_id"]}
         m["marker_scale_spread_pct"] = round(100 * float(np.ptp(list(per.values()))) / s, 2)
     if sc.get("marker_size_estimated"):
         m["marker_size"] = f"ESTIMATED {sc['marker_size_m']} m ({sc.get('marker_size_source', 'not taped')})"

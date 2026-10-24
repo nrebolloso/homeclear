@@ -2,7 +2,7 @@
 its scene from the camera spread, so one stray camera blew kitchen1's scene_scale from 2.2 to 12 and the splat never fit).
   python slurm/drop_far_cams.py <model dir> [<out dir>, default: in place]   -> prints what it dropped
 """
-import sys
+import os, sys
 
 import numpy as np
 import pycolmap
@@ -16,5 +16,7 @@ far = d > 3 * np.percentile(d, 90)   # the filmed path is compact; a real camera
 assert far.mean() < 0.05, f"{far.sum()} of {len(ims)} cameras flagged: not a few strays, check the model"
 for i in np.flatnonzero(far):
     rec.deregister_frame(ims[i].frame_id)   # one camera per frame here
-rec.write(sys.argv[2] if len(sys.argv) > 2 else src)
+out = sys.argv[2] if len(sys.argv) > 2 else src
+os.makedirs(out, exist_ok=True)   # pycolmap writes into an existing dir only
+rec.write(out)
 print(f"dropped {far.sum()} far cameras: {[ims[i].name for i in np.flatnonzero(far)]}; p90 radius {np.percentile(d, 90):.2f}")

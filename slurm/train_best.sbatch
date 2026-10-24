@@ -26,9 +26,11 @@ TORCH_CUDA_ARCH_LIST=10.0 pip install -q --no-build-isolation "git+https://githu
   || echo "fused-ssim build failed: gsplat falls back to its torch SSIM"
 python -c "import torch; print(torch.__version__, torch.cuda.get_device_name(0))"
 S=${STEPS:-30000}; L=$((S - 1))   # STEPS/CAP override for a higher-detail run (sbatch --export=ALL,STEPS=60000,CAP=3000000)
-CMD=(python $GS/examples/simple_trainer.py mcmc --disable_viewer --data_factor 1 --strategy.cap-max ${CAP:-1000000}
+# STRATEGY=default (no Gaussian cap) / EXTRA="--means_lr 8e-5 ...": the MCMC run collapsed on gator_lounge (PSNR 10, loss up from step 2.7k)
+ST=${STRATEGY:-mcmc}; CAPARG=(); [ $ST = mcmc ] && CAPARG=(--strategy.cap-max ${CAP:-1000000})
+CMD=(python $GS/examples/simple_trainer.py $ST --disable_viewer --data_factor 1 "${CAPARG[@]}"
      --max_steps $S --eval_steps $S --save_steps $S --save_ply --ply_steps $S
-     --render_traj_path ellipse --data_dir $DATA --result_dir $W/gsplat)
+     --render_traj_path ellipse --data_dir $DATA --result_dir $W/gsplat ${EXTRA:-})
 [ "${MODE:-3dgs}" = 2dgs ] && python $R/slurm/patch_gsplat_2dgs.py
 [ "${MODE:-3dgs}" = 2dgs ] && CMD=(python $GS/examples/simple_trainer_2dgs.py --disable_viewer --data_factor 1
      --max_steps $S --eval_steps $S --save_steps $S --data_dir $DATA --result_dir $W/gsplat)
