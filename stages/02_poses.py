@@ -1,5 +1,5 @@
 """Stage 2: COLMAP SfM via pycolmap. PASS if >= 80% of frames register. Writes cameras.json for later stages."""
-import json, os, shutil, sys
+import json, os, shutil, sys, tempfile
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import run_stage
@@ -13,18 +13,26 @@ def main(cfg):
     col = cfg["work"] / "colmap"
     shutil.rmtree(col, ignore_errors=True)
     col.mkdir()
-    db = col / "database.db"
-    # shortcut: PINHOLE (no distortion) skips an undistort step; phone video is ISP-undistorted. Use OPENCV + undistort_images if PSNR is poor.
-    reader = pycolmap.ImageReaderOptions(camera_model="PINHOLE")
-    n = len(os.sched_getaffinity(0))  # the job's cores: pycolmap's default is every core on the node, and each SIFT thread costs RAM (400 frames OOMed 48 GB)
-    pycolmap.extract_features(db, images, camera_mode=pycolmap.CameraMode.SINGLE, reader_options=reader,
-                              extraction_options=pycolmap.FeatureExtractionOptions(num_threads=n))
-    match = pycolmap.FeatureMatchingOptions(num_threads=n)
-    if cfg["colmap"]["matcher"] == "exhaustive":
-        pycolmap.match_exhaustive(db, matching_options=match)
-    else:
-        pycolmap.match_sequential(db, matching_options=match)
-    recs = pycolmap.incremental_mapping(db, images, col / "sparse")
+    # SQLite on /blue (network FS) can SIGBUS when it maps its -shm file: build the database on node-local disk
+    # ($TMPDIR in a Slurm job), copy it to colmap/ afterwards (GLOMAP reuses it), even when mapping fails
+    tmp = Path(tempfile.mkdtemp())
+    db = tmp / "database.db"
+    try:
+        # shortcut: PINHOLE (no distortion) skips an undistort step; phone video is ISP-undistorted. Use OPENCV + undistort_images if PSNR is poor.
+        reader = pycolmap.ImageReaderOptions(camera_model="PINHOLE")
+        n = len(os.sched_getaffinity(0))  # the job's cores: pycolmap's default is every core on the node, and each SIFT thread costs RAM (400 frames OOMed 48 GB)
+        pycolmap.extract_features(db, images, camera_mode=pycolmap.CameraMode.SINGLE, reader_options=reader,
+                                  extraction_options=pycolmap.FeatureExtractionOptions(num_threads=n))
+        match = pycolmap.FeatureMatchingOptions(num_threads=n)
+        if cfg["colmap"]["matcher"] == "exhaustive":
+            pycolmap.match_exhaustive(db, matching_options=match)
+        else:
+            pycolmap.match_sequential(db, matching_options=match)
+        recs = pycolmap.incremental_mapping(db, images, col / "sparse")
+    finally:
+        if db.exists():
+            shutil.copy2(db, col / "database.db")
+        shutil.rmtree(tmp, ignore_errors=True)
     assert recs, "COLMAP produced no reconstruction"
     rec = max(recs.values(), key=lambda r: r.num_reg_images())
     (col / "best").mkdir()
