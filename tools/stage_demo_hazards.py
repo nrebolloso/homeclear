@@ -23,6 +23,7 @@ MAT_H, CORD_H = 0.015, 0.005
 MAT_C, MAT_HALF = (0.25, 0.97), (0.45, 0.30)        # on the fridge -> entrance diagonal, ~1 m out from the fridge
 CORD_X, CORD_Y = 1.30, (-0.80, 0.20)                 # across the east corridor, before the trash-can gap
 CHAIR, CHAIR_AT = "chair8", (1.90, -0.83)            # pulled out from the table into the gap under the trash can
+NL_PARK, NL_AT = (-1.13, -0.58), (1.35, 0.80)        # nightlight: parked >2 m from the mat and cord; its fix spot (by a wall) is within 1.3 m of both
 SH0 = 0.28209479
 
 
@@ -75,6 +76,17 @@ mat_obj = {"name": "mat", "kind": "rug", "splat": "objects/mat.ply", "surface_m"
            "pivot": [*MAT_C, 0.0], "footprint": [[-hx, hy], [-hx, -hy], [hx, -hy], [hx, hy]], "height_m": MAT_H,
            "layer": "bump", "light_radius_m": None, "placed": "staged for the demo, not filmed"}
 
+# nightlight: a small warm plug-in unit, movable (drag it, or the fix moves it); the route is a night route, so the
+# simulation's own darkness rule (no multiplier within light_radius_m) is what changes contacts/month
+nl = box_surface([-0.04, -0.03, 0.10], [0.04, 0.03, 0.20], 0.006)
+size, shade = flat_discs(nl, 0.006, rng)
+PlyData([PlyElement.describe(splat_records(nl, np.clip(np.array([1.0, 0.86, 0.6]) * shade[:, None] * 1.1, 0, 1), size, simple), "vertex")]
+        ).write(str(D / "objects/nightlight.ply"))
+nl_obj = {"name": "nightlight", "kind": "nightlight", "splat": "objects/nightlight.ply", "surface_m": None, "fill": "objects/fill_mat.ply",
+          "fills": {b: "objects/fill_mat.ply" for b in backends}, "pivot": [*NL_PARK, 0.0],
+          "footprint": [[-0.04, 0.03], [-0.04, -0.03], [0.04, -0.03], [0.04, 0.03]], "height_m": 0.2, "layer": "none",
+          "light_radius_m": 1.5, "placed": "staged for the demo, not filmed"}
+
 # cord: part of the room (not movable), so it goes into the room splat and the measured bump layers, marked estimated
 # like any classified cable; off-white (a common extension cord) so it shows on the wood floor; a gentle S so it reads as a cord, not a line
 ys = np.arange(CORD_Y[0], CORD_Y[1], 0.004)
@@ -94,7 +106,7 @@ for x, y in zip(xs, ys):
 bump.tofile(D / "bump.f32"); est.tofile(D / "bump_estimated.u8")
 
 # chair: same object, staged start pose; its scanned spot stays the pivot (fills, never-filmed floor, the fix target)
-objs = [o for o in sc["objects"] if o["name"] != "mat"] + [mat_obj]
+objs = [o for o in sc["objects"] if o["name"] not in ("mat", "nightlight")] + [mat_obj, nl_obj]
 chair = next(o for o in objs if o["name"] == CHAIR)
 chair["start"] = [*CHAIR_AT, 0.0]
 sc["objects"] = objs
@@ -105,6 +117,8 @@ sc["interventions"] = [
      "product": "flat cord cover or gaffer tape"},
     {"id": "push_in_chair", "label": "Push the chair back under the table", "kind": "move", "object": CHAIR,
      "to": [chair["pivot"][0], chair["pivot"][1], 0], "cost_usd": 0, "minutes": 1, "effort": 1},
+    {"id": "add_nightlight", "label": "Plug in a nightlight between the mat and the cord", "kind": "move", "object": "nightlight",
+     "to": [*NL_AT, 0], "cost_usd": 12, "minutes": 5, "effort": 1, "product": "plug-in motion-sensor nightlight"},
 ]
 sc["risk"].update(rollouts=200, ghosts=200)        # the storyboard's 200 trips, every one drawn as a ghost
 (D / "scene.json").write_text(json.dumps(sc, indent=1))
