@@ -99,6 +99,8 @@ VR (Quest 2/3 over USB): enable developer mode, plug in, allow USB debugging, th
 press ENTER VR. Walk for real (1:1, floor at your floor); left stick or a held pinch walks where you look, right stick
 snap-turns. Labels are flat-view only for now.
 Full-detail scenes from a Windows PC over Quest Link / Air Link: `VR_WINDOWS.md`.
+Watch the headset on the laptop: `npm run mirror:quest` (needs `brew install scrcpy`; shows the left eye). Mirroring
+costs the headset frames (kitchen 200K at 72 Hz: 72 -> ~50 fps), so mirror the 150K copy for demos.
 
 ## Image-edit backend (stage 9)
 
