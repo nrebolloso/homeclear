@@ -19,7 +19,7 @@ splat:
 scale:
   manual_factor: null
   marker_dict: DICT_4X4_50
-  marker_id: 0
+  marker_id: [0, 1, 2]   # all three floor prints seen in the frames (id 0: 95, id 1: 47, id 2: 67 frames); scale = median, spread reported
   marker_size_m: 0.145   # ASSUMED same prints as the `bedroom` scene (itself an estimate, not taped); tape the black square to replace this
   tolerance_pct: 3.0
   ground_truth: []       # markers lie on the floor, so the marker-height check doesn't apply; stage 4 reports SKIP (unverified)
