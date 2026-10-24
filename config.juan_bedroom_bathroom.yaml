@@ -1,0 +1,140 @@
+# Viewer export of the myhome_bedroom_a run as juan_bedroom_bathroom (same settings as config.myhome_bedroom_a.yaml).
+# Juan's own home, bedroom, bathroom door closed (REAL, filmed by Juan). Paths are relative to the repo root unless absolute.
+# Placeholders: until something is tape-measured, every dimension below is marked estimated: true. Stage 4 then reports
+# SKIP (unverified) instead of PASS, and estimates never set stage 8's borderline margins (stage 6b).
+# Cluster: ssh / base / repo / env come from your cluster.local.yaml (the block further down is only the team default).
+run_name: juan_bedroom_bathroom   # names the exported viewer scene; inputs come from the myhome_bedroom_a run (work_dir)
+video: data/myhome_bedroom_a.mkv          # joined by slurm/sfm_join.sbatch from data/home_bedroom/*.MOV (1080x1920 portrait, HEVC HLG, ~30 fps)
+work_dir: out/myhome_bedroom_a
+
+frames:
+  target: 700                   # ~2.0 fps of 346 s of footage
+  min: 525                      # PASS threshold (75% of target)
+  max_side: 1600                # px, longest side
+
+colmap:
+  matcher: exhaustive           # links passes at chest and waist height (sequential matching would not)
+  min_registered: 0.79          # this room only: IMG_6744 alone registers 79.3-79.4% (556/700) with 218k points at 0.58 px; shared default stays 0.80
+
+splat:
+  steps: 7000
+  test_every: 8                 # every 8th frame held out for PSNR
+  min_psnr: 20.0
+
+scale:
+  manual_factor: null           # set a number to skip marker detection
+  assume_camera_height_m: 1.68  # ASSUMED, no marker in the footage: Juan says the phone was held at 5 ft 6 in (1.676 m), from memory, not measured; stage 4 reports SKIP
+  marker_dict: DICT_4X4_50
+  marker_id: 0
+  # python marker/make_marker.py --print -> marker/aruco_print_letter.pdf, printed at 100% ("Actual size"): the black square
+  # is 150 mm by construction. A bank card covers the box on the sheet exactly if the printer didn't rescale it; once it
+  # does (or a ruler reads 150 mm), set marker_size_estimated: false.
+  marker_size_m: 0.150
+  marker_size_estimated: true
+  marker_size_source: "printed sheet at 100%, not yet checked with a card or ruler"
+  tolerance_pct: 3.0            # tape checks must agree within this to PASS
+  estimate_tolerance_pct: 15.0  # estimated checks only catch gross errors: off by more than this = FAIL
+  ground_truth: []              # marker_height checks: floor to marker centre. On the floor: leave empty (height ~0).
+  # Taped to a wall or a chair back, with an estimated height:
+  # - {name: marker_height, kind: marker_height, meters: 0.75, estimated: true, source: "eyeballed, chair back"}
+
+clean:                          # stage 5b: visual cleanup before the maps and the viewer
+  min_opacity: 0.05             # near-invisible Gaussians
+  max_scale_m: 0.5              # blobs bigger than this are background/sky, not room
+  room_margin_m: 0.6            # keep walls/furniture this far beyond the seen floor
+  below_floor_m: 0.15
+  ceiling_m: 2.9
+  floater_voxel_m: 0.05
+  floater_min_neighbours: 8     # Gaussians in the 15 cm block around it; fewer = floating in empty space
+
+floor:
+  ransac_iters: 2000
+  inlier_m: 0.05               # this splat's floor is a fuzzy +-5 cm slab (16 dB PSNR): 2 cm found only ~700 inliers and a plane 0.3 m off the floor peak
+  min_opacity: 0.05             # the MCMC splat keeps only ~3.7k Gaussians above 0.3, 27k above 0.05
+  near_cameras_m: 2.0
+
+grid:
+  cell_m: 0.02
+  min_opacity: 0.3              # the 2DGS splat (10.9M Gaussians, 5M above 0.3) is dense: the loose 3DGS settings marked 83% of the room as obstacle
+  floor_band_m: 0.04            # |z| below this counts as floor: shag carpet (1.5 cm left only patches of floor)
+  floor_close_cells: 10         # fill small holes in the observed floor (20 cm)
+  obstacle_z: [0.08, 1.8]       # above the carpet pile
+  bump_z: [0.04, 0.08]          # carpet pile is ~4 cm here: bumps below that are not resolved
+  floor_local_m: 1.0            # local floor block for bump heights: 0.3 m blocks inside a big rug took the rug top as floor (rug 15 mm read 6.5 mm)
+  thin:                         # bumps no wider than this are cables/cords: classified, height ESTIMATED, not measured
+    max_width_m: 0.08            # as mapped: a 1 cm cord spreads over ~4 cells of 2 cm in the splat
+    min_length_m: 0.3
+    typical_height_m: 0.006     # ASSUMED typical lamp/charger cord; OT to verify
+  min_count: 20                 # Gaussians per cell to mark it: ~15x the default, scaled to this splat's density (kitchen splats ~0.3M Gaussians)
+
+plan:
+  start: [2.39, -1.79]          # picked from the largest free-floor area of the occupancy map (3.4 m apart); stage 7 finds no 0.3 m-clear cell on this map, so no planned path
+  goal: [-0.41, 0.07]
+  walker_width_m: 0.61
+  preferred_clearance_m: 0.30   # path prefers this much room on each side when it can
+  clearance_weight: 5.0
+
+hazards:
+  clearance_margin_m: 0.10      # flag where side clearance < this
+  bump_limit_m: 0.01            # bumps at least this high are a trip risk (the viewer's "OT should check")
+
+accuracy:                       # stage 6b: map vs ground truth; the max error is stage 8's borderline margin
+  ground_truth: []              # tape measurements (set margins), or placeholders with estimated: true (reported only).
+  # Exact without tape (standard sizes): a sheet of US letter paper lying on the floor, two corners picked by eye in >= 2
+  # frames ({frame: [u, v]}, out/myhome/images/):
+  # - {name: letter sheet long edge, kind: pick_distance, points: [{00012.jpg: [u, v], 00020.jpg: [u, v]}, {...}], meters: 0.2794,
+  #    source: "US letter paper, 11 in"}
+  # Estimates (estimated: true, never margins):
+  # - {name: bedroom door opening height, kind: pick_height, points: [{00030.jpg: [u, v], 00031.jpg: [u, v]}], meters: 2.03,
+  #    estimated: true, source: "standard US interior door, 80 in"}
+  # - {name: bathroom doorway, kind: free_span, box_xy: [[x0, y0], [x1, y1]], axis: 1, meters: 0.76, estimated: true,
+  #    source: "standard 30 in door; real clear width is less (stops, hinges)"}
+  # - {name: toilet seat, kind: pick_height, points: [{...}], meters: 0.40, estimated: true, source: "standard 15-17 in"}
+  # Tape measurements later: the same lines without estimated: true.
+
+fix:
+  backend: stub                 # image-editing backend name in stages/09_fix_render.py BACKENDS
+  max_renders: 3
+  camera_back_m: 1.5
+  camera_height_m: 1.4
+
+viewer:
+  timeout_ms: 60000
+
+cluster:
+  ssh: hpg
+  control_path: ~/.ssh/cm-hpg
+  repo: $HPG_ROOT/Homeclear
+  env: $HPG_ROOT/envs/homeclear
+
+game:                           # walker game (viewer/) + stage 12 export. Coordinates: floor frame, metres (occupancy.png)
+  walker:                       # Drive Medical 10210-1 (Amazon B001HOM4U2): manufacturer spec sheet, not taped
+    width_m: 0.61               # 24 in overall (keep = plan.walker_width_m)
+    depth_m: 0.445              # 17.5 in (retailer listing; the spec sheet gives none)
+    handle_height_m: 0.85       # adjusts 32-39 in (0.81-0.99 m): set to the patient
+    user_gap_m: 0.25            # user's body centre to the rear legs
+    leg_radius_m: 0.0127        # 1 in aluminium tube
+  persona:
+    eye_height_m: 1.55
+    gait_profile: older_adult_walker
+    stride_m: 0.35              # step length
+    stride_cv: 0.10
+    foot_sep_m: 0.20            # left/right foot spacing
+    toe_clearance_cv: 0.25      # per-step spread of toe clearance, applied as a factor on effective hazard height
+  risk:
+    rollouts: 500               # simulated night trips per evaluation
+    trips_per_night: 2
+    days_per_month: 30
+    path_offset_sd_m: 0.05      # how far a real walk wanders from the planned line
+    step_jitter_m: 0.04
+    dark_contact_multiplier: 1.5   # contact risk outside any nightlight's radius (ASSUMED, calibrate)
+    ghosts: 24                  # rollout paths drawn in the viewer
+    leg_flash_m: 0.010          # walker leg over a bump taller than this flashes
+    # Hazard height (m) -> toe-contact probability per stride crossing it, by gait profile.
+    contact_table:
+      older_adult_walker:
+        # generated by tools/contact_table.py: Frontiers 2014: MTC 14.1 +- 8.3 mm (lognormal shape), ~1/578 strides contact a 1 cm obstacle (level); k = p(10 mm)/P(MTC<10 mm), trip-averaged with toe_clearance_cv
+        height_m: [0, 0.0025, 0.005, 0.0075, 0.01, 0.0125, 0.015, 0.02, 0.03, 0.05]
+        p_per_stride: [0, 8.71e-06, 0.000241, 0.000875, 0.00168, 0.00242, 0.00302, 0.00381, 0.00442, 0.00463]
+  objects: []                   # movable objects: {name, kind: bed|rug|nightstand|nightlight|other, box_xy: [[x0,y0],[x1,y1]], z_max}
+  interventions: []             # {id, label, kind: remove|move|flatten, object?, to?: [x, y, yaw_deg], box_xy?, height_m?}
