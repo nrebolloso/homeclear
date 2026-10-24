@@ -142,6 +142,21 @@ def rug_outline(w, lo, cell, shape, box_xy, grow=0.03):
     return cv2.boxPoints(((cx, cy), (bw + 2 * grow, bh + 2 * grow), ang)).astype(float).round(3).tolist()
 
 
+def object_parts(o, xyz, g, w, lo, cell, shape):
+    """Gaussians that belong to config object o (its height-limited parts, with a cut margin). tools/lighter_clean.py reuses it."""
+    # parts: the object is only these height-limited boxes (a table = top slab + legs; chairs pushed in under it stay put)
+    parts = o.get("parts") or [{"box_xy": o["box_xy"], "z": [g["bump_z"][0], o.get("z_max", 2.0)]}]
+    if o.get("kind") == "rug":   # a rug lies at an angle: its box takes bare floor too, so cut the measured bump patch instead
+        parts = [{**q, "poly_xy": rug_outline(w, lo, cell, shape, o["box_xy"])} for q in parts]
+    # a part is a box_xy or a poly_xy outline (a table turned off the axes: its bounding box would take the chair backs),
+    # taken with a margin: an object's sides sit on or just past its outline (a bed's sides 1-3 cm out stayed in the
+    # room when it was moved). A rug has none: its edge Gaussians are floor-height, the margin would take floor.
+    cm = o.get("cut_margin_m", 0.0 if o.get("kind") == "rug" else 0.02)
+    in_xy = lambda q: (near_poly(xyz[:, :2], np.array(q["poly_xy"], float), cm) if "poly_xy" in q else
+                       (xyz[:, :2] >= np.min(q["box_xy"], 0) - cm).all(1) & (xyz[:, :2] <= np.max(q["box_xy"], 0) + cm).all(1))
+    return np.any([in_xy(q) & (xyz[:, 2] >= q["z"][0]) & (xyz[:, 2] <= q["z"][1]) for q in parts], 0)
+
+
 def main(cfg):
     w, g, gm = cfg["work"], cfg["grid"], cfg["game"]
     out = ROOT / "viewer" / "public" / "scene" / cfg["run_name"]
@@ -156,17 +171,7 @@ def main(cfg):
     for o in gm["objects"]:
         (x0, y0), (x1, y1) = np.sort(np.array(o["box_xy"], float), 0)
         inbox = lambda m: (xyz[:, 0] >= x0 - m) & (xyz[:, 0] <= x1 + m) & (xyz[:, 1] >= y0 - m) & (xyz[:, 1] <= y1 + m)
-        # parts: the object is only these height-limited boxes (a table = top slab + legs; chairs pushed in under it stay put)
-        parts = o.get("parts") or [{"box_xy": o["box_xy"], "z": [g["bump_z"][0], o.get("z_max", 2.0)]}]
-        if o.get("kind") == "rug":   # a rug lies at an angle: its box takes bare floor too, so cut the measured bump patch instead
-            parts = [{**q, "poly_xy": rug_outline(w, lo, cell, shape, o["box_xy"])} for q in parts]
-        # a part is a box_xy or a poly_xy outline (a table turned off the axes: its bounding box would take the chair backs),
-        # taken with a margin: an object's sides sit on or just past its outline (a bed's sides 1-3 cm out stayed in the
-        # room when it was moved). A rug has none: its edge Gaussians are floor-height, the margin would take floor.
-        cm = o.get("cut_margin_m", 0.0 if o.get("kind") == "rug" else 0.02)
-        in_xy = lambda q: (near_poly(xyz[:, :2], np.array(q["poly_xy"], float), cm) if "poly_xy" in q else
-                           (xyz[:, :2] >= np.min(q["box_xy"], 0) - cm).all(1) & (xyz[:, :2] <= np.max(q["box_xy"], 0) + cm).all(1))
-        sel = ~taken & np.any([in_xy(q) & (xyz[:, 2] >= q["z"][0]) & (xyz[:, 2] <= q["z"][1]) for q in parts], 0)
+        sel = ~taken & object_parts(o, xyz, g, w, lo, cell, shape)
         assert (sel & solid).sum() > 10, f"object {o['name']}: no Gaussians in its box"
         taken |= sel
         pivot = np.array([(x0 + x1) / 2, (y0 + y1) / 2, 0.0])
@@ -191,7 +196,7 @@ def main(cfg):
             fv[f"f_dc_{k}"], fv[f"scale_{k}"] = dc[k], np.log(0.012 if k < 2 else 0.002)
         fv["opacity"], fv["rot_0"] = 4.0, 1.0
         if o.get("kind") == "rug":   # only where the rug was cut out
-            fv = fv[Path2d(parts[0]["poly_xy"]).contains_points(np.stack([fv["x"], fv["y"]], 1))]
+            fv = fv[Path2d(rug_outline(w, lo, cell, shape, o["box_xy"])).contains_points(np.stack([fv["x"], fv["y"]], 1))]
         write_ply(out / "objects" / f"fill_{o['name']}.ply", fv)
         surface = surface_height(xyz[sel & solid, 2], o.get("surface_z") or SURFACE_Z[o.get("kind")]) if o.get("kind") in SURFACE_Z else None
         objects.append({"name": o["name"], "kind": o.get("kind", "other"), "splat": f"objects/{o['name']}.ply",
