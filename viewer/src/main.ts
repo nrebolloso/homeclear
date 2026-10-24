@@ -30,6 +30,9 @@ import type { WorldModel } from './worldmodel.ts';
 import { setupXR } from './xr.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+// model and scene text (Cosmos Reason notes, hazard details) goes into innerHTML escaped; same as report.ts's, which can't
+// be imported: that module renders the report page when loaded
+const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 const RUN = new URLSearchParams(location.search).get('scene') ?? 'game_synth';
 const BASE = `scene/${RUN}/`;
 const json = (f: string) => fetch(BASE + f).then(r => { if (!r.ok) throw new Error(`${BASE}${f}: ${r.status}`); return r.json(); });
@@ -332,7 +335,7 @@ function renderPanels() {
     ` over ${h.length_m.toFixed(2)} m${h.type === 'floor_bump' ? ` · ${fmt(h.per_month)}/month` : ''}${h.ot_check ? ' · <span class="ot">OT should check</span>' : ''}</li>`);
   // Cosmos Reason: proposals already checked against the grids (cosmos/reason.py); the dismissed ones are not listed
   const reason = hzFile.hazards.filter(h => h.source === 'cosmos_reason' && h.verdict !== 'dismissed').map(h =>
-    `<li><span class="imagined">${h.note}</span> · proposed by Cosmos Reason${h.verdict === 'confirmed' ? `, <span class="measured">geometry agrees: ${h.measured}</span>` : ', not measurable from the scan · <span class="ot">OT should check</span>'}</li>`);
+    `<li><span class="imagined">${esc(h.note)}</span> · proposed by Cosmos Reason${h.verdict === 'confirmed' ? `, <span class="measured">geometry agrees: ${esc(h.measured)}</span>` : ', not measurable from the scan · <span class="ot">OT should check</span>'}</li>`);
   $('hazards').innerHTML = [...geo, ...reason].join('') || '<li>none on this route</li>';
   const vcls = (v: string) => (v === 'ok' ? 'delta-good' : v === 'fail' ? 'delta-bad' : 'ot');
   $('checks').innerHTML = r.checks.map(c => `<li><span class="${vcls(c.verdict)}">${c.verdict}</span> ${c.label}<br><small>${c.note}</small></li>`).join('')
@@ -433,7 +436,7 @@ function tourStep(dt: number) {
       tour.phase = 'hold'; tour.t = 0;
       const s = spotList[tour.k], cap = $('tourcap');
       cap.hidden = false;
-      cap.innerHTML = `<b>${tour.k + 1}/${spotList.length}</b> · ${s.kind === 'measured' ? 'measured' : '<span class="imagined">proposed by Cosmos Reason, not measured</span>'}<br>${s.detail}`;
+      cap.innerHTML = `<b>${tour.k + 1}/${spotList.length}</b> · ${s.kind === 'measured' ? 'measured' : '<span class="imagined">proposed by Cosmos Reason, not measured</span>'}<br>${esc(s.detail)}`;   // model/scene text: escaped
     }
   } else if (tour.t >= TOUR_HOLD_S) {
     if (tour.k + 1 < spotList.length) tourGo(tour.k + 1);
