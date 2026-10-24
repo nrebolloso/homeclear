@@ -17,11 +17,13 @@ export function plainSpot(s: Spot): { title: string; why: string } {
   return { title: gap ? `Tight squeeze, ${gap[1]} cm each side` : 'Tight squeeze', why: 'The walker can bump the sides here' };
 }
 
-/** Where to stand for a stop: back along the route from the hazard, looking at it (the desktop tour's vantage), on floor
+/** Where to stand for a stop: 0.9 m back along the route from the hazard, looking at it (the desktop tour's vantage), on floor
  *  someone could stand on; else the nearest such spot 0.7-2 m around it. Null if there is none. */
 export function tourStand(s: Spot, routeXY: XY[], standable: (x: number, y: number) => boolean): { x: number; y: number; yaw: number } | null {
   const face = (x: number, y: number) => ({ x, y, yaw: Math.atan2(s.xy[1] - y, s.xy[0] - x) });
-  if (routeXY.length) for (const back of [1.2, 0.9, 1.5, 0.7, 2.0]) {
+  // 0.9 m first: closer shows less of the room, so less to draw. Quest 2, kitchen4 doorway: 61 fps at 0.9 m vs 54 at 1.2 and
+  // 72 at 0.6, but at 0.6 a floor hazard is nearly underfoot (~70 deg down); at 0.9 it's ~60 deg
+  if (routeXY.length) for (const back of [0.9, 1.2, 0.7, 1.5, 2.0]) {
     const v = vantage(s.xy, routeXY, back);
     if (standable(v.x, v.y)) return face(v.x, v.y);
   }
