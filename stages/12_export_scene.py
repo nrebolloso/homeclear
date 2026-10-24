@@ -1,7 +1,7 @@
 """Stage 12 (laptop): export the walker-game scene to viewer/public/scene/<run_name>/ (manifest: scene.json).
 
 Everything stays in the floor frame (metres, floor z=0, +z up); the viewer keeps that frame (see viewer/src/frame.ts).
-The movable objects in game.objects (config boxes, floor frame) are cut out of the splat into their own PLYs, and the
+The movable objects in game.objects (config boxes, floor frame; or `auto`: stage 6c's detections) are cut out of the splat into their own PLYs, and the
 grids are recomputed without them so the viewer can stamp them back in wherever the user drags them. Each object also
 gets a fill patch for its original spot: a flat placeholder coloured from the nearby floor (imagined, not measured)
 until a generative fill exists.
@@ -24,6 +24,7 @@ COVERAGE_GOOD = 3        # cells seen by fewer cameras are drawn in fog
 # are higher than the seat and the mattress, so the surface is the densest horizontal layer inside this band
 SURFACE_Z = {"bed": (0.25, 0.9), "toilet": (0.3, 0.6), "chair": (0.3, 0.7), "nightstand": (0.3, 1.0)}
 POINT_KINDS = {"switch", "phone", "outlet", "grab_bar_wall"}
+MEMBER_M = 0.03   # auto objects: a Gaussian belongs to the object of its nearest labelled point, if that is this close
 
 
 def surface_height(z, band):
@@ -142,8 +143,34 @@ def rug_outline(w, lo, cell, shape, box_xy, grow=0.03):
     return cv2.boxPoints(((cx, cy), (bw + 2 * grow, bh + 2 * grow), ang)).astype(float).round(3).tolist()
 
 
+def config_objects(gm, w):
+    """game.objects, or with `auto` stage 6c's proposals (out/<run>/objects_proposed.yaml) minus doors (part of the walls)."""
+    if gm["objects"] != "auto":
+        return gm["objects"]
+    import yaml
+    return [o for o in yaml.safe_load((Path(w) / "objects_proposed.yaml").read_text())["objects"] if o["kind"] != "door"]
+
+
+_nearest = {}
+
+
+def nearest_instance(xyz, w):
+    """Stage 6c instance id of each Gaussian's nearest labelled point within MEMBER_M (-1 = none). Per Gaussian, not per
+    box: a chair pushed in under a table stays a chair, and the same split works on any splat of this floor frame."""
+    from scipy.spatial import cKDTree
+    key = (str(w), xyz.shape, float(xyz[::997].sum()))
+    if key not in _nearest:
+        z = np.load(Path(w) / "objects_points.npz")
+        d, j = cKDTree(z["xyz"]).query(xyz, distance_upper_bound=MEMBER_M)
+        _nearest.clear()
+        _nearest[key] = np.where(d <= MEMBER_M, z["instance"][np.minimum(j, len(z["instance"]) - 1)], -1)
+    return _nearest[key]
+
+
 def object_parts(o, xyz, g, w, lo, cell, shape):
     """Gaussians that belong to config object o (its height-limited parts, with a cut margin). tools/lighter_clean.py reuses it."""
+    if "instance" in o and o.get("kind") != "rug":   # stage 6c detection: its labelled points decide, above the floor band
+        return (nearest_instance(xyz, w) == o["instance"]) & (xyz[:, 2] >= g["bump_z"][0])
     # parts: the object is only these height-limited boxes (a table = top slab + legs; chairs pushed in under it stay put)
     parts = o.get("parts") or [{"box_xy": o["box_xy"], "z": [g["bump_z"][0], o.get("z_max", 2.0)]}]
     if o.get("kind") == "rug":   # a rug lies at an angle: its box takes bare floor too, so cut the measured bump patch instead
@@ -166,9 +193,9 @@ def main(cfg):
     grid = json.loads((w / "grid.json").read_text())
     lo, cell, shape = np.array(grid["origin_xy"]), grid["cell_m"], tuple(grid["shape"])
 
-    taken, objects = np.zeros(len(v), bool), []
+    taken, objects, raised = np.zeros(len(v), bool), [], set()
     floor_g = solid & (np.abs(xyz[:, 2]) < g["floor_band_m"])
-    for o in gm["objects"]:
+    for o in config_objects(gm, w):
         (x0, y0), (x1, y1) = np.sort(np.array(o["box_xy"], float), 0)
         inbox = lambda m: (xyz[:, 0] >= x0 - m) & (xyz[:, 0] <= x1 + m) & (xyz[:, 1] >= y0 - m) & (xyz[:, 1] <= y1 + m)
         sel = ~taken & object_parts(o, xyz, g, w, lo, cell, shape)
@@ -181,6 +208,8 @@ def main(cfg):
         (cx, cy), (bw, bh), ang = cv2.minAreaRect((xyz[sel & solid, :2] - pivot[:2]).astype(np.float32))
         foot = cv2.boxPoints(((cx, cy), (bw, bh), ang))
         height = float(np.percentile(xyz[sel & solid, 2], 99))
+        if np.percentile(xyz[sel & solid, 2], 2) > g["obstacle_z"][0]:
+            raised.add(o["name"])
         if o.get("kind") == "rug":   # the viewer stamps a rug as one flat slab: use stage 6's height above the LOCAL floor, not raw z
             (i0, j0), (i1, j1) = np.clip(np.round((np.array([[x0, y0], [x1, y1]]) - lo) / cell).astype(int), 0, shape)
             rug_h = np.load(w / "bump_height_m.npy")[i0:i1, j0:j1][np.load(w / "bumps.npy")[i0:i1, j0:j1]]
@@ -217,6 +246,8 @@ def main(cfg):
     occ.stamp_synthetic(g, lo, shape, floor, obstacles, bumps, bump_h)
     est = occ.classify_thin(g, bumps, bump_h)
     for o in objects:   # nobody filmed the floor under the furniture: assume the fitted plane (z=0) continues
+        if o["name"] in raised:   # a box on a cabinet: the cabinet under it stays an obstacle
+            continue
         poly = ((np.array(o["footprint"]) + o["pivot"][:2] - lo) / cell)[:, ::-1].astype(np.int32)  # (j, i) for cv2
         m = np.zeros(shape, np.uint8)
         cv2.fillPoly(m, [poly], 1)

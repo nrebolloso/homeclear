@@ -39,4 +39,17 @@ for e in prop["objects"]:
     (x0, y0), (x1, y1) = e["box_xy"]
     assert abs(x0 - lo[0]) < 0.08 and abs(y0 - lo[1]) < 0.08 and abs(x1 - hi[0]) < 0.08 and abs(y1 - hi[1]) < 0.08, (e["kind"], e["box_xy"])
     assert abs(e["z_max"] - hi[2]) < 0.06, (e["kind"], e["z_max"])
+
+# instances(): a chair pushed against a table, both labelled (with some table-mask spill onto the chair), plus a second
+# chair apart from both -> three objects, the touching chair not taken by the table
+rng = np.random.default_rng(0)
+box = lambda lo, hi, n: rng.uniform(lo, hi, (n, 3))
+tab = np.r_[box([0, 0, 0.70], [1.2, 0.8, 0.74], 6000), *[box([x, y, 0], [x + .04, y + .04, .7], 300) for x in (0, 1.16) for y in (0, .76)]]
+ch = lambda x0: np.r_[box([x0, 0.2, 0.42], [x0 + .4, 0.6, 0.45], 2500), box([x0 + .37, 0.2, 0.45], [x0 + .4, 0.6, 0.9], 1500)]
+p3 = np.r_[tab, ch(-0.39), ch(-1.5)]
+li = np.r_[np.full(len(tab), labels.index("table")), np.full(8000, labels.index("chair"))]
+li[len(tab):len(tab) + 300] = labels.index("table")   # spill
+inst, _ = det.instances(p3, li, [])
+n_tab, a, b = inst[0], inst[len(tab) + 1000], inst[-1]
+assert len({n_tab, a, b}) == 3 and (inst[len(tab):len(tab) + 4000] == a).mean() > 0.95, np.unique(inst, return_counts=True)
 print("DETECT VOTE OK", {e["kind"]: e["box_xy"] for e in prop["objects"]})

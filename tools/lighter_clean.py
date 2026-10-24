@@ -47,7 +47,7 @@ def main():
     s = json.loads((dst / "scene.json").read_text())
     grid = json.loads((Path(cfg["work_dir"]) / "grid.json").read_text())
     taken = np.zeros(len(v), bool)
-    for o, so in zip(cfg["game"]["objects"], s["objects"]):   # same order as stage 12 wrote them
+    for o, so in zip(export.config_objects(cfg["game"], cfg["work_dir"]), s["objects"]):   # same order as stage 12 wrote them
         sel = ~drop & ~taken & export.object_parts(o, p, cfg["grid"], Path(cfg["work_dir"]), np.array(grid["origin_xy"]), grid["cell_m"], tuple(grid["shape"]))
         taken |= sel
         ov = v[sel].copy()

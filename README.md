@@ -43,7 +43,7 @@ More stages, all optional, each writing next to the others in `out/<run>/`:
 | Stage | What | Output |
 |---|---|---|
 | `05c_shell.py` | walls (two perpendicular directions) + ceiling fitted to the splat; the Cosmos controls use it where the capture saw nothing | `shell.json` |
-| `06c_detect.py` | Grounding DINO + SAM 2 masks voted onto the Gaussians: proposed objects/fixtures in config format, for a person to accept | `objects_proposed.yaml` |
+| `06c_detect.py` | Grounding DINO + SAM 2 masks voted onto the Gaussians and split into separate objects: proposals in config format; `game.objects: auto` makes them all movable | `objects_proposed.yaml`, `objects_points.npz` |
 | `12b_fills.py` | the floor (and wall) each movable object hid, inpainted: median / telea / ns (CPU), lama (GPU); imagined, tinted | `objects/fill_<name>_<backend>.ply` |
 | `14_rescan_diff.py before.yaml after.yaml` | film again after the fixes: 2-D ICP alignment, each hazard resolved / remaining, new bumps on the route | `verification.json` |
 | `cosmos/reason.py` | Cosmos Reason 2 on capture frames along the route, proposals lifted to 3-D and checked against the grids | `reason.json` |

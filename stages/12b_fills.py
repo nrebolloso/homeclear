@@ -2,7 +2,7 @@
 backends) or on HiPerGator (lama). Writes viewer/public/scene/<run>/objects/fill_<name>_<backend>.ply + fills.json, and
 points scene.json at the best fill made. Everything here is IMAGINED: the viewer tints it, nothing measures it.
 
-  python stages/12b_fills.py <config.yaml> [--backends telea,ns,lama]
+  python stages/12b_fills.py <config.yaml> [--backends telea,ns,lama] [--run <run>_lighter]
 
 1. Orthographic image of the floor around the footprint (1 cm pixels, +0.4 m margin), drawn from the floor-band
    Gaussians of main.ply (the objects are already cut out): each one paints its DC colour over its footprint.
@@ -15,7 +15,7 @@ points scene.json at the best fill made. Everything here is IMAGINED: the viewer
 4. Tall objects (> 0.5 m) standing against a wall of the room shell (stage 5c) hid part of that wall too: the same, on
    the wall plane (along-wall x height image), from the Gaussians within 4 cm of it.
 """
-import argparse, json, sys
+import argparse, functools, json, sys
 from pathlib import Path
 sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
 from common import read_ply, write_ply, ply_xyz, load_cfg, ROOT
@@ -54,6 +54,12 @@ def paint(uv, rgb, radius_px, shape):
     return img, hit
 
 
+@functools.cache
+def lama():
+    from simple_lama_inpainting import SimpleLama   # GPU env on HiPerGator (requirements: simple-lama-inpainting)
+    return SimpleLama()                             # loaded once: every object and wall patch reuses it
+
+
 def inpaint(img, mask, backend, ring):
     """img float RGB, mask bool (to fill). ring: pixels of real floor next to the hole, for the median backend."""
     u8 = (img * 255).astype(np.uint8)
@@ -66,10 +72,9 @@ def inpaint(img, mask, backend, ring):
         flag = cv2.INPAINT_TELEA if backend == "telea" else cv2.INPAINT_NS
         return cv2.inpaint(u8, m8, 15, flag).astype(np.float64) / 255
     if backend == "lama":
-        from simple_lama_inpainting import SimpleLama   # GPU env on HiPerGator (requirements: simple-lama-inpainting)
         from PIL import Image
-        res = SimpleLama()(Image.fromarray(u8), Image.fromarray(m8))
-        return np.asarray(res.resize((img.shape[1], img.shape[0])), np.float64) / 255
+        res = lama()(Image.fromarray(u8), Image.fromarray(m8))
+        return np.asarray(res, np.float64)[:img.shape[0], :img.shape[1]] / 255   # LaMa pads bottom/right to x8: crop, not resize
     raise ValueError(f"unknown fill backend {backend}")
 
 
@@ -155,10 +160,10 @@ def nearest_wall(shell, foot_world, max_d=0.15):
     return best
 
 
-def main(cfg_path, backends):
+def main(cfg_path, backends, run=None):
     cfg = load_cfg(cfg_path)
     w, g = cfg["work"], cfg["grid"]
-    out = ROOT / "viewer" / "public" / "scene" / cfg["run_name"]
+    out = ROOT / "viewer" / "public" / "scene" / (run or cfg["run_name"])
     sc = json.loads((out / "scene.json").read_text())
     v = read_ply(out / sc["splat"])
     xyz = ply_xyz(v)
@@ -198,5 +203,6 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("config")
     ap.add_argument("--backends", default="telea,ns")
+    ap.add_argument("--run", help="scene folder, e.g. kitchen4_lighter (default: the config's run_name)")
     a = ap.parse_args()
-    main(a.config, a.backends.split(","))
+    main(a.config, a.backends.split(","), a.run)
