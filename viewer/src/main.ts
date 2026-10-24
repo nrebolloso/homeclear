@@ -10,6 +10,7 @@ import { createVision, PROFILES, type Profile } from './vision.ts';
 import { createHeatOverlay, nights, drawTimeline } from './heat.ts';
 import { buildMannequin, feetAt, type Step } from './mannequin.ts';
 import { setupXR } from './xr.ts';
+import { createLivePhys, type LivePhys } from './livephys.ts';
 import { initClips, exportForCosmos, listClips, type ExportOpts } from './cosmos.ts';
 import { layoutKey } from './prerender.ts';
 import { drawTopdown } from './topdown.ts';
@@ -486,7 +487,7 @@ tc.addEventListener('dragging-changed', e => { if (!e.value && selected >= 0) co
 function syncObjects() {
   items.forEach((it, k) => {
     const p = layout.poses[k], o = original[k];
-    it.group.position.set(p.x, p.y, 0); it.group.rotation.z = p.yaw;
+    it.group.position.set(p.x, p.y, 0); it.group.rotation.set(0, 0, p.yaw);   // upright (live physics re-tilts a tipped one)
     it.group.visible = !p.removed;
     const moved = !!p.removed || Math.hypot(p.x - o.x, p.y - o.y) > 0.01 || Math.abs(p.yaw - o.yaw) > 0.01;
     it.fill.visible = it.tag.visible = moved && $<HTMLInputElement>('imagfill').checked;   // the spot it used to cover was never filmed
@@ -497,7 +498,36 @@ function syncObjects() {
     m.position.set((x0 + x1) / 2, (y0 + y1) / 2, 0.022);
     tapeGroup.add(m);
   }
+  const gone = objs.flatMap((o, k) => (layout.poses[k].removed ? [k] : []));
+  $('inventory').innerHTML = gone.length ? '' : '<li class="hint">nothing removed</li>';
+  for (const k of gone) {
+    const li = document.createElement('li'), b = document.createElement('button');
+    b.title = `Put back ${objs[k].name}`; b.onclick = () => restoreObject(k);
+    b.innerHTML = `<svg viewBox="0 0 24 24">${iconOf(objs[k])}</svg>`;
+    b.append(objs[k].name.replace(/_/g, ' '));
+    li.appendChild(b); $('inventory').appendChild(li);
+  }
   updateNight();
+  live?.sync(layout);
+}
+const ICONS: Record<string, string> = {   // line drawings for the Removed list, by kind or name
+  chair: '<path d="M7 3v18M7 12h10v9M7 12V3m0 0h3"/>',
+  table: '<path d="M2 8h20M5 8v12M19 8v12"/>',
+  nightstand: '<rect x="5" y="5" width="14" height="12"/><path d="M5 11h14M11 8h2M11 14h2M7 17v3M17 17v3"/>',
+  rug: '<rect x="3" y="7" width="18" height="10" rx="1"/><path d="M7 7v10M17 7v10"/>',
+  basket: '<path d="M3 10h18l-2 10H5zM8 10l3-6M16 10l-3-6"/>',
+  box: '<path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10"/>',
+  trash: '<path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15"/>',
+  other: '<rect x="5" y="5" width="14" height="14" rx="2"/>',
+};
+const iconOf = (o: { name: string; kind: string }) =>
+  ICONS[o.kind] ?? ICONS[Object.keys(ICONS).find(n => o.name.startsWith(n)) ?? 'other'];
+function restoreObject(k: number) {   // back where it stood when removed, if that spot is still free
+  const poses = layout.poses.map((q, n) => (n === k ? { ...q, removed: false } : q));
+  if (!placementOk(g, placeBase, objs, poses, k, overlapOk[k])) return refused();
+  layout = { ...layout, poses };
+  syncObjects();
+  return replan();
 }
 function commitPose(k: number, p: Pose) {
   layout = { ...layout, poses: layout.poses.map((q, n) => (n === k ? { x: p.x, y: p.y, yaw: Math.round(p.yaw / (Math.PI / 2)) * (Math.PI / 2) } : q)) };
@@ -929,6 +959,18 @@ game.doors = { mark: markDoor, list: () => doors, clear: () => $('cleardoors').c
   /** apply one option by key: 'offset' | 'remove' | 'widen' (same path as Plan fixes' Apply) */
   apply: (name: string, key: 'offset' | 'remove' | 'widen') => applyFix(`door_${key}:${name}`) };
 
+// ---------- live object physics (livephys.ts, Rapier in its own worker): objects the walker pushes, slides, tips ----------
+const live: LivePhys | null = PARAMS.has('nophys') ? null : createLivePhys({ base: BASE, g, objs, items, scene, renderer, obst: placeBase.obst, bump: base.bump,
+  walker: () => walkerCfg, layout: () => layout, overlap: overlapOk.flatMap((s, k) => [...s].filter(n => n > k).map(n => [k, n] as [number, number])),
+  hold: k => reim.t() < 1 || ((tc as any).dragging && k === selected), log: $('physevents'), sampledEl: $('physsampled'),
+  settled: moves => {   // the layout follows where the walker left things (no yaw snap: it lies as it fell)
+    layout = { ...layout, poses: layout.poses.map((q, n) => { const m = moves.find(v => v.k === n); return m ? { ...m.pose, removed: q.removed } : q; }) };
+    syncObjects(); replan();
+  } });
+$('physresample').onclick = () => live?.resample();
+if (!live) $('physpanel').hidden = true;
+game.livephys = live;
+
 // ---------- what leaves the game: OT report, family fix card ----------
 /** Every change in the layout on screen, in order, with what it takes and where (for the card's numbered pins). */
 function describeChanges(): ActionOut[] {
@@ -1047,6 +1089,7 @@ async function setPersona(key: string) {
   personaKey = key;
   $<HTMLSelectElement>('persona').value = key;
   walkerCfg = p.walker;
+  live?.resample();   // the physics walker takes the new frame
   persona = { ...p.gait, step_model: STEP ?? p.gait.step_model ?? 'hand' };
   scene.remove(walker.group);
   walker = buildDevice(walkerCfg);
@@ -1191,8 +1234,9 @@ const walkerPoint = (b: { x: number; y: number; yaw: number }, [px, py]: number[
   [b.x + Math.cos(b.yaw) * px - Math.sin(b.yaw) * py, b.y + Math.sin(b.yaw) * px + Math.cos(b.yaw) * py];
 function canStand(b: { x: number; y: number; yaw: number }) {
   const c = cellAt(b.x, b.y);
-  if (!L.floor[c] || L.obst[c] || coverage[c] === 0) return false;           // only where the capture actually saw floor
-  return walker.probes.every(p => { const k = cellAt(...walkerPoint(b, p)); return L.floor[k] && !L.obst[k]; });
+  const S = live ? placeBase : L;   // with live physics the walker meets furniture as bodies, not as a wall on the grid
+  if (!S.floor[c] || S.obst[c] || coverage[c] === 0) return false;           // only where the capture actually saw floor
+  return walker.probes.every(p => { const k = cellAt(...walkerPoint(b, p)); return S.floor[k] && !S.obst[k]; });
 }
 /** Route point + heading at arc length s (the route is the walker frame's centre). */
 function routeAt(s: number): [number, number, number] {
@@ -1368,6 +1412,7 @@ function step(dt: number, t: number) {
   tourStep(dt);
   walker.group.position.set(body.x, body.y, 0);
   walker.group.rotation.z = body.yaw;
+  if (mode !== 'fly') live?.frame(dt, body, mode === 'free', walker.group);
   if (mode === 'fly') {
     const c = Math.cos(body.pitch);
     camera.position.set(fly.x, fly.y, fly.z);
@@ -1434,6 +1479,8 @@ Object.assign(game, {
     return commitPose(k, p).then(ms => ({ ok: true, ms }));
   },
   removeObject: (name: string) => removeObject(objs.findIndex(o => o.name === name)),
+  restoreObject: (name: string) => restoreObject(objs.findIndex(o => o.name === name)),
+  inventory: () => objs.filter((_, k) => layout.poses[k].removed).map(o => o.name),
   applyFix, select: (name: string) => select(objs.findIndex(o => o.name === name)),
   exportForCosmos: (opts?: ExportOpts) => exportForCosmos(ctx, opts), layoutKey: () => layoutKey(objs, layout),
 });

@@ -25,6 +25,9 @@ COVERAGE_GOOD = 3        # cells seen by fewer cameras are drawn in fog
 SURFACE_Z = {"bed": (0.25, 0.9), "toilet": (0.3, 0.6), "chair": (0.3, 0.7), "nightstand": (0.3, 1.0)}
 POINT_KINDS = {"switch", "phone", "outlet", "grab_bar_wall"}
 MEMBER_M = 0.03   # auto objects: a Gaussian belongs to the object of its nearest labelled point, if that is this close
+GROW_M = 0.10     # ... or this close when it is also inside that object's footprint and height band (faint Gaussians 6c never labelled)
+ON_TOP_M = 0.3    # unlabelled things in its footprint up to this far above it go with it (a cup on a removed table must not float)
+STANDS_M = 0.3    # an object labelled from below this stands on the floor: its legs 6c missed go with it down to the floor
 
 
 def surface_height(z, band):
@@ -148,29 +151,51 @@ def config_objects(gm, w):
     if gm["objects"] != "auto":
         return gm["objects"]
     import yaml
-    return [o for o in yaml.safe_load((Path(w) / "objects_proposed.yaml").read_text())["objects"] if o["kind"] != "door"]
+    objs = [o for o in yaml.safe_load((Path(w) / "objects_proposed.yaml").read_text())["objects"] if o["kind"] != "door"]
+    # a low detection inside another one of its kind is a piece of it (a chair's runner 6c split off as its own chair)
+    for o in [o for o in objs if "instance" in o and max(q["z"][1] for q in o["parts"]) < STANDS_M]:
+        c = np.mean([np.mean(q["poly_xy"], 0) for q in o["parts"]], 0)
+        host = next((h for h in objs if h is not o and h["kind"] == o["kind"] and "instance" in h and
+                     any(Path2d(q["poly_xy"]).contains_point(c) for q in h["parts"])), None)
+        if host:
+            host["instances"] = host.get("instances", [host["instance"]]) + [o["instance"]]
+            objs.remove(o)
+    return objs
 
 
 _nearest = {}
 
 
 def nearest_instance(xyz, w):
-    """Stage 6c instance id of each Gaussian's nearest labelled point within MEMBER_M (-1 = none). Per Gaussian, not per
-    box: a chair pushed in under a table stays a chair, and the same split works on any splat of this floor frame."""
+    """Stage 6c instance id of each Gaussian's nearest labelled point within GROW_M (-1 = none), and that distance. Per
+    Gaussian, not per box: a chair pushed in under a table stays a chair, and the same split works on any splat of this floor frame."""
     from scipy.spatial import cKDTree
     key = (str(w), xyz.shape, float(xyz[::997].sum()))
     if key not in _nearest:
         z = np.load(Path(w) / "objects_points.npz")
-        d, j = cKDTree(z["xyz"]).query(xyz, distance_upper_bound=MEMBER_M)
+        d, j = cKDTree(z["xyz"]).query(xyz, distance_upper_bound=GROW_M)
         _nearest.clear()
-        _nearest[key] = np.where(d <= MEMBER_M, z["instance"][np.minimum(j, len(z["instance"]) - 1)], -1)
+        _nearest[key] = np.where(d <= GROW_M, z["instance"][np.minimum(j, len(z["instance"]) - 1)], -1), d
     return _nearest[key]
 
 
 def object_parts(o, xyz, g, w, lo, cell, shape):
     """Gaussians that belong to config object o (its height-limited parts, with a cut margin). tools/lighter_clean.py reuses it."""
+    in_xy = lambda q, cm: (near_poly(xyz[:, :2], np.array(q["poly_xy"], float), cm) if "poly_xy" in q else
+                           (xyz[:, :2] >= np.min(q["box_xy"], 0) - cm).all(1) & (xyz[:, :2] <= np.max(q["box_xy"], 0) + cm).all(1))
+    in_parts = lambda parts, cm: np.any([in_xy(q, cm) & (xyz[:, 2] >= q["z"][0]) & (xyz[:, 2] <= q["z"][1]) for q in parts], 0)
     if "instance" in o and o.get("kind") != "rug":   # stage 6c detection: its labelled points decide, above the floor band
-        return (nearest_instance(xyz, w) == o["instance"]) & (xyz[:, 2] >= g["bump_z"][0])
+        inst, d = nearest_instance(xyz, w)
+        # inside its footprint, from its lowest labelled point (a box on a cabinet keeps off the cabinet) to ON_TOP_M above
+        # its band, it also takes what is nearest to it or to nobody: legs 6c missed and what stood on it
+        z = np.load(Path(w) / "objects_points.npz")
+        ids = o.get("instances", [o["instance"]])
+        z0 = z["xyz"][np.isin(z["instance"], ids), 2].min() - 0.02
+        z0 = g["bump_z"][0] if z0 < STANDS_M else z0
+        zone = in_parts([{**q, "z": [z0, q["z"][1] + ON_TOP_M]} for q in o["parts"]], 0.02)
+        own = np.isin(inst, ids)
+        # its own labelled points go even below the floor band: a chair's runners lie flat on the floor
+        return (own & (d <= MEMBER_M)) | (zone & (own | (inst == -1)) & (xyz[:, 2] >= g["bump_z"][0]))
     # parts: the object is only these height-limited boxes (a table = top slab + legs; chairs pushed in under it stay put)
     parts = o.get("parts") or [{"box_xy": o["box_xy"], "z": [g["bump_z"][0], o.get("z_max", 2.0)]}]
     if o.get("kind") == "rug":   # a rug lies at an angle: its box takes bare floor too, so cut the measured bump patch instead
@@ -178,10 +203,7 @@ def object_parts(o, xyz, g, w, lo, cell, shape):
     # a part is a box_xy or a poly_xy outline (a table turned off the axes: its bounding box would take the chair backs),
     # taken with a margin: an object's sides sit on or just past its outline (a bed's sides 1-3 cm out stayed in the
     # room when it was moved). A rug has none: its edge Gaussians are floor-height, the margin would take floor.
-    cm = o.get("cut_margin_m", 0.0 if o.get("kind") == "rug" else 0.02)
-    in_xy = lambda q: (near_poly(xyz[:, :2], np.array(q["poly_xy"], float), cm) if "poly_xy" in q else
-                       (xyz[:, :2] >= np.min(q["box_xy"], 0) - cm).all(1) & (xyz[:, :2] <= np.max(q["box_xy"], 0) + cm).all(1))
-    return np.any([in_xy(q) & (xyz[:, 2] >= q["z"][0]) & (xyz[:, 2] <= q["z"][1]) for q in parts], 0)
+    return in_parts(parts, o.get("cut_margin_m", 0.0 if o.get("kind") == "rug" else 0.02))
 
 
 def main(cfg):

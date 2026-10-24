@@ -64,6 +64,8 @@
     <button id="report" title="printable report for the occupational therapist">OT report</button>
     <button id="fixcard" title="QR code: the family's checklist on a phone">Fix card (QR)</button>
     <ol id="fixes"></ol>
+    <h2>Removed</h2>
+    <ul id="inventory"><li class="hint">nothing removed</li></ul>
     <h2>Suggested layouts</h2>
     <button id="suggest">Suggest layouts</button>
     <div id="optstatus" class="status"></div>
@@ -103,6 +105,12 @@
     <button id="export">Export for Cosmos</button>
     <label title="one 93-frame chunk (~5 min of B200) around the riskiest hazard, instead of the whole route"><input type="checkbox" id="hero" /> hero chunk only</label>
     <div id="exportstatus" class="status"></div>
+    <section id="physpanel">
+      <h2>Object physics <small>live</small></h2>
+      <ul id="physevents"><li class="hint">push into things in Walk mode: bumps, slides, tips and the mat corner show here</li></ul>
+      <div id="physsampled" class="hint">loading object colliders…</div>
+      <button id="physresample" title="new masses and frictions from the assumed ranges (physics_ranges.json)">Resample unknowns</button>
+    </section>
   </aside>
   <div id="player" hidden>
     <div class="wrap"><video id="video" controls muted playsinline></video><canvas id="overlay"></canvas>
