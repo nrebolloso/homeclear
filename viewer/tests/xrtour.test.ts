@@ -19,7 +19,7 @@ test('tourStand: back along the route, facing the hazard; around it when that sp
   const route: [number, number][] = [[0, 0], [1, 0], [2, 0], [3, 0]];
   const s = spot({ xy: [2, 0] });
   const a = tourStand(s, route, () => true)!;
-  assert.ok(Math.abs(a.x - 0.8) < 1e-9 && Math.abs(a.y) < 1e-9 && Math.abs(a.yaw) < 1e-9, JSON.stringify(a));   // 1.2 m back, looking +x
+  assert.ok(Math.abs(a.x - 1.1) < 1e-9 && Math.abs(a.y) < 1e-9 && Math.abs(a.yaw) < 1e-9, JSON.stringify(a));   // 0.9 m back, looking +x
   const b = tourStand(s, route, (x, y) => y > 0.5)!;   // only the far side of the route is floor
   assert.ok(b.y > 0.5 && Math.abs(Math.atan2(s.xy[1] - b.y, s.xy[0] - b.x) - b.yaw) < 1e-9, JSON.stringify(b));
   assert.equal(tourStand(s, route, () => false), null);
