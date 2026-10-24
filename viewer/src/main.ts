@@ -16,8 +16,9 @@ import { drawTopdown } from './topdown.ts';
 import { spots, vantage, heightTexels, type Spot } from './spotlight.ts';
 import { summarize, drawPushChart, poseAt, pushColor, sampleText } from './physdebug.ts';
 import { cardState, encodeCard, type ActionOut, type ReportPayload } from './share.ts';
-import { createReimagine, undoChange, costText, type Change } from './reimagine.ts';
+import { createReimagine, undoChange, costText, card, type Change } from './reimagine.ts';
 import { moveCost, removeCost, sumCosts } from './movecost.ts';
+import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } from './perf.ts';
 import QRCode from 'qrcode';
 import type { Eval, Init, RouteDef } from './worker.ts';
 import type { WorldModel } from './worldmodel.ts';
@@ -54,8 +55,14 @@ const routes: RouteDef[] = sc.routes ? await json(sc.routes) : [{ name: 'route',
 let selRoute = 0;
 
 // ---------- three + Spark ----------
-const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+// performance mode (perf.ts): on in a standalone headset, off over Link (the PC renders the full scene); ?perf=1|0 decides,
+// else what the person chose last time. ?stddev= and ?maxpx= (the Link guide's names) always set the splat limits.
+const wantXR = new URLSearchParams(location.search).has('xr');
+const tier = tierAtLoad(location.search, wantXR);
+let perfOn = perfAtLoad(location.search, tier, (() => { try { return localStorage.getItem('homeclear.perf'); } catch { return null; } })());
+// the drawing buffer is kept on the monitor for screenshots (fix card, e2e); a headset frame doesn't need the extra copy
+const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: !wantXR });
+renderer.setPixelRatio(Math.min(devicePixelRatio, perfOn ? PERF.pixel_ratio : FULL.pixel_ratio));
 renderer.setSize(innerWidth, innerHeight);
 $('view').appendChild(renderer.domElement);
 const css = new CSS2DRenderer();
@@ -65,12 +72,13 @@ document.body.appendChild(css.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1d2126);
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 60);
-scene.add(new SparkRenderer({ renderer }));
+const sparkR = new SparkRenderer({ renderer });
+scene.add(sparkR);
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 2.2);
 scene.add(hemi);
 const vision = createVision(renderer, scene, camera);
 // ?xr=1: headset mode (xr.ts). Off by default: nothing below changes without it
-const xr = new URLSearchParams(location.search).has('xr') ? setupXR(renderer, scene, camera) : null;
+const xr = wantXR ? setupXR(renderer, scene, camera, xrCfg(location.search, tier)) : null;
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight); css.setSize(innerWidth, innerHeight); vision.resize();
@@ -202,7 +210,7 @@ scene.add(routeLine, ghostDots, hazardGroup, tapeGroup);
     const m = new THREE.Mesh(new THREE.PlaneGeometry(nx * g.cell_m, ny * g.cell_m),
       new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.3, depthWrite: false }));
     m.position.set(g.origin_xy[0] + (nx * g.cell_m) / 2, g.origin_xy[1] + (ny * g.cell_m) / 2, z);
-    m.renderOrder = 1;
+    m.renderOrder = 1; m.name = 'fog';
     scene.add(m);
   }
 }
@@ -282,13 +290,19 @@ function drawPlan(r: Eval) {
   ghostDots.geometry = new THREE.BufferGeometry();
   ghostDots.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   ghostDots.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  for (const c of [...hazardGroup.children]) { hazardGroup.remove(c); c.traverse(x => { if (x instanceof CSS2DObject) x.element.remove(); }); }
-  for (const h of r.hazards) {
+  for (const c of [...hazardGroup.children]) {
+    hazardGroup.remove(c);
+    c.traverse(x => {
+      if (x instanceof CSS2DObject) x.element.remove();
+      else if (x instanceof THREE.Mesh || x instanceof THREE.Sprite) { (x as THREE.Mesh).geometry?.dispose(); (x.material as THREE.Material).dispose(); }   // rebuilt on every re-plan; card textures are cached
+    });
+  }
+  for (const { rep: h, label: text } of clusterHazards(r.hazards)) {   // a row of bumps is one ring and one label (perf.ts)
     const bump = h.type === 'floor_bump';
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.22, 32), new THREE.MeshBasicMaterial({ color: bump ? 0xff8a1f : 0xffe14d, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide }));
     ring.position.set(h.position[0], h.position[1], 0.03);
     ring.userData.s = routeS[h.a] ?? 0;
-    const t = label(bump ? `${h.name} ${h.estimated ? '~' : ''}${(h.height_m! * 100).toFixed(1)} cm${h.estimated ? ' (est.)' : ''}` : `${(h.min_side_clearance_m! * 100).toFixed(0)} cm/side`);
+    const t = wantXR ? card([text], bump ? '#ffcf99' : '#fff0a8', 'rgba(14,20,28,0.8)', 0.05) : label(text);   // DOM labels don't render in WebXR
     t.position.set(0, 0, 0.35);
     ring.add(t);
     hazardGroup.add(ring);
@@ -434,9 +448,11 @@ setMode('translate');
 scene.add(tc.getHelper());
 let selected = -1, lastValid: Pose | null = null;
 const poseOf = (k: number): Pose => ({ x: items[k].group.position.x, y: items[k].group.position.y, yaw: items[k].group.rotation.z });
+let onSelect: ((k: number) => void) | null = null;   // the reimagined room shows the picked object's cost tag
 function select(k: number) {
   if (selected >= 0) items[selected].outline.visible = false;
   selected = k;
+  onSelect?.(k);
   if (k < 0) { tc.detach(); $<HTMLButtonElement>('remove').disabled = true; return; }
   items[k].outline.visible = true;
   $<HTMLButtonElement>('remove').disabled = false;
@@ -650,7 +666,7 @@ $('suggest').onclick = () => suggest();
 // ---------- reimagined room (reimagine.ts): the room morphing into the layout on screen, with what each change takes ----------
 const reim = createReimagine({ scene, items, objs, original, interventions, sync: syncObjects,
   centre: [g.origin_xy[0] + (nx * g.cell_m) / 2, g.origin_xy[1] + (ny * g.cell_m) / 2],
-  fillsOn: () => $<HTMLInputElement>('imagfill').checked, onT: t => { $<HTMLInputElement>('reimt').value = String(Math.round(t * 100)); } });
+  camera, fillsOn: () => $<HTMLInputElement>('imagfill').checked, onT: t => { $<HTMLInputElement>('reimt').value = String(Math.round(t * 100)); } });
 let baseEvals: (Eval | undefined)[] = [];   // the room as filmed, per route: what the reimagined one is compared with
 /** after every re-plan: changes since the room as filmed, overlays, receipt */
 function refreshReimagine() {
@@ -697,6 +713,10 @@ $('reimagine').onclick = () => reimagineRoom();
 $('reimplay').onclick = () => reim.play();
 $<HTMLInputElement>('reimt').oninput = e => reim.setT(+(e.target as HTMLInputElement).value / 100);
 $('reimshow').onchange = () => reim.setVisible($<HTMLInputElement>('reimshow').checked);
+const reimParts = () => reim.setParts({ ghosts: $<HTMLInputElement>('reimghosts').checked, arrows: $<HTMLInputElement>('reimarrows').checked,
+  tags: $<HTMLSelectElement>('reimtags').value as 'all' | 'selected' | 'off', receipt: $<HTMLInputElement>('reimreceipt').checked });
+for (const id of ['reimghosts', 'reimarrows', 'reimtags', 'reimreceipt']) $(id).onchange = reimParts;
+onSelect = k => reim.selectChange(k);
 // for e2e and the VR team: bind a controller to setT / play (AGENTS.md)
 game.reimagine = { run: reimagineRoom, setT: reim.setT, t: reim.t, play: reim.play, playing: reim.playing, refresh: refreshReimagine,
   changes: reim.changes, resolved: reim.resolved, undo: (n: number) => undoReimagined(reim.changes()[n]),
@@ -883,6 +903,38 @@ async function setFillBackend(b: string) {
 }
 $('ghosts').onchange = () => { ghostDots.visible = $<HTMLInputElement>('ghosts').checked; };
 
+// ---------- performance mode (perf.ts) ----------
+// One switch thins what is drawn: no ghost walkers, heatmap, imagined ceiling, bump heights or fog, fewer splat pixels, a
+// lower pixel ratio, no per-change cost cards, hazard labels only just ahead. It drives the same checkboxes the person
+// has (nothing new to drift), and leaving it puts them back as they were. Numbers and checks never change.
+const PERF_BOXES = ['ghosts', 'heat', 'imagceil', 'heights'];
+let perfSaved: Record<string, boolean> | null = null;
+function setBox(id: string, on: boolean) {
+  const el = $<HTMLInputElement>(id);
+  if (el.checked === on) return;
+  el.checked = on;
+  el.onchange?.(new Event('change'));
+}
+function applyPerf(on: boolean, remember = true) {
+  perfOn = on;
+  if (remember) try { localStorage.setItem('homeclear.perf', on ? '1' : '0'); } catch { /* private window: the choice is just not remembered */ }   // only a person's choice, not the headset's default
+  $<HTMLInputElement>('perf').checked = on;
+  if (on) { perfSaved ??= Object.fromEntries(PERF_BOXES.map(id => [id, $<HTMLInputElement>(id).checked])); PERF_BOXES.forEach(id => setBox(id, false)); }
+  else if (perfSaved) { for (const id of PERF_BOXES) setBox(id, perfSaved[id]); perfSaved = null; }
+  renderer.setPixelRatio(Math.min(devicePixelRatio, (on ? PERF : FULL).pixel_ratio));
+  renderer.setSize(innerWidth, innerHeight);
+  const lim = splatCfg(location.search, on);
+  sparkR.maxStdDev = lim.max_std_dev; sparkR.maxPixelRadius = lim.max_pixel_radius;
+  const fog = scene.getObjectByName('fog');
+  if (fog) fog.visible = !on;
+  $<HTMLSelectElement>('reimtags').value = on ? 'off' : 'selected';
+  reim.setParts({ tags: on ? 'off' : 'selected', ringLabels: !on });
+  for (const ring of hazardGroup.children) if (ring.children[0]) ring.children[0].visible = true;
+}
+$('perf').onchange = () => applyPerf($<HTMLInputElement>('perf').checked);
+applyPerf(perfOn, false);
+game.perf = { set: (on: boolean) => applyPerf(on), on: () => perfOn, tier };   // for the VR team: bind a controller button to it
+
 // ---------- input ----------
 const keys = new Set<string>();
 addEventListener('keydown', e => {
@@ -1034,6 +1086,7 @@ function liveChecks(t: number) {
   for (const ring of hazardGroup.children as THREE.Mesh[]) {
     const ahead = ring.userData.s - sNow, mat = ring.material as THREE.MeshBasicMaterial;
     const glow = ahead > -0.3 && ahead < 2.5;
+    if (perfOn && ring.children[0]) ring.children[0].visible = glow;   // performance mode: a label only for the hazards just ahead
     mat.opacity = glow ? 0.55 + 0.45 * Math.sin(t * 8) : 0.35;
     ring.scale.setScalar(glow ? 1.25 : 1);
   }
@@ -1125,7 +1178,7 @@ function step(dt: number, t: number) {
   liveChecks(t);
   if (xr?.presenting()) renderer.render(scene, camera);   // the post pass can't run per eye: plain render in the headset
   else vision.render();
-  css.render(scene, camera);
+  if (!xr?.presenting()) css.render(scene, camera);   // DOM labels don't show in the headset: skip their layout work
 }
 
 // ---------- start ----------

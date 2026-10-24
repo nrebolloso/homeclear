@@ -4,10 +4,16 @@
 // On a Quest: `adb reverse tcp:5179 tcp:5179`, then open http://localhost:5179/?xr=1 (localhost counts as secure).
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
+import type { XrCfg } from './perf.ts';
 
-export function setupXR(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera) {
+/** `cfg` (perf.ts xrCfg): a standalone Quest renders a little under native resolution, blurs the edges (fixed foveation) and
+ *  asks for 72 Hz; over Link the PC can afford full resolution, so the default is no foveation and the Link app sets the rate. */
+export function setupXR(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, cfg: XrCfg = { scale: 1, foveation: 0, hz: 0 }) {
   renderer.xr.enabled = true;
   renderer.xr.setReferenceSpaceType('local-floor');
+  const { hz } = cfg;
+  renderer.xr.setFramebufferScaleFactor(cfg.scale);
+  renderer.xr.setFoveation(cfg.foveation);
   const rig = new THREE.Group();
   scene.add(rig);
   const button = VRButton.createButton(renderer);
@@ -15,7 +21,11 @@ export function setupXR(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camer
   document.body.appendChild(button);
   const upZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);   // XR y-up -> scene z-up
   const yawQ = new THREE.Quaternion(), zAxis = new THREE.Vector3(0, 0, 1);
-  renderer.xr.addEventListener('sessionstart', () => { rig.add(camera); camera.position.set(0, 0, 0); camera.quaternion.identity(); });
+  renderer.xr.addEventListener('sessionstart', () => {
+    rig.add(camera); camera.position.set(0, 0, 0); camera.quaternion.identity();
+    const s = renderer.xr.getSession() as any;
+    if (hz > 0 && s?.supportedFrameRates?.includes(hz)) s.updateTargetFrameRate(hz).catch(() => {});   // not every runtime offers it
+  });
   renderer.xr.addEventListener('sessionend', () => { scene.add(camera); });
   let snapCooldown = 0;
   return {
