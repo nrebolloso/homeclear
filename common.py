@@ -166,4 +166,13 @@ def fit_floor(pts, centers, cams, fc):
     n, d, inl = fit_plane_ransac(pts, camera_up(cams), iters=fc["ransac_iters"], thresh=fc["inlier_m"])
     if np.median(centers @ n + d) < 0:  # floor normal must point toward the cameras
         n, d = -n, -d
+    # a handheld camera is 1-2 m above the floor: a plane under 1 m below it is a bed or table top (bedroom2: the bed, 0.74 m
+    # above the markers on the floor), so take a well-supported parallel plane further down that puts the cameras 1-2 m up
+    low = pts[pts @ n + d < -0.15]
+    if np.median(centers @ n + d) < 1.0 and len(low) > 1000:
+        n2, d2, _ = fit_plane_ransac(low, n, iters=fc["ransac_iters"], thresh=fc["inlier_m"], max_angle_deg=10)
+        n2, d2 = (n2, d2) if np.median(centers @ n2 + d2) > 0 else (-n2, -d2)
+        inl2 = np.abs(pts @ n2 + d2) < fc["inlier_m"]
+        if 1.0 <= np.median(centers @ n2 + d2) <= 2.0 and inl2.sum() > 0.2 * inl.sum():
+            n, d, inl = n2, d2, inl2
     return n, d, inl, pts
