@@ -5,9 +5,11 @@ run_name: newell_stair
 video: data/newell_stair.mp4
 work_dir: out/newell_stair
 frames:
-  target: 990
-  min: 742
-  max_side: 1600
+  # retry: 990 frames at 1600 px split into 19 models (scattered gaps all through the take: plain walls, blur), so denser
+  # frames (smaller steps between them) at higher resolution (more features on plain walls); still sequential
+  target: 1500
+  min: 1125
+  max_side: 2400
 colmap:
   matcher: sequential
   min_registered: 0.8
