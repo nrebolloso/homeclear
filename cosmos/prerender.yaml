@@ -29,3 +29,5 @@ scenes:
   bedroom:   # the real capture: fill in once its objects and fixes are in configs/bedroom.yaml
     - {name: night_as_is, condition: night, night: true}
     - {name: night_as_is_hero, condition: night, night: true, hero: true}
+  kitchen4_lighter:   # the demo kitchen: worst case = the as-is route (mat, cord, chair) at night, hero chunk
+    - {name: night_as_is_hero, condition: night, night: true, hero: true}
