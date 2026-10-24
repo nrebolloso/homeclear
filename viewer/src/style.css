@@ -42,3 +42,10 @@ select { max-width: 100%; background: #1b1f24; color: var(--fg); border: 1px sol
 #inventory li { margin: 0; } #inventory .hint { grid-column: 1 / -1; }
 #inventory button { width: 100%; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; overflow-wrap: anywhere; }
 #inventory svg { width: 32px; height: 32px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+/* demo mode (?demo=1 or H): the walker game, findings and fixes only */
+.demo .dbg, .demo .panel p.hint, .demo #personanote, .demo #verifyinfo, .demo #hud, .demo #status, .demo #optstatus,
+.demo label:has(#imagfill), .demo #fillsel, .demo label:has(#imagceil), .demo label:has(#shell), .demo label:has(#verify), .demo label:has(#perf),
+.demo h2:has(+ #markstairs), .demo #markstairs, .demo #viewstairs, .demo #clearstairs, .demo #copystairs, .demo #editstairs,
+.demo label:has(#topdevice), .demo label:has(#strongside), .demo .row:has(#railleft), .demo #stairstatus,
+.demo h2:has(+ #markdoor), .demo #markdoor, .demo #cleardoors, .demo #copydoors, .demo #editdoors, .demo #doorstatus,
+.demo label:has(#prompt), .demo #export, .demo label:has(#hero), .demo #exportstatus, .demo #physpanel { display: none !important; }

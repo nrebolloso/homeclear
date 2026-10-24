@@ -359,11 +359,11 @@ function renderPanels() {
   const r = current!;
   const d = r.per_month - (baselinePerMonth ?? r.per_month);
   const perRoute = r.routes.map((q, k) => `<li class="${k === r.sel ? 'sel' : ''}">${q.name}${q.night ? ' (night)' : ''}, ${q.trips_per_night}/night: ` +
-    (q.error ? '<span class="delta-bad">no route</span>' : `<span class="measured">${fmt(q.per_month)}</span> (${fmt(q.lo)}–${fmt(q.hi)})`) + '</li>').join('');
+    (q.error ? '<span class="delta-bad">no route</span>' : `<span class="measured">${fmt(q.per_month)}</span><span class="dbg"> (${fmt(q.lo)}–${fmt(q.hi)})</span>`) + '</li>').join('');
   $('risk').innerHTML = r.error ? `<span class="delta-bad">no route for this walker</span><ul>${perRoute}</ul>` :
-    `<div class="big measured">${fmt(r.per_month)}</div><div class="range">likely ${fmt(r.per_month_lo)}–${fmt(r.per_month_hi)}</div>` +
-    `expected toe contacts / month, all routes (${risk.rollouts} simulated trips per route; steps: ${persona.step_model === 'world' ? 'world model (heels + walker)' : persona.step_model === 'learned' ? 'learned model' : 'hand rule'}; ` +
-    `range = measured height error ±${(100 * sc.hazard_rules.margin_m.height).toFixed(1)} cm + simulation noise)` +
+    `<div class="big measured">${fmt(r.per_month)}</div><div class="range dbg">likely ${fmt(r.per_month_lo)}–${fmt(r.per_month_hi)}</div>` +
+    `expected toe contacts / month, all routes (${risk.rollouts} simulated trips per route; steps: ${persona.step_model === 'world' ? 'world model (heels + walker)' : persona.step_model === 'learned' ? 'learned model' : 'hand rule'})` +
+    `<span class="dbg"> range = measured height error ±${(100 * sc.hazard_rules.margin_m.height).toFixed(1)} cm + simulation noise</span>` +
     (r.hand ? `<div class="range">hand-rule baseline on the same route: ${fmt(r.hand.per_month)}</div>` : '') +
     `<ul class="routes">${perRoute}</ul>` +
     `original layout: ${fmt(baselinePerMonth!)} → now ${fmt(r.per_month)} <span class="${d <= 0 ? 'delta-good' : 'delta-bad'}">(${d <= 0 ? '' : '+'}${fmt(d)})</span>`;
@@ -2065,7 +2065,14 @@ const frontendAdapter: FrontendAdapter = {
   path(on) { routeLine.visible = on; },
   highlights(on) { hazardGroup.visible = on; }, improvements(on) { reim.setParts({ rings: on, ringLabels: on }); },
 };
+// classic two-panel UI by default (?planning keeps the drawer): the shell still mounts for VR, then every control it reparented goes home
+const homes = [...document.querySelectorAll('#left *, #right *')].map(n => [n, n.parentNode!, n.nextSibling] as const).reverse();
 const frontend = mountFrontend(frontendAdapter);
+// demo mode (?demo=1, H toggles; shot.ts records with it): debug rows, ranges and the fps line hidden (style.css .demo)
+document.body.classList.toggle('demo', PARAMS.get('demo') === '1');
+addEventListener('keydown', e => { if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) document.body.classList.toggle('demo'); });
+game.setDemo = (on: boolean) => document.body.classList.toggle('demo', on);
+if (!PARAMS.has('planning')) { for (const [n, p, s] of homes) p.insertBefore(n, s); document.body.classList.remove('frontend'); document.getElementById('frontend')!.hidden = true; document.getElementById('left')!.hidden = document.getElementById('right')!.hidden = false; }
 frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
 game.frontend = frontend;
 game.frontendXR = frontendVR;
