@@ -21,7 +21,7 @@ splat:
   min_psnr: 20.0
 scale:
   manual_factor: null
-  assume_camera_height_m: 1.4   # ASSUMED fallback only; the floor markers below set the scale
+  assume_camera_height_m: null  # unset: stage 4 checks this before markers, so a value here would override them
   # TODO after stage 2: known_object {name: stair_sign, meters: 0.5588, points: <sign top/bottom corner picks, >= 2 frames>}
   marker_dict: DICT_4X4_50
   marker_id: [0, 1, 2]   # all three floor prints seen in a 2 fps scan of the video (id 0: 94, id 1: 37, id 2: 39 frames); scale = median, spread reported
