@@ -22,7 +22,7 @@
  {
   "check": "free walk stays on covered floor (walls, unseen floor)",
   "pass": true,
-  "detail": "toward wall y=4.0: stopped at y=3.22 (front legs need 0.75 m); toward unseen x>6.2: stopped at x=5.75 (coverage 4 views)"
+  "detail": "toward wall y=4.0: stopped at y=3.23 (front legs need 0.75 m); toward unseen x>6.2: stopped at x=5.75 (coverage 4 views)"
  },
  {
   "check": "fill appears only after the object moves",
@@ -32,7 +32,7 @@
  {
   "check": "moving the bed updates route and numbers within ~1 s",
   "pass": true,
-  "detail": "replan 77 ms; route 3.91 -> 4.14 m; contacts/month 2.93 -> 2.53"
+  "detail": "replan 37 ms; route 3.91 -> 4.12 m; contacts/month 2.93 -> 2.54"
  },
  {
   "check": "placement into a wall is blocked",
@@ -57,7 +57,7 @@
  {
   "check": "export for Cosmos",
   "pass": true,
-  "detail": "game_synth_20261024T010820: 186 frames, 2 chunks, 186 walker depth PNGs, walker covers 3.9% of frame 0"
+  "detail": "game_synth_20261024T044322: 186 frames, 2 chunks, 186 walker depth PNGs, walker covers 3.9% of frame 0"
  },
  {
   "check": "clip overlay markers align at known frames",
@@ -82,7 +82,7 @@
  {
   "check": "vision pass changes the frame (cataract blurs: smaller JPEG)",
   "pass": true,
-  "detail": "40379 -> 21155 bytes"
+  "detail": "43559 -> 20839 bytes"
  },
  {
   "check": "heatmap: rollouts return per-cell counts when on",
@@ -92,12 +92,12 @@
  {
   "check": "suggest layouts, apply the full option, walkable",
   "pass": true,
-  "detail": "Quick fixes 0.11, Moderate 0.00, Full re-layout 0.08 in 12.8 s; now 0.08 (bed:1.00,3.05,0|door:4.50,1.95,0|nightlight:3.90,0.95,90|rai)"
+  "detail": "Quick fixes 0.11, Moderate 0.00, Full re-layout 0.08 in 7.5 s; now 0.08 (bed:1.00,3.05,0|door:4.50,1.95,0|nightlight:3.90,0.95,90|rai)"
  },
  {
   "check": "OT report renders the live layout",
   "pass": true,
-  "detail": "3795 chars"
+  "detail": "3799 chars"
  },
  {
   "check": "fix card opens from the QR link with numbered fixes",
@@ -112,11 +112,26 @@
  {
   "check": "physics pass (Rapier): the walker reaches every goal, snags listed",
   "pass": true,
-  "detail": "{\"done\":true,\"snags\":5,\"li\":6,\"ms\":4682}"
+  "detail": "{\"done\":true,\"snags\":0,\"li\":3,\"ms\":945}"
  },
  {
   "check": "?xr=1 loads (VR button, render loop on the renderer)",
   "pass": true,
   "detail": "errors: none"
+ },
+ {
+  "check": "reimagine: morphs into the safest layout, every change costed in the receipt",
+  "pass": true,
+  "detail": "{\"n\":4,\"m\":{\"from\":{\"x\":4.48,\"y\":1.87,\"yaw\":0},\"to\":{\"x\":4.48,\"y\":1.93,\"yaw\":0},\"name\":\"door\"},\"at0\":{\"x\":4.48,\"y\":1.87,\"yaw\":0,\"visible\":true},\"at1\":{\"x\":4.48,\"y\":1.93,\"yaw\":0,\"visible\":true},\"costed\":true,\"li\":4,\"total\":\"4 changes · $68 · 50 min (placeholder costs)\"}"
+ },
+ {
+  "check": "reimagine: undo takes one change back",
+  "pass": true,
+  "detail": "4 -> 3; page errors: none"
+ },
+ {
+  "check": "reimagine: no page errors",
+  "pass": true,
+  "detail": "none"
  }
 ]

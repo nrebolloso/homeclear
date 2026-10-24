@@ -9,7 +9,7 @@
 # CPU stages 1-2: frames + COLMAP poses (pycolmap is a CPU build).
 # Usage: sbatch slurm/sfm.sbatch <config.yaml>
 source slurm/env.sh
-CFG=${1:-config.yaml}
+CFG=${1:-configs/home.yaml}
 for s in 01_frames 02_poses; do
   python stages/$s.py "$CFG" || { echo "stopping after $s FAILED"; exit 1; }
 done

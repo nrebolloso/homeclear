@@ -12,12 +12,12 @@ from common import FFMPEG
 PROMPT = ("The same kitchen at 3 AM, lights off, lit only by a small warm nightlight near the floor; "
           "realistic home interior; camera moving slowly forward.")
 ap = argparse.ArgumentParser()
-ap.add_argument("--video", default=yaml.safe_load((ROOT / "config.yaml").read_text())["video"])
+ap.add_argument("--video", default=yaml.safe_load((ROOT / "configs" / "home.yaml").read_text())["video"])
 ap.add_argument("--start", type=float, default=0.0, help="seconds into the video")
 ap.add_argument("--depth"); ap.add_argument("--seg")
 a = ap.parse_args()
 video = (ROOT / a.video).resolve()
-assert video.exists(), f"{video} not found (set --video or config.yaml video)"
+assert video.exists(), f"{video} not found (set --video or configs/home.yaml video)"
 
 out = HERE / "inputs"; out.mkdir(exist_ok=True)
 clip = out / "hallway_93.mp4"

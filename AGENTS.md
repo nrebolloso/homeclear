@@ -10,7 +10,7 @@ Fill in the names.
 
 | Workstream | Owner | Owns (writes) | Reads only |
 |---|---|---|---|
-| Object detection on the splat | TBD | `stages/06c_detect.py`, `tools/merge_labels.py`, `slurm/detect.sbatch`, `objects_proposed.yaml` | `config.*.yaml` object schema |
+| Object detection on the splat | TBD | `stages/06c_detect.py`, `tools/merge_labels.py`, `slurm/detect.sbatch`, `objects_proposed.yaml` | `configs/*.yaml` object schema |
 | Move effort + insurance / funding (see *Move-Effort Model and Insurance Feature.pdf*) | TM2 (see Teammates) | `viewer/src/effort.ts` (`moveEffort`, funding classification: Part B DMEPOS lookup, then MA SSBCI / Medicaid HCBS / VA HISA / self-pay) | `movecost.ts`, `reimagine.ts` |
 | VR (WebXR) | TBD (VR team) | `viewer/src/xr.ts`, headset locomotion, controller input, XR performance | `game.reimagine` API |
 | Reimagined room | Juan | `viewer/src/reimagine.ts`, the `movecost.ts` interface (types and signatures), the "Reimagined room" panel | `optimize.ts`, `movecost.ts` numbers, `xr.ts` |
@@ -59,7 +59,7 @@ Teammates work on feature branches off `main` with their own short-lived PRs. Al
 | Labelling tool | TM4 | `tools/label/index.html`, `objects_labeled.yaml`, `routes_picked.yaml` | `tm4-label-tool` |
 
 **Files no teammate edits:** `physics.ts`, `worker.ts`, `main.ts`, `index.html`, `e2e/run.ts`,
-`cosmos/*`, `slurm/*`, `cluster*.yaml`, `README.md`, `BLOCKERS.md`, `MORNING_REPORT.md`, `config.bedroom.yaml`.
+`cosmos/*`, `slurm/*`, `cluster*.yaml`, `README.md`, `BLOCKERS.md`, `MORNING_REPORT.md`, `configs/bedroom.yaml`.
 **Shared items** (handoff nodes): `DEMO.md`, `LIMITATIONS.md`, `SUBMISSION.md`, `SMOKE_CHECKLIST.md` (TM2 owns).
 
 ## Resolving a conflict
@@ -74,7 +74,7 @@ Teammates work on feature branches off `main` with their own short-lived PRs. Al
 5. **`stages/12_export_scene.py`:** add/add conflict (Juan's physics exports → main's world model). Keep world-model version
    and re-run stage 12 to regenerate `scene.json`.
 6. **`tests/run_py.sh`:** take Juan's longer test list (includes hazard/route/physics tests).
-7. **`config.kitchen4.yaml`:** take main's version (kitchen4 table, no physics changes).
+7. **`configs/kitchen4.yaml`:** take main's version (kitchen4 table, no physics changes).
 8. **`viewer/package-lock.json`:** take `main`'s version, then `npm install` to re-add your dependency.
 9. Before pushing: `cd viewer && npm test && npm run build`, then `npm run dev` and `node e2e/run.ts`. All must pass.
 10. Generated files (`out/`, `public/scene/`): take either side, then re-run the stage that writes them.

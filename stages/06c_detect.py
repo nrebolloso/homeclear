@@ -48,7 +48,7 @@ def zbuffer_visible(xyz, w2c, K, W, H, step=4, slack=0.05):
     return vis, u, v
 
 
-def vote(xyz, frames, labels, with_hits=False):
+def vote(xyz, frames, labels, with_hits=False, zstep=4):
     """frames: [{w2c, K, width, height, masks: [(label_index, bool HxW)]}]. Returns per-point label (-1 = none), and with
     with_hits the per-frame (point index, mask index) pairs. Where masks overlap a pixel goes to the smallest: a chair
     box's mask that spills over the table must not out-vote the table's own mask."""
@@ -56,7 +56,7 @@ def vote(xyz, frames, labels, with_hits=False):
     seen, votes, hits = np.zeros(len(xyz), int), np.zeros((len(xyz), L), int), []
     for f in frames:
         w2c, K = np.asarray(f["w2c"], float), np.asarray(f["K"], float)
-        vis, u, v = zbuffer_visible(xyz, w2c, K, f["width"], f["height"])
+        vis, u, v = zbuffer_visible(xyz, w2c, K, f["width"], f["height"], step=zstep)
         seen += vis
         owner = np.full((f["height"], f["width"]), -1)
         for k in np.argsort([-m.sum() for _, m in f["masks"]]):
@@ -70,6 +70,41 @@ def vote(xyz, frames, labels, with_hits=False):
     share = votes[np.arange(len(xyz)), best] / np.maximum(seen, 1)
     lab = np.where((seen >= 3) & (share >= 0.5), best, -1)
     return (lab, hits) if with_hits else lab
+
+
+def lift(v, solid, frames, labels, min_weight=0.1):
+    """vote() by rendering instead of point projection: each solid Gaussian votes with the alpha-blending weight it really puts
+    inside each mask (d/dX sum(regions * render(X)) = each Gaussian's weight in each region), so the splat's own occlusion and
+    a leg's whole footprint decide, not its centre pixel against a point z-buffer. Same returns as vote(..., with_hits=True) (GPU)."""
+    import torch
+    from gsplat import rasterization
+    t = lambda x: torch.tensor(np.ascontiguousarray(x), dtype=torch.float32, device="cuda")
+    G = dict(means=t(ply_xyz(v)), quats=t(np.stack([v[f"rot_{i}"] for i in range(4)], 1)),
+             scales=torch.exp(t(np.stack([v[f"scale_{i}"] for i in range(3)], 1))), opacities=torch.sigmoid(t(v["opacity"])))
+    sid = torch.from_numpy(np.flatnonzero(solid)).cuda()
+    n, L = len(sid), len(labels)
+    seen, votes, hits = np.zeros(n, int), np.zeros((n, L), int), []
+    for f in frames:
+        owner = np.full((f["height"], f["width"]), -1)
+        for k in np.argsort([-m.sum() for _, m in f["masks"]]):   # overlaps go to the smallest mask, as in vote()
+            owner[f["masks"][k][1]] = k
+        D = len(f["masks"]) + 1   # region 0 = no mask
+        C = next(c for c in (1, 2, 3, 4, 5, 6, 8, 9, 16, 17, 21, 23, 24, 32, 33, 64, 65, 128) if c >= D)   # gsplat's compiled channel counts
+        X = torch.zeros(len(v), C, device="cuda", requires_grad=True)
+        img, _, _ = rasterization(G["means"], G["quats"], G["scales"], G["opacities"], X, t(f["w2c"])[None], t(f["K"])[None],
+                                  f["width"], f["height"], packed=False)
+        (img[0] * torch.nn.functional.one_hot(torch.from_numpy(owner + 1).cuda(), C)).sum().backward()
+        m = X.grad[sid, :D].cpu().numpy()
+        vis = m.sum(1) > min_weight
+        dom = m.argmax(1)
+        seen += vis
+        idx = np.flatnonzero(vis & (dom > 0) & (m.max(1) >= 0.5 * m.sum(1)))
+        o = dom[idx] - 1
+        np.add.at(votes, (idx, np.array([li for li, _ in f["masks"]], int)[o] if len(o) else idx[:0]), 1)
+        hits.append((idx, o))
+    best = votes.argmax(1)
+    share = votes[np.arange(n), best] / np.maximum(seen, 1)
+    return np.where((seen >= 3) & (share >= 0.5), best, -1), hits
 
 
 def pieces3d(p, vox):
@@ -224,32 +259,66 @@ def label_of(text, labels):
     return best if all(h in best for h in hits) else None
 
 
-def detect(images, labels, boxes_threshold=0.3):
-    """Grounding DINO + SAM 2 on PIL images -> per image [(label_index, mask)] (GPU)."""
+def boxes_finder(labels, boxes_threshold=0.3):
+    """Grounding DINO: PIL image -> (boxes, label indices) of the vocabulary words it finds (GPU)."""
     import torch
-    from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection, Sam2Processor, Sam2Model
+    from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
     did, drev = MODELS["detector"]
-    sid, srev = MODELS["segmenter"]
     dp, dm = AutoProcessor.from_pretrained(did, revision=drev), AutoModelForZeroShotObjectDetection.from_pretrained(did, revision=drev).cuda().eval()
-    sp, sm = Sam2Processor.from_pretrained(sid, revision=srev), Sam2Model.from_pretrained(sid, revision=srev).cuda().eval()
     text = ". ".join(labels) + "."
-    out = []
-    for img in images:
+
+    def find(img):
         with torch.no_grad():
             inp = dp(images=img, text=text, return_tensors="pt").to("cuda")
             det = dp.post_process_grounded_object_detection(dm(**inp), inp.input_ids, threshold=boxes_threshold, text_threshold=0.25,
                                                             target_sizes=[img.size[::-1]])[0]
+        keep = [(b, label_of(str(lab), labels)) for b, lab in zip(det["boxes"].tolist(), det["text_labels"])]
+        keep = [(b, labels.index(n)) for b, n in keep if n]
+        return [b for b, _ in keep], [li for _, li in keep]
+    return find
+
+
+def detect(images, labels, boxes_threshold=0.3):
+    """Grounding DINO + SAM 2 on PIL images -> per image [(label_index, mask)] (GPU)."""
+    import torch
+    from transformers import Sam2Processor, Sam2Model
+    find = boxes_finder(labels, boxes_threshold)
+    sid, srev = MODELS["segmenter"]
+    sp, sm = Sam2Processor.from_pretrained(sid, revision=srev), Sam2Model.from_pretrained(sid, revision=srev).cuda().eval()
+    out = []
+    for img in images:
+        boxes, lis = find(img)
         masks = []
-        if len(det["boxes"]):
+        if boxes:
             with torch.no_grad():
-                si = sp(images=img, input_boxes=[det["boxes"].tolist()], return_tensors="pt").to("cuda")
+                si = sp(images=img, input_boxes=[boxes], return_tensors="pt").to("cuda")
                 mo = sm(**si, multimask_output=False)
                 mk = sp.post_process_masks(mo.pred_masks.cpu(), si["original_sizes"])[0][:, 0].numpy() > 0.5
-            for lab, m in zip(det["text_labels"], mk):
-                name = label_of(str(lab), labels)
-                if name:
-                    masks.append((labels.index(name), m))
+            masks = list(zip(lis, mk))
         out.append(masks)
+    return out
+
+
+def detect_video(clips, labels, boxes_threshold=0.3):
+    """Grounding DINO on each clip's first image, SAM 2 tracks those boxes through the clip's frames: masks that agree
+    from frame to frame, so a thin leg one frame misses still wins its votes. -> per image (clips flattened) [(label_index, mask)]."""
+    import torch
+    from transformers import Sam2VideoModel, Sam2VideoProcessor
+    find = boxes_finder(labels, boxes_threshold)
+    sid, srev = MODELS["segmenter"]
+    vp, vm = Sam2VideoProcessor.from_pretrained(sid, revision=srev), Sam2VideoModel.from_pretrained(sid, revision=srev).cuda().eval()
+    out = []
+    for clip in clips:
+        boxes, lis = find(clip[0])
+        res = [[] for _ in clip]
+        if boxes:
+            ses = vp.init_video_session(video=clip, inference_device="cuda")
+            vp.add_inputs_to_inference_session(inference_session=ses, frame_idx=0, obj_ids=list(range(1, len(boxes) + 1)), input_boxes=[boxes])
+            with torch.no_grad():
+                for o in vm.propagate_in_video_iterator(ses, start_frame_idx=0):
+                    mk = vp.post_process_masks([o.pred_masks], original_sizes=[[ses.video_height, ses.video_width]])[0]
+                    res[o.frame_idx] = list(zip(lis, np.asarray(mk.cpu()).reshape(len(boxes), ses.video_height, ses.video_width).astype(bool)))
+        out += res
     return out
 
 
@@ -258,6 +327,10 @@ def main():
     ap.add_argument("config")
     ap.add_argument("--frames", type=int, default=60)
     ap.add_argument("--cached", action="store_true", help="reuse <work>/detect_masks.npz instead of running the models")
+    ap.add_argument("--mask_step", type=int, default=4, help="cache masks at 1/N res (1 = full: thin legs survive)")
+    ap.add_argument("--zstep", type=int, default=4, help="z-buffer pixel block for what a frame sees")
+    ap.add_argument("--lift", choices=("points", "render"), default="points", help="how masks become Gaussian labels: vote() or lift()")
+    ap.add_argument("--video", type=int, default=0, help="N > 0: SAM 2 tracks each keyframe's boxes through every Nth frame to the next keyframe")
     a = ap.parse_args()
     import yaml
     from PIL import Image
@@ -269,7 +342,12 @@ def main():
     solid = solid_mask(v, min_opacity=cfg["grid"].get("min_opacity", 0.3))
     xyz = ply_xyz(v)[solid]
     cams = floor_cameras(w)
-    cams = [cams[int(k)] for k in np.linspace(0, len(cams) - 1, min(a.frames, len(cams)))]
+    if a.video:   # capture order, every Nth frame; a clip starts at each keyframe
+        cams = sorted([c for c in cams if (w / "images" / c["name"]).exists()], key=lambda c: c["name"])[::a.video]
+        key = np.linspace(0, len(cams) - 1, min(a.frames, len(cams))).astype(int)
+        clip_len = np.diff(np.r_[key, len(cams)])
+    else:
+        cams = [cams[int(k)] for k in np.linspace(0, len(cams) - 1, min(a.frames, len(cams)))]
     labels = list(VOCAB)
     imgs, frames = [], []
     for c in cams:
@@ -280,24 +358,30 @@ def main():
         W, H = img.size
         imgs.append(img)
         frames.append({"w2c": c["w2c"], "K": np.array(c["K"], float) * [[W / c["width"]], [H / c["height"]], [1]], "width": W, "height": H})
-    cache = w / "detect_masks.npz"   # masks at 1/4 res (the z-buffer works in 4 px blocks anyway): re-vote on CPU with --cached
+    cache = w / "detect_masks.npz"   # masks at 1/mask_step res: re-vote on CPU with --cached
     if a.cached:
         z = np.load(cache)
         for i, f in enumerate(frames):
             h, wd = z[f"s{i}"]
+            st = -(-f["height"] // h)   # the step the cache was written at
             f["masks"] = [(int(li), np.unpackbits(z[f"m{i}_{k}"], count=h * wd).reshape(h, wd).astype(bool)
-                           .repeat(4, 0).repeat(4, 1)[:f["height"], :f["width"]]) for k, li in enumerate(z[f"l{i}"])]
+                           .repeat(st, 0).repeat(st, 1)[:f["height"], :f["width"]]) for k, li in enumerate(z[f"l{i}"])]
     else:
-        for f, m in zip(frames, detect(imgs, labels)):
+        if a.video:
+            ends = np.cumsum(clip_len)
+            masks = detect_video([imgs[e - n:e] for e, n in zip(ends, clip_len)], labels)
+        else:
+            masks = detect(imgs, labels)
+        for f, m in zip(frames, masks):
             f["masks"] = m
         out = {}
         for i, f in enumerate(frames):
             out[f"l{i}"] = np.array([li for li, _ in f["masks"]], int)
-            out[f"s{i}"] = np.array((len(range(0, f["height"], 4)), len(range(0, f["width"], 4))))
+            out[f"s{i}"] = np.array((len(range(0, f["height"], a.mask_step)), len(range(0, f["width"], a.mask_step))))
             for k, (_, m) in enumerate(f["masks"]):
-                out[f"m{i}_{k}"] = np.packbits(m[::4, ::4])
+                out[f"m{i}_{k}"] = np.packbits(m[::a.mask_step, ::a.mask_step])
         np.savez_compressed(cache, **out)
-    lab, hits = vote(xyz, frames, labels, with_hits=True)
+    lab, hits = lift(v, solid, frames, labels) if a.lift == "render" else vote(xyz, frames, labels, with_hits=True, zstep=a.zstep)
     inst, lab = instances(xyz, lab, hits)
     shell = json.loads((w / "shell.json").read_text()) if (w / "shell.json").exists() else None
     prop = propose(xyz, lab, labels, shell=shell, inst=inst)

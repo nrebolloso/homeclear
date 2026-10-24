@@ -35,7 +35,7 @@ v = read_ply(work / "splat_aligned.ply").copy()   # read_ply memory-maps the fil
 v["opacity"][o[1]:o[2]] = -4.0                                              # sigmoid -> 0.018: transparent
 from common import write_ply
 write_ply(work / "splat_aligned.ply", v)
-cfg_y = yaml.safe_load((ROOT / "config.yaml").read_text())
+cfg_y = yaml.safe_load((ROOT / "configs" / "home.yaml").read_text())
 cfg_y.update(run_name="clean_test", work_dir="out/clean_test")
 (work / "config.yaml").write_text(yaml.safe_dump(cfg_y))
 cfg = load_cfg(work / "config.yaml")

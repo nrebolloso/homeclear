@@ -52,7 +52,7 @@ def cluster_shell(cfg_path):
 
 def run_stage(name, fn):
     """Run fn(cfg) -> (passed, metrics_dict); record PASS/FAIL/SKIP + runtime to results/<name>.json."""
-    cfg = load_cfg(sys.argv[1] if len(sys.argv) > 1 else ROOT / "config.yaml")
+    cfg = load_cfg(sys.argv[1] if len(sys.argv) > 1 else ROOT / "configs" / "home.yaml")
     out = cfg["work"] / "results"
     out.mkdir(exist_ok=True)
     t = time.time()
