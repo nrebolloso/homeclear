@@ -1,5 +1,5 @@
 // Re-planning + Monte Carlo off the main thread, so dragging furniture never stalls rendering.
-import { applyIntervention, stamp, bumpComponents } from './grid.ts';
+import { applyIntervention, stamp, bumpComponents, carvedPolys } from './grid.ts';
 import { evaluate, type Init, type Eval } from './evaluate.ts';
 import { optimize } from './optimize.ts';
 export type { Init, Eval, RouteDef, HazardOut, RouteSummary } from './evaluate.ts';
@@ -29,7 +29,7 @@ self.onmessage = async (e: MessageEvent) => {
     // the walker pushed along every route over this layout's floor (Rapier); separate from the toe-contact numbers
     const { initPhysics, pushAlong } = await import('./physics.ts');   // Rapier's wasm (~4 MB) only when asked
     await initPhysics();
-    const L = stamp(S.g, S.base, S.objects, m.layout.poses, m.layout.flattened);
+    const L = stamp(S.g, S.base, S.objects, m.layout.poses, m.layout.flattened, carvedPolys(m.layout));
     const comps = bumpComponents(S.g, L.bump, S.rules.bump_min_m, S.rules.bump_link_cells);
     const routes = S.routes.map((rd, k) => {
       const e = evaluate(S, m.layout, { ghosts: false, sel: k });

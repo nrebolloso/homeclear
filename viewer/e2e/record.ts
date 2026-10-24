@@ -15,7 +15,7 @@ const at = a.flatMap((v, i) => (v === '--at' ? [a[i + 1]] : [])).map(s => { cons
 const BASE = opt('--url', 'http://localhost:5179');
 
 const browser = await chromium.launch({ executablePath: CHROME, headless: true,
-  args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'] });
+  args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 const p = await browser.newPage({ viewport: { width: W, height: H } });
 p.on('pageerror', e => console.error('pageerror', e));
 await p.goto(`${BASE}/?scene=${scene}${opt('--query', '')}`);

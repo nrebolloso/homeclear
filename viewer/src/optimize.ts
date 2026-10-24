@@ -143,7 +143,7 @@ export function score(S: Init, cfg: OptimizerCfg, r: Eval, lay: Layout, effort: 
 /** Every single change on the table: the configured fixes, plus moving each movable object to a wall slot. */
 export function actions(S: Init, cfg: OptimizerCfg, start: Layout): Action[] {
   const A: Action[] = S.interventions.map((iv: Intervention) => ({
-    id: iv.id, key: iv.kind === 'raise' ? `raise:${iv.target}` : iv.kind === 'add' ? `add:${iv.id}` : iv.kind === 'flatten' ? `flat:${iv.id}` : `obj:${iv.object}`,
+    id: iv.id, key: iv.kind === 'raise' ? `raise:${iv.target}` : iv.kind === 'carve' ? `carve:${iv.target}` : iv.kind === 'add' ? `add:${iv.id}` : iv.kind === 'flatten' ? `flat:${iv.id}` : `obj:${iv.object}`,
     label: iv.label, effort: iv.effort ?? 1, cost_usd: iv.cost_usd ?? 0, minutes: iv.minutes ?? 10, product: iv.product,
     apply: (l: Layout) => applyIntervention(S.objects, l, iv),
   }));

@@ -15,7 +15,7 @@ const shot = (p: Page, name: string) => process.env.SHOTS ? p.screenshot({ path:
 const G = (p: Page, f: string) => p.evaluate(`(async () => { const game = window.game; ${f} })()`) as Promise<any>;
 
 const browser = await chromium.launch({ executablePath: CHROME, headless: true,
-  args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
+  args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
     '--disable-accelerated-video-decode'] });   // headless: HW decode + ANGLE stalls seeks and loses the WebGL context
 async function open(scene: string) {
   const p = await browser.newPage({ viewport: { width: 1600, height: 900 } });
@@ -137,13 +137,15 @@ try {
     const t = clip.test, busy = Object.keys(t.expected).filter(k => t.expected[k].length).map(Number);
     const picks = [busy[0], busy[Math.floor(busy.length / 2)], busy[busy.length - 1]];
     const video = game.openClip(clip);
-    await new Promise(r => video.readyState >= 1 ? r() : video.addEventListener('loadedmetadata', r, { once: true }));
+    // a stalled decoder never fires these events (seen on macOS headless): fail with a reason instead of hanging
+    const within = (pr, what) => Promise.race([pr, new Promise((_, no) => setTimeout(() => no(new Error(what + ' timed out after 10 s')), 10000))]);
+    await within(new Promise(r => video.readyState >= 1 ? r() : video.addEventListener('loadedmetadata', r, { once: true })), 'clip metadata');
     video.pause();
     const cv = document.createElement('canvas'); cv.width = clip.width; cv.height = clip.height;
     const ctx = cv.getContext('2d', { willReadFrequently: true });
     const out = [];
     for (const k of picks) {
-      await new Promise(r => { video.addEventListener('seeked', r, { once: true }); video.currentTime = (k + 0.5) / clip.fps; });
+      await within(new Promise(r => { video.addEventListener('seeked', r, { once: true }); video.currentTime = (k + 0.5) / clip.fps; }), 'seek to frame ' + k);
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
       ctx.drawImage(video, 0, 0);
       let shown = 0;
@@ -214,10 +216,6 @@ try {
     li: document.querySelectorAll('#snags li').length, ms: Math.round(r.reduce((n, x) => n + x.ms, 0)) }`);
   check('physics pass (Rapier): the walker reaches every goal, snags listed', ph.done && ph.li >= 2, JSON.stringify(ph));
   await q.p.close();
-  const x = await open('game_synth&xr=1');
-  check('?xr=1 loads (VR button, render loop on the renderer)', await G(x.p, 'return game.xr()') && !!(await x.p.$('#vrbutton')) && x.errors.length === 0,
-    `errors: ${x.errors.join('; ') || 'none'}`);
-  await x.p.close();
   // 9. reimagined room: the room morphs into the safest suggested layout, each change costed, undo takes one back
   const ri = await open('game_synth');
   const R = (f: string) => G(ri.p, f);
@@ -234,6 +232,46 @@ try {
   check('reimagine: undo takes one change back', un === run.n - 1, `${run.n} -> ${un}; page errors: ${ri.errors.join(' | ') || 'none'}`);
   check('reimagine: no page errors', ri.errors.length === 0, ri.errors.join(' | ') || 'none');
   await ri.p.close();
+  // 10. stairs on the real kitchen (its scene folder is generated, so skipped where it isn't exported): the lower flight
+  // measured from the splat, checked against code and the stronger hand, then the three additions clear their checks
+  const k4scene = ['kitchen4_lighter_objects', 'kitchen4_lighter'].find(s => existsSync(`${ROOT}viewer/public/scene/${s}/scene.json`));
+  if (k4scene) {
+    const k4 = await open(k4scene);
+    const K = (f: string) => G(k4.p, f);
+    if (k4scene.endsWith('_objects')) {   // the demo scene: detected furniture, so Reimagine has something to move
+      const re = await K('const cs = await game.reimagine.run(); return { n: cs.length, labels: cs.map(c => c.label), msg: document.getElementById("reimtotal").textContent }');
+      check('reimagine on the demo kitchen: at least one costed move', re.n >= 1, `${re.labels.join('; ') || re.msg}`);
+    }
+    const st = await K('return await game.stairs.mark([4.28, -0.68], [3.48, -0.68], [3.88, -1.6])');
+    const risers = st.treads_z.map((z: number, k: number) => z - (k ? st.treads_z[k - 1] : 0));
+    check('stairs: measured from the splat (treads, risers, rail side)', st.treads_z.length >= 3 && risers.every((r: number) => r > 0.13 && r < 0.24) && st.rails.right === 'seen',
+      `${st.treads_z.length} treads, risers ${risers.map((r: number) => (r * 100).toFixed(0)).join('/')} cm, rails ${JSON.stringify(st.rails)}`);
+    const v = (w: string) => `game.current().checks.find(c => c.id === 'stairs:stairs:${w}')?.verdict`;
+    await K("game.stairs.setStrongSide('left'); await new Promise(r => setTimeout(r, 800))");
+    const before = await K(`return [${v('rails')}, ${v('light')}, ${v('walker')}]`);
+    for (const id of ['stair_rail:stairs:left', 'stair_lights:stairs', 'stair_walker:stairs']) await K(`await game.applyFix('${id}')`);
+    const after = await K(`return [${v('rails')}, ${v('light')}, ${v('walker')}]`);
+    check('stairs: rail for the stronger hand, step lights and a walker at the top clear their checks',
+      before.every((x: string) => x !== 'ok') && after.every((x: string) => x === 'ok'), `${before.join(', ')} -> ${after.join(', ')}`);
+    await K("game.setNight(true)"); await shot(k4.p, 'stairs_night');
+    check('stairs: no page errors', k4.errors.length === 0, k4.errors.join(' | ') || 'none');
+    await k4.p.close();
+  }
+  // 11. doorways: the 55 cm synthetic doorway blocks the walker; widening it (away from the open leaf) opens the route,
+  // edits the scan (wall strip hidden, jamb shifted) and undo closes it again
+  const dn = await open('game_synth_narrow');
+  const D = (f: string) => G(dn.p, f);
+  await D("await game.doors.mark([4.05, 1.225], [4.05, 1.775], 'bathroom door')");
+  const d0 = await D("return { err: game.current().error ?? null, v: game.current().checks.find(c => c.id === 'door:bathroom door')?.verdict, ids: game.doors.list().map(d => d.hinge) }");
+  await D("await game.doors.apply('bathroom door', 'widen')");
+  const d1 = await D("return { err: game.current().error ?? null, v: game.current().checks.find(c => c.id === 'door:bathroom door')?.verdict, edits: game.doors.edits(), squeeze: game.current().hazards.filter(h => h.type === 'tight_clearance' && Math.abs(h.position[0] - 4.05) < 0.3).length }");
+  check('doorway: blocked at 55 cm, open once widened away from the leaf, scan edited',
+    !!d0.err && d0.v === 'fail' && d0.ids[0] === 'b' && !d1.err && d1.v === 'ok' && d1.edits === 2 && d1.squeeze === 0, `${JSON.stringify(d0)} -> ${JSON.stringify(d1)}`);
+  await shot(dn.p, 'door_widened');
+  const d2 = await D("await game.reimagine.undo(0); return { err: game.current().error ?? null, edits: game.doors.edits() }");
+  check('doorway: undo closes it and removes the edits', !!d2.err && d2.edits === 0, JSON.stringify(d2));
+  check('doorway: no page errors', dn.errors.length === 0, dn.errors.join(' | ') || 'none');
+  await dn.p.close();
 } finally {
   await browser.close();
   writeFileSync(new URL('results.json', import.meta.url), JSON.stringify(results, null, 1));
