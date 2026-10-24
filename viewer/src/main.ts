@@ -16,6 +16,8 @@ import { drawTopdown } from './topdown.ts';
 import { spots, vantage, heightTexels, type Spot } from './spotlight.ts';
 import { summarize, drawPushChart, poseAt, pushColor, sampleText } from './physdebug.ts';
 import { cardState, encodeCard, type ActionOut, type ReportPayload } from './share.ts';
+import { createReimagine, undoChange, costText, type Change } from './reimagine.ts';
+import { moveCost, removeCost, sumCosts } from './movecost.ts';
 import QRCode from 'qrcode';
 import type { Eval, Init, RouteDef } from './worker.ts';
 import type { WorldModel } from './worldmodel.ts';
@@ -260,6 +262,7 @@ async function replan(): Promise<number> {
   game.evals++; game.lastReplanMs = ms;
   $('status').textContent = r.error ? `No route: ${r.error}` : `route ${r.length_m.toFixed(2)} m · replanned in ${ms.toFixed(0)} ms (worker ${r.ms.toFixed(0)} ms)`;
   $('status').style.color = r.error ? 'var(--red)' : '';
+  refreshReimagine();
   return ms;
 }
 
@@ -636,9 +639,64 @@ function applyOption(n: number) {
   layout = o.layout;
   applied = o.actions.map((a: any) => a.id);
   syncObjects();
-  return replan().then(ms => { if (!current?.error) Object.assign(body, routePose(0, 0, Infinity)); setWalk('auto'); return ms; });
+  return replan().then(ms => { if (!current?.error) Object.assign(body, routePose(0, 0, Infinity)); setWalk('auto'); reim.play(); return ms; });
 }
 $('suggest').onclick = () => suggest();
+
+// ---------- reimagined room (reimagine.ts): the room morphing into the layout on screen, with what each change takes ----------
+const reim = createReimagine({ scene, items, objs, original, interventions, sync: syncObjects,
+  centre: [g.origin_xy[0] + (nx * g.cell_m) / 2, g.origin_xy[1] + (ny * g.cell_m) / 2],
+  fillsOn: () => $<HTMLInputElement>('imagfill').checked, onT: t => { $<HTMLInputElement>('reimt').value = String(Math.round(t * 100)); } });
+let baseEvals: (Eval | undefined)[] = [];   // the room as filmed, per route: what the reimagined one is compared with
+/** after every re-plan: changes since the room as filmed, overlays, receipt */
+function refreshReimagine() {
+  const cur = current && !current.error ? current : null, sel = selRoute;
+  const cs = reim.refresh(layout, applied, baseEvals[sel] ?? null, cur);
+  if (!cs.length && cur) baseEvals[sel] = cur;
+  else if (cs.length && !baseEvals[sel])   // route or persona changed since: score the room as filmed once
+    ask({ type: 'eval', layout: { poses: original.map(p => ({ ...p })), flattened: [] }, sel, heat: false })
+      .then(({ r }) => { baseEvals[sel] = r; if (sel === selRoute) refreshReimagine(); });
+  const tot = sumCosts(cs.map(c => c.cost));
+  $('reimtotal').textContent = cs.length ? `${cs.length} change${cs.length === 1 ? '' : 's'} · ${tot.usd ? `$${tot.usd}` : 'no purchases'} · ${tot.minutes} min` +
+    `${tot.helpers > 1 ? ` · ${tot.helpers} people` : ''}${cs.some(c => c.cost.source === 'placeholder') ? ' (placeholder costs)' : ''}` : 'no changes yet: reimagine, suggest a layout, or drag something';
+  $('receipt').innerHTML = '';
+  for (const c of cs) {
+    const li = document.createElement('li');
+    li.innerHTML = `${c.label} <small class="cost">${costText(c.cost)}</small> `;
+    const b = document.createElement('button');
+    b.textContent = 'Undo';
+    b.onclick = () => undoReimagined(c);
+    li.appendChild(b);
+    $('receipt').appendChild(li);
+  }
+}
+function undoReimagined(c: Change) {
+  layout = undoChange(layout, original, c, interventions);
+  applied = applied.filter(id => id !== c.iv && !(id.startsWith('move:') && id.split(':')[1] === c.name));
+  syncObjects();
+  return replan();
+}
+/** Search layouts (if not done yet), take the one with the fewest toe contacts, and morph the room into it. */
+async function reimagineRoom() {
+  const why = (msg: string) => { $('reimtotal').textContent = msg; return []; };   // say why nothing moved instead of doing nothing
+  if (!objs.length && !interventions.length)
+    return why('Nothing to rearrange: this scene exported no movable objects and no fixes (furniture is still part of the room splat). Try ?scene=game_synth.');
+  if (!suggestions.length) await suggest();
+  if (!suggestions.length) return why('The layout search returned no options.');
+  const best = suggestions.reduce((b, o, n) => (o.per_month < suggestions[b].per_month ? n : b), 0);
+  if (!suggestions[best].actions.length)
+    return why(`No change earns its place: ${fmt(current?.per_month ?? 0)} toe contacts/month already, and no move or fix lowers it or clears a failed check.`);
+  await applyOption(best);
+  return reim.changes();
+}
+$('reimagine').onclick = () => reimagineRoom();
+$('reimplay').onclick = () => reim.play();
+$<HTMLInputElement>('reimt').oninput = e => reim.setT(+(e.target as HTMLInputElement).value / 100);
+$('reimshow').onchange = () => reim.setVisible($<HTMLInputElement>('reimshow').checked);
+// for e2e and the VR team: bind a controller to setT / play (AGENTS.md)
+game.reimagine = { run: reimagineRoom, setT: reim.setT, t: reim.t, play: reim.play, playing: reim.playing, refresh: refreshReimagine,
+  changes: reim.changes, resolved: reim.resolved, undo: (n: number) => undoReimagined(reim.changes()[n]),
+  pose: (name: string) => { const gr = items[objs.findIndex(o => o.name === name)].group; return { x: gr.position.x, y: gr.position.y, yaw: gr.rotation.z, visible: gr.visible }; } };
 
 // ---------- what leaves the game: OT report, family fix card ----------
 /** Every change in the layout on screen, in order, with what it takes and where (for the card's numbered pins). */
@@ -667,9 +725,11 @@ function describeChanges(): ActionOut[] {
   objs.forEach((o, k) => {   // drags and deletes done by hand
     const p = layout.poses[k], q = original[k];
     if (covered.has(o.name)) return;
-    if (p.removed) out.push({ label: `Take the ${o.name} out of the room`, at: [q.x, q.y] });
-    else if (Math.hypot(p.x - q.x, p.y - q.y) > 0.02 || Math.abs(p.yaw - q.yaw) > 0.01)
-      out.push({ label: `Move the ${o.name} ${Math.hypot(p.x - q.x, p.y - q.y).toFixed(1)} m (see map)`, at: [p.x, p.y] });
+    if (p.removed) { const c = removeCost(o); out.push({ label: `Take the ${o.name} out of the room`, cost_usd: c.usd, minutes: c.minutes, at: [q.x, q.y] }); }
+    else if (Math.hypot(p.x - q.x, p.y - q.y) > 0.02 || Math.abs(p.yaw - q.yaw) > 0.01) {
+      const c = moveCost(o, q, p);
+      out.push({ label: `Move the ${o.name} ${Math.hypot(p.x - q.x, p.y - q.y).toFixed(1)} m (see map)`, cost_usd: c.usd, minutes: c.minutes, at: [p.x, p.y] });
+    }
   });
   return out;
 }
@@ -763,7 +823,7 @@ async function setPersona(key: string) {
   if (worldModel) worldModel.shift = centreOffset - worldModel.mean_gap_m;   // learned.py Learned.shift, for this walker
   init = { ...init, persona, plan: { ...sc.plan, ...p.plan, walker_width_m: walkerCfg.width_m } };
   worker.postMessage({ type: 'init', init });
-  baselinePerMonth = null;
+  baselinePerMonth = null; baseEvals = [];
   if (p.vision) game.setVision(p.vision);
   $('personanote').textContent = key === 'patient' ? '' : 'comparison: gait and planner numbers for this persona are assumptions, not this patient';
   const ms = await replan();
@@ -1057,6 +1117,7 @@ function step(dt: number, t: number) {
   }
   pulseSpots(t);
   replayStep(dt);
+  reim.update(dt);
   liveChecks(t);
   if (xr?.presenting()) renderer.render(scene, camera);   // the post pass can't run per eye: plain render in the headset
   else vision.render();
