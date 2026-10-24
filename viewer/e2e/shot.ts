@@ -13,7 +13,7 @@ const args = process.argv.slice(2), opt = (k: string, d: string) => { const i = 
 const [out, secs] = args, fps = +opt('fps', '30'), url = opt('url', 'http://localhost:5175/?demo=1');
 const dir = mkdtempSync(`${tmpdir()}/shot-`);
 const vite = spawn('npx', ['vite', '--port', '5175', '--strictPort'], { env: { ...process.env, NO_HMR: '1' }, stdio: 'ignore', detached: true });
-process.on('exit', () => { try { process.kill(-vite.pid!); } catch {} });   // also when a frame throws
+vite.unref(); process.on('exit', () => { try { process.kill(-vite.pid!); } catch {} });   // unref: the server must not keep node alive; exit kills it, also when a frame throws
 for (let k = 0; k < 120 && !(await fetch('http://localhost:5175/').then(r => r.ok, () => false)); k++) await new Promise(r => setTimeout(r, 500));
 const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const p = await browser.newPage({ viewport: { width: 1600, height: 900 } });
