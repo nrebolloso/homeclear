@@ -7,7 +7,10 @@
    between clips. Tape one aisle or doorway width and one mat or threshold height for real accuracy margins.
 3. **Bedroom tape measurements** (`config.bedroom.yaml`): the printed marker's black square, toilet seat height, bed
    height, and the bathroom doorway's clear width.
-4. **Walker specs** for physics: wheel diameter, glide size, frame width and depth, handle height, weight.
+4. **Walker specs**: mostly answered by the spec sheet of your walker (Drive Medical 10210-1: 24 in wide, 1 in tube,
+   5 in wheels, rear glide caps, 7.5 lb), now in every config and `physics_ranges.json`. Still to tape: depth front to
+   rear legs (17.5 in is a retailer figure, not on the spec sheet), the rear glide cap's diameter, and the handle height
+   you set it to (it adjusts 32-39 in; configs use 0.85 m).
 5. **Your own home (`config.myhome.yaml`): film it, measure later.** Print the marker (`python marker/make_marker.py --print`,
    100%, check with a bank card), keep it in view, copy the video to `data/myhome.mp4`, `./run_all.sh config.myhome.yaml`.
    Until anything is taped, the dimensions are placeholders with `estimated: true` (stage 4 SKIP, no margins). Then tape:

@@ -33,9 +33,13 @@ uniformly from each range:
 | flap stiffness, damping | 0.01-0.15 N m/rad, 0.001-0.01 |
 | walker push (person's max force) | 25-60 N |
 | glide friction | 0.15-0.45 |
-| walker frame mass | 2.5-4 kg |
+| walker frame mass | 3.4 kg: the spec sheet's 7.5 lb (manufacturer figure, not weighed) |
 | hand load on the walker | 15-45 N |
 | batch only: assumed curl (when the splat shows none) | lift 1-4 cm, flap 6-15 cm |
+
+Walker geometry is the user's own walker, a Drive Medical 10210-1, taken from the manufacturer's spec sheet and not
+taped: 0.61 m (24 in) overall width, 1 in tube, 5 in front wheels, rear glide caps. The depth of 0.445 m (17.5 in) comes
+from a retailer listing. The glide caps' size isn't published, so the glides stay modelled as 3.3 cm spheres.
 
 ## Offline batch (HiPerGator, CPU): MuJoCo
 
