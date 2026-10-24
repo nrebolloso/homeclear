@@ -10,7 +10,7 @@ from scipy import ndimage
 
 
 def layers(p, g, lo, shape):
-    """Grid layers from solid Gaussian centres p (floor frame): floor, obstacles, bumps, bump height (m)."""
+    """Grid layers from solid Gaussian centres p (floor frame): floor, obstacles, bumps, bump height (m), filled floor holes."""
     cell = g["cell_m"]
     ij = np.floor((p[:, :2] - lo) / cell).astype(int)
     ok = (ij >= 0).all(1) & (ij < shape).all(1)
@@ -41,9 +41,16 @@ def layers(p, g, lo, shape):
     bumps &= (np.bincount(lab[bumps], minlength=lab.max() + 1) >= g.get("bump_min_cells", 4))[lab]
     # rugs hide the floor under them, so bump cells count as observed floor too
     floor = ndimage.binary_closing((count(-g["floor_band_m"], g["floor_band_m"])[0] > 0) | bumps, iterations=g["floor_close_cells"])
+    # faint floor (few solid Gaussians) leaves holes too big to close; one ringed by floor with nothing standing in it is
+    # floor (otherwise an invisible wall in the open). Counted in the metrics as filled_floor_m2.
+    lab, n = ndimage.label(ndimage.binary_fill_holes(floor) & ~floor)
+    idx = np.arange(1, n + 1)
+    ok = (ndimage.sum(np.ones(shape), lab, idx) * cell ** 2 <= g.get("fill_holes_max_m2", 1.0)) & (ndimage.maximum(obstacles, lab, idx) == 0)
+    filled = np.r_[False, ok][lab]
+    floor |= filled
     bump_h = np.nan_to_num(cell_median(ij[bsel], p[bsel, 2], shape))   # median, not max: one noisy Gaussian isn't the top
     bump_h[~bumps] = 0
-    return floor, obstacles, bumps, bump_h
+    return floor, obstacles, bumps, bump_h, filled
 
 
 def cell_median(ij, z, shape):
@@ -123,7 +130,7 @@ def main(cfg):
     hi = np.percentile(near_floor[:, :2], 99.5, 0) + 0.2
     cell = g["cell_m"]
     shape = tuple(np.ceil((hi - lo) / cell).astype(int))
-    floor, obstacles, bumps, bump_h = layers(p, g, lo, shape)
+    floor, obstacles, bumps, bump_h, filled = layers(p, g, lo, shape)
     stamp_synthetic(g, lo, shape, floor, obstacles, bumps, bump_h)
     est = classify_thin(g, bumps, bump_h)
 
@@ -147,7 +154,8 @@ def main(cfg):
     cv2.imwrite(str(w / "occupancy.png"), img)
     m = {"grid_cells": f"{shape[0]}x{shape[1]}", "area_m2": round(float(floor.sum() * cell ** 2), 2),
          "obstacle_pct": round(100 * float(obstacles.mean()), 1), "bump_cells": int(bumps.sum()),
-         "max_bump_cm": round(100 * float(bump_h.max()), 1), "estimated_thin_cells": int(est.sum())}
+         "max_bump_cm": round(100 * float(bump_h.max()), 1), "estimated_thin_cells": int(est.sum()),
+         "filled_floor_m2": round(float(filled.sum() * cell ** 2), 2)}
     return obstacles.any() and obstacles.mean() < 0.9 and m["area_m2"] > 1.0, m
 
 

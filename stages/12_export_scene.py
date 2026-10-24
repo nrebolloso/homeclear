@@ -117,7 +117,7 @@ def main(cfg):
     if (w / "removed.ply").exists():   # stage 5b's dropped Gaussians, for the cleanup before/after
         (out / "removed.ply").write_bytes((w / "removed.ply").read_bytes())
 
-    floor, obstacles, bumps, bump_h = layers(xyz[solid & ~taken], g, lo, shape)
+    floor, obstacles, bumps, bump_h, _ = layers(xyz[solid & ~taken], g, lo, shape)
     occ.stamp_synthetic(g, lo, shape, floor, obstacles, bumps, bump_h)
     est = occ.classify_thin(g, bumps, bump_h)
     for o in objects:   # nobody filmed the floor under the furniture: assume the fitted plane (z=0) continues
