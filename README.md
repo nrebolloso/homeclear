@@ -100,7 +100,8 @@ press ENTER VR. Walk for real (1:1, floor at your floor); left stick or a held p
 snap-turns. Labels are flat-view only for now.
 Full-detail scenes from a Windows PC over Quest Link / Air Link: `VR_WINDOWS.md`.
 Watch the headset on the laptop: `npm run mirror:quest` (needs `brew install scrcpy`): a 16:9 crop centred on the left
-eye's lens centre (about x 870, y 960 of 3664x1920; edges are lens pre-distortion, so a smaller crop looks straighter). Mirroring
+eye's lens centre (about x 870, y 960 of 3664x1920; edges are lens pre-distortion, so a smaller crop looks straighter). `npm run mirror:quest:both` shows the
+whole panel (both eyes, as the headset draws them). Mirroring
 costs the headset frames (kitchen 200K at 72 Hz: 72 -> ~50 fps), so mirror the 150K copy for demos.
 
 ## Image-edit backend (stage 9)
