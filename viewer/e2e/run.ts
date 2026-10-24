@@ -96,10 +96,13 @@ try {
   await p.waitForTimeout(500);
   const rm = await G(p, "const k = game.items.indexOf('bed'), q = game.layout().poses[k]; return { removed: !!q.removed, obst: game.cell(2.0, 1.0).obst, err: game.current().error }");
   check('Delete removes the selected object from the map', rm.removed && rm.obst === 0 && !rm.err, `removed=${rm.removed}, obstacle at old spot=${rm.obst}, replan error=${rm.err}`);
+  await G(p, "game.frontend.setTab('changes')");
   await p.click('#reset');
   await p.waitForTimeout(500);
 
   // 3. plan fixes: ranked by reduction, applying the top one lowers the number
+  await G(p, "game.frontend.setTab('reimagine')");
+  await p.locator('summary').filter({ hasText: 'Explore individual fixes' }).click();
   await p.click('#planfixes');
   const fixes = await p.waitForFunction(() => (window as any).game.fixes, null, { timeout: 20000 }).then(h => h.jsonValue());
   const sorted = fixes.every((f: any, i: number) => i === 0 || fixes[i - 1].reduction >= f.reduction);
@@ -109,10 +112,12 @@ try {
   const pm1 = await G(p, 'return game.current().per_month');
   check('plan fixes ranked; applying the top fix lowers risk', sorted && fixes[0].reduction > 0 && pm1 < pm0,
     fixes.map((f: any) => `${f.id} -${f.reduction === null || !isFinite(f.reduction) ? 'blocked' : f.reduction.toFixed(2)}`).join(', ') + `; applied ${fixes[0].id}: ${pm0.toFixed(2)} -> ${pm1.toFixed(2)}/month`);
+  await G(p, "game.frontend.setTab('changes')");
   await p.click('#reset');
   await p.waitForTimeout(500);
 
   // 4. night mode
+  await p.click('#filter-toggle');
   await p.click('#night');
   await p.waitForTimeout(4000);
   const nfps = await G(p, 'return game.fps');
@@ -185,6 +190,8 @@ try {
   await Q('game.setVision("cataract")'); await q.p.waitForTimeout(300); const n1 = await px();
   await Q('game.setVision("normal")');
   check('vision pass changes the frame (cataract blurs: smaller JPEG)', n1 < n0 * 0.95, `${n0} -> ${n1} bytes`);
+  await q.p.click('#filter-toggle');
+  await q.p.locator('#filter-menu details').evaluate((el: HTMLDetailsElement) => { el.open = true; });
   await q.p.click('#heat'); await q.p.waitForTimeout(800);
   const heat = await Q('return !!game.current().heat');
   await q.p.click('#heat');
@@ -297,6 +304,8 @@ try {
     `bed moved away=${bedAway}, nightstand moved onto its old spot=${taken}; bed stays at (${blocked.x.toFixed(2)}, ${blocked.y.toFixed(2)})`);
   await RS("await game.resetAll()");
   await RS("await game.moveObject('bed', 2.0, 1.0, 90); game.removeObject('rug')");
+  await RS("game.frontend.setTab('reimagine')");
+  await rs.p.locator('summary').filter({ hasText: 'Explore individual fixes' }).click();
   await rs.p.click('#planfixes');
   const rf = await rs.p.waitForFunction(() => (window as any).game.fixes, null, { timeout: 20000 }).then(h => h.jsonValue());
   await RS(`await game.applyFix('${rf[0].id}')`);

@@ -31,6 +31,8 @@ import { createMarker3d } from './marker3d.ts';
 import { MAX_EXTRA_LIGHTS, type PointLight } from './night.ts';
 import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } from './perf.ts';
 import QRCode from 'qrcode';
+import { mountFrontend, type FrontendAdapter } from './frontend.ts';
+import { createFrontendXR } from './frontend-xr.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
 import type { WorldModel } from './worldmodel.ts';
 import { floorHit, twistAngle, snapQuarter, holdProgress, DELETE_HOLD_S, DELETE_SHOW_S, DRAG_DEADZONE_M } from './wand.ts';
@@ -198,7 +200,7 @@ if (verification) {
 scene.add(verifyGroup);
 
 // ---------- grid overlays: route, hazards, ghosts, fog, taped strips ----------
-const routeLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x33ddff }));
+const routeLine = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ color: 0x55c7ef, size: 3, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
 // ghost walkers as one dot per step (WebGL lines are 1 px: trails hugging the route vanished); red = a toe contact
 const ghostDots = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({ vertexColors: true, size: 5, sizeAttenuation: false, transparent: true, opacity: 0.8, depthWrite: false }));
 const hazardGroup = new THREE.Group(), tapeGroup = new THREE.Group();
@@ -235,6 +237,7 @@ gapTag.visible = false;
 scene.add(gapTag);
 const body = { x: 0, y: 0, yaw: 0, pitch: -(+(PARAMS.get('pitch') ?? 28)) * Math.PI / 180 };   // ?pitch=<deg down>: more walker, less room
 let mode: 'auto' | 'free' | 'fly' = 'auto', autoS = 0, autoPause = 0;
+let routePaused = false, routeSpeed = 1, frontendVR: ReturnType<typeof createFrontendXR> | null = null, xrFollowRoute = false;
 
 // ---------- layout state + worker ----------
 let layout: Layout = { poses: original.map(p => ({ ...p })), flattened: [] };
@@ -1571,6 +1574,7 @@ function worldStep(dt: number): boolean {
   return true;
 }
 function autoStep(dt: number) {
+  dt = routePaused ? 0 : dt * routeSpeed;
   if (!current || current.error || routeS.length < 2) return;
   if (persona.step_model === 'world' && worldStep(dt)) return;
   const Ls = routeS[routeS.length - 1];
@@ -1691,6 +1695,7 @@ function frame(now: number) {
   }
 }
 function step(dt: number, t: number) {
+  frontendVR?.update();
   if (renderer.xr.isPresenting) xrStep(dt);
   else if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
   if (!renderer.xr.isPresenting) tourStep(dt);
@@ -1750,10 +1755,12 @@ let snapReady = true;
 const pinching = new Set<object>();   // non-wand hands/controllers holding select: walk
 const head = new THREE.Vector3(), headDir = new THREE.Vector3();
 function xrStep(dt: number) {
+  if (frontendVR?.isOpen()) return;
   // the user camera, not renderer.xr.getCamera(): before render() that one still holds the raw y-up headset pose
   // without the rig; three writes the camera's rig-local pose after each render, so this is last frame's head, in the floor frame
   camera.getWorldPosition(head); camera.getWorldDirection(headDir);
   const yaw = Math.atan2(headDir.y, headDir.x);
+  if (xrFollowRoute && mode === 'auto') { autoStep(dt); xrRig.x += body.x - head.x; xrRig.y += body.y - head.y; placeRig(); wandStep(); return; }
   const pads: Record<string, Gamepad> = {};
   for (const s of renderer.xr.getSession()?.inputSources ?? []) if (s.gamepad) pads[s.handedness] = s.gamepad;
   const stick = (p?: Gamepad) => (p ? [p.axes[2] ?? 0, p.axes[3] ?? 0].map(a => (Math.abs(a) < 0.2 ? 0 : a)) : [0, 0]);
@@ -1839,8 +1846,8 @@ const ctls: Ctl[] = [0, 1].map(i => {
   const c: Ctl = { group, ray };
   group.addEventListener('connected', e => { c.source = e.data; });
   group.addEventListener('disconnected', () => { if (isWand(c)) dropWand(); pinching.delete(c); c.source = undefined; });
-  group.addEventListener('selectstart', () => (isWand(c) ? wandDown(c) : pinching.add(c)));
-  group.addEventListener('selectend', () => (isWand(c) ? wandUp() : pinching.delete(c)));
+  group.addEventListener('selectstart', () => { if (frontendVR?.activate(group)) return; isWand(c) ? wandDown(c) : pinching.add(c); });
+  group.addEventListener('selectend', () => { if (frontendVR?.release(group)) return; isWand(c) ? wandUp() : pinching.delete(c); });
   return c;
 });
 const xrMarkHelp = card(['A/X: mark doorway · B/Y: mark stairs', 'wand B/Y: edit saved marks'], '#ffe27a', undefined, 0.025);
@@ -1948,6 +1955,7 @@ function wandStep() {
       if (hover < 0 && aiming && f && standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
     }
     c.ray.scale.z = len;
+    if (hover >= 0 && !grab) reim.selectChange(hover);
   } else { hover = -1; if (mk || editing) { markHover = null; markDraw(); say(); } }
   items.forEach((it, k) => {   // blue = pointed at, yellow = held, turning red = about to be deleted
     const held = grab?.k === k, m = it.outline.material as THREE.LineBasicMaterial;
@@ -2041,3 +2049,32 @@ Object.assign(game, {
   applyFix, select: (name: string) => select(objs.findIndex(o => o.name === name)),
   exportForCosmos: (opts?: ExportOpts) => exportForCosmos(ctx, opts), layoutKey: () => layoutKey(objs, layout),
 });
+
+// ---------- frontend shell: existing data/actions, independent of backend and optimizer ownership ----------
+let inspectReturn: { body: typeof body; fly: typeof fly; mode: 'auto' | 'free' | 'fly'; rig: typeof xrRig } | null = null;
+const frontendAdapter: FrontendAdapter = {
+  snapshot: () => ({ room: RUN, patient: personaKey, route: routes[selRoute].name, current, baseline: baseEvals[selRoute] ?? null,
+    changes: reim.changes(), spots: spotList, options: suggestions, selected, selectedName: objs[selected]?.name, mode, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
+  navigate(m) {
+    endTour(); select(-1);
+    if (m === 'inspect') { inspectReturn ??= { body: { ...body }, fly: { ...fly }, mode, rig: { ...xrRig } }; setWalk(renderer.xr.isPresenting ? 'free' : 'fly'); }
+    else { xrFollowRoute = renderer.xr.isPresenting && m === 'route'; setWalk(m === 'route' ? 'auto' : 'free'); routePaused = false; }
+  },
+  focus(item) {
+    const p = vantage(item.at, current?.xy ?? [item.at], 1.2, 1.1);
+    if (renderer.xr.isPresenting) { if (standable(p.x, p.y)) frontendVR?.transition(() => { camera.getWorldPosition(head); xrRig.x += p.x - head.x; xrRig.y += p.y - head.y; placeRig(); }); }
+    else { setWalk('fly'); Object.assign(fly, p); body.yaw = p.yaw; body.pitch = p.pitch; }
+    reim.selectChange(item.object, item.change?.iv);
+  },
+  leaveInspect() { if (inspectReturn) { const back = inspectReturn; Object.assign(body, back.body); Object.assign(fly, back.fly); if (renderer.xr.isPresenting) frontendVR?.transition(() => { Object.assign(xrRig, back.rig); placeRig(); }); setWalk(back.mode); inspectReturn = null; } },
+  pause() { routePaused = !routePaused; }, restart() { autoS = 0; autoPause = 0; routePaused = false; }, speed(v) { routeSpeed = v; },
+  compare(t) { reim.setT(t); }, animate() { reim.play(); },
+  suggest, async apply(index) { await applyOption(index); setWalk('free'); reim.setT(1); },
+  undo: undoReimagined, select,
+  path(on) { routeLine.visible = on; },
+  highlights(on) { hazardGroup.visible = on; }, improvements(on) { reim.setParts({ rings: on, ringLabels: on }); },
+};
+const frontend = mountFrontend(frontendAdapter);
+frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
+game.frontend = frontend;
+game.frontendXR = frontendVR;
