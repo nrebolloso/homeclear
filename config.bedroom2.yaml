@@ -7,6 +7,7 @@ work_dir: out/bedroom2
 frames:
   target: 1165
   min: 870
+  exclude_s: [[489, 492]]   # user: a hand is in frame for ~1 s at 8:10; +-1 s margin
   max_side: 1600
 colmap:
   matcher: exhaustive
