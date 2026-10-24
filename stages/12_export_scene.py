@@ -27,6 +27,7 @@ POINT_KINDS = {"switch", "phone", "outlet", "grab_bar_wall"}
 MEMBER_M = 0.03   # auto objects: a Gaussian belongs to the object of its nearest labelled point, if that is this close
 GROW_M = 0.10     # ... or this close when it is also inside that object's footprint and height band (faint Gaussians 6c never labelled)
 ON_TOP_M = 0.3    # unlabelled things in its footprint up to this far above it go with it (a cup on a removed table must not float)
+STANDS_M = 0.3    # an object labelled from below this stands on the floor: its legs 6c missed go with it down to the floor
 
 
 def surface_height(z, band):
@@ -150,7 +151,16 @@ def config_objects(gm, w):
     if gm["objects"] != "auto":
         return gm["objects"]
     import yaml
-    return [o for o in yaml.safe_load((Path(w) / "objects_proposed.yaml").read_text())["objects"] if o["kind"] != "door"]
+    objs = [o for o in yaml.safe_load((Path(w) / "objects_proposed.yaml").read_text())["objects"] if o["kind"] != "door"]
+    # a low detection inside another one of its kind is a piece of it (a chair's runner 6c split off as its own chair)
+    for o in [o for o in objs if "instance" in o and max(q["z"][1] for q in o["parts"]) < STANDS_M]:
+        c = np.mean([np.mean(q["poly_xy"], 0) for q in o["parts"]], 0)
+        host = next((h for h in objs if h is not o and h["kind"] == o["kind"] and "instance" in h and
+                     any(Path2d(q["poly_xy"]).contains_point(c) for q in h["parts"])), None)
+        if host:
+            host["instances"] = host.get("instances", [host["instance"]]) + [o["instance"]]
+            objs.remove(o)
+    return objs
 
 
 _nearest = {}
@@ -179,9 +189,11 @@ def object_parts(o, xyz, g, w, lo, cell, shape):
         # inside its footprint, from its lowest labelled point (a box on a cabinet keeps off the cabinet) to ON_TOP_M above
         # its band, it also takes what is nearest to it or to nobody: legs 6c missed and what stood on it
         z = np.load(Path(w) / "objects_points.npz")
-        z0 = z["xyz"][z["instance"] == o["instance"], 2].min() - 0.02
+        ids = o.get("instances", [o["instance"]])
+        z0 = z["xyz"][np.isin(z["instance"], ids), 2].min() - 0.02
+        z0 = g["bump_z"][0] if z0 < STANDS_M else z0
         zone = in_parts([{**q, "z": [z0, q["z"][1] + ON_TOP_M]} for q in o["parts"]], 0.02)
-        own = inst == o["instance"]
+        own = np.isin(inst, ids)
         return ((own & (d <= MEMBER_M)) | (zone & (own | (inst == -1)))) & (xyz[:, 2] >= g["bump_z"][0])
     # parts: the object is only these height-limited boxes (a table = top slab + legs; chairs pushed in under it stay put)
     parts = o.get("parts") or [{"box_xy": o["box_xy"], "z": [g["bump_z"][0], o.get("z_max", 2.0)]}]

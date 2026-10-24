@@ -62,3 +62,12 @@ inside its footprint, from its lowest labelled point to 30 cm above its band, wh
 chairs, so the leftovers are nearer the chair labels) and the counter under the basket (never filmed, shows as a blur).
 The boxes on the cabinet do not take the cabinet (the zone starts at their lowest labelled point). Re-ran the LaMa fills
 afterwards (job 47386024, 33 s). Live: `kitchen4_lighter_table_removed_clean.jpg` (table, chair4, chair7 removed).
+Follow-up: chair legs were still left (user screenshot). chair7's labelled points start 22 cm up, so its zone missed its
+runners, and one of chair4's runners was detected as its own "chair6". Now an object labelled from below 30 cm takes
+its footprint down to the floor, and a low detection inside another of its kind is merged into it (chair6 -> chair4).
+Left inside footprints: chair7 172 -> 0, chair4 39 -> 4, bedside tables 112 / 47 -> 7 / 6. Fills re-run (job 47389772).
+
+## Removed-objects inventory
+The Fixes panel lists every removed object ("Removed") with a Put back button; put back returns it where it stood if
+that spot passes the placement check. `game.inventory()` / `game.restoreObject(name)` for tests. Live-checked on
+`kitchen4_lighter`: remove chair4 + chair7 -> both listed; Put back chair7 -> back in the room, list shows chair4 only.
