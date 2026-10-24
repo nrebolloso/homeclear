@@ -1,4 +1,5 @@
 import './frontend.css';
+import { createAnnouncer, mountDisplaySettings, nameUnlabeled, watchDialog } from './a11y.ts';
 import { distinctOptions, escapeHTML as h, LIGHTING_IDEAS, summarizeChanges } from './frontend-model.ts';
 import type { Change } from './reimagine.ts';
 import type { Eval } from './evaluate.ts';
@@ -30,31 +31,38 @@ export function mountFrontend(api: FrontendAdapter) {
   document.body.classList.add('frontend');
   const root = document.createElement('div'); root.id = 'frontend';
   root.innerHTML = `
-    <button id="workspace-toggle" class="floating brand" aria-expanded="false" aria-controls="workspace-menu"><span class="brand-mark">C</span><span>Cleared<small id="room-name"></small></span><span class="chevron">⌄</span></button>
+    <a class="skip-link" id="skip-panel" href="#planning-panel">Skip to planning panel</a><a class="skip-link" id="skip-toolbar" href="#viewer-toolbar">Skip to viewer controls</a>
+    <button id="workspace-toggle" class="floating brand" aria-expanded="false" aria-controls="workspace-menu"><span class="brand-mark" aria-hidden="true">C</span><span>Cleared<small id="room-name"></small></span><span class="chevron" aria-hidden="true">⌄</span></button>
     <section id="workspace-menu" class="floating popover" aria-label="Room and patient settings" hidden>
       <div class="eyebrow">WORKSPACE</div><h2>Room & patient</h2><div id="context-controls"></div>
+      <details id="a11y-settings"><summary>Accessibility & display</summary>
+        <div role="group" aria-labelledby="a11y-text-label"><span id="a11y-text-label">Text size</span><div class="segmented"><button data-text="default" aria-pressed="true">Default</button><button data-text="large" aria-pressed="false">Large</button><button data-text="larger" aria-pressed="false">Largest</button></div></div>
+        <label>Color theme <select id="a11y-theme"><option value="system">Match device (dark)</option><option value="dark">Dark</option><option value="light">Light</option><option value="contrast">High contrast</option></select></label>
+        <label class="a11y-check"><input type="checkbox" id="a11y-motion"> Reduce motion <small id="a11y-motion-note"></small></label>
+        <button id="a11y-reset">Reset display settings</button>
+      </details>
       <details><summary>Scan setup & advanced tools</summary><div id="advanced-controls"></div></details>
       <details><summary>Help & keyboard controls</summary><div id="help-controls"></div><p>In VR, click the left thumbstick to open the spatial menu. Point and trigger to choose.</p></details>
       <div id="share-controls" class="button-row"></div>
     </section>
-    <div id="comparison" class="floating" aria-label="Layout comparison" hidden><div class="segmented"><button id="show-original" aria-pressed="false">Original</button><button id="show-proposed" aria-pressed="true">Proposed</button></div><button id="animate-changes">▷ Animate changes</button></div>
+    <div id="comparison" class="floating" role="group" aria-label="Layout comparison" hidden><div class="segmented"><button id="show-original" aria-pressed="false">Original</button><button id="show-proposed" aria-pressed="true">Proposed</button></div><button id="animate-changes"><span aria-hidden="true">▷</span> Animate changes</button></div>
     <div id="active-filters" class="floating status-pill" role="status" hidden></div>
-    <aside id="planning-panel" class="floating" aria-label="Room planning">
-      <div class="panel-top"><span class="eyebrow">ROOM PLANNING</span><button id="panel-close" aria-label="Collapse planning panel">›</button></div>
+    <aside id="planning-panel" class="floating" aria-label="Room planning" tabindex="-1">
+      <div class="panel-top"><span class="eyebrow">ROOM PLANNING</span><button id="panel-close" aria-label="Collapse planning panel"><span aria-hidden="true">›</span></button></div>
       <div class="panel-tabs" role="tablist" aria-label="Planning view"><button id="tab-assessment" role="tab" aria-controls="pane-assessment" aria-selected="true" tabindex="0">Assessment</button><button id="tab-reimagine" role="tab" aria-controls="pane-reimagine" aria-selected="false" tabindex="-1">Reimagine</button><button id="tab-changes" role="tab" aria-controls="pane-changes" aria-selected="false" tabindex="-1">Changes <span id="change-count"></span></button></div>
-      <section id="pane-assessment" class="pane" role="tabpanel" aria-labelledby="tab-assessment"><div class="eyebrow" id="route-scope"></div><h1>Understand the room</h1><p class="muted">Review the route before making changes.</p><div id="assessment-summary"></div><div id="assessment-findings"></div><details><summary>Simulation & additional checks</summary><div id="assessment-details"></div></details><button class="primary full" id="assessment-reimagine">Explore improvements <span>→</span></button></section>
-      <section id="pane-reimagine" class="pane" role="tabpanel" aria-labelledby="tab-reimagine" hidden><div class="eyebrow">PLAN A CHANGE</div><h1>Reimagine room</h1><p class="muted">Compare proposals, then choose what to change.</p><button id="generate-proposals" class="primary full">✧ Reimagine room</button><p id="proposal-progress" class="muted" role="status" aria-live="polite"></p><div id="proposal-cards"></div><details><summary>Explore individual fixes</summary><div id="individual-fixes"></div></details><button id="light-path" class="full">☾ Light the path at night</button><p id="light-path-note" class="muted" role="status" aria-live="polite"></p><details><summary>Improve nighttime visibility <span class="badge">Concepts</span></summary><p class="muted">Ideas for review, not scene-specific recommendations. Placement, illumination, and installation estimates need verification.</p><div id="lighting-ideas"></div></details></section>
+      <section id="pane-assessment" class="pane" role="tabpanel" aria-labelledby="tab-assessment"><div class="eyebrow" id="route-scope"></div><h1>Understand the room</h1><p class="muted">Review the route before making changes.</p><div id="assessment-summary"></div><div id="assessment-findings"></div><details><summary>Simulation & additional checks</summary><div id="assessment-details"></div></details><button class="primary full" id="assessment-reimagine">Explore improvements <span aria-hidden="true">→</span></button></section>
+      <section id="pane-reimagine" class="pane" role="tabpanel" aria-labelledby="tab-reimagine" hidden><div class="eyebrow">PLAN A CHANGE</div><h1>Reimagine room</h1><p class="muted">Compare proposals, then choose what to change.</p><button id="generate-proposals" class="primary full"><span aria-hidden="true">✧</span> Reimagine room</button><p id="proposal-progress" class="muted" role="status" aria-live="polite"></p><div id="proposal-cards"></div><details><summary>Explore individual fixes</summary><div id="individual-fixes"></div></details><button id="light-path" class="full"><span aria-hidden="true">☾</span> Light the path at night</button><p id="light-path-note" class="muted" role="status" aria-live="polite"></p><details><summary>Improve nighttime visibility <span class="badge">Concepts</span></summary><p class="muted">Ideas for review, not scene-specific recommendations. Placement, illumination, and installation estimates need verification.</p><div id="lighting-ideas"></div></details></section>
       <section id="pane-changes" class="pane" role="tabpanel" aria-labelledby="tab-changes" hidden><div class="eyebrow">YOUR CURRENT PLAN</div><h1>Changes & effort</h1><p class="muted">One list for moves, removals, and additions.</p><div id="change-summary"></div><div class="segmented"><button id="cost-summary" aria-pressed="true">Summary</button><button id="cost-breakdown" aria-pressed="false">Cost breakdown</button></div><div id="change-list"></div><div id="comparison-metrics"></div><div id="selected-controls"><h2>Selected object</h2><p id="selection-name" class="muted"></p><div id="object-actions" class="button-row"></div></div><details><summary>Restore removed objects</summary><div id="removed-controls"></div></details><div id="reset-controls" class="button-row"></div></section>
       <footer class="panel-footer">Geometry measured · outcomes simulated<br><span class="imagined">Imagined content is never used for measurements</span></footer>
     </aside>
-    <button id="panel-open" class="floating" aria-expanded="false" aria-controls="planning-panel" hidden>Planning ‹</button>
-    <section id="inspect-card" class="floating" aria-label="Inspection details" hidden><div class="button-row"><span class="eyebrow">INSPECT</span><select id="inspect-filter" aria-label="Inspect items"><option value="all">All items</option><option value="hazards">Hazards</option><option value="changes">Changes</option></select><button id="inspect-exit" aria-label="Exit inspection">×</button></div><div id="inspect-content"></div><div class="button-row"><button id="inspect-prev">← Previous</button><span id="inspect-position" class="muted"></span><button id="inspect-next">Next →</button></div></section>
-    <div id="viewer-toolbar" class="floating"><nav class="segmented" aria-label="Navigation mode"><button id="mode-explore" aria-pressed="false"><span>◎</span> Explore</button><button id="mode-route" aria-pressed="true"><span>⠿</span> Follow route</button><button id="mode-inspect" aria-pressed="false"><span>⌖</span> Inspect</button></nav><div id="route-playback" class="button-row"><button id="route-pause">Pause</button><button id="route-restart" aria-label="Restart route">↺</button><select id="route-speed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option></select></div></div>
-    <button id="filter-toggle" class="floating" aria-expanded="false" aria-controls="filter-menu">☷ View filters <span id="filter-count"></span></button>
+    <button id="panel-open" class="floating" aria-expanded="false" aria-controls="planning-panel" hidden>Planning <span aria-hidden="true">‹</span></button>
+    <section id="inspect-card" class="floating" aria-label="Inspection details" tabindex="-1" hidden><div class="button-row"><span class="eyebrow">INSPECT</span><select id="inspect-filter" aria-label="Inspect items"><option value="all">All items</option><option value="hazards">Hazards</option><option value="changes">Changes</option></select><button id="inspect-exit" aria-label="Exit inspection"><span aria-hidden="true">×</span></button></div><div id="inspect-content"></div><div class="button-row"><button id="inspect-prev"><span aria-hidden="true">←</span> Previous</button><span id="inspect-position" class="muted"></span><button id="inspect-next">Next <span aria-hidden="true">→</span></button></div></section>
+    <div id="viewer-toolbar" class="floating" role="group" aria-label="Viewer controls" tabindex="-1"><nav class="segmented" aria-label="Navigation mode"><button id="mode-explore" aria-pressed="false"><span aria-hidden="true">◎</span> Explore</button><button id="mode-route" aria-pressed="true"><span aria-hidden="true">⠿</span> Follow route</button><button id="mode-inspect" aria-pressed="false"><span aria-hidden="true">⌖</span> Inspect</button></nav><div id="route-playback" class="button-row"><button id="route-pause">Pause</button><button id="route-restart" aria-label="Restart route"><span aria-hidden="true">↺</span></button><select id="route-speed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option></select></div></div>
+    <button id="filter-toggle" class="floating" aria-expanded="false" aria-controls="filter-menu"><span aria-hidden="true">☷</span> View filters <span id="filter-count"></span></button>
     <section id="filter-menu" class="floating popover" aria-label="View filters" hidden><div class="button-row"><h2>View filters</h2><button id="filter-reset">Reset view</button></div><div id="filter-experience"><h3>Experience</h3></div><div id="filter-navigation"><h3>Navigation</h3><label><input id="particle-path" type="checkbox" checked> Particle path</label></div><div id="filter-findings"><h3>Findings</h3></div><div id="filter-changes"><h3>Changes</h3><label><input id="improvement-highlights" type="checkbox" checked> Evaluated improvements</label></div><details><summary>Advanced display</summary><div id="filter-advanced"></div></details></section>
     <div id="view-caption" class="floating status-pill">Original scan · simulation estimates</div>
     <div id="frontend-message" class="floating" role="status" aria-live="polite" hidden></div>`;
-  document.body.append(root);
+  document.body.prepend(root);   // first in tab order, so the skip links are the first stop
 
   // Reparent the existing controls so event handlers, IDs, and teammate integrations continue to work.
   function move(id: string, target: string, label?: string) {
@@ -97,12 +105,22 @@ export function mountFrontend(api: FrontendAdapter) {
   // Hidden legacy overlays stay addressable, with a quiet default rather than duplicate receipts/arrows.
   for (const id of ['reimarrows', 'reimreceipt']) { const box = $<HTMLInputElement>(id); box.checked = false; box.dispatchEvent(new Event('change')); }
 
+  // ---------- accessibility (a11y.ts) ----------
+  const announce = createAnnouncer(root);
+  const display = mountDisplaySettings(root, () => { calmMotion(); updateChrome(); });
+  const sceneView = document.getElementById('view'); sceneView?.setAttribute('role', 'main'); sceneView?.setAttribute('aria-label', '3D room view');
+  watchDialog(document.getElementById('player'), 'Cosmos video preview (imagined, not measured)', '#closeplayer');
+  watchDialog(document.getElementById('qr'), 'Family fix card QR code', '#closeqr');
+  $('nightscrub').setAttribute('aria-label', 'Night of the month'); $('nightscrub').setAttribute('aria-describedby', 'nightinfo');
+  $('timeline').setAttribute('role', 'img'); $('timeline').setAttribute('aria-label', 'Toe contacts across a month of nights'); $('timeline').setAttribute('aria-describedby', 'nightinfo');
+  nameUnlabeled(root);
+
   let tab = 'assessment', nav: NavigationMode = 'route', inspectIndex = 0, inspectKind = 'all', costDetail = false, busy = false;
   let signature = '', inspectedId = ''; let generatedFor = '', generatedPlan = '', previewedPlan = ''; let chosenOption: number | null = null;
   const defaults = new Map<HTMLInputElement | HTMLSelectElement, string | boolean>();
   $('filter-menu').querySelectorAll<HTMLInputElement | HTMLSelectElement>('input,select').forEach(el => defaults.set(el, el instanceof HTMLInputElement ? el.checked : el.value));
   let messageTimer = 0;
-  function notify(message: string) { window.clearTimeout(messageTimer); $('frontend-message').textContent = message; $('frontend-message').hidden = false; messageTimer = window.setTimeout(() => { $('frontend-message').hidden = true; }, 5500); }
+  function notify(message: string) { window.clearTimeout(messageTimer); $('frontend-message').textContent = message; $('frontend-message').hidden = false; messageTimer = window.setTimeout(() => { $('frontend-message').hidden = true; }, Math.max(5500, 4000 + message.length * 80)); }   // longer messages stay long enough to read
   function setTab(next: string) {
     tab = next;
     for (const name of ['assessment', 'reimagine', 'changes']) { $(`pane-${name}`).hidden = name !== tab; $(`tab-${name}`).setAttribute('aria-selected', String(name === tab)); $(`tab-${name}`).tabIndex = name === tab ? 0 : -1; }
@@ -115,7 +133,8 @@ export function mountFrontend(api: FrontendAdapter) {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
     e.preventDefault(); k = e.key === 'Home' ? 0 : e.key === 'End' ? 2 : (k + (e.key === 'ArrowRight' ? 1 : 2)) % 3; setTab(names[k]); $(`tab-${names[k]}`).focus();
   });
-  $('panel-close').onclick = () => setPanel(false); $('panel-open').onclick = () => setPanel(true);
+  $('panel-close').onclick = () => { setPanel(false); $('panel-open').focus(); }; $('panel-open').onclick = () => { setPanel(true); $(`tab-${tab}`).focus(); };
+  for (const [link, target] of [['skip-panel', 'planning-panel'], ['skip-toolbar', 'viewer-toolbar']]) $(link).onclick = e => { e.preventDefault(); if (target === 'planning-panel') setPanel(true); $(target).focus(); };
   $('assessment-reimagine').onclick = () => setTab('reimagine');
   for (const [button, menu] of [['workspace-toggle', 'workspace-menu'], ['filter-toggle', 'filter-menu']]) $(button).onclick = () => {
     const open = $(menu).hidden;
@@ -132,16 +151,20 @@ export function mountFrontend(api: FrontendAdapter) {
   document.addEventListener('keydown', e => { if (e.key === 'Escape') dismiss(); });
   function setNavigation(next: NavigationMode) {
     if (nav === 'inspect' && next !== 'inspect') api.leaveInspect();
-    nav = next; api.navigate(next);
+    const was = nav; nav = next; api.navigate(next); calmMotion();
     if (next === 'inspect') { inspectIndex = 0; inspectedId = ''; showInspection(true); }
     updateChrome();
+    if (next === 'inspect' && was !== 'inspect') $('inspect-card').focus();   // keyboard users land on the card they just opened
+    if (next !== was) announce({ explore: 'Explore mode. Move through the room freely.', route: 'Following the route.', inspect: 'Inspect mode. Step through findings and changes with Previous and Next.' }[next]);
   }
+  // With reduced motion the walkthrough waits for the person to press Play instead of moving on its own.
+  function calmMotion() { if (display.reduceMotion() && nav === 'route' && !api.snapshot().paused) api.pause(); }
   for (const mode of ['explore', 'route', 'inspect'] as const) $(`mode-${mode}`).onclick = () => setNavigation(mode);
-  $('inspect-exit').onclick = () => setNavigation('explore');
-  $('route-pause').onclick = () => { api.pause(); updateChrome(); }; $('route-restart').onclick = () => api.restart();
+  $('inspect-exit').onclick = () => { setNavigation('explore'); $('mode-explore').focus(); };
+  $('route-pause').onclick = () => { api.pause(); updateChrome(); announce(api.snapshot().paused ? 'Route paused.' : 'Route playing.'); }; $('route-restart').onclick = () => { api.restart(); announce('Route restarted.'); };
   $<HTMLSelectElement>('route-speed').onchange = e => api.speed(Number((e.target as HTMLSelectElement).value));
-  $('show-original').onclick = () => { api.compare(0); updateChrome(); }; $('show-proposed').onclick = () => { api.compare(1); updateChrome(); };
-  $('animate-changes').onclick = () => api.animate();
+  $('show-original').onclick = () => { api.compare(0); updateChrome(); announce('Showing the original layout.'); }; $('show-proposed').onclick = () => { api.compare(1); updateChrome(); announce('Showing the proposed layout.'); };
+  $('animate-changes').onclick = () => { if (display.reduceMotion()) api.compare(api.snapshot().comparison > 0 ? 0 : 1); else api.animate(); };
   $<HTMLInputElement>('particle-path').onchange = e => api.path((e.target as HTMLInputElement).checked);
   $<HTMLInputElement>('improvement-highlights').onchange = e => api.improvements((e.target as HTMLInputElement).checked);
   $('spot').addEventListener('change', () => api.highlights($<HTMLInputElement>('spot').checked));
@@ -158,7 +181,10 @@ export function mountFrontend(api: FrontendAdapter) {
     $('inspect-content').innerHTML = item ? `<h2>${h(item.title)}</h2><p class="muted">${h(item.detail)}</p>${item.change ? installationHTML(item.change, true) : '<span class="badge amber">Finding for review</span>'}` : '<h2>Nothing to inspect yet</h2><p class="muted">Choose another filter, or add a change to the plan.</p>';
     $('inspect-position').textContent = list.length ? `${inspectIndex + 1} / ${list.length}` : '0 items';
     $<HTMLButtonElement>('inspect-prev').disabled = inspectIndex <= 0; $<HTMLButtonElement>('inspect-next').disabled = inspectIndex >= list.length - 1;
-    if (item && (focus || inspectedId !== item.id)) { inspectedId = item.id; api.focus(item); }
+    if (item && (focus || inspectedId !== item.id)) { inspectedId = item.id; api.focus(item); announce(`${inspectIndex + 1} of ${list.length}: ${item.title}. ${item.detail}`); }
+    // A button that just became disabled (first or last item) would drop focus to the page; keep it in the card.
+    const held = document.activeElement as HTMLButtonElement | null;
+    if (held?.disabled && $('inspect-card').contains(held)) { const other = $<HTMLButtonElement>(held.id === 'inspect-next' ? 'inspect-prev' : 'inspect-next'); (other.disabled ? $('inspect-card') : other).focus(); }
   }
   $<HTMLSelectElement>('inspect-filter').onchange = e => { inspectKind = (e.target as HTMLSelectElement).value; inspectIndex = 0; showInspection(true); };
   $('inspect-prev').onclick = () => { inspectIndex--; showInspection(true); }; $('inspect-next').onclick = () => { inspectIndex++; showInspection(true); };
@@ -171,7 +197,7 @@ export function mountFrontend(api: FrontendAdapter) {
     const total = summarizeChanges(s.changes);
     $('change-count').textContent = total.count ? String(total.count) : '';
     $('change-summary').innerHTML = `<div class="metric-grid"><div><small>Known subtotal</small><strong>${total.count && !total.unpriced ? money(total.knownSubtotal) : total.knownSubtotal ? money(total.knownSubtotal) : 'Pending'}</strong></div><div><small>Setup time</small><strong>${total.count && !total.untimed ? `${total.setupMinutes} min` : 'Pending'}</strong></div><div><small>Helpers needed</small><strong>${total.helpers ?? 'Pending'}</strong></div><div><small>Unpriced items</small><strong>${total.unpriced} / ${total.count}</strong></div></div><p class="muted">${total.count ? `${total.count - total.unpriced} of ${total.count} changes have non-placeholder cost estimates. Setup time is summed hands-on work, not a delivery or completion schedule.` : 'Add a change to see cost and installation estimates.'}</p>`;
-    $('change-list').innerHTML = total.count ? s.changes.map((c, i) => `<article class="change-card"><div class="eyebrow">${h(c.kind === 'fix' ? 'Addition / fix' : c.kind)}</div><h3>${h(c.label)}</h3>${installationHTML(c, costDetail)}<div class="button-row"><button data-inspect-change="${i}">Inspect</button><button data-undo-change="${i}">Undo</button></div></article>`).join('') : '<div class="empty-state"><span>✧</span><h3>Your plan starts here</h3><p>Move an object or preview a proposal. Every change will appear in this list.</p></div>';
+    $('change-list').innerHTML = total.count ? s.changes.map((c, i) => `<article class="change-card"><div class="eyebrow">${h(c.kind === 'fix' ? 'Addition / fix' : c.kind)}</div><h3>${h(c.label)}</h3>${installationHTML(c, costDetail)}<div class="button-row"><button data-inspect-change="${i}">Inspect</button><button data-undo-change="${i}">Undo</button></div></article>`).join('') : '<div class="empty-state"><span aria-hidden="true">✧</span><h3>Your plan starts here</h3><p>Move an object or preview a proposal. Every change will appear in this list.</p></div>';
     $('change-list').querySelectorAll<HTMLButtonElement>('[data-undo-change]').forEach(b => b.onclick = async () => { b.disabled = true; try { await api.undo(s.changes[Number(b.dataset.undoChange)]); refresh(); } catch { notify('Could not undo this change. Try again.'); b.disabled = false; } });
     $('change-list').querySelectorAll<HTMLButtonElement>('[data-inspect-change]').forEach(b => b.onclick = () => { inspectKind = 'changes'; $<HTMLSelectElement>('inspect-filter').value = 'changes'; setNavigation('inspect'); inspectIndex = Number(b.dataset.inspectChange); showInspection(true); });
     $('selected-controls').hidden = s.selected < 0;
@@ -189,7 +215,7 @@ export function mountFrontend(api: FrontendAdapter) {
     const currentContext = `${s.patient}:${s.route}`;
     if (generatedFor && (generatedFor !== currentContext || (generatedPlan && s.planKey !== generatedPlan && s.planKey !== previewedPlan))) { $('proposal-cards').innerHTML = '<p class="muted">Patient, route, or working layout changed. Generate proposals again for this context.</p>'; return; }
     const card = ({ option: o, index }: typeof options[number], recommended: boolean) => `<article class="proposal-card ${recommended ? 'recommended' : ''}"><span class="badge">${recommended ? 'Recommended by model' : 'Alternative'}</span><h2>${h(o.name)}</h2><p>${o.actions.length} change${o.actions.length === 1 ? '' : 's'} · ${o.checks_failed} checks flagged</p><ol>${o.actions.map(a => `<li>${h(a.label)}</li>`).join('')}</ol><div class="proposal-metrics"><span>${number(o.per_month)}/month<small>Simulated contacts · all routes</small></span><span>${number(o.per_month_lo)}–${number(o.per_month_hi)}<small>Likely range</small></span></div><p class="muted">Cost & installation estimates are reviewed in Changes after applying.</p><button class="${recommended ? 'primary' : ''} full" data-preview="${index}">Preview proposal</button><button class="full" data-use="${index}" ${chosenOption === index ? '' : 'disabled'}>Use this layout</button></article>`;
-    $('proposal-cards').innerHTML = options.length ? card(options[0], true) + (options.length > 1 ? `<details><summary>Other options · ${options.length - 1}</summary>${options.slice(1).map(o => card(o, false)).join('')}</details>` : '<p class="muted">One distinct outcome found.</p>') : '<div class="empty-state"><span>✧</span><h3>Make room for a better route</h3><p>Explore rearrangements and configured fixes. Each proposal is evaluated by the existing model.</p></div>';
+    $('proposal-cards').innerHTML = options.length ? card(options[0], true) + (options.length > 1 ? `<details><summary>Other options · ${options.length - 1}</summary>${options.slice(1).map(o => card(o, false)).join('')}</details>` : '<p class="muted">One distinct outcome found.</p>') : '<div class="empty-state"><span aria-hidden="true">✧</span><h3>Make room for a better route</h3><p>Explore rearrangements and configured fixes. Each proposal is evaluated by the existing model.</p></div>';
     $('proposal-cards').querySelectorAll<HTMLButtonElement>('[data-preview]').forEach(b => b.onclick = async () => { if (busy) return; busy = true; b.disabled = true; try { await api.apply(Number(b.dataset.preview)); chosenOption = Number(b.dataset.preview); previewedPlan = api.snapshot().planKey; api.navigate('explore'); nav = 'explore'; notify('Proposal loaded in the viewer. This is a simulation; the room has not physically changed.'); refresh(); } catch { notify('Proposal could not be loaded. Try generating again.'); } finally { busy = false; b.disabled = false; } });
     $('proposal-cards').querySelectorAll<HTMLButtonElement>('[data-use]').forEach(b => b.onclick = () => { setTab('changes'); notify('This proposal is your current working plan. Review individual changes and estimates here.'); });
   }
@@ -203,7 +229,7 @@ export function mountFrontend(api: FrontendAdapter) {
     if (busy) return; busy = true; const b = $<HTMLButtonElement>('generate-proposals'); b.disabled = true; b.textContent = 'Searching layouts…'; chosenOption = null;
     const request = api.snapshot(); generatedFor = `${request.patient}:${request.route}`; generatedPlan = request.planKey; previewedPlan = '';
     try { await api.suggest(); refresh(); } catch { notify('Layout search failed. You can still move objects or explore individual fixes.'); }
-    finally { busy = false; b.disabled = false; b.textContent = '✧ Generate proposals again'; }
+    finally { busy = false; b.disabled = false; b.innerHTML = '<span aria-hidden="true">✧</span> Generate proposals again'; }
   };
   $('lighting-ideas').innerHTML = LIGHTING_IDEAS.map(idea => `<article class="change-card"><span class="badge">Concept · verify on site</span><h3>${h(idea.title)}</h3><p>${h(idea.why)}</p><p class="muted">${h(idea.placement)}</p><dl class="details-grid"><dt>Power</dt><dd>${h(idea.powerSource ?? 'Pending')}</dd><dt>Cost / setup</dt><dd>Pending estimate</dd><dt>Installation</dt><dd>${idea.professionalRequired ? 'Professional assessment suggested' : 'Verify requirements'}</dd>${idea.maintenance ? `<dt>Maintenance</dt><dd>${h(idea.maintenance)}</dd>` : ''}</dl></article>`).join('') + '<p class="muted">Rendered brightness does not establish real illumination. No lux or vision-improvement claims are inferred from this preview.</p>';
 
@@ -214,6 +240,8 @@ export function mountFrontend(api: FrontendAdapter) {
     $('route-playback').hidden = nav !== 'route'; $('inspect-card').hidden = nav !== 'inspect';
     $('route-pause').textContent = s.paused ? 'Play' : 'Pause';
     $('comparison').hidden = !s.changes.length;
+    const calm = display.reduceMotion(); $('animate-changes').hidden = calm;
+    const tour = $<HTMLButtonElement>('tour'); tour.disabled = calm; tour.title = calm ? 'Off while reduce motion is on. Use Inspect to step through findings.' : 'fly to each hazard, worst first';
     $('show-original').setAttribute('aria-pressed', String(s.comparison === 0)); $('show-proposed').setAttribute('aria-pressed', String(s.comparison > 0));
     const night = $<HTMLInputElement>('night').checked, vision = $<HTMLSelectElement>('vision');
     const active = [night ? 'Night view' : '', vision.selectedIndex > 0 ? vision.selectedOptions[0]?.textContent : ''].filter(Boolean);
@@ -224,15 +252,19 @@ export function mountFrontend(api: FrontendAdapter) {
     $('view-caption').textContent = s.changes.length ? `${s.comparison === 0 ? 'Original visual preview' : 'Proposed layout · imagined, not measured'} · metrics describe proposed endpoint` : 'Original scan · simulation estimates';
     $('cost-summary').setAttribute('aria-pressed', String(!costDetail)); $('cost-breakdown').setAttribute('aria-pressed', String(costDetail));
     $('proposal-progress').textContent = $('optstatus').textContent;
+    const concerns = (s.current?.hazards.length ?? 0) + (s.current?.checks.filter(c => c.verdict !== 'ok').length ?? 0);
+    const summary = `Interactive 3D scan of ${s.room.replaceAll('_', ' ')}. ${nav === 'route' ? 'Following the route.' : nav === 'inspect' ? 'Inspecting.' : 'Exploring.'} ${s.current ? `${concerns} finding${concerns === 1 ? '' : 's'} to review. ` : ''}${s.changes.length} planned change${s.changes.length === 1 ? '' : 's'}. The Room planning panel lists everything in text.`;
+    const canvas = sceneView?.querySelector('canvas');
+    if (canvas && canvas.getAttribute('aria-label') !== summary) { canvas.setAttribute('role', 'img'); canvas.setAttribute('aria-label', summary); }
   }
   function refresh() { const s = api.snapshot(); renderAssessment(s); renderChanges(s); renderProposals(s); showInspection(); updateChrome(); }
   // Small scalar signature keeps the viewer frame loop free of DOM work; changes are polled only four times/sec.
   let lastSelected = -1;
   const timer = window.setInterval(() => {
     const s = api.snapshot(); const next = JSON.stringify([s.current?.ms, s.current?.per_month, s.patient, s.route, s.changes.map(c => [c.name, c.kind, c.at, c.turn_deg]), s.options.map(o => o.layout), s.selected]);
-    if (s.selected >= 0 && s.selected !== lastSelected) setTab('changes'); lastSelected = s.selected;
+    if (s.selected !== lastSelected) { if (s.selected >= 0) { setTab('changes'); announce(`${s.selectedName ?? 'Object'} selected. Arrow keys move it 5 cm; Delete removes it; Escape deselects.`); } else if (lastSelected >= 0) announce('Selection cleared.'); } lastSelected = s.selected;
     if (next !== signature) { signature = next; refresh(); } else updateChrome();
   }, 250);
-  refresh();
+  calmMotion(); refresh();
   return { refresh, setTab, setNavigation, inspection: () => nav === 'inspect' ? inspectionItems()[inspectIndex] ?? null : null, inspectNext: () => { inspectIndex = Math.min(inspectIndex + 1, inspectionItems().length - 1); showInspection(true); }, inspectPrevious: () => { inspectIndex = Math.max(0, inspectIndex - 1); showInspection(true); }, dispose: () => window.clearInterval(timer) };
 }
