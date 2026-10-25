@@ -152,7 +152,7 @@
     </section>
     <section id="fanpanel">
       <h2>Futures fan <span class="imagined">imagined (world model)</span></h2>
-      <label title="every 0.5 s, ~30 futures 4-5 s ahead from where the walker is now: green = clean, red = hits a hazard"><input type="checkbox" id="fanon"> Show the fan</label>
+      <label title="every 0.5 s, ~30 futures 4-5 s ahead from where the walker is now: green = crosses nothing, faint orange to bright red = the chance of a toe catch (full red 3%+), amber frame = brushes furniture"><input type="checkbox" id="fanon"> Show the fan</label>
       <select id="fanmodel" title="learned world model, or the hand rule (feet on the route + noise)"><option value="learned">learned: tight on straights, wider at turns</option><option value="hand">hand rule: same wobble everywhere</option></select>
       <select id="fanstyle" title="whose gait embedding the learned model is folded with"></select>
       <div class="hint">red = a swing catches a bump of 4 mm or more (mat edge, cord, folded corner) or the frame comes within 3 cm of furniture; not a fall prediction</div>

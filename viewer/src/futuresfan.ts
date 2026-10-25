@@ -1,7 +1,8 @@
 // The live futures fan, life-size in the kitchen (desktop, demo mode and VR: everything is scene objects). Every ~0.5 s
 // fanworker.ts imagines ~30 futures 4-5 s ahead from where the walker is right now (futures.ts); each is drawn as a faint
-// trail on the floor plus a translucent walker + person at its end, green if clean, red if it hits a hazard (the hazard
-// flash red of wmghosts.ts). A card above the walker says how many hit what. Learned (the persona world model folded with
+// trail on the floor plus a translucent walker + person at its end, shaded by its chance of a toe catch (futures.ts p, the
+// calibrated contact table): green = crosses nothing, faint orange = a risky crossing, bright red = a likely catch (P_RED+);
+// a frame that brushes furniture is amber. A card above the walker says what they cross and the expected toe catches/month. Learned (the persona world model folded with
 // a gait style) or the hand rule. Where the way ahead forks (over / around the mat, past / wide of a chair) each route gets
 // a card at its tip with how many futures took it. Foot lift: average or low-clearance shuffler (futures.ts LIFTS).
 // The sample count adapts so the frame rate stays within ~10% of the rate without the fan.
@@ -18,7 +19,9 @@ export interface FanDeps {
   body: () => { x: number; y: number; yaw: number }; route: () => XY[] | null; layout: () => Layout; fold: () => Fold | null;
   night: () => boolean; fps: () => number;
 }
-const EVERY_S = 0.5, MAX_N = 30, MIN_N = 10, SEGS = 12, PERSON_EVERY = 3, RED = 0xff3030, GREEN = 0x3ddc84;
+const EVERY_S = 0.5, MAX_N = 30, MIN_N = 10, SEGS = 12, PERSON_EVERY = 3, RED = 0xff2020, ORANGE = 0x9a6a3c, GREEN = 0x3ddc84, AMBER = 0xffc040;
+/** a future at this catch chance or more is full red: ~the fan's top futures over the mat edge (average lift 2.5-3%, shuffler up to 4%) */
+export const P_RED = 0.03;
 const $ = (id: string) => document.getElementById(id);
 
 export function createFuturesFan(D: FanDeps) {
@@ -50,7 +53,8 @@ export function createFuturesFan(D: FanDeps) {
   const body = inst(new THREE.CylinderGeometry(0.13, 0.15, 1.15, 8), mat(0.12), MAX_N), head = inst(new THREE.SphereGeometry(0.1, 8, 6), mat(0.12), MAX_N);
   const frame = inst(new THREE.BoxGeometry(w0.depth_m, w0.width_m, 0.04), mat(0.28), MAX_N);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), zAxis = new THREE.Vector3(0, 0, 1), up = q.clone().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
-  const red = new THREE.Color(RED), green = new THREE.Color(GREEN), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  const red = new THREE.Color(RED), orange = new THREE.Color(ORANGE), green = new THREE.Color(GREEN), amber = new THREE.Color(AMBER), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  const shade = (p: number) => (p < 1e-4 ? green : orange.clone().lerp(red, Math.min(1, p / P_RED)));
 
   function wm(): WorldModel | null {
     if (model === 'hand') return null;
@@ -71,7 +75,7 @@ export function createFuturesFan(D: FanDeps) {
     const w = D.walker(), off = w.user_gap_m + w.depth_m / 2;
     let t = 0;
     F.futures.forEach((f, i) => {
-      const c = f.hazard ? red : green;
+      const c = shade(f.p);
       for (let k = 1; k < f.walker.length && t < trail.instanceMatrix.count; k++, t++) {
         const [ax, ay] = f.walker[k - 1], [bx, by] = f.walker[k], len = Math.hypot(bx - ax, by - ay);
         m4.compose(v.set((ax + bx) / 2, (ay + by) / 2, 0.012), q.setFromAxisAngle(zAxis, Math.atan2(by - ay, bx - ax)), new THREE.Vector3(len, 1, 1));
@@ -83,12 +87,13 @@ export function createFuturesFan(D: FanDeps) {
         body.setMatrixAt(j, m4.compose(v.set(px, py, 0.6), up, one)); body.setColorAt(j, c);
         head.setMatrixAt(j, m4.makeTranslation(px + 0.08 * Math.cos(yaw), py + 0.08 * Math.sin(yaw), 1.4)); head.setColorAt(j, c);
       }
-      frame.setMatrixAt(i, m4.compose(v.set(x, y, w.handle_height_m), q.setFromAxisAngle(zAxis, yaw), one)); frame.setColorAt(i, c);
+      frame.setMatrixAt(i, m4.compose(v.set(x, y, w.handle_height_m), q.setFromAxisAngle(zAxis, yaw), one)); frame.setColorAt(i, f.hazard ? amber : c);
     });
     trail.count = t; frame.count = F.futures.length; body.count = head.count = Math.ceil(F.futures.length / PERSON_EVERY);
     for (const im of [trail, body, head, frame]) { im.instanceMatrix.needsUpdate = true; im.instanceColor!.needsUpdate = true; }
     const lines = [fanLabel(F, modelName()), ...(routeLabel(F) ? [routeLabel(F)] : []),
-      `imagined, ${model === 'hand' ? 'hand-rule steps' : `learned gait · ${style === 'mean' ? 'average person' : style}`} · ${LIFTS[F.lift].label}, ${F.ahead_s.toFixed(1)} s ahead`];
+      `imagined, ${model === 'hand' ? 'hand-rule steps' : `learned gait · ${style === 'mean' ? 'average person' : style}`} · ${LIFTS[F.lift].label}, ${F.ahead_s.toFixed(1)} s ahead`,
+      `colour = chance of a toe catch (1 in 578 strides at 1 cm) · full red ${P_RED * 100}%+`];
     if (lines.join('|') !== text) {
       text = lines.join('|');
       if (label) { label.removeFromParent(); label.material.dispose(); }
@@ -96,11 +101,11 @@ export function createFuturesFan(D: FanDeps) {
       // a card at each route's tip once the way ahead forks: "around the mat · 12/30"
       forks = F.routes.length > 1 ? F.routes.flatMap(r => {
         if (!r.tip || !r.n) return [];
-        const hit = F!.futures.filter(f => F!.routes[f.route] === r && f.hazard).length, c = card([`${r.label} · ${r.n}/${F!.futures.length}`], hit ? '#ffd0d0' : '#c8ffd8', 'rgba(14,20,28,0.7)', 0.05);
+        const hit = F!.futures.some(f => F!.routes[f.route] === r && f.p >= P_RED / 2), c = card([`${r.label} · ${r.n}/${F!.futures.length}`], hit ? '#ffd0d0' : '#c8ffd8', 'rgba(14,20,28,0.7)', 0.05);
         c.position.set(r.tip[0], r.tip[1], 0.5); c.renderOrder = 6; root.add(c); return [c];
       }) : [];
-      label = card(lines, Object.keys(F.counts).length ? '#ffd0d0' : '#c8ffd8', 'rgba(14,20,28,0.78)', 0.07); label.renderOrder = 6; root.add(label);
-      const s = $('fanstatus'); if (s) s.textContent = `${lines.slice(0, -1).join(' · ')} (${n} sampled, ${ms.toFixed(0)} ms in the worker${F.path === 'heading' ? ', off the route: straight ahead' : ''}; route odds: ASSUMPTION, from path length)`;
+      label = card(lines, F.catches_month >= 0.1 ? '#ffd0d0' : '#c8ffd8', 'rgba(14,20,28,0.78)', 0.07); label.renderOrder = 6; root.add(label);
+      const s = $('fanstatus'); if (s) s.textContent = `${lines.slice(0, -2).join(' · ')} (${n} sampled, ${ms.toFixed(0)} ms in the worker${F.path === 'heading' ? ', off the route: straight ahead' : ''}; route odds: ASSUMPTION, from path length)`;
     }
   }
 
@@ -140,7 +145,8 @@ export function createFuturesFan(D: FanDeps) {
     setLift(l: Lift) { lift = l; text = ''; acc = EVERY_S; const sel = $('fanlift') as HTMLSelectElement | null; if (sel) sel.value = l; },
     /** for e2e and the recording: the last fan (futures, counts, spread), the sample count and the fps budget */
     state: () => ({ on, model, style, lift, n, offFps, ms, label: text.split('|')[0], lines: text.split('|'), styles: styles.map(s => s.name),
-      fan: F && { n: F.futures.length, counts: { ...F.counts }, crossed: { ...F.crossed }, routes: F.routes.map(r => ({ ...r })), ahead_s: F.ahead_s, lift: F.lift, spread_m: F.spread_m, path: F.path, red: F.futures.filter(f => f.hazard).length, hits: F.futures.flatMap(f => (f.at ? [f.at] : [])) } }),
+      fan: F && { n: F.futures.length, counts: { ...F.counts }, crossed: { ...F.crossed }, routes: F.routes.map(r => ({ ...r })), ahead_s: F.ahead_s, lift: F.lift, spread_m: F.spread_m, path: F.path,
+        catches_month: F.catches_month, p: F.futures.map(f => f.p), red: F.futures.filter(f => f.p >= P_RED / 2).length, brushes: F.futures.filter(f => f.hazard).length, hits: F.futures.flatMap(f => (f.at ? [f.at] : [])) } }),
     root,
   };
 }

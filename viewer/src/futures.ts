@@ -2,10 +2,11 @@
 // runs it). ~30 rollouts 4-5 s ahead, with the rollout loop and checks of sim.ts (world model: worldRollouts; hand rule:
 // rollouts()), split over 2-4 candidate routes where the way ahead forks (over / around the mat, past / wide of a chair:
 // routeOptions). Checks: each swing's rise over an edge against that swing's toe clearance, drawn from the published curve
-// (LIFTS), and the walker frame against the furniture (the planner's brush test, planner.ts brushes()). A future is red if a
-// toe passes lower than an edge of >= hazard_rules.bump_min_m it rises over, or its frame comes within brush_m of a piece of
-// furniture; p is the chance the toe actually catches (contact table), kept apart. Imagined, never measured. Pure: node
-// tests run it on the exported scene.
+// (LIFTS), and the walker frame against the furniture (the planner's brush test, planner.ts brushes()). p = the chance the
+// toe catches somewhere in the future: sim.ts's calculation (contact table, calibrated 1 in 578 strides at 1 cm, x the dark
+// multiplier), so the fan's catches/month and the viewer's, planner's and OT report's are the same number. crossed = the edge
+// it rose over (caught or not); hazard = a brush with furniture (not a toe catch). Imagined, never measured. Pure: node tests
+// run it on the exported scene.
 import { stamp, edt, plan, toCell, cellXY, carvedPolys, worldFootprint, polyCells, type GridMeta, type Layers, type Layout, type PlanParams, type XY } from './grid.ts';
 import { contactProb, rng, type Persona, type Risk } from './sim.ts';
 import { predict, sampleHeel, smoothRoute, type Pose, type WorldModel } from './worldmodel.ts';
@@ -20,17 +21,16 @@ export interface FanScene {
 export interface Fold { corner: XY; lift_m: number; size_m: number }
 /** crossed = the edge (mat, cord, folded corner) a swing rose over, hit or not; route = index into Fan.routes */
 export interface Future { walker: XY[]; heels: XY[]; end: Pose; hazard: string | null; at: XY | null; p: number; crossed: string | null; route: number }
+/** catches_month = the fan's mean p x trips/night x days/month: expected toe catches per month if every trip passed here as these futures do */
 export interface RouteOption { label: string; xy: XY[]; length_m: number; p: number; fork: XY | null }
 export interface Fan {
   futures: Future[]; counts: Record<string, number>; crossed: Record<string, number>; spread_m: number; path: 'route' | 'heading';
-  routes: { label: string; p: number; n: number; fork: XY | null; tip: XY | null }[]; ahead_s: number; lift: Lift;
+  routes: { label: string; p: number; n: number; fork: XY | null; tip: XY | null }[]; ahead_s: number; lift: Lift; catches_month: number;
 }
 
-/** Foot lift: each swing's minimum toe clearance (MTC) is drawn from the published older-adult curve, lognormal 14.1 +- 8.3 mm
- *  (Frontiers 2014, the curve tools/contact_table.py fits the trip-odds table to). A swing "hits the edge" when its toe passes
- *  lower than the edge it rises over. People lift their feet higher over edges they see, so most of these never become trips:
- *  the trip odds (p, the contact table) stay apart. */
-const MTC_MEAN_M = 0.0141, MTC_SD_M = 0.0083, MTC_S = Math.sqrt(Math.log(1 + (MTC_SD_M / MTC_MEAN_M) ** 2)), MTC_MED_M = MTC_MEAN_M / Math.sqrt(1 + (MTC_SD_M / MTC_MEAN_M) ** 2);
+/** Foot lift: the published older-adult minimum toe clearance (MTC) curve, lognormal 14.1 +- 8.3 mm (Frontiers 2014, the
+ *  curve tools/contact_table.py fits the contact table to); its spread sets the shuffler below. */
+const MTC_MEAN_M = 0.0141, MTC_SD_M = 0.0083, MTC_S = Math.sqrt(Math.log(1 + (MTC_SD_M / MTC_MEAN_M) ** 2));
 /** The fan's personas until shuffle recordings exist. "Shuffler" = a person whose foot lift sits at the published curve's
  *  16th percentile (its median x e^-s, ~7 mm typical MTC instead of ~12); it scales both the MTC draw and the trip-odds
  *  lookup (clearance_scale). ASSUMPTION: a percentile of the published curve, not a measured shuffling group (Alcock 2018
@@ -213,9 +213,7 @@ export function fan(S: FanScene, st: Stamped, wm: WorldModel | null, state: { x:
     // an edge the swing rises over (stepping along the top of a mat or down off it is not)
     const [fi, fj] = toCell(g, from), rise = h - st.L.bump[fi * ny + fj];
     if (rise < S.rules.bump_min_m) return;
-    const nm = bumpName(S, st, hc, true);
-    fu.crossed ??= nm.replace(/ edge$/, '');
-    if (!fu.hazard && MTC_MED_M * ls * Math.exp(MTC_S * R.n()) < rise) { fu.hazard = nm; fu.at = cellXY(g, hc); }
+    if (!fu.crossed) { fu.crossed = bumpName(S, st, hc, true).replace(/ edge$/, ''); fu.at ??= cellXY(g, hc); }
   };
   const frame = (p: Pose, fu: Future) => { if (fu.hazard) return; const b = brushName(S, st, p); if (b) { fu.hazard = b.name; fu.at = b.at; } };
   const travel = (fu: Future) => { let d = 0; for (let k = 1; k < fu.walker.length; k++) d += Math.hypot(fu.walker[k][0] - fu.walker[k - 1][0], fu.walker[k][1] - fu.walker[k - 1][1]); return d; };
@@ -260,7 +258,8 @@ export function fan(S: FanScene, st: Stamped, wm: WorldModel | null, state: { x:
     if (fu.crossed) crossed[fu.crossed] = (crossed[fu.crossed] ?? 0) + 1;
     futures.push(fu);
   }
-  return { futures, counts, crossed, spread_m: spread(futures), path: kind, routes, ahead_s, lift };
+  const catches_month = futures.reduce((a, f) => a + f.p, 0) / Math.max(1, n) * risk.trips_per_night * risk.days_per_month;
+  return { futures, counts, crossed, spread_m: spread(futures), path: kind, routes, ahead_s, lift, catches_month };
 }
 
 /** sd of the futures' end points across their mean heading (m): how wide the fan opens */
@@ -271,15 +270,14 @@ export function spread(fs: Future[]): number {
   const v = fs.map(f => (f.end[0] - m[0]) * l[0] + (f.end[1] - m[1]) * l[1]);
   return Math.sqrt(v.reduce((a, x) => a + x * x, 0) / v.length);
 }
-/** the label: "World model: 12/30 cross the mat · 5 hit the edge" (the most crossed edge), then the other hazards;
- *  nothing crossed: "World model: 30 imagined futures · 4 hit the chair" (the most common hazard) or "all clear" */
+/** the label: "World model: 30 futures · 30 cross the mat · ≈1.0 toe catches/month here", then the brushes ("4 brush the chair") */
 export function fanLabel(F: Fan, model: string): string {
   const n = F.futures.length, edge = Object.entries(F.crossed).sort((a, b) => b[1] - a[1])[0];
-  const hit = edge ? F.futures.filter(f => f.crossed === edge[0] && f.hazard?.replace(/ edge$/, '') === edge[0]).length : 0;
-  const rest = Object.entries(F.counts).filter(([k]) => !edge || k.replace(/ edge$/, '') !== edge[0]).sort((a, b) => b[1] - a[1]).map(([k, c]) => `${c} hit the ${k}`);
-  const lead = edge ? `${edge[1]}/${n} cross the ${edge[0]} · ${hit} hit the edge` : `${n} imagined futures${rest.length ? '' : ' · all clear'}`;
-  return [`${model}: ${lead}`, ...rest].join(' · ');
+  const brush = Object.entries(F.counts).sort((a, b) => b[1] - a[1]).map(([k, c]) => `${c} brush the ${k}`);
+  const lead = edge ? `${edge[1]} cross the ${edge[0]} · ≈${catches(F.catches_month)} toe catches/month here` : brush.length ? '' : 'all clear';
+  return [`${model}: ${n} futures`, ...(lead ? [lead] : []), ...brush].join(' · ');
 }
+const catches = (c: number) => (c >= 0.095 ? c.toFixed(1) : c >= 0.001 ? c.toFixed(2) : '0');
 /** "18 over the mat · 12 around the mat" (only when the way ahead forks) */
 export function routeLabel(F: Fan): string {
   return F.routes.length > 1 ? F.routes.map(r => `${r.n} ${r.label}`).join(' · ') : '';

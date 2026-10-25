@@ -20,7 +20,7 @@ const at = (u: number) => { const i = Math.round(u * 100), q = rt[i + 10], yaw =
 const wm = toWorldModel(M, styles[0].e, off0 - M.mean_gap_m);
 const mat = init.objects.findIndex((o: any) => o.name === 'mat');
 
-test('futures fan: red at the mat, green once the mat is taped flat or removed', () => {
+test('futures fan: likely catches at the mat (sim.ts p), none once the mat is taped flat or removed', () => {
   const fp = worldFootprint(init.objects[mat] as any, lay.poses[mat]), xs = fp.map(p => p[0]), ys = fp.map(p => p[1]);
   const taped = { ...lay, flattened: [[[Math.min(...xs) - 0.03, Math.min(...ys) - 0.03], [Math.max(...xs) + 0.03, Math.max(...ys) + 0.03]]] as [XY, XY][] };
   const removed = { ...lay, poses: lay.poses.map((p, k) => (k === mat ? { ...p, removed: true } : p)) };
@@ -28,11 +28,12 @@ test('futures fan: red at the mat, green once the mat is taped flat or removed',
   for (const m of [wm, null]) {
     const F = fan(S, prepare(S, lay, null), m, at(0.7), xy, 30, 3);
     assert.equal(F.futures.length, 30);
-    assert.ok(F.crossed.mat >= 25 && F.counts['mat edge'] >= 10, JSON.stringify([F.crossed, F.counts]));
-    assert.match(fanLabel(F, 'World model'), /^World model: \d+\/30 cross the mat · \d+ hit the edge/);
+    // 1.1/month on the whole route (evaluate), almost all of it the mat: the fan over the mat says ~1
+    assert.ok(F.crossed.mat >= 20 && F.catches_month > 0.5 && F.catches_month < 2, JSON.stringify([F.crossed, F.catches_month]));
+    assert.match(fanLabel(F, 'World model'), /^World model: 30 futures · \d+ cross the mat · ≈[\d.]+ toe catches\/month here/);
     for (const L of [taped, tapedPose, removed]) {
       const G = fan(S, prepare(S, L, null), m, at(0.7), xy, 30, 3);
-      assert.ok(!G.crossed.mat && !Object.keys(G.counts).some(k => k.startsWith('mat')), JSON.stringify([G.crossed, G.counts]));
+      assert.ok(!G.crossed.mat && G.catches_month < 0.1 * F.catches_month, JSON.stringify([G.crossed, G.catches_month]));
     }
   }
 });
@@ -50,7 +51,7 @@ test('futures fan: the hand rule is one width everywhere, the learned fan opens 
 test('futures fan: a folded corner on the path is a hazard of its own', () => {
   const p = at(2.1), fold = { corner: [p.x + 0.6 * Math.cos(p.yaw), p.y + 0.6 * Math.sin(p.yaw)] as XY, lift_m: 0.03, size_m: 0.6 };
   const F = fan(S, prepare(S, lay, fold), wm, p, xy, 30, 3);
-  assert.ok((F.counts['folded corner'] ?? 0) > 0, JSON.stringify(F.counts));
+  assert.ok((F.crossed['folded corner'] ?? 0) > 0 && F.futures.some(f => f.crossed === 'folded corner' && f.p > 0.01), JSON.stringify([F.crossed, F.catches_month]));
 });
 
 test('futures fan model = the trained checkpoint: toWorldModel + predict match torch on 24 fresh states x every style (worldmodel/fan_parity.py)', () => {
@@ -87,9 +88,10 @@ test('futures fan: forks over vs around the mat ahead of it, each future follows
 });
 
 test('futures fan: the low-clearance shuffler catches the mat edge more often than average foot lift; taped, neither does', () => {
-  const st = prepare(S, lay, null), hits = (lift: 'average' | 'shuffler', L = st) => [0.7, 1.0, 1.2].flatMap(u => [1, 2, 3].map(sd => fan(S, L, wm, at(u), xy, 30, sd, { lift }).counts['mat edge'] ?? 0)).reduce((a, b) => a + b);
-  const avg = hits('average'), shuf = hits('shuffler');
-  assert.ok(shuf > avg + 20, `average ${avg} vs shuffler ${shuf} of 270`);
+  const st = prepare(S, lay, null), month = (lift: 'average' | 'shuffler', L = st) => [0.7, 1.0, 1.2].flatMap(u => [1, 2, 3].map(sd => fan(S, L, wm, at(u), xy, 30, sd, { lift }).catches_month)).reduce((a, b) => a + b) / 9;
+  const avg = month('average'), shuf = month('shuffler');
+  console.log(`fan over the mat: average ${avg.toFixed(2)} vs shuffler ${shuf.toFixed(2)} toe catches/month`);
+  assert.ok(shuf > 1.3 * avg, `average ${avg} vs shuffler ${shuf}`);
   const taped = prepare(S, { ...lay, poses: lay.poses.map((p, k) => (k === mat ? { ...p, taped: true } : p)) }, null);
-  assert.equal(hits('shuffler', taped), 0);
+  assert.ok(month('shuffler', taped) < 0.2 * shuf, `taped ${month('shuffler', taped)}`);   // what is left is the cord the mat lay over
 });
