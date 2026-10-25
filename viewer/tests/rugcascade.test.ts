@@ -25,7 +25,7 @@ test('the fold is a taller bump within its size', () => {
 
 test('one fold per rug, cleared when the rug moves or is taped', () => {
   const pose = { x: 0, y: 0, yaw: 0 };
-  const C = createRugCascade({ index: 0, poly: p => rug.map(([x, y]) => [x + p.x, y + p.y] as XY) });
+  const C = createRugCascade([{ index: 0, poly: p => rug.map(([x, y]) => [x + p.x, y + p.y] as XY) }]);
   let lay: Layout = { poses: [pose], flattened: [] };
   for (let k = 0; k < 20 && !lay.folds?.length; k++) lay = C.lap(route, lay) ?? lay;
   assert.equal(lay.folds?.length, 1);
@@ -35,4 +35,12 @@ test('one fold per rug, cleared when the rug moves or is taped', () => {
   const taped = { poses: [{ ...pose, taped: true } as Pose], flattened: [] } as Layout;
   assert.deepEqual(C.lap(route, { ...taped, folds: lay.folds })?.folds, []);   // taping clears the fold
   for (let k = 0; k < 20; k++) assert.equal(C.lap(route, taped), null);       // and a taped rug never folds
+});
+
+test('two rugs: the one the route crosses folds', () => {
+  const at = (dx: number) => (p: Pose) => rug.map(([x, y]) => [x + p.x + dx, y + p.y] as XY);
+  const C = createRugCascade([{ index: 0, poly: at(5) }, { index: 1, poly: at(0) }]);   // rug 0 is 5 m off the route
+  let lay: Layout = { poses: [{ x: 0, y: 0, yaw: 0 }, { x: 0, y: 0, yaw: 0 }], flattened: [] };
+  for (let k = 0; k < 20 && !lay.folds?.length; k++) lay = C.lap(route, lay) ?? lay;
+  assert.deepEqual(lay.folds?.[0].corner, [0, 0]);
 });

@@ -49,25 +49,27 @@ export function foldOnPass(poly: XY[], xy: XY[], n: number, p = P_FOLD): Fold | 
   return null;
 }
 
-/** Autoplay's lap counter: call lap() each time autoplay wraps to the start. A fold already there stays (one per rug);
- *  moving, removing or taping the rug clears it. Returns the new layout when it changed, else null. */
-export function createRugCascade(rug: { index: number; poly: (p: Pose) => XY[] } | null) {
-  let n = 0, at = '';
+/** Autoplay's lap counter over every rug: call lap() each time autoplay wraps to the start. The first rug the route
+ *  crosses that folds gets the fold; it stays (one fold at a time) until that rug is moved, removed or taped. Returns the
+ *  new layout when it changed, else null. */
+export function createRugCascade(rugs: { index: number; poly: (p: Pose) => XY[] }[]) {
+  let n = 0, at = -1, was = '';
   // a taped rug can't fold (Pose.taped comes with the futures-fan branch; read without depending on it)
   const taped = (p: Pose) => 'taped' in p && !!p.taped;
   const key = (p: Pose) => `${p.x},${p.y},${p.yaw},${!!p.removed},${taped(p)}`;
   return {
     get passes() { return n; },
     lap(xy: XY[], lay: Layout): Layout | null {
-      if (!rug) return null;
-      const p = lay.poses[rug.index];
-      if (lay.folds?.length && key(p) !== at) return { ...lay, folds: [] };
-      if (p.removed || taped(p) || lay.folds?.length) return null;
-      const f = foldOnPass(rug.poly(p), xy, ++n);
-      if (!f) return null;
-      at = key(p);
-      return { ...lay, folds: [f] };
+      if (lay.folds?.length) return at >= 0 && key(lay.poses[at]) !== was ? { ...lay, folds: [] } : null;
+      n++;
+      for (const r of rugs) {
+        const p = lay.poses[r.index];
+        if (p.removed || taped(p)) continue;
+        const f = foldOnPass(r.poly(p), xy, n);
+        if (f) { at = r.index; was = key(p); return { ...lay, folds: [f] }; }
+      }
+      return null;
     },
-    reset() { n = 0; at = ''; },
+    reset() { n = 0; at = -1; was = ''; },
   };
 }

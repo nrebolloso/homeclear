@@ -1793,8 +1793,7 @@ function routePose(s: number, prevYaw: number, dt: number) {
 }
 // ---------- rug fold cascade in autoplay (rugcascade.ts): a corner folded on one pass is a taller bump on the next ----------
 // on with ?rugfold=1 or game.rugFolds.set(true); off by default so the e2e numbers stay fixed
-const rugK = objs.findIndex(o => o.kind === 'rug');
-const rugCascade = createRugCascade(rugK < 0 ? null : { index: rugK, poly: p => worldFootprint(objs[rugK], p) });
+const rugCascade = createRugCascade(objs.flatMap((o, k) => (o.kind === 'rug' ? [{ index: k, poly: (p: Pose) => worldFootprint(o, p) }] : [])));
 const foldMark = new THREE.Mesh(new THREE.CircleGeometry(1, 32), new THREE.MeshBasicMaterial({ color: 0xff3030, transparent: true, opacity: 0.55, depthWrite: false }));
 foldMark.visible = false; foldMark.renderOrder = 2; scene.add(foldMark);
 let rugOn = PARAMS.has('rugfold'), atEnd = false;
