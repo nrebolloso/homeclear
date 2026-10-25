@@ -167,7 +167,7 @@ export function createWmGhosts(D: WmGhostDeps) {
   }
 
   // ---------- a month of trips at once ----------
-  let month: { trips: ImaginedStep[][]; W: [number, number, number][][]; d: number[][]; next: number[]; flashT: number[]; snagAt: { k: number; what: string }[][];
+  let month: { every: number; trips: ImaginedStep[][]; W: [number, number, number][][]; d: number[][]; next: number[]; flashT: number[]; snagAt: { k: number; what: string }[][];
     body: THREE.InstancedMesh; head: THREE.InstancedMesh; frame: THREE.InstancedMesh; counts: Record<string, number>; label: THREE.Sprite | null; which: string; key: string; im: Imagined } | null = null;
   function clearMonth() {
     if (!month) return;
@@ -186,9 +186,13 @@ export function createWmGhosts(D: WmGhostDeps) {
     await D.planfix.goto(pl);
     const im = await D.planfix.imagine(pl, wmOf(styles[0].e), 60);
     if (id !== runId) return null;
-    const n = im.trips.length, w = D.walker(), mk = (geo: THREE.BufferGeometry) => {
-      const m = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false }), n);
-      m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3); m.renderOrder = 5; m.frustumCulled = false; root.add(m); return m;
+    // demo mode: every 3rd trip drawn (20 ghosts, coarser and unlit: 60 overlapping translucent figures on the splat cost
+    // the frame rate); all 60 still walk and count
+    const demo = document.body.classList.contains('demo'), every = demo ? 3 : 1;
+    const n = im.trips.length, drawn = Math.ceil(n / every), w = D.walker(), mk = (geo: THREE.BufferGeometry) => {
+      const opt = { color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false };
+      const m = new THREE.InstancedMesh(geo, demo ? new THREE.MeshBasicMaterial(opt) : new THREE.MeshStandardMaterial(opt), drawn);
+      m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(drawn * 3), 3); m.renderOrder = 5; m.frustumCulled = false; root.add(m); return m;
     };
     // the batch tables' snags (mat slides, chair knocked) are rates per trip, not per step: drawn per trip with their own
     // seed, shown at the step nearest the object
@@ -196,8 +200,8 @@ export function createWmGhosts(D: WmGhostDeps) {
     const snagAt = im.trips.map(t => im.snags.flatMap(o => (R.u() < o.per_month / im.trips_per_month ? [{
       k: t.reduce((b, st, k) => (Math.hypot(st.walker[0] - o.at[0], st.walker[1] - o.at[1]) < Math.hypot(t[b].walker[0] - o.at[0], t[b].walker[1] - o.at[1]) ? k : b), 0),
       what: `${o.object} ${o.event}` }] : [])));
-    month = { trips: im.trips, W: im.trips.map(t => t.map(x => x.walker)), d: [], next: new Array(n).fill(0), flashT: new Array(n).fill(0), snagAt,
-      body: mk(new THREE.CylinderGeometry(0.13, 0.15, 1.15, 8)), head: mk(new THREE.SphereGeometry(0.1, 8, 6)), frame: mk(new THREE.BoxGeometry(w.depth_m, w.width_m, 0.04)),
+    month = { every, trips: im.trips, W: im.trips.map(t => t.map(x => x.walker)), d: [], next: new Array(n).fill(0), flashT: new Array(n).fill(0), snagAt,
+      body: mk(new THREE.CylinderGeometry(0.13, 0.15, 1.15, demo ? 5 : 8)), head: mk(new THREE.SphereGeometry(0.1, demo ? 5 : 8, demo ? 3 : 6)), frame: mk(new THREE.BoxGeometry(w.depth_m, w.width_m, 0.04)),
       counts: {}, label: null, which, key: '', im };
     month.d = month.W.map(arc);
     mode = 'month'; s = 0;
@@ -211,7 +215,7 @@ export function createWmGhosts(D: WmGhostDeps) {
   }
 
   // ---------- per frame ----------
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(1, 0, 0), red = new THREE.Color(0xff3030), calm = new THREE.Color(0x9fd8ff);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(1, 0, 0), zAxis = new THREE.Vector3(0, 0, 1), pv = new THREE.Vector3(), sv = new THREE.Vector3(), red = new THREE.Color(0xff3030), calm = new THREE.Color(0x9fd8ff);
   function update(dt: number) {
     if (mode === 'off') return;
     s += SPEED * dt;
@@ -253,13 +257,14 @@ export function createWmGhosts(D: WmGhostDeps) {
           M2.next[i]++;
         }
         M2.flashT[i] = Math.max(0, M2.flashT[i] - dt);
-        const [x, y, yaw] = poseAtArc(M2.W[i], M2.d[i], Math.max(0, si)), bx = x - Math.cos(yaw) * offset(), by = y - Math.sin(yaw) * offset();
-        q.setFromAxisAngle(up, Math.PI / 2);
-        M2.body.setMatrixAt(i, m4.compose(new THREE.Vector3(bx, by, 0.6), q, new THREE.Vector3(sc, sc, sc)));
-        M2.head.setMatrixAt(i, m4.makeTranslation(bx + 0.08 * Math.cos(yaw), by + 0.08 * Math.sin(yaw), 1.4).scale(new THREE.Vector3(sc, sc, sc)));
-        M2.frame.setMatrixAt(i, m4.compose(new THREE.Vector3(x, y, w.handle_height_m), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), yaw), new THREE.Vector3(sc, sc, sc)));
+        if (i % M2.every) return;
+        const j = i / M2.every, [x, y, yaw] = poseAtArc(M2.W[i], M2.d[i], Math.max(0, si)), bx = x - Math.cos(yaw) * offset(), by = y - Math.sin(yaw) * offset();
+        q.setFromAxisAngle(up, Math.PI / 2); sv.setScalar(sc);
+        M2.body.setMatrixAt(j, m4.compose(pv.set(bx, by, 0.6), q, sv));
+        M2.head.setMatrixAt(j, m4.makeTranslation(bx + 0.08 * Math.cos(yaw), by + 0.08 * Math.sin(yaw), 1.4).scale(sv));
+        M2.frame.setMatrixAt(j, m4.compose(pv.set(x, y, w.handle_height_m), q.setFromAxisAngle(zAxis, yaw), sv));
         const c = M2.flashT[i] > 0 ? red : calm;
-        for (const m of [M2.body, M2.head, M2.frame]) m.setColorAt(i, c);
+        for (const m of [M2.body, M2.head, M2.frame]) m.setColorAt(j, c);
       });
       for (const m of [M2.body, M2.head, M2.frame]) { m.instanceMatrix.needsUpdate = true; m.instanceColor!.needsUpdate = true; }
       const lines = monthLines(), key = lines.join('|');
