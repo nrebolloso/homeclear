@@ -32,3 +32,30 @@
    headless fps to about 16-22 (it was 60 plugged in), and the e2e fps check fails. Plug in and switch to the
    balanced or performance profile first.
 9. **Quest 2 test with taped controllers: fps + tracking (VR team).**
+10. **Kitchen planner zones and outlets (kitchen4_lighter).** `configs/planner/kitchen4_lighter.json` uses the zones you
+   described (start in front of the fridge, sink next to it, goal near the stairs), read off the viewer. The outlets are
+   assumed: the nightlight at (-1.13, -0.58) and the add_nightlight spot at (1.35, 0.80). Mark the real outlets and tape
+   the fridge-door swing; the planner then only places nightlights on real outlets.
+11. **Our own walker videos for gait personalization.** Film yourself and teammates with the walker and write `steps.csv` as
+   described in `worldmodel/walker_videos.py`. Then run `python -m worldmodel.persona --extra <dir>`. Until then the embedding is
+   trained on PhysioNet only.
+12. **VR: the 3D ghosts are untested in a headset (VR team).** `game.gait.ghost` and the life-size world-model ghosts
+   (`game.wmghosts`: two gait styles, futures fan, predicted self, month replay) and the live futures fan (`game.fan`: 30 trails, 30 frames, 10 people, updated every 0.5 s in `xrFrame`, 4-5 s ahead, plus a card per route fork) are scene objects, so they should render in
+   WebXR, but nobody has looked at them on a Quest 2. Labels are sprites sized for a desktop camera, and the month replay
+   draws 3 instanced meshes of 60. Check legibility and fps in the headset, and bind `twoStyles()` / `month()` from `xr.ts`.
+13. **Re-run the planner's B200 search for the unified "taped" mat (Nicolas, HiPerGator).** A taped mat is now a 1.5 mm edge
+   (`grid.ts TAPED_EDGE_M`, mirrored in `planner/engine.py`); the published search (job 47465023) used the old rule. A CPU
+   re-score of the taped replays gives ~60.0-60.4/month, but `out/planner/kitchen4_lighter/search.json` was not regenerated.
+   Run `planner/publish.sh` after the job.
+14. **Shuffle recordings for the fan's "shuffler".** The low-clearance foot lift is an ASSUMPTION (16th percentile of the
+   Frontiers 2014 MTC curve, ~7 mm). Film a few deliberate shuffling passes over the mat edge (side view, tape in view) so
+   the lift distribution comes from our own data.
+15. **Should the planner minimise toe catches alone?** Its objective is toe catches + simulated snags + brushes/month, and the
+   snags/brushes dominate (60.91 = 0.07 toe catches + the rest), so the option "least effort for 20% less risk" cuts the
+   objective without saving any toe catches. The demo now leads with toe catches/month everywhere; changing the objective
+   means a new B200 search.
+16. **Merge `rug-calibration` into `wm-planner` (yours; its BLOCKERS 17).** Without it the round trip cannot fold the mat (the
+   Rapier flap: 0/8 inbound legs). A trial merge in a scratch worktree (discarded) worked with the recipe there plus the
+   fan hook `fold: () => live?.fold() ?? layout.folds?.[0] ?? null`: tsc clean, and with `?rugfold=1` the mat folded at the
+   end of the inbound leg in 4/4 runs and the outbound fan showed "folded corner". After the merge, re-record
+   `futures_fan.mp4` with `&rugfold=1` so the fold is in the video.

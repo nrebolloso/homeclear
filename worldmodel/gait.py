@@ -65,6 +65,7 @@ def walker_track(proc_dir, seg):
 def trial_samples(seg, com, wk):
     st = steps_of(seg)
     com_xy = com[["CoM x", "CoM y"]].to_numpy()
+    head = seg[["Head x", "Head y", "Head z"]].to_numpy()       # what a headset tracks (gait personalization, persona.py)
     route = route_of(com_xy)
     rows, drop = [], {"same_side": 0, "edge": 0, "implausible": 0, "no_walker": 0}
     for i in range(2, len(st) - 2):            # first two and last steps: starting / stopping, not walking
@@ -86,7 +87,7 @@ def trial_samples(seg, com, wk):
             continue
         rows.append({"heels": heels, "sides": np.array([s0, -s0, s0]), "action": route[[k + 25, k + 50, k + 100]],
                      "walker0": wk[t0], "heel1": h1, "walker1": wk[t1], "com": com_xy[t0], "dt": (t1 - t0) / FPS,
-                     "route_k": k, "step": i})
+                     "route_k": k, "step": i, "head0": head[t0], "head1": head[t1]})
     return rows, drop, len(st), route
 
 
@@ -119,7 +120,7 @@ def main(ds, out):
     log.to_csv(Path(out).with_suffix(".trials.csv"), index=False)
     A = lambda k: np.stack([r[k] for r in recs])
     np.savez_compressed(out, **{k: A(k) for k in ("heels", "sides", "action", "walker0", "heel1", "walker1", "com", "dt",
-                                                    "route_k", "step", "pid", "kind", "speed", "trial")})
+                                                    "route_k", "step", "pid", "kind", "speed", "trial", "head0", "head1")})
     np.savez_compressed(Path(out).with_suffix(".routes.npz"), **routes)
     print(f"{len(log)} trials, {log.steps.sum()} steps, {len(recs)} samples; camera fit median "
           f"{1000 * log.fit_res_median_m.median():.1f} mm, bad frames {log.fit_bad_frames.sum()} / {log.camera_frames.sum()}; dropped "

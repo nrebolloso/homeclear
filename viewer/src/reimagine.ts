@@ -234,7 +234,7 @@ export function createReimagine(D: ReimagineDeps) {
     if (changes.length) {   // the receipt over the middle of the room
       const tot = sumCosts(changes.map(c => c.cost));
       const lines = ['Reimagined room', `${changes.length} change${changes.length === 1 ? '' : 's'} · ${tot.usd ? `$${tot.usd}` : 'no purchases'} · ${tot.minutes} min`];
-      if (before && after) lines.push(`toe contacts/month ${before.per_month.toFixed(2)} → ${after.per_month.toFixed(2)}`);
+      if (before && after) lines.push(`toe catches/month ${before.per_month.toFixed(2)} → ${after.per_month.toFixed(2)}`);
       if (resolved.length) lines.push(`${resolved.length} hazard${resolved.length === 1 ? '' : 's'} cleared`);
       if (changes.some(c => c.cost.source === 'placeholder')) lines.push('costs: placeholder estimates');
       const r = card(lines, '#ffffff', 'rgba(14,20,28,0.85)', 0.09);

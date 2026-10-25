@@ -1,0 +1,1037 @@
+{
+ "what": "kitchen route walked by the persona world model folded with each embedding (planner/engine.py, common random numbers, 2000 trips each); scanned room, the search's 3 options, one change at a time toward the chosen option",
+ "data": "PhysioNet Multi-Gait-Posture 1.0.0 (CC BY 4.0), participants [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]; held out [12, 13]",
+ "scanned_spread": {
+  "contacts": {
+   "min": 1.09,
+   "max": 1.18,
+   "mean_style": 1.13,
+   "mean_style_reseeded": 1.12
+  },
+  "snags": {
+   "min": 66.57,
+   "max": 66.57,
+   "mean_style": 66.57,
+   "mean_style_reseeded": 66.57
+  },
+  "brushes": {
+   "min": 121.92,
+   "max": 149.52,
+   "mean_style": 123.24,
+   "mean_style_reseeded": 122.73
+  },
+  "risk": {
+   "min": 189.63,
+   "max": 217.27,
+   "mean_style": 190.94,
+   "mean_style_reseeded": 190.42
+  }
+ },
+ "same_best_option": 15,
+ "same_fix_order": 15,
+ "search_picks": {
+  "chosen": 37,
+  "lowest": 44,
+  "cheap": 3
+ },
+ "same_repick": {
+  "chosen": 2,
+  "lowest": 12,
+  "cheap": 1
+ },
+ "repick_by_style": {
+  "mean": {
+   "chosen": 40,
+   "lowest": 44,
+   "cheap": 1
+  },
+  "P12 (held out, fitted 30 s)": {
+   "chosen": 40,
+   "lowest": 44,
+   "cheap": 1
+  },
+  "P13 (held out, fitted 30 s)": {
+   "chosen": 40,
+   "lowest": 44,
+   "cheap": 1
+  },
+  "P00 (training)": {
+   "chosen": 37,
+   "lowest": 44,
+   "cheap": 1
+  },
+  "P01 (training)": {
+   "chosen": 40,
+   "lowest": 44,
+   "cheap": 1
+  },
+  "P02 (training)": {
+   "chosen": 36,
+   "lowest": 43,
+   "cheap": 3
+  },
+  "P03 (training)": {
+   "chosen": 40,
+   "lowest": 44,
+   "cheap": 1
+  },
+  "P04 (training)": {
+   "chosen": 40,
+   "lowest": 44,
+   "cheap": 1
+  },
+  "P05 (training)": {
+   "chosen": 40,
+   "lowest": 44,
+   "cheap": 1
+  },
+  "P06 (training)": {
+   "chosen": 40,
+   "lowest": 44,
+   "cheap": 1
+  },
+  "P07 (training)": {
+   "chosen": 40,
+   "lowest": 44,
+   "cheap": 1
+  },
+  "P08 (training)": {
+   "chosen": 37,
+   "lowest": 44,
+   "cheap": 1
+  },
+  "P09 (training)": {
+   "chosen": 40,
+   "lowest": 45,
+   "cheap": 1
+  },
+  "P10 (training)": {
+   "chosen": 40,
+   "lowest": 44,
+   "cheap": 1
+  },
+  "P11 (training)": {
+   "chosen": 36,
+   "lowest": 45,
+   "cheap": 1
+  }
+ },
+ "n": 15,
+ "per_style": {
+  "mean": {
+   "placement": {
+    "step_cm": 38.5,
+    "lateral_cm": 8.6,
+    "vs_mean_cm": null,
+    "steps": 11
+   },
+   "scanned": {
+    "risk": 190.94,
+    "lo": 181.18,
+    "hi": 200.73,
+    "contacts": 1.13,
+    "snags": 66.57,
+    "brushes": 123.24
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 67.24,
+     "lo": 65.47,
+     "hi": 68.47,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 67.17
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 60.22,
+     "lo": 60.17,
+     "hi": 60.24,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 60.03
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 153.8,
+     "lo": 145.59,
+     "hi": 163.47,
+     "contacts": 1.13,
+     "snags": 41.46,
+     "brushes": 111.21
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     81.54
+    ],
+    [
+     "mat",
+     42.16
+    ]
+   ],
+   "repick": {
+    "chosen": 40,
+    "lowest": 44,
+    "cheap": 1
+   }
+  },
+  "P12 (held out, fitted 30 s)": {
+   "placement": {
+    "step_cm": 39.3,
+    "lateral_cm": 9.2,
+    "vs_mean_cm": 6.0,
+    "steps": 11
+   },
+   "scanned": {
+    "risk": 191.72,
+    "lo": 181.54,
+    "hi": 201.41,
+    "contacts": 1.13,
+    "snags": 66.57,
+    "brushes": 124.02
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 70.84,
+     "lo": 68.65,
+     "hi": 72.7,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 70.77
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 60.22,
+     "lo": 60.17,
+     "hi": 60.24,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 60.03
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 157.94,
+     "lo": 148.93,
+     "hi": 166.62,
+     "contacts": 1.13,
+     "snags": 41.46,
+     "brushes": 115.35
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     78.72
+    ],
+    [
+     "mat",
+     42.16
+    ]
+   ],
+   "repick": {
+    "chosen": 40,
+    "lowest": 44,
+    "cheap": 1
+   }
+  },
+  "P13 (held out, fitted 30 s)": {
+   "placement": {
+    "step_cm": 38.0,
+    "lateral_cm": 8.2,
+    "vs_mean_cm": 3.6,
+    "steps": 11
+   },
+   "scanned": {
+    "risk": 189.83,
+    "lo": 180.58,
+    "hi": 199.8,
+    "contacts": 1.13,
+    "snags": 66.57,
+    "brushes": 122.13
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 65.62,
+     "lo": 63.58,
+     "hi": 67.0,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 65.55
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 60.19,
+     "lo": 60.17,
+     "hi": 60.21,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 60.0
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 152.21,
+     "lo": 144.46,
+     "hi": 161.79,
+     "contacts": 1.13,
+     "snags": 41.46,
+     "brushes": 109.62
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     82.05
+    ],
+    [
+     "mat",
+     42.16
+    ]
+   ],
+   "repick": {
+    "chosen": 40,
+    "lowest": 44,
+    "cheap": 1
+   }
+  },
+  "P00 (training)": {
+   "placement": {
+    "step_cm": 38.3,
+    "lateral_cm": 7.9,
+    "vs_mean_cm": 8.0,
+    "steps": 11
+   },
+   "scanned": {
+    "risk": 190.93,
+    "lo": 182.04,
+    "hi": 200.24,
+    "contacts": 1.12,
+    "snags": 66.57,
+    "brushes": 123.24
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 63.49,
+     "lo": 61.53,
+     "hi": 64.63,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 63.42
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 60.19,
+     "lo": 60.17,
+     "hi": 60.21,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 60.0
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 136.27,
+     "lo": 127.56,
+     "hi": 146.03,
+     "contacts": 1.12,
+     "snags": 41.46,
+     "brushes": 93.69
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     85.29
+    ],
+    [
+     "mat",
+     42.15
+    ]
+   ],
+   "repick": {
+    "chosen": 37,
+    "lowest": 44,
+    "cheap": 1
+   }
+  },
+  "P01 (training)": {
+   "placement": {
+    "step_cm": 37.2,
+    "lateral_cm": 7.7,
+    "vs_mean_cm": 8.1,
+    "steps": 11
+   },
+   "scanned": {
+    "risk": 192.49,
+    "lo": 183.24,
+    "hi": 202.22,
+    "contacts": 1.12,
+    "snags": 66.57,
+    "brushes": 124.8
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 71.56,
+     "lo": 69.49,
+     "hi": 73.3,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 71.49
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 60.19,
+     "lo": 60.17,
+     "hi": 60.21,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 60.0
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 171.43,
+     "lo": 163.32,
+     "hi": 180.12,
+     "contacts": 1.13,
+     "snags": 41.46,
+     "brushes": 128.85
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     78.78
+    ],
+    [
+     "mat",
+     42.16
+    ]
+   ],
+   "repick": {
+    "chosen": 40,
+    "lowest": 44,
+    "cheap": 1
+   }
+  },
+  "P02 (training)": {
+   "placement": {
+    "step_cm": 34.8,
+    "lateral_cm": 8.1,
+    "vs_mean_cm": 18.5,
+    "steps": 12
+   },
+   "scanned": {
+    "risk": 217.27,
+    "lo": 207.46,
+    "hi": 227.44,
+    "contacts": 1.18,
+    "snags": 66.57,
+    "brushes": 149.52
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 61.75,
+     "lo": 60.6,
+     "hi": 62.53,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 61.68
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 60.4,
+     "lo": 60.17,
+     "hi": 60.54,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 60.21
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 135.42,
+     "lo": 126.76,
+     "hi": 145.34,
+     "contacts": 1.17,
+     "snags": 41.46,
+     "brushes": 92.79
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     113.31
+    ],
+    [
+     "mat",
+     42.21
+    ]
+   ],
+   "repick": {
+    "chosen": 36,
+    "lowest": 43,
+    "cheap": 3
+   }
+  },
+  "P03 (training)": {
+   "placement": {
+    "step_cm": 40.8,
+    "lateral_cm": 10.0,
+    "vs_mean_cm": 10.8,
+    "steps": 11
+   },
+   "scanned": {
+    "risk": 193.57,
+    "lo": 183.63,
+    "hi": 203.68,
+    "contacts": 1.12,
+    "snags": 66.57,
+    "brushes": 125.88
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 71.56,
+     "lo": 69.78,
+     "hi": 73.0,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 71.49
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 60.25,
+     "lo": 60.17,
+     "hi": 60.51,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 60.06
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 163.24,
+     "lo": 155.82,
+     "hi": 171.92,
+     "contacts": 1.12,
+     "snags": 41.46,
+     "brushes": 120.66
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     79.86
+    ],
+    [
+     "mat",
+     42.15
+    ]
+   ],
+   "repick": {
+    "chosen": 40,
+    "lowest": 44,
+    "cheap": 1
+   }
+  },
+  "P04 (training)": {
+   "placement": {
+    "step_cm": 38.1,
+    "lateral_cm": 8.7,
+    "vs_mean_cm": 8.1,
+    "steps": 11
+   },
+   "scanned": {
+    "risk": 194.99,
+    "lo": 185.35,
+    "hi": 204.6,
+    "contacts": 1.13,
+    "snags": 66.57,
+    "brushes": 127.29
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 83.89,
+     "lo": 80.77,
+     "hi": 88.03,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 83.82
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 60.34,
+     "lo": 60.17,
+     "hi": 60.54,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 60.15
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 181.34,
+     "lo": 172.78,
+     "hi": 192.25,
+     "contacts": 1.13,
+     "snags": 41.46,
+     "brushes": 138.75
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     68.94
+    ],
+    [
+     "mat",
+     42.17
+    ]
+   ],
+   "repick": {
+    "chosen": 40,
+    "lowest": 44,
+    "cheap": 1
+   }
+  },
+  "P05 (training)": {
+   "placement": {
+    "step_cm": 40.5,
+    "lateral_cm": 9.6,
+    "vs_mean_cm": 15.2,
+    "steps": 11
+   },
+   "scanned": {
+    "risk": 202.91,
+    "lo": 193.16,
+    "hi": 212.72,
+    "contacts": 1.1,
+    "snags": 66.57,
+    "brushes": 135.24
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 88.15,
+     "lo": 86.11,
+     "hi": 90.76,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 88.08
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 64.24,
+     "lo": 63.23,
+     "hi": 65.4,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 64.05
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 174.05,
+     "lo": 166.27,
+     "hi": 182.77,
+     "contacts": 1.11,
+     "snags": 41.46,
+     "brushes": 131.49
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     72.63
+    ],
+    [
+     "mat",
+     42.14
+    ]
+   ],
+   "repick": {
+    "chosen": 40,
+    "lowest": 44,
+    "cheap": 1
+   }
+  },
+  "P06 (training)": {
+   "placement": {
+    "step_cm": 39.3,
+    "lateral_cm": 8.7,
+    "vs_mean_cm": 8.2,
+    "steps": 11
+   },
+   "scanned": {
+    "risk": 191.11,
+    "lo": 181.57,
+    "hi": 201.26,
+    "contacts": 1.12,
+    "snags": 66.57,
+    "brushes": 123.42
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 71.92,
+     "lo": 69.64,
+     "hi": 73.99,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 71.85
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 60.19,
+     "lo": 60.17,
+     "hi": 60.21,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 60.0
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 158.8,
+     "lo": 150.81,
+     "hi": 168.17,
+     "contacts": 1.12,
+     "snags": 41.46,
+     "brushes": 116.22
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     77.04
+    ],
+    [
+     "mat",
+     42.15
+    ]
+   ],
+   "repick": {
+    "chosen": 40,
+    "lowest": 44,
+    "cheap": 1
+   }
+  },
+  "P07 (training)": {
+   "placement": {
+    "step_cm": 34.5,
+    "lateral_cm": 8.5,
+    "vs_mean_cm": 21.9,
+    "steps": 12
+   },
+   "scanned": {
+    "risk": 193.5,
+    "lo": 183.71,
+    "hi": 203.77,
+    "contacts": 1.17,
+    "snags": 66.57,
+    "brushes": 125.76
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 68.5,
+     "lo": 67.17,
+     "hi": 70.87,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 68.43
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 60.25,
+     "lo": 60.17,
+     "hi": 60.27,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 60.06
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 151.08,
+     "lo": 142.03,
+     "hi": 163.34,
+     "contacts": 1.17,
+     "snags": 41.46,
+     "brushes": 108.45
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     82.8
+    ],
+    [
+     "mat",
+     42.21
+    ]
+   ],
+   "repick": {
+    "chosen": 40,
+    "lowest": 44,
+    "cheap": 1
+   }
+  },
+  "P08 (training)": {
+   "placement": {
+    "step_cm": 36.3,
+    "lateral_cm": 8.9,
+    "vs_mean_cm": 15.6,
+    "steps": 12
+   },
+   "scanned": {
+    "risk": 197.01,
+    "lo": 187.55,
+    "hi": 207.04,
+    "contacts": 1.17,
+    "snags": 66.57,
+    "brushes": 129.27
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 61.21,
+     "lo": 60.6,
+     "hi": 61.9,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 61.14
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 60.19,
+     "lo": 60.17,
+     "hi": 60.21,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 60.0
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 138.84,
+     "lo": 130.7,
+     "hi": 147.38,
+     "contacts": 1.17,
+     "snags": 41.46,
+     "brushes": 96.21
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     93.6
+    ],
+    [
+     "mat",
+     42.2
+    ]
+   ],
+   "repick": {
+    "chosen": 37,
+    "lowest": 44,
+    "cheap": 1
+   }
+  },
+  "P09 (training)": {
+   "placement": {
+    "step_cm": 37.8,
+    "lateral_cm": 8.1,
+    "vs_mean_cm": 7.1,
+    "steps": 11
+   },
+   "scanned": {
+    "risk": 189.63,
+    "lo": 180.65,
+    "hi": 198.97,
+    "contacts": 1.14,
+    "snags": 66.57,
+    "brushes": 121.92
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 65.68,
+     "lo": 64.21,
+     "hi": 67.33,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 65.61
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 60.19,
+     "lo": 60.17,
+     "hi": 60.21,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 60.0
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 151.47,
+     "lo": 142.22,
+     "hi": 160.88,
+     "contacts": 1.14,
+     "snags": 41.46,
+     "brushes": 108.87
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     81.78
+    ],
+    [
+     "mat",
+     42.17
+    ]
+   ],
+   "repick": {
+    "chosen": 40,
+    "lowest": 45,
+    "cheap": 1
+   }
+  },
+  "P10 (training)": {
+   "placement": {
+    "step_cm": 42.1,
+    "lateral_cm": 10.1,
+    "vs_mean_cm": 20.3,
+    "steps": 10
+   },
+   "scanned": {
+    "risk": 198.31,
+    "lo": 188.71,
+    "hi": 208.21,
+    "contacts": 1.09,
+    "snags": 66.57,
+    "brushes": 130.65
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 80.41,
+     "lo": 77.97,
+     "hi": 82.21,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 80.34
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 60.85,
+     "lo": 60.44,
+     "hi": 61.47,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 60.66
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 167.23,
+     "lo": 158.91,
+     "hi": 176.42,
+     "contacts": 1.09,
+     "snags": 41.46,
+     "brushes": 124.68
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     75.78
+    ],
+    [
+     "mat",
+     42.13
+    ]
+   ],
+   "repick": {
+    "chosen": 40,
+    "lowest": 44,
+    "cheap": 1
+   }
+  },
+  "P11 (training)": {
+   "placement": {
+    "step_cm": 37.2,
+    "lateral_cm": 8.0,
+    "vs_mean_cm": 6.0,
+    "steps": 11
+   },
+   "scanned": {
+    "risk": 194.75,
+    "lo": 184.87,
+    "hi": 204.45,
+    "contacts": 1.13,
+    "snags": 66.57,
+    "brushes": 127.05
+   },
+   "options": [
+    {
+     "why": "chosen: most risk removed per unit of effort",
+     "risk": 61.9,
+     "lo": 60.37,
+     "hi": 63.07,
+     "contacts": 0.07,
+     "snags": 0,
+     "brushes": 61.83
+    },
+    {
+     "why": "lowest risk found",
+     "risk": 60.19,
+     "lo": 60.17,
+     "hi": 60.21,
+     "contacts": 0.0,
+     "snags": 0.19,
+     "brushes": 60.0
+    },
+    {
+     "why": "least effort for 20% less risk",
+     "risk": 134.36,
+     "lo": 126.43,
+     "hi": 143.29,
+     "contacts": 1.13,
+     "snags": 41.46,
+     "brushes": 91.77
+    }
+   ],
+   "best_option": "lowest risk found",
+   "fix_ranking": [
+    [
+     "chair8",
+     90.69
+    ],
+    [
+     "mat",
+     42.17
+    ]
+   ],
+   "repick": {
+    "chosen": 36,
+    "lowest": 45,
+    "cheap": 1
+   }
+  }
+ }
+}

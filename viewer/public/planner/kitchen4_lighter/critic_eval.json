@@ -1,0 +1,35 @@
+{
+ "scene": "kitchen4_lighter",
+ "target": "risk (events / month, search rollouts)",
+ "features": 33,
+ "hidden": [
+  64,
+  64
+ ],
+ "train": {
+  "n": 50684,
+  "mae": 1.0,
+  "rmse": 2.13,
+  "r2": 0.997,
+  "spearman": 0.823,
+  "top5pct_overlap": 0.172,
+  "risk_range": [
+   60.1,
+   330.0
+  ]
+ },
+ "held_out": {
+  "n": 12670,
+  "mae": 1.38,
+  "rmse": 4.2,
+  "r2": 0.987,
+  "spearman": 0.803,
+  "top5pct_overlap": 0.09,
+  "risk_range": [
+   60.2,
+   323.8
+  ]
+ },
+ "note": "held-out = a random 20% of the searched layouts, never trained on; their 'real' risk is the evaluator's own Monte Carlo estimate (200 trips), so part of the error is that noise",
+ "onnx": "critic.onnx"
+}

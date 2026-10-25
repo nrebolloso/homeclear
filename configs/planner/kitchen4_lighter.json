@@ -1,0 +1,39 @@
+{
+  "scene": "kitchen4_lighter",
+  "note": "Kitchen planner search space (viewer/src/planner.ts, planner/ on the GPU). Zones and outlets are read off the viewer, not taped: BLOCKERS.md.",
+  "grid_m": 0.05,
+  "yaw_step_deg": 90,
+  "table": "table",
+  "chairs": ["chair3", "chair4", "chair5", "chair7", "chair8"],
+  "chair_reach_m": 0.8,
+  "chair_overlap_frac": 0.15,
+  "under_table_frac": 0.85,
+  "mat": "mat",
+  "cord_box_xy": [[1.2, -0.8], [1.4, 0.2]],
+  "nightlight": "nightlight",
+  "zones": {
+    "fridge_swing": { "box_xy": [[-0.8, 1.45], [-0.05, 2.25]], "source": "ESTIMATED from viewer screenshots: fridge door ahead of the route start" },
+    "sink": { "box_xy": [[0.15, 1.7], [0.95, 2.25]], "source": "ESTIMATED from viewer screenshots: standing spot at the double sink" },
+    "entrance": { "box_xy": [[0.45, 0.3], [1.35, 0.6]], "source": "ESTIMATED: where the planned route leaves the kitchen" }
+  },
+  "outlets": {
+    "hall": { "xy": [-1.13, -0.58], "source": "where the scanned nightlight is plugged in" },
+    "kitchen": { "xy": [1.35, 0.8], "source": "ASSUMED outlet: the add_nightlight fix's spot; mark real outlets (BLOCKERS.md)" }
+  },
+  "options": {
+    "mat": {
+      "taped": { "label": "Tape the mat's edges down", "cost_usd": 10, "minutes": 10, "effort": 1, "product": "double-sided carpet tape",
+        "assumption": "ASSUMPTION: taped edges stop the simulated slide and corner fold; ~1.5 mm of edge stays under the tape (grid.ts TAPED_EDGE_M, not measured)" },
+      "removed": { "from_fix": "remove_mat" }
+    },
+    "cord": {
+      "taped": { "from_fix": "tape_cord" },
+      "rerouted": { "label": "Run the cord along the wall instead of across the path", "cost_usd": 6, "minutes": 25, "effort": 2, "product": "adhesive cord clips",
+        "assumption": "ASSUMPTION: the cord leaves the floor box entirely (same map effect as taping), clips and labour estimated" }
+    },
+    "nightlight": { "kitchen": { "from_fix": "add_nightlight" }, "off": { "label": "Unplug the nightlight", "cost_usd": 0, "minutes": 1, "effort": 1 } }
+  },
+  "brush_m": 0.03,
+  "search": { "steps": 800, "chains_per_weight": 16, "t0": 20, "t1": 0.3, "effort_weight": [0, 1, 2, 4, 8, 16, 32, 64], "live_effort_weight": 2,
+    "note": "simulated annealing on risk + effort_weight * effort (risk is per month, ~70-220 here; effort ~1-3 per change), one weight per group of chains so the chains together trace the risk-vs-effort front" }
+}
