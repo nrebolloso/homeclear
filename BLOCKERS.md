@@ -47,6 +47,8 @@
    (`grid.ts TAPED_EDGE_M`, mirrored in `planner/engine.py`); the published search (job 47465023) used the old rule. A CPU
    re-score of the taped replays gives ~60.0-60.4/month, but `out/planner/kitchen4_lighter/search.json` was not regenerated.
    Run `planner/publish.sh` after the job.
+   **Done:** B200 job 47577852 (toe-catch objective, 1.5 mm taped edge, glide caps in the action set), critic 47577853;
+   published to `viewer/public/planner/kitchen4_lighter/` after `planner/check_options.py` passed.
 14. **Shuffle recordings for the fan's "shuffler".** The low-clearance foot lift is an ASSUMPTION (16th percentile of the
    Frontiers 2014 MTC curve, ~7 mm). Film a few deliberate shuffling passes over the mat edge (side view, tape in view) so
    the lift distribution comes from our own data.
@@ -54,8 +56,18 @@
    snags/brushes dominate (60.91 = 0.07 toe catches + the rest), so the option "least effort for 20% less risk" cuts the
    objective without saving any toe catches. The demo now leads with toe catches/month everywhere; changing the objective
    means a new B200 search.
+   **Decided (Nicolas):** objective = expected toe catches/month; snags + brushes only break ties (TIE_BREAK 1e-5) and are
+   shown as notes on each option. Done in job 47577852.
 16. **Merge `rug-calibration` into `wm-planner` (yours; its BLOCKERS 17).** Without it the round trip cannot fold the mat (the
    Rapier flap: 0/8 inbound legs). A trial merge in a scratch worktree (discarded) worked with the recipe there plus the
    fan hook `fold: () => live?.fold() ?? layout.folds?.[0] ?? null`: tsc clean, and with `?rugfold=1` the mat folded at the
    end of the inbound leg in 4/4 runs and the outbound fan showed "folded corner". After the merge, re-record
    `futures_fan.mp4` with `&rugfold=1` so the fold is in the video.
+   **Approved (Nicolas).** Another Claude session in `Homeclear-main` already merged wm-planner (as of f31f6d7) and
+   rug-calibration into local `main` (9853d36, not pushed) and is re-recording `futures_fan.mp4` / `backup_v6.mp4` there.
+17. **Who finishes `main` and moves demo-safe?** wm-planner has 5 commits since f31f6d7 (toe-catch objective, glide caps,
+   job 47577852 results, check_options, planner.mp4). A trial merge onto main 9853d36 (scratch worktree) is clean and passes
+   `npm test` 212/212, `npm run build` and `tests/run_py.sh`. `Homeclear-main` has the other session's uncommitted edits
+   (`STATUS.md`, `main.ts`, `futures_fan.mp4`), so this session did not merge there. Once that session commits:
+   `git -C ../Homeclear-main merge wm-planner`, re-run the three test commands, re-record `planner.mp4` and the backup on the
+   merged main, then move demo-safe. Tell one session to own it.
