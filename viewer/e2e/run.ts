@@ -390,13 +390,15 @@ try {
   {
     const ff = await open('kitchen4_lighter&seed');
     const F = (f: string) => G(ff.p, f);
-    const watch = 'const seen = []; for (let i = 0; i < 28; i++) { await new Promise(r => setTimeout(r, 500)); const s = game.fan.state(); if (s.fan) seen.push(s); } return seen';
-    await F('await new Promise(r => setTimeout(r, 6000))');
+    // waits in sim time: the seeded walk is lockstep (demorun.ts) and slows down on a loaded machine instead of skipping ahead
+    const sim = (s: number) => `await (async k => { while (game.lockstep.ticks() < k) await new Promise(r => setTimeout(r, 5)); })(game.lockstep.ticks() + ${Math.round(s * 60)});`;
+    const watch = `const seen = []; for (let i = 0; i < 28; i++) { ${sim(0.5)} const s = game.fan.state(); if (s.fan) seen.push(s); } return seen`;
+    await F(sim(6));
     await F('game.fan.set(true)');
     const before: any[] = await F(watch);
     await F('await game.fan.tapeMat()');
     const after: any[] = await F(watch);
-    await F("game.fan.setModel('hand'); await new Promise(r => setTimeout(r, 1500))");
+    await F(`game.fan.setModel('hand'); ${sim(1.5)}`);
     const h = await F('return game.fan.state()');
     const mat = (s: any) => (s.fan.crossed.mat ?? 0) > 0;
     const hit = before.find(s => mat(s) && s.fan.red > 0 && / cross the mat /.test(s.label)) ?? before.find(s => mat(s) && s.fan.red > 0);   // near the cord the cord leads the label
