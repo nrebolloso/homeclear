@@ -324,13 +324,26 @@ const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'modu
 let init: Init = { g, base, est, objects: objs, routes, persona, risk, interventions, stepModel, worldModel, fixtures: sc.fixtures, transfer: sc.transfer, ems: sc.ems, coverage, coverage_good: sc.grid.coverage_good,
   plan: { walker_width_m: walkerCfg.width_m, ...sc.plan }, rules: sc.hazard_rules };
 worker.postMessage({ type: 'init', init });
-let seq = 0, latestEval = 0;
+let seq = 0, latestEval = 0, evalSeq = 0;
 const waiting = new Map<number, (d: any) => void>();
 worker.onmessage = e => {
   if (e.data.type === 'progress') { $('optstatus').textContent = e.data.msg; return; }   // the optimizer reports as it goes
   waiting.get(e.data.id)?.(e.data); waiting.delete(e.data.id);
 };
 const ask = (msg: object) => new Promise<any>(res => { const id = ++seq; waiting.set(id, res); worker.postMessage({ ...msg, id }); });
+// evaluations by layout: going back to a proposal already shown (or prefetched) skips the worker. Cleared with the worker's init.
+const evalCache = new Map<string, Promise<any>>(), evalDone = new Set<string>();
+const evalKey = (lay: { poses: unknown[] }) => JSON.stringify([selRoute, $<HTMLInputElement>('heat').checked, lay]);
+function evalOf(lay: Layout): Promise<{ r: Eval }> {
+  const key = evalKey(lay);
+  let p = evalCache.get(key);
+  if (!p) {
+    p = ask({ type: 'eval', layout: lay, sel: selRoute, heat: $<HTMLInputElement>('heat').checked }).then(d => (evalDone.add(key), d));
+    evalCache.set(key, p);
+    if (evalCache.size > 24) { const oldest = evalCache.keys().next().value!; evalCache.delete(oldest); evalDone.delete(oldest); }
+  }
+  return p;
+}
 
 const editLocks = createEditLocks();
 const game: any = { ready: false, fps: 0, evals: 0, pending: () => waiting.size };
@@ -349,9 +362,9 @@ async function replan(): Promise<number> {
   L = stamp(g, base, objs, layout.poses, layout.flattened, carvedPolys(layout));
   stampFolds(g, L.bump, layout.folds);
   updateHeights();
-  const id = seq + 1;
+  const id = ++evalSeq;
   latestEval = id;
-  const { r } = await ask({ type: 'eval', layout, sel: selRoute, heat: $<HTMLInputElement>('heat').checked });
+  const { r } = await evalOf(layout);
   if (id !== latestEval) return performance.now() - t;    // a newer layout is already on its way
   current = r;
   baselinePerMonth ??= r.per_month;
@@ -846,8 +859,18 @@ function previewOption(n: number) {
   proposalPrior ??= snap();
   layout = o.layout; applied = o.applied ?? o.actions.map((a: any) => a.id);
   syncObjects();
-  const mine = ++previewSeq;
-  return new Promise<void>(res => setTimeout(async () => { if (mine === previewSeq) { await replan(); reim.setT(1); } res(); }, 300));
+  const mine = ++previewSeq, seen = evalDone.has(evalKey(layout));
+  return new Promise<void>(res => setTimeout(async () => {
+    if (mine === previewSeq) { await replan(); reim.setT(1); prefetchProposals(); }
+    res();
+  }, seen ? 0 : 120));   // a layout already evaluated needs no pause to coalesce quick steps
+}
+/** the other proposals' evaluations in the background, once the one on show is up (not in the seeded demo: its clock waits for an idle worker) */
+let prefetched: unknown = null;
+async function prefetchProposals() {
+  if (SEED !== null || prefetched === suggestions) return;
+  const list = prefetched = suggestions;
+  for (const o of list) { if (suggestions !== list) return; await evalOf(o.layout); }
 }
 /** back to the room as it was when proposals were generated */
 async function resetProposals() {
@@ -1069,6 +1092,7 @@ function setupStairs() {
   init = { ...init, interventions, stairs, doors, strong_side: strongSide, device: walkerCfg.device,
     walker: { width_m: parkedWalkerCfg.width_m, depth_m: parkedWalkerCfg.depth_m, user_gap_m: parkedWalkerCfg.user_gap_m } };
   worker.postMessage({ type: 'init', init });
+  evalCache.clear(); evalDone.clear();
   suggestions = [];   // searched without these stairs
   drawStairs();
   $('stairstatus').textContent = stairs.length ? stairs.map(st => `${st.name}: ${st.treads_z?.length ?? 0} treads ${st.measured === 'tape' ? 'tape-measured' : 'seen in the scan'}` +
