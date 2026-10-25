@@ -1,5 +1,6 @@
 // Dev-only API: the game writes Cosmos exports to public/exports/<job>/ and lists clips in public/clips/.
 import { defineConfig } from 'vite';
+import { scanCatalogPlugin } from './scan-plugin.ts';
 import { mkdirSync, writeFileSync, readdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { networkInterfaces } from 'node:os';
@@ -14,7 +15,7 @@ export default defineConfig({
     fs: { allow: ['.', '../physics_ranges.json', '../physics/batch_results.json'] },   // object-physics ranges + offline batch results; nothing else outside viewer/
   },
   build: { rollupOptions: { input: { main: 'index.html', report: 'report.html', fixcard: 'fixcard.html' } } },
-  plugins: [{
+  plugins: [scanCatalogPlugin(PUB), {
     name: 'rehearsal-api',
     configureServer(server) {
       server.middlewares.use('/api/export/', (req, res) => {
