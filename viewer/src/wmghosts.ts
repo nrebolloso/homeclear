@@ -126,7 +126,7 @@ export function createWmGhosts(D: WmGhostDeps) {
     mode = 'styles';
     const pl = (x: Style) => `${x.placement.step_cm} cm steps, ${x.placement.lateral_cm} cm off the route`;
     $('wgstatus').innerHTML = `<b>${TAG}</b>: average person (${pl(styles[0])}) vs ${st.name} (${pl(st)}; heel ${st.placement.vs_mean_cm} cm from the average's)` +
-      `<br>this room: ${a.score.risk.toFixed(1)} vs <b>${b.score.risk.toFixed(1)}</b> incidents/month (contacts ${a.score.contacts.toFixed(2)} vs ${b.score.contacts.toFixed(2)}, brushes ${a.score.brushes.toFixed(1)} vs ${b.score.brushes.toFixed(1)})`;
+      `<br>this room: ${a.score.contacts.toFixed(2)} vs <b>${b.score.contacts.toFixed(2)}</b> toe catches/month (search objective ${a.score.risk.toFixed(1)} vs ${b.score.risk.toFixed(1)}; brushes ${a.score.brushes.toFixed(1)} vs ${b.score.brushes.toFixed(1)})`;
     return state();
   }
 
@@ -204,9 +204,9 @@ export function createWmGhosts(D: WmGhostDeps) {
     return state();
   }
   function monthLines() {
-    const c = month!.counts, total = Object.values(c).reduce((a, b) => a + b, 0), top = Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    const c = month!.counts, toe = c['toe catch'] ?? 0, total = Object.values(c).reduce((a, b) => a + b, 0), top = Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 4);
     const done = month!.next.filter((k, i) => k >= month!.trips[i].length).length;
-    return [`${month!.which === 'before' ? 'as scanned' : "after the planner's fixes"}: ${done}/${month!.trips.length} trips (1 month) done · ${total} incidents`,
+    return [`${month!.which === 'before' ? 'as scanned' : "after the planner's fixes"}: ${done}/${month!.trips.length} trips (1 month) done · ${toe} toe catch${toe === 1 ? '' : 'es'} · ${total - toe} brushes / snags`,
       ...top.map(([k, v]) => `${k}: ${v}`), TAG];
   }
 
@@ -267,8 +267,8 @@ export function createWmGhosts(D: WmGhostDeps) {
         M2.key = key; untag(M2.label); M2.label = tag(lines, '#ffd0d0');
         const t0 = M2.trips[0], st = t0[t0.length >> 1]?.walker ?? [0, 0, 0];   // over the middle of the route: in view from any angle
         M2.label.position.set(st[0], st[1], 2.0);
-        $('wgstatus').innerHTML = `${lines.slice(0, -1).join('<br>')}<br><small>${TAG}: the evaluator expects ${M2.im.score.risk.toFixed(1)} incidents/month in this layout ` +
-          `(contacts ${M2.im.score.contacts.toFixed(2)}, snags ${M2.im.score.snags.toFixed(1)}, brushes ${M2.im.score.brushes.toFixed(1)}); this is one month's draw</small>`;
+        $('wgstatus').innerHTML = `${lines.slice(0, -1).join('<br>')}<br><small>${TAG}: the evaluator expects ${M2.im.score.contacts.toFixed(2)} toe catches/month in this layout ` +
+          `(search objective ${M2.im.score.risk.toFixed(1)}: + snags ${M2.im.score.snags.toFixed(1)}, brushes ${M2.im.score.brushes.toFixed(1)}); this is one month's draw</small>`;
       }
     }
   }

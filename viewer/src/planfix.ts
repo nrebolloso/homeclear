@@ -25,8 +25,11 @@ export interface PlanFixDeps {
 }
 const $ = (id: string) => document.getElementById(id)!;
 const f1 = (x: number) => x.toFixed(1);
-const range = (s: Slim) => `${f1(s.risk)} <small>(${f1(s.lo)}–${f1(s.hi)})</small>`;
-const parts = (s: Slim) => `<small>${s.contacts.toFixed(2)} toe contacts + ${f1(s.snags)} snags + ${f1(s.brushes)} brushes</small>`;
+// the headline is expected toe catches/month (score().contacts = sim.ts's calculation, the viewer's and the OT report's
+// number); the search objective (risk = toe catches + simulated snags + brushes, what the B200 job minimised) stays secondary
+const f2 = (x: number) => x.toFixed(2);
+const range = (s: Slim) => `${f2(s.contacts)} toe catches`;
+const parts = (s: Slim) => `<small>the search also weighs ${f1(s.snags)} snags + ${f1(s.brushes)} brushes/month (simulated object events, not toe catches): objective ${f1(s.risk)} (${f1(s.lo)}–${f1(s.hi)})</small>`;
 
 export function createPlanFix(D: PlanFixDeps) {
   let data: Search | null = null, critic: any = null, playing = false, frame = -1, live: any = null;
@@ -71,7 +74,7 @@ export function createPlanFix(D: PlanFixDeps) {
     c.strokeStyle = '#3a4048'; c.beginPath(); c.moveTo(P, 4); c.lineTo(P, H - P); c.lineTo(W - 4, H - P); c.stroke();
     c.fillStyle = '#9aa0a6'; c.font = '10px system-ui';
     c.fillText('effort →', W - 46, H - P + 14); c.fillText('0', P - 8, H - P + 10);
-    c.save(); c.translate(10, H / 2 + 30); c.rotate(-Math.PI / 2); c.fillText('risk / month →', 0, 0); c.restore();
+    c.save(); c.translate(10, H / 2 + 30); c.rotate(-Math.PI / 2); c.fillText('search objective / month →', 0, 0); c.restore();
     c.fillText(f1(rmax), 2, 12);
     c.fillStyle = 'rgba(77,201,240,0.35)';
     for (const d of ds) if (d[3] <= step) c.fillRect(X(d[1]) - 1, Y(d[0]) - 1, 2, 2);
@@ -128,7 +131,7 @@ export function createPlanFix(D: PlanFixDeps) {
     for (frame = 0; frame < fr.length && playing; frame++) {
       const f = fr[frame];
       showFan(f.ghosts); draw();
-      $('pfresult').innerHTML = `step ${f.step} of ${data.stats.steps}: risk <b>${f1(f.score.risk)}</b>/month · effort ${f.cost.effort.toFixed(1)} · $${f.cost.usd}`;
+      $('pfresult').innerHTML = `step ${f.step} of ${data.stats.steps}: <b>${f2(f.score.contacts)}</b> toe catches/month (objective ${f1(f.score.risk)}) · effort ${f.cost.effort.toFixed(1)} · $${f.cost.usd}`;
       await glide(prev, f.layout, ms * 0.7);
       await new Promise(r => setTimeout(r, ms * 0.3));
       prev = f.layout;
@@ -152,7 +155,7 @@ export function createPlanFix(D: PlanFixDeps) {
     $('pfoptions').innerHTML = '';
     for (const o of data!.options) {
       const q = data!.pareto[o.k], li = document.createElement('li'), b = document.createElement('button');
-      li.innerHTML = `${o.why}: <b>${f1(q.confirm.risk)}</b>/month · effort ${q.cost.effort.toFixed(1)} · $${q.cost.usd} `;
+      li.innerHTML = `${o.why}: <b>${f2(q.confirm.contacts)}</b> toe catches/month <small>(objective ${f1(q.confirm.risk)})</small> · effort ${q.cost.effort.toFixed(1)} · $${q.cost.usd} `;
       b.textContent = o.k === k ? 'Applied' : 'Apply'; b.disabled = o.k === k;
       b.onclick = () => apply(o.k);
       li.appendChild(b); $('pfoptions').appendChild(li);
@@ -174,7 +177,7 @@ export function createPlanFix(D: PlanFixDeps) {
     const mine = changed(cfg(), scan, judge), kept = mine.filter(k => val(r.best.pl, k) === val(judge, k));
     const same = JSON.stringify(r.best.pl) === JSON.stringify(r.invalid.length ? scan : judge);
     $('pfresult').innerHTML = (r.invalid.length ? `<div class="delta-bad">Your layout can't be used as is: ${r.invalid.join('; ')}. The search started from the scanned room instead.</div>` :
-      `Your layout <b>${range(r.judge.s)}</b> → AI <b class="delta-good">${range(r.best.s)}</b>/month<br>${parts(r.best.s)}<br>`) +
+      `Your layout <b>${range(r.judge.s)}</b> → AI <b class="delta-good">${range(r.best.s)}</b>/month<br><small>search objective: yours ${f1(r.judge.s.risk)}</small><br>${parts(r.best.s)}<br>`) +
       (same ? 'No layout the critic found beat yours once re-run for real: keeping it.<br>' : '') +
       (mine.length && !r.invalid.length ? `Kept ${kept.length} of your ${mine.length} change${mine.length === 1 ? '' : 's'}${kept.length ? `: ${kept.join(', ')}` : ''}` +
         `${mine.length > kept.length ? `; changed ${mine.filter(k => !kept.includes(k)).join(', ')}` : ''}<br>` : '') +
@@ -211,7 +214,8 @@ export function createPlanFix(D: PlanFixDeps) {
 
   const state = () => ({ loaded: !!data, playing, frame, frames: data?.replay.length ?? 0, stats: data?.stats, options: data?.options.map(o => ({ ...o, ...data!.pareto[o.k] })) });
   /** OT report: the planner's layout (the live search's if one ran, else the chosen option), one change at a time on the
-   *  room as it is now, each scored for real and ranked by risk removed. null = no planner search for this scene. */
+   *  room as it is now, each scored for real and ranked by toe catches removed (the search objective breaks ties). null =
+   *  no planner search for this scene. */
   async function rankedFixes() {
     await ready;
     if (!data) return null;
@@ -224,12 +228,12 @@ export function createPlanFix(D: PlanFixDeps) {
       else { q.nightlight = goal.nightlight; q.nightlight_at = goal.nightlight_at; }
       return q;
     };
-    const keys = changed(cfg(), cur, goal), { scores } = await ask({ type: 'score', pls: [cur, ...keys.map(one)] }), before = scores[0].risk;
+    const keys = changed(cfg(), cur, goal), { scores } = await ask({ type: 'score', pls: [cur, ...keys.map(one)] }), before = scores[0].contacts;
     return keys.map((k, n) => {
-      const it = cost(S(), cfg(), cur, one(k)).items[0], sc = scores[n + 1], cut = before - sc.risk;
+      const it = cost(S(), cfg(), cur, one(k)).items[0], sc = scores[n + 1], cut = before - sc.contacts;
       return { label: it?.label ?? k, error: sc.check.length ? sc.check.join('; ') : sc.error, reduction: Math.max(0, cut), share: before > 0 ? cut / before : 0,
-        clearance_gain_m: 0, cost_usd: it?.usd, minutes: it?.minutes, effort: it?.effort };
-    }).sort((a, b) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction));
+        objective_cut: scores[0].risk - sc.risk, clearance_gain_m: 0, cost_usd: it?.usd, minutes: it?.minutes, effort: it?.effort };
+    }).sort((a, b) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.objective_cut - a.objective_cut));
   }
   /** wmghosts.ts: the room as it is now / the scan / the chosen option, the evaluator's trips with one world model, and a
    *  glide + commit to a planner layout (before / after) */

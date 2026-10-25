@@ -384,7 +384,7 @@ function renderPanels() {
     (q.error ? '<span class="delta-bad">no route</span>' : `<span class="measured">${fmt(q.per_month)}</span><span class="dbg"> (${fmt(q.lo)}–${fmt(q.hi)})</span>`) + '</li>').join('');
   $('risk').innerHTML = r.error ? `<span class="delta-bad">no route for this walker</span><ul>${perRoute}</ul>` :
     `<div class="big measured">${fmt(r.per_month)}</div><div class="range dbg">likely ${fmt(r.per_month_lo)}–${fmt(r.per_month_hi)}</div>` +
-    `expected toe contacts / month, all routes (${risk.rollouts} simulated trips per route; steps: ${persona.step_model === 'world' ? 'world model (heels + walker)' : persona.step_model === 'learned' ? 'learned model' : 'hand rule'})` +
+    `expected toe catches / month, all routes (${risk.rollouts} simulated trips per route; steps: ${persona.step_model === 'world' ? 'world model (heels + walker)' : persona.step_model === 'learned' ? 'learned model' : 'hand rule'})` +
     `<span class="dbg"> range = measured height error ±${(100 * sc.hazard_rules.margin_m.height).toFixed(1)} cm + simulation noise</span>` +
     (r.hand ? `<div class="range">hand-rule baseline on the same route: ${fmt(r.hand.per_month)}</div>` : '') +
     `<ul class="routes">${perRoute}</ul>` +
@@ -812,7 +812,7 @@ async function reimagineRoom() {
   const better = (o: any, b: any) => o.score < b.score - 1e-9 || (o.score <= b.score + 1e-9 && o.actions.length < b.actions.length);
   const best = suggestions.reduce((b, o, n) => (better(o, suggestions[b]) ? n : b), 0);
   if (!suggestions[best].actions.length)
-    return why(`No change earns its place: ${fmt(current?.per_month ?? 0)} toe contacts/month already, and no move or fix lowers it or clears a failed check.`);
+    return why(`No change earns its place: ${fmt(current?.per_month ?? 0)} toe catches/month already, and no move or fix lowers it or clears a failed check.`);
   await applyOption(best);
   return reim.changes();
 }
@@ -1459,7 +1459,7 @@ async function openReport() {
     reason: hzFile.hazards.filter(h => h.source === 'cosmos_reason'),
     clips: (game.clips ?? []).filter((k: any) => k.layout_key === layoutKey(objs, layout)).map((k: any) => k.title ?? k.file),
     topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85), ranked_fixes: planned ?? ranked_fixes,
-    ranked_by: planned ? 'kitchen planner (B200 layout search + critic): each change alone on this layout, events/month = toe contacts + snags + brushes' : undefined,
+    ranked_by: planned ? 'kitchen planner (B200 layout search + critic): each change alone on this layout, by toe catches/month saved (the same calculation as above), ties broken by the search objective (toe catches + simulated snags + brushes)' : undefined,
   };
   sessionStorage.setItem(`report:${RUN}`, JSON.stringify(payload));
   if (!w) return window.open(`report.html?scene=${encodeURIComponent(RUN)}`, '_blank');
@@ -1555,7 +1555,7 @@ async function lightPath() {
   syncObjects(); await replan(); drawStairs();
   const pct = before > 0 && current ? Math.round((100 * (before - current.per_month)) / before) : 0;
   return { added: fresh.length, note: `${fresh.length} motion nightlight${fresh.length === 1 ? '' : 's'} added along the ${routes[selRoute].name}` +
-    (pct > 0 ? `: simulated toe contacts down ${pct}%` : '') + ` (darkness raises contacts ${risk.dark_contact_multiplier}×, an assumed number). Designed, not built.` };
+    (pct > 0 ? `: simulated toe catches down ${pct}%` : '') + ` (darkness raises contacts ${risk.dark_contact_multiplier}×, an assumed number). Designed, not built.` };
 }
 async function clearPathLights() {
   const ids = new Set(pathLightIvs.map(iv => iv.id));
@@ -1582,8 +1582,8 @@ function drawNights() {   // 30 nights at the current rate; the selected night s
   drawTimeline($<HTMLCanvasElement>('timeline'), data, nightSel);
   const bad = data.filter(d => d.count).length;
   $('nightinfo').textContent = nightSel >= 0
-    ? `night ${nightSel + 1}: ${data[nightSel].count ? data[nightSel].at.join(', ') : 'no toe contact'}`
-    : `${bad} of 30 nights with a toe contact (one draw at ${current.per_month.toFixed(1)}/month)`;
+    ? `night ${nightSel + 1}: ${data[nightSel].count ? data[nightSel].at.join(', ') : 'no toe catch'}`
+    : `${bad} of 30 nights with a toe catch (one draw at ${current.per_month.toFixed(1)}/month)`;
 }
 $<HTMLInputElement>('nightscrub').oninput = e => { nightSel = +(e.target as HTMLInputElement).value - 1; drawNights(); };
 /** Swap who walks: device mesh + footprint, gait, planner penalties, default eyes; then re-plan everything. */
