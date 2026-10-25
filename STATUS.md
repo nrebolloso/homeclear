@@ -1,10 +1,10 @@
 # Status
 
 ## While you were out (2026-10-25, branch merge-juan, pushed to origin/merge-juan only; main and demo-safe untouched)
-- **Done:** sofa2 streaks removed by hand (box drop, before/after renders); bench, conference table and booth fixed in the lounge floor map; merge-juan merged with main and pushed; kitchen4 rebuilt in separate folders and compared (BLOCKERS 21). The comparison found removal over-selecting things on counters and cabinets, fixed in b7c2484 (lounge unchanged).
+- **Done:** sofa2 streaks removed by hand (box drop, before/after renders); bench, conference table and booth fixed in the lounge floor map; merge-juan merged with main and pushed; kitchen4 rebuilt in separate folders and compared (BLOCKERS 22). The comparison found removal over-selecting things on counters and cabinets, fixed in b7c2484 (lounge unchanged).
 - **Lounge as the VR scene:** yes. 94 m² walkable after the fixed furniture, no invisible obstacles, 17 movable objects. Its scale is ASSUMED (camera height), and it has no floor hazards, so the kitchen stays the hazard demo.
 - **In progress:** bedbath_hall and night1 on HPG (SfM mapping); watchers build their unpolished montage demos when training finishes.
-- **Needs you:** BLOCKERS 21 (kitchen4 walker width and lama fills before any demo re-export); merging merge-juan into main (it now contains main with futures-fan and rug-calibration).
+- **Needs you:** BLOCKERS 22 (kitchen4 walker width and lama fills before any demo re-export); merging merge-juan into main (it now contains main with futures-fan and rug-calibration).
 - **Risks:** re-exporting kitchen4 changes its finding count (17 to 13) because of the walker spec, not the code; local rebuilds can't make lama fills.
 
 ## While you were out (2026-10-24, branch merge-juan, nothing pushed, demo-safe tag untouched)
@@ -13,6 +13,13 @@
 - **In progress:** bedbath_hall (nicoroom) on HPG (SfM map running, then densify and train); night1/turlington (GPU SfM running). Watchers build the demos when training finishes.
 - **Needs you:** BLOCKERS 10 (accept sofa2 streaks or retrain with a Gaussian-size cap; render lift not adopted); OK to push d012fb8..d129e81 to main.
 - **Risks:** the new stage 12 rules change every `objects: auto` scene on re-export (only the lounge rebuilt so far); viewer tests and e2e pass.
+
+## Demo walker: 0.61 m Drive Medical (kitchen4_lighter_v1)
+- **Walker:** stage 12 re-export with config `game.walker` (0.61 x 0.445 m, 12.7 mm legs); only `walker.json`, `personas.json` and `personas_scan.json` were installed, so grids, fills and footprints are unchanged. Probe (0.66 -> 0.61): findings 17 -> 13, hazards 5 -> 3 (tight spot 4 cm / 0.70 m, mat 1.1/month, cable 0.1/month), route and hazards.json identical. The 0.66 export is kept as `viewer/public/scene/kitchen4_lighter_066` (local, not in git).
+- **One width:** viewer, VR, physics batch scene, planner (`engine.py` reads walker.json), futures fan, OT report and stairs all read `walker.json` / `personas.json`. Own values left alone: `wheelchair.ts` 0.66 (the wheelchair), `world_model_check.json` 0.66 (TS/Python parity fixture), a comment in `worldmodel/test_worldmodel.py`, `VR_LOG.md` (VR team's doc); worldmodel/ and cosmos/ read config `game.walker` (the same 0.61).
+- **Planner rerun** (B200 job 47599784, critic 47599785): 52,510 layouts (50,013 valid), 102,528 evaluations, 10.04 M imagined trips, 1,072 s (43.6 s GPU). Scanned 1.14 toe catches/month; Easiest remove the mat -> 0.07 (effort 1, $0); Keep my mat tape it -> 0.07 (effort 1, $10); Safest chair8 + mat removed + cord taped -> 0.00 (effort 5, $8). Critic held-out (n = 10,002) R² 0.999, Spearman 0.90.
+- **Scene sharing:** the scene's small JSON is in git (`.gitignore` exception); splats, maps and object plys are `kitchen4_lighter_v1.zip` (375 MB, sha256 in `version.json`), installed by `tools/get_scene.sh` (README "Demo scene without running the pipeline"). The viewer shows the scene version bottom left outside demo mode. `test_planner.py` snags parity tolerance is relative 1e-5 (float difference between TS and Python, ~2.8e-6 on layout 3).
+- **Proof:** `proof/demo/futures_fan.mp4` (86 s round trip, red fan at the fold), `planner.mp4`, `backup_v8.mp4`, all at 0.61 m.
 
 ## Main: wm-planner + rug-calibration + PR #9 (VR / wheelchair / scan library) merged
 - **Merged:** wm-planner (toe-catch objective, B200 job 47577852, critic 47577853), rug-calibration (calibrated rug, fold cascade, cluster batch 47577456) and origin/main's PR #9. main.ts keeps both sides' hooks; the fan's fold is `live?.fold() ?? layout.folds?.[0] ?? null`; planfix.ts ranks "tape the mat edge" next to the search's picks; glide caps stay hidden in the viewer (friction ASSUMED).

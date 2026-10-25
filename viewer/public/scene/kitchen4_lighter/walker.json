@@ -1,0 +1,27 @@
+{
+ "width_m": 0.61,
+ "depth_m": 0.445,
+ "handle_height_m": 0.85,
+ "user_gap_m": 0.25,
+ "leg_radius_m": 0.0127,
+ "device": "walker",
+ "frame": "x forward from the user's body centre, y left",
+ "legs": [
+  [
+   0.6950000000000001,
+   0.2923
+  ],
+  [
+   0.6950000000000001,
+   -0.2923
+  ],
+  [
+   0.25,
+   0.2923
+  ],
+  [
+   0.25,
+   -0.2923
+  ]
+ ]
+}

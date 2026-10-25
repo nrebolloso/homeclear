@@ -94,7 +94,11 @@
    **stool2 (2026-10-25):** removing it took the grey bench's front face (the "attached to the couch" report). Stage 12's
    join now never takes pieces inside a `grid.fixed` outline, and the bench outline was redrawn from its edges in the
    splat (it was ~40 cm short). Free floor 94.01 -> 93.85 m²; only stool2 (and chair3, +5 Gaussians) changed.
-21. **kitchen4 demo vs a rebuild (2026-10-25): nothing changed, two things need a call.** Rebuilding kitchen4_lighter
+21. **Put the scene bundle in the Drive folder and share it (Nicolas).** The Drive connector can't upload a 375 MB file, so
+    the folder "Homeclear scene bundles" (https://drive.google.com/drive/folders/1sMKaR_2YbwhMRrhvPaULsURbEhZY0rlH) is
+    empty. Drag in `kitchen4_lighter_v1.zip` (`~/Downloads/kitchen4_lighter_v1.zip` on the laptop, or /blue/dream_team/nrebolloso/scene_bundles/) and share
+    the folder with the team. Teammates without HiPerGator access can then run `tools/get_scene.sh kitchen4_lighter <zip>`.
+22. **kitchen4 demo vs a rebuild (2026-10-25): nothing changed, two things need a call.** Rebuilding kitchen4_lighter
    from demo-safe code reproduces the demo exactly (objects, splat, floor/obstacle/bump maps, route, hazards). With the
    merge-juan code (after fix b7c2484) the movable boxes and basket are identical; standing chairs, the trash can and
    bedside_table2 cut 1-4% more (bedside_table2 2x: its legs), floor +469 cells (0.19 m²), obstacles -67 cells; route,

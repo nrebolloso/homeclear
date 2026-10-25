@@ -60,7 +60,7 @@ import { createEditLocks } from './edit-locks.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
 import type { Ghost } from './sim.ts';
 import type { WorldModel } from './worldmodel.ts';
-import { setupXR, type XrEditor } from './xr.ts';
+import { setupXR, type XrEditor, type XrPage, type XrRow } from './xr.ts';
 import { plainSpot, tourStand } from './xrtour.ts';
 import { createXRComparison } from './xrcompare.ts';
 import { createPlanFix } from './planfix.ts';
@@ -899,7 +899,8 @@ game.reimagine = { run: reimagineRoom, setT: reim.setT, overlay: reim.overlay, p
   pose: (name: string) => { const gr = items[objs.findIndex(o => o.name === name)].group; return { x: gr.position.x, y: gr.position.y, yaw: gr.rotation.z, visible: gr.visible }; } };
 
 // ---------- kitchen planner (planfix.ts, planworker.ts): the B200 layout search replayed; live critic search from the judge's layout ----------
-const planfix = createPlanFix({ run: RUN, scene, init: () => init, base: original, walker: () => walkerCfg, layout: () => layout,
+// a headset copy (tools/thin_scene.py) keeps its source scene's planner search
+const planfix = createPlanFix({ run: sc.thinned?.source ?? RUN, scene, init: () => init, base: original, walker: () => walkerCfg, layout: () => layout,
   show: lay => { layout = lay; syncObjects(); },   // gliding: no re-plan per frame
   commit: (lay, ids) => { layout = lay; applied = ids; syncObjects(); return replan(); } });
 $('pfplay').onclick = () => planfix.play();
@@ -911,7 +912,8 @@ $('gfplay').onclick = () => gait.play(+($('gfspeed') as HTMLSelectElement).value
 $('gfreplan').onclick = () => gait.replan();
 game.gait = gait;   // VR: feed game.gait.observe() per heel strike, hang game.gait.panel / show game.gait.ghost (HANDOFF_GAIT.md)
 // ---------- world model in the kitchen (wmghosts.ts): two gait styles life-size, futures fan, predicted self, a month of trips ----------
-const wmg = createWmGhosts({ scene, walker: () => walkerCfg, planfix, view: () => game.setFly(-0.7, -2.3, 2.3, 55, -36) });
+// in VR you stay where you stand (setFly would switch the desktop to fly mode and turn the walker under you)
+const wmg = createWmGhosts({ scene, walker: () => walkerCfg, planfix, view: () => { if (!renderer.xr.isPresenting) game.setFly(-0.7, -2.3, 2.3, 55, -36); } });
 $('wgstyles').onclick = () => wmg.twoStyles();
 $('wgstyle').onchange = () => wmg.twoStyles();
 $('wgmonth').onclick = () => wmg.month();
@@ -1892,7 +1894,7 @@ async function setPersona(key: string) {
 }
 /** P: the next persona in the Who list, with the keys that drive it. */
 async function cyclePersona() {
-  const ks = Object.keys(personas), next = ks[(ks.indexOf(personaKey) + 1) % ks.length];
+  const ks = Object.keys(personas).filter(k => !(document.body.classList.contains('demo') && (k === 'wheelchair' || k === 'stroke'))), next = ks[(ks.indexOf(personaKey) + 1) % ks.length];
   await setPersona(next);
   keyHelp.toast(`${personas[next].label}${isChair() ? ': W/S roll · A/D steer while rolling · Q/E spin' : ''}`, 4000);
 }
@@ -2589,6 +2591,49 @@ function dangerGo(k: number) {
   dangerVR.k = k; tourSpot = k;
   xr.place(at.x, at.y, at.yaw);
 }
+// ---------- world model in the headset (BLOCKERS 12): one card button steps through the ghosts and the futures fan ----------
+let wmStep = 0, wmBusy = false, wmNone = false;
+const WM_NEXT = [['World model: two walking styles', 'imagined, life-size, from the fridge'], ['World model: a month of trips', 'now: two walking styles'],
+  ['World model: imagined futures', 'now: a month of trips'], ['Hide the world model', 'now: imagined futures as you walk']];
+const wmButton = {
+  text: () => (wmBusy ? ['Imagining...', 'world model'] : wmNone ? ['World model', 'no planner data for this scene'] : WM_NEXT[wmStep]),
+  tone: () => (wmBusy ? 'busy' as const : 'plain' as const),
+  async press() {
+    if (wmBusy || wmNone) return;
+    wmBusy = true;
+    try {
+      const next = (wmStep + 1) % 4;
+      wmg.stop(); fanFan.set(false);
+      let ok: unknown = true;   // the ghosts give null without the gait model or a planner search for this scene
+      if (next === 1) ok = await wmg.twoStyles(); else if (next === 2) ok = await wmg.month(); else if (next === 3) fanFan.set(true);
+      if (!ok) { wmNone = true; wmg.stop(); return; }
+      wmStep = next;
+    } finally { wmBusy = false; }
+  },
+};
+// ---------- results in the headset (xr.ts results panel): the desktop panels' numbers, page by page ----------
+const n1 = (x: number) => x.toFixed(x > 0 && x < 0.05 ? 2 : 1);
+function xrResults(): XrPage[] {
+  const ev = current && !current.error ? current : null, base = baseEvals[selRoute] ?? null, ch = reim.changes(), who = personas[personaKey]?.label ?? personaKey;
+  const safety: XrRow[] = ev ? [
+    { text: () => [`${n1(ev.per_month)} toe catches a month`, `likely ${n1(ev.per_month_lo)}-${n1(ev.per_month_hi)} · ${who}`, 'simulated over all the routes'] },
+    ...(base && ch.length ? [{ text: () => [`As scanned: ${n1(base.per_month)} a month`, `${ch.length} change${ch.length === 1 ? '' : 's'}: ${base.per_month > 0 ? Math.round(100 * (base.per_month - ev.per_month) / base.per_month) : 0}% fewer`] }] : []),
+    ...ev.routes.map(r => ({ text: () => [`${r.name}: ${n1(r.per_month)} a month`, `${r.trips_per_night} trip${r.trips_per_night === 1 ? '' : 's'} a night · ${r.length_m.toFixed(1)} m${r.min_side_m !== undefined ? ` · tightest ${(r.min_side_m * 100).toFixed(0)} cm a side` : ''}`] })),
+  ] : [{ text: () => ['No numbers yet', current?.error ?? 'the route is still being worked out'] }];
+  const hazards: XrRow[] = spotList.length ? [...spotList].sort((a, b) => b.severity - a.severity).map(sp => ({ text: () => [sp.label, sp.detail] })) : [{ text: () => ['No hazards on this route'] }];
+  const fx = game.fixes as any[] | undefined, ivOf = (id: string) => interventions.find(i => i.id === id);
+  const fixes: XrRow[] = !fx ? [{ text: () => ['Work out the fixes', 'tries each fix on this route alone', 'point here (a few seconds)'], tone: () => 'go' as const, press: () => $('planfixes').click() }]
+    : !fx.length ? [{ text: () => ['No fixes for this route'] }]
+    : [...fx].sort((a, b) => b.reduction - a.reduction).map(f => ({
+      text: () => [f.label, f.error ? 'blocks the route' : `${n1(Math.max(0, f.reduction))} fewer a month · $${ivOf(f.id)?.cost_usd ?? '?'}${ivOf(f.id)?.minutes ? `, ${ivOf(f.id)!.minutes} min` : ''}`, applied.includes(f.id) ? 'applied' : f.error ? '' : 'point here to apply'],
+      tone: () => (applied.includes(f.id) || f.error ? 'plain' as const : 'go' as const), press: () => { if (!f.error && !applied.includes(f.id)) return applyFix(f.id); } }));
+  const checks: XrRow[] = ev?.checks.length ? ev.checks.map(c => ({ text: () => [c.label, `${c.verdict}${c.note ? `: ${c.note}` : ''}`], tone: () => (c.verdict === 'ok' ? 'go' as const : c.verdict === 'fail' ? 'busy' as const : 'plain' as const) })) : [{ text: () => ['No checks for this room'] }];
+  const usd = ch.reduce((t, c) => t + (c.cost?.usd ?? 0), 0), mins = ch.reduce((t, c) => t + (c.cost?.minutes ?? 0), 0);
+  const changes: XrRow[] = ch.length ? [{ text: () => [`${ch.length} change${ch.length === 1 ? '' : 's'}: $${Math.round(usd)}`, `about ${Math.round(mins)} min in all`] },
+    ...ch.map(c => ({ text: () => [c.label, `$${Math.round(c.cost?.usd ?? 0)} · ${Math.round(c.cost?.minutes ?? 0)} min · ${c.cost?.helpers ?? 0} helper${c.cost?.helpers === 1 ? '' : 's'}`] }))] : [{ text: () => ['No changes yet', 'move furniture or apply a fix'] }];
+  return [{ title: 'Safety on this route', rows: safety }, { title: 'Hazards on this route', rows: hazards }, { title: 'Fixes', rows: fixes },
+    { title: 'Transfers, reach, emergencies', rows: checks }, { title: 'Changes and cost', rows: changes }];
+}
 const dangersButton = {
   text() {
     const n = spotList.length;
@@ -2607,7 +2652,7 @@ const dangersButton = {
 const xr = await setupXR({
   renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses,
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
-  commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m,
+  commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m, walkerFits: canPlace, walkerCentre: () => centreOffset, results: xrResults,
   lock: k => editLocks.acquire(String(k), 'vr'), unlock: k => editLocks.release(String(k), 'vr'),
   resetObject, resetAll, editor: markerXR, readOnly: () => game.sessionBusy || comparison.previewing(), movement: () => game.comfort?.movement ?? 'all', eyeHeight: () => game.comfort?.seated ? persona.eye_height_m : undefined, hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { lines: hintLines(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
   startPose() {   // stay if this floor is seen as well as the route's median spot; else the first such point along the route
@@ -2626,7 +2671,7 @@ const xr = await setupXR({
     say();
   },
   exit() { comparison.endPreview(); inXR = false; game.xr = false; dangerVR.k = -1; tourSpot = -1; applyPerf(perfBeforeXR, false); if (current) drawPlan(current); say(); },
-  buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton, { text: () => ['Room menu', 'Scans, experience, findings and controls'], press: () => frontendVR?.open() }],   // the story for a family: what's risky, how night feels, the fix
+  buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton, wmButton, { text: () => ['Room menu', 'Scans, experience, findings and controls'], press: () => frontendVR?.open() }],   // the story for a family: what's risky, how night feels, the fix
   shell: {   // the planning shell (frontend.ts) over the wand; frontendVR is created after the first frame, so look it up lazily
     activate: c => !!frontendVR?.activate(c), release: c => !!frontendVR?.release(c), open: () => !!frontendVR?.isOpen(),
     follow(dt) { if (!xrFollowRoute || mode !== 'auto') return false; autoStep(dt); return true; },
@@ -2645,6 +2690,7 @@ function xrFrame(dt: number, t: number) {
   pulseSpots(t);
   reim.update(dt);
   fanFan.update(dt);
+  wmg.update(dt);
   comparison.step(dt);
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
   if (!comparison.previewing()) labelStep();
@@ -2686,7 +2732,7 @@ Object.assign(game, {
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
   debug: { renderer, scene, camera, marker: mk3d.root, stairs: stairs3d.root, spark: sparkR, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup],
-    vision, rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrSpawn: xr.spawn, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
+    vision, rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrSpawn: xr.spawn, xrButtons: xr.buttons, xrPanel: xr.panel, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); headTurn.yaw = 0; chairVel.v = chairVel.w = 0; Object.assign(body, { x, y, yaw }); },
@@ -2785,6 +2831,14 @@ const frontend = mountFrontend(frontendAdapter);
 document.body.classList.toggle('demo', PARAMS.get('demo') === '1');
 onWindow('keydown', e => { if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) document.body.classList.toggle('demo'); });
 game.setDemo = (on: boolean) => document.body.classList.toggle('demo', on);
+// ---------- scene version (tracked version.json vs the installed bundle.json, tools/get_scene.sh): debug corner, hidden in demo mode ----------
+Promise.all([json('version.json'), json('bundle.json')].map(p => p.catch(() => null))).then(([v, b]) => {
+  if (!v) return;
+  const el = Object.assign(document.createElement('div'), { id: 'sceneversion', className: 'dbg' });
+  el.textContent = b?.version === v.version ? v.version : `${v.version} (installed bundle ${b?.version ?? 'unknown'}: run tools/get_scene.sh)`;
+  el.style.cssText = 'position:fixed;left:6px;bottom:4px;font:11px monospace;opacity:.6;pointer-events:none;z-index:5';
+  document.body.append(el);
+});
 if (PARAMS.has('classic')) { for (const [n, p, s] of homes) p.insertBefore(n, s); document.body.classList.remove('frontend'); document.getElementById('frontend')!.hidden = true; document.getElementById('left')!.hidden = document.getElementById('right')!.hidden = false; }
 frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
 game.frontend = frontend;

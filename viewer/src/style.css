@@ -53,3 +53,9 @@ select { max-width: 100%; background: #1b1f24; color: var(--fg); border: 1px sol
 .demo #gfreplan { display: none !important; }
 /* the gait-style dropdown hidden in demo mode: across the styles the fan barely changes; foot lift (#fanlift) is the persona that does */
 .demo #fanstyle { display: none !important; }
+/* off the storyboard, hidden in demo mode: the scan library (its Scans button sits in the brand pill, frontend.ts), wheelchair and stroke personas, the reach map */
+.demo #scan-library, .demo #scan-picker, .demo #persona option[value=wheelchair], .demo #persona option[value=stroke],
+.demo .persona-card[data-persona=wheelchair], .demo .persona-card[data-persona=stroke],
+.demo h2:has(+ label #reach), .demo label:has(#reach), .demo label:has(#coverage), .demo label:has(#reachwidth), .demo #reachplay,
+.demo #markpoint, .demo #clearpoints, .demo #copypoints, .demo #reachstatus, .demo #reachfindings, .demo #reachtargets,
+.demo #reachcost, .demo #reachcostinfo { display: none !important; }

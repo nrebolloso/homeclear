@@ -1,7 +1,7 @@
 # Bedroom with desk, TV and rug on carpet (REAL, user 2026-10-24): ONE continuous 528.4 s take, iPhone 14 4K 60 fps HEVC 10-bit HLG
 # (data/bedroom3.mov = ~/Downloads/IMG_2969.MOV). ~2.2 frames/s as kitchen4 -> 1165 frames, exhaustive.
 # Scale from the printed ArUco markers on the floor, printed at 100% (user: "not fit to page, so they should be 1 to 1").
-run_name: bedroom3
+run_name: aleroom2   # viewer scene aleroom2_lighter (was bedroom3)
 video: data/bedroom3.mov
 work_dir: out/bedroom3
 frames:

@@ -1,0 +1,115 @@
+{
+ "patient": {
+  "label": "This patient (walker)",
+  "walker": {
+   "width_m": 0.61,
+   "depth_m": 0.445,
+   "handle_height_m": 0.85,
+   "user_gap_m": 0.25,
+   "leg_radius_m": 0.0127,
+   "device": "walker",
+   "frame": "x forward from the user's body centre, y left",
+   "legs": [
+    [
+     0.6950000000000001,
+     0.2923
+    ],
+    [
+     0.6950000000000001,
+     -0.2923
+    ],
+    [
+     0.25,
+     0.2923
+    ],
+    [
+     0.25,
+     -0.2923
+    ]
+   ]
+  },
+  "gait": {
+   "eye_height_m": 1.55,
+   "gait_profile": "older_adult_walker",
+   "stride_m": 0.35,
+   "stride_cv": 0.1,
+   "foot_sep_m": 0.2,
+   "toe_clearance_cv": 0.25
+  },
+  "plan": {},
+  "vision": "normal"
+ },
+ "cane": {
+  "label": "With a cane instead (assumed gait)",
+  "walker": {
+   "width_m": 0.5,
+   "depth_m": 0.25,
+   "handle_height_m": 0.85,
+   "user_gap_m": 0.1,
+   "leg_radius_m": 0.0127,
+   "device": "cane",
+   "frame": "x forward from the user's body centre, y left",
+   "legs": [
+    [
+     0.3,
+     -0.22
+    ]
+   ]
+  },
+  "gait": {
+   "eye_height_m": 1.55,
+   "gait_profile": "older_adult_walker",
+   "stride_m": 0.45,
+   "stride_cv": 0.1,
+   "foot_sep_m": 0.2,
+   "toe_clearance_cv": 0.3
+  },
+  "plan": {},
+  "vision": "normal"
+ },
+ "parkinsons": {
+  "label": "Parkinson's, walker (assumed: shuffling, freezing at turns/doorways)",
+  "walker": {
+   "width_m": 0.61,
+   "depth_m": 0.445,
+   "handle_height_m": 0.85,
+   "user_gap_m": 0.25,
+   "leg_radius_m": 0.0127,
+   "device": "walker",
+   "frame": "x forward from the user's body centre, y left",
+   "legs": [
+    [
+     0.6950000000000001,
+     0.2923
+    ],
+    [
+     0.6950000000000001,
+     -0.2923
+    ],
+    [
+     0.25,
+     0.2923
+    ],
+    [
+     0.25,
+     -0.2923
+    ]
+   ]
+  },
+  "gait": {
+   "eye_height_m": 1.55,
+   "gait_profile": "older_adult_walker",
+   "stride_m": 0.25,
+   "stride_cv": 0.1,
+   "foot_sep_m": 0.15,
+   "toe_clearance_cv": 0.35,
+   "clearance_scale": 0.7
+  },
+  "plan": {
+   "turn_weight_m": 0.6,
+   "narrow_weight": 2.0,
+   "narrow_m": 0.15
+  },
+  "vision": "low_contrast"
+ }
+}

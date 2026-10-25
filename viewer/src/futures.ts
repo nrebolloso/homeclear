@@ -7,7 +7,7 @@
 // multiplier), so the fan's catches/month and the viewer's, planner's and OT report's are the same number. crossed = the edge
 // it rose over (caught or not); hazard = a brush with furniture (not a toe catch). Imagined, never measured. Pure: node tests
 // run it on the exported scene.
-import { stamp, edt, plan, toCell, cellXY, carvedPolys, worldFootprint, polyCells, type GridMeta, type Layers, type Layout, type PlanParams, type XY } from './grid.ts';
+import { stamp, edt, TAPED_EDGE_M, plan, toCell, cellXY, carvedPolys, worldFootprint, polyCells, type GridMeta, type Layers, type Layout, type PlanParams, type XY } from './grid.ts';
 import { contactProb, rng, type Persona, type Risk } from './sim.ts';
 import { predict, sampleHeel, smoothRoute, type Pose, type WorldModel } from './worldmodel.ts';
 
@@ -56,7 +56,8 @@ export function prepare(S: FanScene, lay: Layout, fold: Fold | null): Stamped {
     if (lay.poses[k].removed || o.layer === 'none') return;
     for (const c of polyCells(g, worldFootprint(o as any, lay.poses[k]))) {
       if (o.layer === 'obstacle') { owner[c] = k + 1; furn[c] = 1; }
-      else if (L.bump[c] > 0) owner[c] = k + 1;   // a taped strip zeroed it: nothing to own
+      // a taped strip zeroed it: nothing to own; a taped mat pushed onto the cord leaves the cord's lump the tallest: the cord's
+      else if (L.bump[c] > 0 && (lay.poses[k].taped ? Math.min(o.height_m, TAPED_EDGE_M) : o.height_m) >= L.bump[c]) owner[c] = k + 1;
     }
   });
   if (fold) {
@@ -270,9 +271,27 @@ export function spread(fs: Future[]): number {
   const v = fs.map(f => (f.end[0] - m[0]) * l[0] + (f.end[1] - m[1]) * l[1]);
   return Math.sqrt(v.reduce((a, x) => a + x * x, 0) / v.length);
 }
+/** the crossed edge with the most expected catches (sum of p; more crossings breaks a tie), or null */
+export function leadHazard(F: Fan): string | null {
+  const p: Record<string, number> = {};
+  for (const f of F.futures) if (f.crossed) p[f.crossed] = (p[f.crossed] ?? 0) + f.p;
+  return Object.keys(p).sort((a, b) => p[b] - p[a] || F.crossed[b] - F.crossed[a])[0] ?? null;
+}
+/** leadHazard held until a new leader has led for hold_s (two close hazards would swap the label every fan); a held
+ *  hazard the fan no longer crosses gives way at once */
+export function stickyLead(hold_s = 1.5) {
+  let held: string | null = null, cand: string | null = null, since = 0;
+  return (F: Fan, t_s: number) => {
+    const top = leadHazard(F);
+    if (!held || !F.crossed[held] || top === held) { held = top; cand = null; return held; }
+    if (top !== cand) { cand = top; since = t_s; }
+    if (t_s - since >= hold_s) { held = top; cand = null; }
+    return held;
+  };
+}
 /** the label: "World model: 30 futures · 30 cross the mat · ≈1.0 toe catches/month here", then the brushes ("4 brush the chair") */
-export function fanLabel(F: Fan, model: string): string {
-  const n = F.futures.length, edge = Object.entries(F.crossed).sort((a, b) => b[1] - a[1])[0];
+export function fanLabel(F: Fan, model: string, lead_hazard = leadHazard(F)): string {
+  const n = F.futures.length, edge = lead_hazard && F.crossed[lead_hazard] ? [lead_hazard, F.crossed[lead_hazard]] : null;
   const brush = Object.entries(F.counts).sort((a, b) => b[1] - a[1]).map(([k, c]) => `${c} brush the ${k}`);
   const lead = edge ? `${edge[1]} cross the ${edge[0]} · ≈${catches(F.catches_month)} toe catches/month here` : brush.length ? '' : 'all clear';
   return [`${model}: ${n} futures`, ...(lead ? [lead] : []), ...brush].join(' · ');

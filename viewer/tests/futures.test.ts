@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { loadScene } from './scene.ts';
 import { evaluate } from '../src/evaluate.ts';
-import { prepare, fan, fanLabel, routeOptions, routeLabel, type FanScene } from '../src/futures.ts';
+import { prepare, fan, fanLabel, leadHazard, stickyLead, routeOptions, routeLabel, type Fan, type FanScene } from '../src/futures.ts';
 import { toWorldModel } from '../src/gaitfit.ts';
 import { worldFootprint, type XY } from '../src/grid.ts';
 import { frame, predict, smoothRoute, toLocal, toWorld } from '../src/worldmodel.ts';
@@ -94,4 +94,31 @@ test('futures fan: the low-clearance shuffler catches the mat edge more often th
   assert.ok(shuf > 1.3 * avg, `average ${avg} vs shuffler ${shuf}`);
   const taped = prepare(S, { ...lay, poses: lay.poses.map((p, k) => (k === mat ? { ...p, taped: true } : p)) }, null);
   assert.ok(month('shuffler', taped) < 0.2 * shuf, `taped ${month('shuffler', taped)}`);   // what is left is the cord the mat lay over
+});
+
+test('the label leads with the most expected catches and holds it ~1.5 s', () => {
+  // SYNTHETIC fans: more futures cross the cord, but the mat's crossings carry more catch risk
+  const fu = (crossed: string, p: number) => ({ walker: [], heels: [], end: [0, 0, 0], hazard: null, at: null, p, crossed, route: 0 });
+  const mk = (cord: number, mat: number, pm: number) => ({ futures: [...Array(cord)].map(() => fu('cord', 0.001)).concat([...Array(mat)].map(() => fu('mat', pm))),
+    counts: {}, crossed: { cord, mat }, spread_m: 0, path: 'route', routes: [], ahead_s: 4, lift: 'average', catches_month: 1 }) as unknown as Fan;
+  const matLeads = mk(19, 11, 0.02), cordLeads = mk(19, 11, 0.0001);
+  assert.equal(leadHazard(matLeads), 'mat');
+  assert.match(fanLabel(matLeads, 'World model'), /· 11 cross the mat ·/);
+  const L = stickyLead(1.5);
+  assert.equal(L(matLeads, 0), 'mat');
+  assert.equal(L(cordLeads, 0.5), 'mat');     // the cord leads for 1 s: no switch
+  assert.equal(L(cordLeads, 1.5), 'mat');
+  assert.equal(L(matLeads, 2), 'mat');
+  assert.equal(L(cordLeads, 2.5), 'mat');     // the 1.5 s count starts again
+  assert.equal(L(cordLeads, 4), 'cord');
+  assert.equal(L(mk(19, 0, 0), 4.5), 'cord');
+  assert.equal(L({ ...mk(0, 11, 0.02), crossed: { mat: 11 } } as Fan, 5), 'mat');   // the held one is gone: switch at once
+});
+
+test('futures fan: a taped mat the walker pushed onto the cord leaves the cord named, not the mat', () => {
+  // where the e2e walker pushed the mat (1.2, -0.1) before taping: 36 cord cells (5 mm) under it
+  const pushed = (taped: boolean) => ({ ...lay, poses: lay.poses.map((p, k) => (k === mat ? { ...p, x: 1.203, y: -0.104, yaw: 0, taped } : p)) });
+  const owners = (t: boolean) => { const st = prepare(S, pushed(t), null), on = new Set<number>(); st.L.bump.forEach((h, c) => { if (h >= init.rules.bump_min_m) on.add(st.owner[c]); }); return on; };
+  assert.ok(owners(false).has(mat + 1), 'untaped: the mat owns its own 15 mm edge');
+  assert.ok(!owners(true).has(mat + 1) && owners(true).has(-1), `taped: only the cord stands above bump_min_m (${[...owners(true)]})`);
 });

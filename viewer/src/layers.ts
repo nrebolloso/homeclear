@@ -47,6 +47,16 @@ export const PRESETS: Record<PresetName, Preset> = {
 };
 export const PRESET_ORDER: PresetName[] = ['clean', 'hazards', 'compare', 'evidence'];
 
+/** The rail's Ghosts group: two toggles over the existing checkboxes, and two buttons that press the existing reach controls. */
+export const GHOST_TOGGLES = [
+  { id: 'ghosts', label: 'Footsteps', hint: 'Simulated trips, drawn as translucent walkers' },
+  { id: 'coverage', label: 'Coverage', hint: 'The widest way from the route start to each goal, picked point and room corner (computed, not simulated)' },
+];
+export const GHOST_ACTIONS = [
+  { id: 'reachplay', label: 'Play wave', hint: 'Replay the coverage ghosts fanning out from the route start' },
+  { id: 'markpoint', label: 'Pick a point', hint: 'Click a spot on the floor: a ghost goes there from the route start' },
+];
+
 /** The layers performance mode keeps off (heavy overlays), so a preset never undoes that choice. */
 export function perfSkips(id: string, value: LayerValue): boolean { return id === 'heat' || id === 'imagceil' || (id === 'reimtags' && value === 'all'); }
 
@@ -108,8 +118,11 @@ export function mountLayers(opts: LayersOpts = {}): LayersApi {
   dock.id = 'layers'; dock.setAttribute('role', 'group'); dock.setAttribute('aria-label', 'Layers');
   dock.innerHTML = `
     <div class="lay-full">
+      <h3 class="lay-title">View</h3>
       <div class="lay-presets" role="group" aria-label="Layer presets">${PRESET_ORDER.map(n => `<button type="button" data-preset="${n}" aria-pressed="false" title="${PRESETS[n].hint}">${PRESETS[n].label}</button>`).join('')}<span id="lay-custom" class="lay-custom" hidden>Custom</span></div>
-      <button type="button" id="lay-more" aria-expanded="false" aria-controls="lay-pop" title="Every layer, grouped">Layers <span aria-hidden="true">▴</span></button>
+      <h3 class="lay-title">Ghosts</h3>
+      <div class="lay-ghosts" role="group" aria-label="Ghosts">${GHOST_TOGGLES.map(g => `<button type="button" data-ghost="${g.id}" aria-pressed="false" title="${g.hint}">${g.label}</button>`).join('')}${GHOST_ACTIONS.map(g => `<button type="button" data-ghost-act="${g.id}" title="${g.hint}">${g.label}</button>`).join('')}</div>
+      <button type="button" id="lay-more" aria-expanded="false" aria-controls="lay-pop" title="Every layer, grouped">Layers <span aria-hidden="true">▸</span></button>
       <button type="button" id="lay-hide" title="Hide the panels and HUD, leave only the room (V)">Hide UI <kbd>V</kbd></button>
     </div>
     <section id="lay-info" class="lay-info" aria-label="What the layers show" hidden></section>
@@ -178,6 +191,8 @@ export function mountLayers(opts: LayersOpts = {}): LayersApi {
     const a = activePreset(io, { perf: perf() });
     for (const b of dock.querySelectorAll<HTMLButtonElement>('[data-preset]')) b.setAttribute('aria-pressed', String(b.dataset.preset === a));
     q('#lay-custom').hidden = a !== 'custom';
+    for (const b of dock.querySelectorAll<HTMLButtonElement>('[data-ghost]')) { const id = b.dataset.ghost!; b.hidden = !io.has(id); b.setAttribute('aria-pressed', String(io.has(id) && io.get(id) === true)); }
+    for (const b of dock.querySelectorAll<HTMLButtonElement>('[data-ghost-act]')) b.hidden = !el(b.dataset.ghostAct!);
   };
   const say = (t: string) => { live.textContent = ''; later(() => { live.textContent = t; }, 30); };
 
@@ -195,6 +210,11 @@ export function mountLayers(opts: LayersOpts = {}): LayersApi {
   };
 
   for (const b of dock.querySelectorAll<HTMLButtonElement>('[data-preset]')) b.onclick = () => api.apply(b.dataset.preset as PresetName);
+  for (const b of dock.querySelectorAll<HTMLButtonElement>('[data-ghost]')) b.onclick = () => { const id = b.dataset.ghost!; if (io.has(id)) { io.set(id, !io.get(id)); sync(); } };
+  for (const b of dock.querySelectorAll<HTMLButtonElement>('[data-ghost-act]')) b.onclick = () => {
+    if (b.dataset.ghostAct === 'reachplay' && io.has('coverage') && !io.get('coverage')) io.set('coverage', true);   // the wave plays the coverage ghosts
+    el(b.dataset.ghostAct!)?.click(); sync();
+  };
   q('#lay-more').onclick = () => { pop.hidden = !pop.hidden; q('#lay-more').setAttribute('aria-expanded', String(!pop.hidden)); sync(); };
   q('#lay-hide').onclick = () => api.setChrome(true);
   q('#lay-show').onclick = () => api.setChrome(false);
@@ -204,14 +224,7 @@ export function mountLayers(opts: LayersOpts = {}): LayersApi {
   });
   onDocument('change', e => { if (!dock.contains(e.target as Node)) sync(); });   // any layer changed elsewhere (View tab, classic panel, code)
   onDocument('pointerdown', e => { if (!pop.hidden && !dock.contains(e.target as Node)) { pop.hidden = true; q('#lay-more').setAttribute('aria-expanded', 'false'); } });
-  // sit just above the walk-mode bar (frontend.ts) rather than over it; ?classic has no bar, so the dock keeps its corner
-  const place = () => {
-    const bar = document.getElementById('mode-route')?.parentElement, r = bar?.getBoundingClientRect();
-    dock.style.bottom = r && r.height > 0 && getComputedStyle(bar!).display !== 'none' ? `${Math.max(8, Math.round(innerHeight - r.top + 8))}px` : '';
-  };
-  onWindow('resize', place);
-  every(() => { place(); if (!info.hidden && !hidden) renderInfo(); }, 800);
-  place();   // the before/after numbers arrive after a re-plan, with no change event
+  every(() => { if (!info.hidden && !hidden) renderInfo(); }, 800);
   sync();
   return api;
 }

@@ -77,7 +77,9 @@ async function preflight(id: string) {
   const paths = [sc.splat, sc.walker, sc.persona, sc.route, sc.hazards, sc.grid?.floor, sc.grid?.obstacles, sc.grid?.bump_height_m, sc.grid?.coverage, sc.routes, sc.personas, ...((sc.objects ?? []).map((o: any) => o.splat))].filter(Boolean);
   await Promise.all(paths.map(async path => { const r = await fetch(root + path, { method: 'HEAD' }); if (!r.ok) throw Error(`Missing scan asset: ${path}`); }));
 }
+function rescuePicker() { const b = document.getElementById('scan-picker'); if (b && b.parentElement !== toolbar) toolbar.prepend(b); }   // frontend.ts moves it into the brand pill
 function restoreDOM() {
+  rescuePicker();
   renderer.domElement.remove(); stage.innerHTML = template;
   document.body.classList.remove('frontend', 'panel-collapsed', 'xr-active');
 }
@@ -111,7 +113,7 @@ async function switchScan(id: string, resume = true, fromHost = false) {
       saved.set(current, game.saveSession());
       if (game.editLocks?.busy()) throw Error('Release the edited object before switching scans.');
     }
-    scope?.dispose(); disposed = true; showHeadsetLoading(id);
+    rescuePicker(); scope?.dispose(); disposed = true; showHeadsetLoading(id);
     await mount(id, resume);
     if (preferences) {
       game.setVision(preferences.vision); game.setNight(preferences.night); game.comfort.movement = preferences.movement; game.comfort.seated = preferences.seated; game.companion.setMode(preferences.display);

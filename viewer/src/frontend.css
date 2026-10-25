@@ -74,12 +74,19 @@
 #frontend .measured::before { content: "▣ "; content: "▣ " / ""; }
 #frontend .measured { color: var(--text); border-bottom-color: var(--text); }
 .frontend[data-theme="light"] #frontend .ot { color: #8a4b00; }
-#workspace-toggle { position: absolute; top: 20px; left: 20px; display: flex; gap: 10px; align-items: center; padding: 10px 14px; text-align: left; }
+#brand-bar { position: absolute; top: 20px; left: 20px; display: flex; align-items: stretch; }
+#workspace-toggle { display: flex; gap: 10px; align-items: center; padding: 10px 14px; text-align: left; background: none; border: 0; border-radius: 16px; }
+#scan-slot:not(:empty) { display: flex; align-items: center; padding: 6px 8px 6px 0; border-left: 1px solid var(--line); margin: 8px 0; padding-left: 8px; }
+#scan-slot #scan-picker { font: inherit; font-size: calc(0.8125rem * var(--fs)); color: var(--text); background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+#scan-slot #scan-picker:hover, #scan-slot #scan-picker[aria-expanded="true"] { background: var(--pressed-bg); border-color: var(--pressed-line); color: var(--pressed-fg); }
+#scan-slot #scan-current { display: none; }
 #workspace-toggle small { display: block; font-size: calc(0.75rem * var(--fs)); font-weight: 400; color: var(--muted); max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brand-mark { font-size: calc(1.8125rem * var(--fs)); font-weight: 900; color: var(--accent); }
 .chevron { color: var(--muted); margin-left: 15px; }
 .popover { width: min(330px, calc(100vw - 56px)); padding: 20px; max-height: calc(100dvh - 155px); overflow-y: auto; }
 #workspace-menu { position: absolute; top: 98px; left: 20px; z-index: 10; }
+/* the open workspace menu covers the layers rail (layers.css, z 25 over #frontend z 4) instead of hiding under it */
+body:has(#workspace-toggle[aria-expanded="true"]) #layers { z-index: 3; }
 #context-controls > label { display: grid; gap: 6px; margin: 12px 0; }
 #context-controls select, #a11y-settings select { width: 100%; min-width: 0; }
 #advanced-controls { font-size: calc(0.75rem * var(--fs)); }
@@ -169,7 +176,7 @@
   .frontend { --drawer: min(370px, calc(100vw - 24px)); --scene-right: 0px; }
   #planning-panel { right: 12px; top: 95px; bottom: 155px; }
   #viewer-toolbar { bottom: 25px; left: 50%; width: max-content; }
-  #workspace-toggle { top: 12px; left: 12px; }
+  #brand-bar { top: 12px; left: 12px; } #scan-slot #scan-picker { padding: 6px; }
   #comparison { top: 12px; left: auto; right: 12px; transform: none; }
   #comparison > button { display: none; }
   #comparison button { min-height: 30px; padding: 6px; font-size: calc(0.75rem * var(--fs)); }
@@ -211,6 +218,8 @@ button.pill { cursor: pointer; } button.pill:hover { border-color: var(--btn-hov
 .persona-card { min-height: 52px; padding: 8px 10px; text-align: left; }
 .persona-card[aria-checked="true"] { color: var(--pressed-fg); background: var(--pressed-bg); border-color: var(--pressed-line); font-weight: 700; }
 #pane-view #filter-menu label { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0; font-size: calc(0.75rem * var(--fs)); }
+#planner-controls label, #world-controls label { display: flex; align-items: center; gap: 8px; margin: 10px 0; font-size: calc(0.75rem * var(--fs)); }
+#planner-controls h2, #world-controls h2 { margin-top: 20px; }
 #mark-controls { margin: 10px 0 16px; padding: 12px; border: 1px solid var(--line); border-left: 4px solid var(--tone-mark); border-radius: 10px; }
 #mark-controls h2 { margin-top: 0; } #mark-buttons button { flex: 1 1 auto; }
 body.demo #controls-strip, body.demo #status-pills { display: none; }
