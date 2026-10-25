@@ -39,7 +39,7 @@ export function createMarker3d(scene: THREE.Scene) {
   const tagSlots: { sp: THREE.Sprite; text: string }[] = [];
   let pointsKey = '', handlesKey = '', hoverId: string | null = null;
   const hlist: { id: string; grp: THREE.Group; core: THREE.Mesh; ring: THREE.Mesh; label: THREE.Sprite; on: boolean; seed: number }[] = [];
-  const camPos = new THREE.Vector3(), camQuat = new THREE.Quaternion();
+  const camPos = new THREE.Vector3(), camQuat = new THREE.Quaternion(), tagAt = new THREE.Vector3();
 
   function reTag(old: THREE.Sprite | null, text: string, color: string, size = 0.035) {
     old?.removeFromParent(); old?.material.dispose();
@@ -58,8 +58,8 @@ export function createMarker3d(scene: THREE.Scene) {
       const c = o.ok === false ? 0xff6b6b : o.snapped ? 0x7dff9a : 0xffffff;
       ringMat.color.setHex(c); (stem.material as THREE.LineBasicMaterial).color.setHex(c); ((dot.material) as THREE.MeshBasicMaterial).color.setHex(c);
       const t = o.text ?? `${Math.round(p[2] * 100)} cm up`;
-      if (t !== hText) { hText = t; hTag = reTag(hTag, t, o.ok === false ? TEXT.bad : '#ffffff', 0.03); if (hTag) pointer.add(hTag); }
-      hTag?.position.set(0, 0, 0.3);
+      if (t !== hText) { hText = t; hTag = reTag(hTag, t, o.ok === false ? TEXT.bad : '#ffffff', 0.065); if (hTag) pointer.add(hTag); }
+      hTag?.position.set(0, 0, 0.4);
       order();
     },
     /** the points placed so far, numbered */
@@ -71,8 +71,8 @@ export function createMarker3d(scene: THREE.Scene) {
       ps.forEach((p, k) => {
         const s = new THREE.Mesh(new THREE.SphereGeometry(0.022, 14, 10), basic(0xffd84d));
         s.position.set(...p);
-        const n = card([`${k + 1}`], '#ffd84d', 'rgba(14,20,28,0.78)', 0.03);
-        n.position.set(p[0], p[1], p[2] + 0.09);
+        const n = card([`${k + 1}`], '#ffd84d', 'rgba(14,20,28,0.78)', 0.065);
+        n.position.set(p[0], p[1], p[2] + 0.12);
         placed.add(s, n);
       });
       order();
@@ -83,7 +83,7 @@ export function createMarker3d(scene: THREE.Scene) {
       pv.tags.forEach((t, k) => {   // a sprite per slot, re-made only when its text changes (the pointer moves every frame)
         const slot = tagSlots[k], text = `${t.tone}|${t.text}`;
         if (!slot || slot.text !== text) {
-          const sp = card([t.text], TEXT[t.tone], 'rgba(14,20,28,0.78)', t.tone === 'side' ? 0.05 : 0.035)!;
+          const sp = card([t.text], TEXT[t.tone], 'rgba(14,20,28,0.78)', t.tone === 'side' ? 0.095 : 0.075)!;
           if (slot) { slot.sp.removeFromParent(); slot.sp.material.dispose(); }
           tagSlots[k] = { sp, text }; prev.add(sp);
         }
@@ -106,7 +106,7 @@ export function createMarker3d(scene: THREE.Scene) {
         const ring = new THREE.Mesh(new THREE.RingGeometry(0.052, 0.062, 40), basic(0x8fe3ff, 0.85));
         const halo = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), basic(0x8fe3ff, 0.1));   // a generous target for a laser pointer
         core.userData.handle = userData; halo.userData.handle = userData;
-        const label = card([h.label, active === id ? 'release to place' : 'drag to move'], '#ffe27a', 'rgba(14,20,28,0.9)', 0.032);
+        const label = card([h.label, active === id ? 'release to place' : 'drag to move'], '#ffe27a', 'rgba(14,20,28,0.9)', 0.05);
         label.position.set(0, 0, 0.16); label.visible = false;
         grp.add(halo, core, ring, label);
         handles.add(grp);
@@ -118,8 +118,12 @@ export function createMarker3d(scene: THREE.Scene) {
     setHover(id: string | null) { hoverId = id; },
     /** per frame: a handle keeps the same size on screen (a 3 cm sphere at the far end of a landing was a speck), faces you, pulses */
     update(camera: THREE.Camera, t: number) {
+      camera.getWorldPosition(camPos);
+      // text keeps its look from far off: a tag grows with distance (up to 3x past 1.5 m) so it still reads from across the room
+      const grow = (sp: THREE.Sprite | null) => { if (!sp?.visible || !sp.userData.base) return; sp.getWorldPosition(tagAt); sp.scale.copy(sp.userData.base).multiplyScalar(Math.min(3, Math.max(1, camPos.distanceTo(tagAt) / 1.5))); };
+      grow(hTag); grow(promptTag); tagSlots.forEach(s => grow(s.sp)); placed.children.forEach(c => c instanceof THREE.Sprite && grow(c));
       if (!hlist.length) return;
-      camera.getWorldPosition(camPos); camera.getWorldQuaternion(camQuat);
+      camera.getWorldQuaternion(camQuat);
       const calm = reducedMotion();
       for (const h of hlist) {
         const hot = h.on || hoverId === h.id, d = camPos.distanceTo(h.grp.position), s = Math.min(4.5, Math.max(0.8, d / 1.6)) * (hot ? 1.25 : 1);
@@ -141,7 +145,7 @@ export function createMarker3d(scene: THREE.Scene) {
         const tube = new THREE.Mesh(new THREE.TubeGeometry(path, 8, t.on ? 0.018 : 0.01, 8, false), basic(t.on ? 0x2fd6c8 : 0x9aa4ae, t.on ? 0.85 : 0.5));
         const hit = new THREE.Mesh(new THREE.TubeGeometry(path, 8, 0.08, 6, false), basic(0xffffff, 0.0));   // invisible, wide: easy to click
         hit.userData.toggle = t.id; tube.userData.toggle = t.id;
-        const tag = card([t.label], t.on ? '#7ff5e8' : '#c9d3dc', 'rgba(14,20,28,0.78)', 0.035);
+        const tag = card([t.label], t.on ? '#7ff5e8' : '#c9d3dc', 'rgba(14,20,28,0.78)', 0.055);
         // Stagger the two sides along the flight: at an oblique view equal-height cards otherwise cover one another.
         tag.position.copy(a).lerp(b, k % 2 ? 0.6 : 0.2).add(new THREE.Vector3(0, 0, -0.12));
         toggles.add(tube, hit, tag);
@@ -150,7 +154,7 @@ export function createMarker3d(scene: THREE.Scene) {
     },
     /** in the headset there is no status bar: the prompt floats near the pointer */
     setPrompt(text: string | null, at: P3 | null) {
-      if ((text ?? '') !== promptText) { promptText = text ?? ''; promptTag = reTag(promptTag, promptText, '#ffe27a', 0.03); if (promptTag) root.add(promptTag); }
+      if ((text ?? '') !== promptText) { promptText = text ?? ''; promptTag = reTag(promptTag, promptText, '#ffe27a', 0.065); if (promptTag) root.add(promptTag); }
       if (promptTag) { promptTag.visible = !!at; if (at) promptTag.position.set(at[0], at[1], at[2] + 0.5); }
       order();
     },

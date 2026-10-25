@@ -240,12 +240,15 @@ gap everywhere means the floor (fix with `?floor=`), a gap only at one object me
    behind it). Any mount angle works (it tracks the controller's most level axis), so a handle-down cup holder is fine.
    Snap-turn spins the walker about its centre (`centreOffset`, 0.5 m ahead of the body for the kitchen walker); a turn or
    step that puts a leg into furniture or off filmed floor is refused (turn: buzz). `e2e:xr` 34/34. Needs a real-walker try.
-13. **Results panel in the headset (2026-10-25, ours; Juan's room menu may cover the same, pick one together):** a
-   "Results" card button swaps the story buttons for 5 pages: safety on this route (toe catches/month with the range, each
-   route's trips a night, length and tightest gap), hazards (by severity), fixes ("Work out the fixes", then point at one to
-   apply it), transfers/reach/emergencies (checks with verdicts), changes and cost. The header flips pages, 4 rows at a
-   time, Close brings the story buttons back. Data: `main.ts` `xrResults()`; drawing: `xr.ts` (same cards as the story
-   buttons). `e2e:xr` 35/35.
+13. **Results panel in the headset (2026-10-25), removed the same day.** It was five paged cards (safety, hazards, fixes,
+   checks, changes and cost) over the story buttons; the desktop has the numbers, and the headset view is cleaner without it.
+14. **One tabbed panel, an empty view (2026-10-25):** the story-button stack, its Results pages and the separate Room menu
+   are one panel (`frontend-xr.ts`): tabs World / Vision / Device / Tour / More, standing 2 m out where you faced when you
+   held the left stick click, upright and not following your head. Tour holds the old story buttons (`xr.ts` `actions`).
+   The off-hand strip is its own canvas (`xrstrip.ts`): the mode, then at most three rows, each a key pill and a word (VR
+   shows move / delete / reset when pointing at an object). A drag onto a spot that collides turns the held outline red
+   (dropping there leaves the object where it was); a refused walk or turn flashes the device red and buzzes. Hazard, cost
+   and marking labels are larger and grow with distance; hazard cards sit behind the hazard and hide within 0.9 m.
 10. Tell Juan (security review of `viewer/session-plugin.ts`, the companion relay): a device is known only by the
    `client` name in its URL, and those names are sent to every device, so anyone who can reach the dev server can post
    as another device (even the headset host). Fine on `127.0.0.1` and over adb; not with `--host` on a shared network.

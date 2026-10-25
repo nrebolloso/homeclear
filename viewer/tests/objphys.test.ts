@@ -85,7 +85,8 @@ test('a slippery mat slides under the glides; a grippy one stays', async () => {
   const slip = drive([mat()], ranges({ matFric: 0.08, glide: 0.45 }));
   const grip = drive([mat()], ranges({ matFric: 0.6, glide: 0.2 }));
   const slid = (r: typeof slip) => Math.hypot(r.poses[0][1] - 1.8, r.poses[0][2] - 1.5);   // where the mat ended up
-  assert.ok(slid(slip) > 0.05 && slip.events.some(e => e.kind === 'slid'), `slippery mat slid ${slid(slip).toFixed(3)} m; events ${slip.events.map(e => e.kind)}`);
+  // the mat's drag (objphys.ts MAT_DRAG) makes even a 0.08 mat creep cm, not skate
+  assert.ok(slid(slip) > 0.03 && slip.events.some(e => e.kind === 'slid'), `slippery mat slid ${slid(slip).toFixed(3)} m; events ${slip.events.map(e => e.kind)}`);
   assert.ok(slid(grip) < 0.02, `grippy mat slid ${slid(grip).toFixed(3)} m`);
   assert.ok(grip.far > 2.5, 'the walker crosses a mat that stays put');
 });
@@ -127,4 +128,16 @@ test('a door leaf is bumped but never slides (hinged; the swing is not modelled)
   const r = drive([leaf], ranges());
   assert.ok(r.events.some(e => e.kind === 'bumped'), `events: ${r.events.map(e => e.kind)}`);
   assert.ok(!r.events.some(e => e.kind === 'moved') && r.poses.length === 0, `door moved: ${JSON.stringify(r.events)}`);
+});
+
+test('a 15 mm mat at the low end of its friction range moves centimetres, not across the room, when a glide crosses it', async () => {
+  await initPhysics();
+  // the real rug stayed put in 9/9 passes (its edge folded): a grippy glide rides up the edge instead of plowing the slab
+  const mat = obj('mat', 'rug', [1.8, 1.5], new Float32Array(0), 0.4, 0.015);
+  for (const y of [1.5 - 0.3, 1.5 + 0.08]) {
+    const r = drive([mat], ranges({ matFric: 0.3, glide: 0.45 }), undefined, { y, secs: 8 });
+    const slid = Math.hypot(r.poses[0][1] - 1.8, r.poses[0][2] - 1.5);
+    assert.ok(slid < 0.05, `mat slid ${slid.toFixed(3)} m with the walker at y ${y}`);
+    assert.ok(r.far > 2.6, `the walker crossed (got to ${r.far.toFixed(2)})`);
+  }
 });

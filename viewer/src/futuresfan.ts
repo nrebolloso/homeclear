@@ -18,6 +18,8 @@ export interface FanDeps {
   scene: THREE.Scene; walker: () => WalkerCfg; fanScene: () => Omit<FanScene, 'walker'>; worldModel?: WorldModel;
   body: () => { x: number; y: number; yaw: number }; route: () => XY[] | null; layout: () => Layout; fold: () => Fold | null;
   night: () => boolean; fps: () => number;
+  /** fixed seed (demo autoplay, demorun.ts): every fan draws the same numbers and keeps all MAX_N futures */
+  seed?: number | null;
 }
 const EVERY_S = 0.5, MAX_N = 30, MIN_N = 10, SEGS = 12, PERSON_EVERY = 3, RED = 0xff2020, ORANGE = 0x9a6a3c, GREEN = 0x3ddc84, AMBER = 0xffc040;
 /** a future at this catch chance or more is full red: ~the fan's top futures over the mat edge (average lift 2.5-3%, shuffler up to 4%) */
@@ -121,7 +123,7 @@ export function createFuturesFan(D: FanDeps) {
     // adaptive count: drop 5 futures while the frame rate is >10% under the fan-off rate, add back when there's room
     // (the mean over the 2 s window: single 1 s readings jitter by more than 10% and would ratchet the count down)
     fpsT += dt; fpsSum += fps * dt;
-    if (fpsT >= 2 && fps > 0) {
+    if (D.seed == null && fpsT >= 2 && fps > 0) {
       const mean = fpsSum / fpsT;
       fpsT = fpsSum = 0;
       if (!offFps) offFps = mean;
@@ -132,7 +134,7 @@ export function createFuturesFan(D: FanDeps) {
     acc += dt;
     if (acc < EVERY_S || busy) return;
     acc = 0; busy = true;
-    worker.postMessage({ type: 'fan', id: ++seq, layout: D.layout(), fold: D.fold(), state: { x: b.x, y: b.y, yaw: b.yaw }, route: D.route(), n, seed: seq, night: D.night(), lift });
+    worker.postMessage({ type: 'fan', id: ++seq, layout: D.layout(), fold: D.fold(), state: { x: b.x, y: b.y, yaw: b.yaw }, route: D.route(), n, seed: D.seed ?? seq, night: D.night(), lift });
   }
   function set(v: boolean) {
     on = v; root.visible = v; acc = EVERY_S; fpsT = fpsSum = 0; F = null; text = '';
@@ -141,6 +143,8 @@ export function createFuturesFan(D: FanDeps) {
   }
   return {
     ready, set, update, on: () => on,
+    /** demorun.ts lockstep: false while a fan this tick would send is still waiting on the last one */
+    idle: (dt: number) => !on || !busy || acc + dt < EVERY_S,
     setModel(m: 'learned' | 'hand') { model = m; sendModel(); text = ''; },
     setStyle(name: string) { style = name; sendModel(); text = ''; },
     setLift(l: Lift) { lift = l; text = ''; acc = EVERY_S; const sel = $('fanlift') as HTMLSelectElement | null; if (sel) sel.value = l; },

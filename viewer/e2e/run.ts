@@ -24,11 +24,12 @@ async function open(scene: string) {
   p.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
   await p.goto(`${BASE}/?scene=${scene}`);
   await p.waitForFunction(() => (window as any).game?.ready, null, { timeout: 60000 });
+  if (/[&?](seed|demo=1)/.test(`&${scene}`)) await p.evaluate('game.resetDemo()');   // seeded (demorun.ts): every such check starts from Reset demo
   return { p, errors };
 }
 
 try {
-  const { p, errors } = await open('game_synth');
+  const { p, errors } = await open('game_synth&seed&nophys');   // no live physics: the synthetic route runs over the rug and slides it on every seed
   const gpu = await p.evaluate(() => { const gl = document.createElement('canvas').getContext('webgl2')!; const e = gl.getExtension('WEBGL_debug_renderer_info'); return e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : 'n/a'; });
   await p.waitForTimeout(6000);
   const fps = await G(p, 'return game.fps');
@@ -282,11 +283,11 @@ try {
   await dn.p.close();
   // 12. reset: Z puts the picked object back, a blocked original refuses, Shift+Z / Reset all restore objects, removals and fixes
   {
-  const rs = await open('game_synth');
+  const rs = await open('game_synth&seed&nophys');   // frozen pushes: the walker slides the rug and nudges the bed on every seed
   const RS = (f: string) => G(rs.p, f);
+  const bed = await RS("return { ...game.layout().poses[game.items.indexOf('bed')] }");   // as scanned, right after Reset demo
   await rs.p.waitForTimeout(1500);
   const r0 = await RS("return { poses: game.layout().poses.map(q => ({ ...q })), pm: game.current().per_month }");
-  const bed = r0.poses[await RS("return game.items.indexOf('bed')")];
   await RS("await game.moveObject('bed', 2.0, 1.0, 90); game.select('bed')");
   await rs.p.waitForTimeout(300);
   const lab = await RS("return { lines: game.label(), btn: !document.getElementById('resetobj').disabled }");
@@ -387,31 +388,34 @@ try {
   // 16. the live futures fan (futuresfan.ts): from the walker's current state during autoplay, red at the mat, green once
   // it is taped, the hand-rule toggle, and the fps stays within ~10% of the fan-off rate (adaptive count)
   {
-    const ff = await open('kitchen4_lighter');
+    const ff = await open('kitchen4_lighter&seed');
     const F = (f: string) => G(ff.p, f);
     const watch = 'const seen = []; for (let i = 0; i < 28; i++) { await new Promise(r => setTimeout(r, 500)); const s = game.fan.state(); if (s.fan) seen.push(s); } return seen';
     await F('await new Promise(r => setTimeout(r, 6000))');
-    const off = await F('return game.fps');
     await F('game.fan.set(true)');
-    const before: any[] = await F(watch), fps = await F('return game.fps');
+    const before: any[] = await F(watch);
     await F('await game.fan.tapeMat()');
     const after: any[] = await F(watch);
     await F("game.fan.setModel('hand'); await new Promise(r => setTimeout(r, 1500))");
     const h = await F('return game.fan.state()');
     const mat = (s: any) => (s.fan.crossed.mat ?? 0) > 0;
-    const hit = before.find(s => mat(s) && s.fan.red > 0);
+    const hit = before.find(s => mat(s) && s.fan.red > 0 && / cross the mat /.test(s.label)) ?? before.find(s => mat(s) && s.fan.red > 0);   // near the cord the cord leads the label
     check('futures fan: 30 imagined futures from the current state, red at the mat, labelled', !!hit && hit.fan.n === 30 && /^World model: 30 futures · \d+ cross the mat · ≈[\d.]+ toe catches\/month here/.test(hit.label), hit ? `${hit.label}; ${hit.fan.red} likely catches, ${hit.fan.catches_month.toFixed(2)}/month` : `never red at the mat: ${before.map(s => s.label.split('· ')[1]).join(', ')}`);
     check('futures fan: no future hits the mat once it is taped flat', after.length > 10 && !after.some(mat), `${after.length} fans, mat crossings ${after.filter(mat).length}, max ${Math.max(...after.map(s => s.fan.catches_month)).toFixed(2)} catches/month`);
     check('futures fan: hand rule toggle', h.model === 'hand' && /^Hand rule:/.test(h.label), h.label);
-    check('futures fan: fps within ~10% of the fan-off rate (adaptive count)', fps >= 0.9 * off, `${off.toFixed(1)} fps off -> ${fps.toFixed(1)} on, ${before.at(-1)?.n} futures sampled`);
-    check('futures fan: no page errors', ff.errors.length === 0, ff.errors.join(' | ') || 'none');
-    await ff.p.close();
+    // a fixed seed keeps all 30 futures (demorun.ts: the numbers match the recordings), so the adaptive count is measured unseeded
+    const fr = await open('kitchen4_lighter');
+    const off = await G(fr.p, 'await new Promise(r => setTimeout(r, 6000)); return game.fps');
+    const on = await G(fr.p, 'game.fan.set(true); await new Promise(r => setTimeout(r, 14000)); return { fps: game.fps, n: game.fan.state().fan?.n }');
+    check('futures fan: fps within ~10% of the fan-off rate (adaptive count)', on.fps >= 0.9 * off, `${off.toFixed(1)} fps off -> ${on.fps.toFixed(1)} on, ${on.n} futures sampled (unseeded)`);
+    check('futures fan: no page errors', ff.errors.length + fr.errors.length === 0, [...ff.errors, ...fr.errors].join(' | ') || 'none');
+    await ff.p.close(); await fr.p.close();
   }
   // 17. the fan's fork and foot lift (futures.ts routeOptions, LIFTS): at the fridge facing the mat the way ahead forks
   // (over / around the mat), the low-clearance shuffler catches the mat edge more often than the average lift, a taped mat
   // catches neither, and the mat's physics steps during autoplay without breaking the route
   {
-    const fk = await open('kitchen4_lighter');
+    const fk = await open('kitchen4_lighter&seed');
     const F = (f: string) => G(fk.p, f);
     const steps0 = await F('await new Promise(r => setTimeout(r, 3000)); return game.livephys.steps()');
     await F('await new Promise(r => setTimeout(r, 4000))');
@@ -434,7 +438,7 @@ try {
   // 18. round-trip autoplay (roundtrip.ts, the scripted demo): from the route's goal back to its start, a turn, then out as
   // planned, with no jump between legs; the fan follows the leg being walked; one way is still the default
   {
-    const rt = await open('kitchen4_lighter');
+    const rt = await open('kitchen4_lighter&seed');
     const F = (f: string) => G(rt.p, f);
     const one = await F('return game.roundTrip.leg()');
     const r = await F(`const c = game.current(); await game.roundTrip.set(true); game.fan.set(true);
@@ -533,6 +537,7 @@ try {
     const S = (f: string) => G(sp, f), step = async (name: string, f: () => Promise<string>) => {
       try { check(`storyboard: ${name}`, true, await f()); } catch (e) { check(`storyboard: ${name}`, false, String(e).split('\n')[0]); } };
     await S('await game.planfix.ready');
+    const scan0 = await S('return game.layout().poses.map(q => ({ x: q.x, y: q.y }))');
     await step('futures fan on, learned vs hand rule, average vs shuffler (View tab)', async () => {
       await sp.click('#tab-view'); await sp.check('#fanon'); await sp.selectOption('#fanmodel', 'hand'); const hand = await S('return game.fan.state().model');
       await sp.selectOption('#fanmodel', 'learned'); await sp.selectOption('#fanlift', 'shuffler'); const st = await S('return game.fan.state()');
@@ -605,6 +610,16 @@ try {
         .filter(q => [...document.querySelectorAll<HTMLElement>(q)].some(e => e.checkVisibility())));
       const cards = await sp.$$eval('#persona-cards .persona-card', bs => bs.filter(b => (b as HTMLElement).checkVisibility()).map(b => b.textContent));
       if (shown.length || cards.some(c => /Wheelchair|Stroke/.test(c ?? ''))) throw Error(`visible: ${shown.join(', ')}; cards ${cards.join(' | ')}`); return `${cards.length} persona cards: ${cards.join(' | ')}`;
+    });
+    await step('Reset demo (viewer toolbar) puts back the scan: poses, tape, removals, fan and replay; same seed', async () => {
+      await S("await game.fan.tapeMat(); await game.moveObject('chair8', 1.6, -0.9, 0); game.fan.set(true)");
+      await sp.click('#tab-reimagine'); await sp.click('#pfplay'); await sp.waitForTimeout(1500);
+      await sp.click('#resetdemo'); await sp.waitForTimeout(3000);
+      const r = await S(`const L = game.layout(), s0 = ${JSON.stringify(scan0)}; return { far: Math.max(...L.poses.map((q, k) => Math.hypot(q.x - s0[k].x, q.y - s0[k].y))),
+        taped: L.poses.filter(q => q.taped).length, removed: L.poses.filter(q => q.removed).length, folds: game.rugFolds.folds().length, fan: game.fan.state().on,
+        playing: game.planfix.state().playing, options: document.querySelectorAll('#pfoptions li').length, seed: game.lockstep.seed, auto: game.lockstep.on() }`);
+      if (r.far > 0.05 || r.taped || r.removed || r.folds || r.fan || r.playing || r.options || !r.seed || !r.auto) throw Error(JSON.stringify(r));
+      return `furthest object ${(r.far * 100).toFixed(1)} cm from the scan, nothing taped / removed / folded, fan off, replay stopped; seed ${r.seed}, lockstep autoplay`;
     });
     check('storyboard: no page errors', sb.errors.length === 0, sb.errors.join(' | ') || 'none');
     await sp.close();
