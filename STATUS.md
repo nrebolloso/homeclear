@@ -2,10 +2,13 @@
 
 ## While you were out (rug-calibration)
 - **Done:** rug physics calibrated against 8 real flat-rug passes; fold cascade in autoplay (folds the mat on pass 2 in kitchen4_lighter); glide caps as a planner fix next to "tape the mat edge"; `proof/demo/real_vs_sim_rug.mp4` and `proof/demo/broll/` (16 clips).
-- **In progress:** nothing running. The branch passes `npm test` (166) and `npm run build`; a trial merge with wm-planner passes 172/172 and the build.
+- **In progress:** cluster rug batch, job 47577456 (50 tasks x 40 trials: calibrated, glide caps, tape, wheels only, bare floor, both directions, 200 paired draws each); `python physics/rug_calib.py summarize out/rug_batch` writes `physics/rug_batch.json`. The branch passes `npm test` (166) and `npm run build`; a trial merge with wm-planner passes 172/172 and the build.
 - **Needs me:** BLOCKERS 13-17: a real tennis-ball pass, the 8-vs-9 rug count, IMG_6800, the effort numbers, and the main.ts/planfix.ts merge with wm-planner.
 - **Risks:** the sim drags where the real rug folds (disturbance matches, fold shape doesn't); the caps value is assumed and friction-only, so "caps barely help" is a sim result to test, not a finding.
 - **Overlap with futures fan:** main.ts and planfix.ts conflict (resolution in BLOCKERS 17); grid.ts, planner.ts, engine.py and the kitchen4_lighter config auto-merge. No futures-fan files touched.
+
+## Glide caps friction (for the futures-fan branch)
+Glide caps / tennis balls on the rear legs = glide-rug friction **μ 0.10-0.20, ASSUMED** (PTFE-like on rug pile; not measured, no real caps pass yet). Without caps the calibrated glide-rug range is 0.35-0.9 (rug-floor 0.1-0.3). Source: `physics/rug_calib.py` `CAPS_MU`, `physics/rug_calib.json` `glide_caps_mu_assumed`; the viewer reads the ratio as `CAPS_FACTOR` (`viewer/src/rugcascade.ts`).
 
 ## Rug calibration (branch `rug-calibration`, not merged to demo-safe)
 - **Data:** `data/walker_rug/pairs.csv` (floor/wide pairs, synced by audio cross-correlation, visual fallback), `data/recording_notes.csv` (tracked). 1000101382 / IMG_6801 syncs at -1.64 s (sure). The 6798 pair rechecked: audio -1.21 s, bracketed by the walker start/stop (-1.6 / -0.9 s), kept at -1.21 ±0.3 s.
