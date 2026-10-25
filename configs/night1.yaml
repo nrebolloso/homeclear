@@ -61,7 +61,7 @@ grid:
   floor_min_opacity: 0.1   # 5b drops 57% of this night splat (faint, isolated): stage 12 rebuilt the grid with half the floor (241 vs 490 m2) and cut the route
 plan:
   start: [5.9, 7.5]   # past the blue bike (triangulated hubs ~(5.9, 2.5), leaning on the planter's west side): walk the path beside it, north to south
-  goal: [5.4, -2.0]
+  goal: [-21.0, 1.4]   # just short of the two yellow "DO NOT REMOVE" bollards (splat yellow columns at (-22.7, 1.2) and (-21.6, 2.0), confirmed in a render)
   walker_width_m: 0.61
   preferred_clearance_m: 0.3
   clearance_weight: 5.0
