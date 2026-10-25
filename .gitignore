@@ -1,5 +1,6 @@
 out/
-data/
+data/*
+!data/recording_notes.csv
 __pycache__/
 .venv
 *.pyc
