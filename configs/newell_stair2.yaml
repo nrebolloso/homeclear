@@ -49,7 +49,7 @@ clean:
       - {center: [0.66, 3.13, 3.35], size: [4.3, 2.2, 1.7], yaw_deg: 103.1, pitch_deg: -30.5}     # flight B, landing up, treads to rail tops
       - {center: [-0.78, 4.98, 2.05], size: [2.3, 3.6, 0.3], yaw_deg: 103.1}                      # landing, z 2.0
       - {center: [-0.40, 5.70, 2.40], size: [0.6, 0.6, 0.8], yaw_deg: 103.1}                      # caution sign
-      - {center: [0, 0, 3.92], size: [40, 40, 0.3]}                                                # upper floor
+      - {center: [-1.79, -1.14, 3.92], size: [4.6, 12, 0.3], yaw_deg: 103.1}                      # upper floor, up to its edge 40 cm past the guard rail: past it is the stairwell's air (a white blob 2 m over the landing)
       - {center: [-0.45, 1.15, 4.45], size: [1.9, 0.7, 1.1], yaw_deg: 13.1}                       # upper floor's guard rail over flight A (faint bars)
     haze_disc_m: 0.03   # the rails' Gaussians are thin (middle axis < 2 cm); the blobs over the flights are 4-15 cm discs
     haze_boxes:   # the flight boxes above, from 25 cm over the treads (local z -0.58 A, -0.48 B) to their tops
@@ -63,8 +63,10 @@ clean:
   # Gaussians there sit near 2.35, 2.5, 2.65 and 2.8 m. Never measured (game.stairs keeps "83 cm rise, steps not seen").
   # The seen treads above have no risers in the scan (1 each closes them), and 3 risers (12 cm, 31 cm goings) from 3.49 m
   # to the top are ASSUMED from traces near 3.55, 3.7 and 3.82 m
+  # under_m 0.15: the scan has nothing under the flight or beside its open sides (the floor and flight A show through),
+  # so a 15 cm waist under the bottom_z-top_z line and side faces up to the treads are ASSUMED, not measured
   lighter_imagined_steps:
-    - {flight: flight_B, risers: [5, 1, 1, 1, 3]}
+    - {flight: flight_B, risers: [5, 1, 1, 1, 3], under_m: 0.15}
 floor:
   ransac_iters: 2000
   inlier_m: 0.02

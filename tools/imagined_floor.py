@@ -3,9 +3,10 @@ reconstructed (newell_stair: 69% of the landing under half covered) and the view
 clean.lighter_imagined_floor box {center, size, yaw_deg} (floor frame; center z = a little under the floor) becomes a
 sheet of flat 1 cm discs (stage 12b's gaussians) in the median colour of the opaque Gaussians within BAND of it: the real
 floor stays on top, the sheet shows only through its gaps. Writes <scene>/imagined_floor.ply and points scene.json's
-imagined_floor at it; the viewer tints it as imagined. clean.lighter_imagined_steps entries {flight, risers: [n per gap]}
-add even steps (treads and risers) between a game.stairs flight's seen treads and up to its top, where the scan saw
-almost nothing (newell flight B). Run after lighter_trim, and again after any re-export.
+imagined_floor at it; the viewer tints it as imagined. clean.lighter_imagined_steps entries {flight, risers: [n per
+gap], under_m?} add even steps (treads and risers) between a game.stairs flight's seen treads and up to its top, where
+the scan saw almost nothing (newell flight B); under_m adds an underside and side faces, so the flight reads solid from
+beside and below. Run after lighter_trim, and again after any re-export.
   python tools/imagined_floor.py <config.yaml> viewer/public/scene/<run>_lighter
 """
 import importlib, json, sys
@@ -33,15 +34,16 @@ def sheet(v, p, b):
     return pts, np.tile(np.median(fills.rgb_of(v[near]), 0), (len(xy), 1))
 
 
-def steps(v, p, f, risers):
+def steps(v, p, f, risers, under=None):
     """Gaussians of even steps over flight f: risers[i] of them from seen tread i up to the next one (the last from the
     last seen tread up to top_z at the flight's top). Each tread a sheet 1 cm under its height, each riser a wall of discs
-    at its front, in the lower seen tread's colour (risers shaded)."""
+    at its front, in the lower seen tread's colour (risers shaded). under (m): also an underside sheet that far below the
+    line from bottom_z to top_z and side faces from it up to the treads, so the flight reads solid from beside and below."""
     b0, top = np.mean(f["bottom"], 0), np.array(f["top"])
     u = (top - b0) / np.linalg.norm(top - b0); side = np.array([-u[1], u[0]]); yaw = np.degrees(np.arctan2(u[1], u[0]))
     fronts, zs = [*f["tread_fronts_m"], np.linalg.norm(top - b0)], [*f["treads_z"], f["top_z"]]
     assert len(risers) <= len(f["treads_z"]), "more step runs than gaps between seen treads"
-    out = []
+    out, st, hz = [], [], []   # each tread's start along the run and its height, for the side faces
     for i, n in enumerate(risers):
         s0, z0 = fronts[i], zs[i]
         g, r = (fronts[i + 1] - s0) / n, (zs[i + 1] - z0) / n
@@ -51,8 +53,20 @@ def steps(v, p, f, risers):
         rise = np.concatenate([np.c_[b0 + u * (s0 + k * g) + np.outer(w.ravel(), side), z0 + (k - 1) * r + h.ravel()] for k in range(1, n + 1)])
         rgb = tr[0][1][0]
         assert np.isfinite(rgb).all(), f"no opaque Gaussians at seen tread {i} to take a colour from"
+        st += [s0 + k * g for k in range(n)]; hz += [z0 + k * r for k in range(n)]
         out += [fills.gaussians(v.dtype, pts, np.tile(rgb, (len(pts), 1)), 2),
                 fills.gaussians(v.dtype, rise, np.tile(rgb * RISER_SHADE, (len(rise), 1)), int(abs(u[1]) > abs(u[0])))]   # risers: flat along the run's main axis
+    if under:   # ASSUMED waist: the scan has nothing under the flight or beside it
+        L, W = fronts[-1], f["width_m"]
+        soffit, tread = lambda s: f["bottom_z"] + (f["top_z"] - f["bottom_z"]) * s / L - under, lambda s: np.array(hz)[np.searchsorted(st, s, "right") - 1]
+        s, w = (a.ravel() for a in np.meshgrid(np.arange(fills.PX / 2, L, fills.PX), np.arange(fills.PX / 2, W, fills.PX) - W / 2))
+        assert (tread(s) > soffit(s)).all(), "underside above a tread: under_m too large for this flight"
+        sz, z = (a.ravel() for a in np.meshgrid(np.arange(fills.PX / 2, L, fills.PX), np.arange(soffit(0), max(hz), fills.PX)))
+        k = (z >= soffit(sz)) & (z <= tread(sz))
+        sides = np.concatenate([np.c_[b0 + np.outer(sz[k], u) + e * W / 2 * side, z[k]] for e in (-1, 1)])
+        rgb = RISER_SHADE * fills.rgb_of(out[0][:1])   # shaded like the risers
+        out += [fills.gaussians(v.dtype, np.c_[b0 + np.outer(s, u) + np.outer(w, side), soffit(s)], np.tile(rgb, (len(s), 1)), 2),
+                fills.gaussians(v.dtype, sides, np.tile(rgb, (len(sides), 1)), int(abs(side[1]) > abs(side[0])))]
     return np.concatenate(out)
 
 
@@ -62,7 +76,7 @@ def main():
     p = ply_xyz(v)
     pts, rgb = (np.concatenate(x) for x in zip(*[sheet(v, p, b) for b in cfg["clean"]["lighter_imagined_floor"]]))
     stairs = {f["name"]: f for f in cfg["game"]["stairs"]}
-    g = np.concatenate([fills.gaussians(v.dtype, pts, rgb, 2)] + [steps(v, p, stairs[e["flight"]], e["risers"]) for e in cfg["clean"].get("lighter_imagined_steps", [])])
+    g = np.concatenate([fills.gaussians(v.dtype, pts, rgb, 2)] + [steps(v, p, stairs[e["flight"]], e["risers"], e.get("under_m")) for e in cfg["clean"].get("lighter_imagined_steps", [])])
     write_ply(dst / "imagined_floor.ply", g)
     sc = json.loads((dst / "scene.json").read_text())
     sc["imagined_floor"] = "imagined_floor.ply"
@@ -80,4 +94,8 @@ if __name__ == "__main__":
     flat = np.isclose(g["scale_2"], np.log(0.001))
     assert np.allclose(np.unique(g["z"][flat].round(3)), [-0.01, 0.09, 0.19]), np.unique(g["z"][flat].round(3))   # treads 1 cm under each step
     assert np.allclose(np.unique(g["x"][~flat].round(3)), [0.25, 0.5, 1.0]) and 0.39 < g["z"][~flat].max() < 0.4   # risers at the fronts, up to the top
+    e = steps(sv, sp, {"bottom": [[0, -0.5], [0, 0.5]], "top": [1, 0], "bottom_z": -0.1, "top_z": 0.4, "treads_z": [0, 0.2], "tread_fronts_m": [0, 0.5], "width_m": 1}, [2, 1], 0.25)[len(g):]
+    flat = np.isclose(e["scale_2"], np.log(0.001))   # the same steps first, then the underside and the two side faces
+    assert np.allclose(e["z"][flat], 0.5 * e["x"][flat] - 0.35, atol=1e-6) and np.allclose(np.abs(e["y"][~flat]), 0.5)
+    assert (e["z"][~flat] <= np.where(e["x"][~flat] < 0.25, 0, np.where(e["x"][~flat] < 0.5, 0.1, 0.2)) + 1e-6).all()   # sides stop at the treads
     main()
