@@ -12,7 +12,7 @@ const gpu = await p.evaluate(() => { const gl = document.createElement('canvas')
 const fps = async (ms: number) => { await p.waitForTimeout(ms); return +(await G('return game.fps')).toFixed(1); };
 await G('game.setFly(-0.7, -2.3, 2.3, 55, -36)');   // the ghosts' camera, without them
 const room = await fps(6000);
-await G("await game.planfix.ready; await game.wmghosts.twoStyles('P10 (training)')");
+await G("await game.planfix.ready; await game.wmghosts.twoStyles()");
 const two = await fps(6000);
 await G("await game.wmghosts.month('before')");
 const month = await fps(10000);

@@ -7,7 +7,7 @@ const errors: string[] = []; page.on('pageerror', e => errors.push(String(e)));
 const G = (code: string) => page.evaluate(`(async () => { const game = window.game; ${code} })()`);
 const wait = () => page.waitForTimeout(350);
 try {
-  await page.goto(`${process.argv[2] ?? 'http://127.0.0.1:5180'}/?scene=game_synth&emulate=quest2`);
+  await page.goto(`${process.argv[2] ?? 'http://127.0.0.1:5180'}/?scene=game_synth&emulate=quest2&mount=off`);
   await page.waitForFunction(() => (window as any).game?.frontendXR, null, { timeout: 60000 });
   await page.getByText('ENTER VR', { exact: true }).click(); await page.waitForFunction(() => (window as any).game.xr);
   await wait();
@@ -20,10 +20,16 @@ try {
     const m = new rig.matrix.constructor().lookAt(lo, lt, new V(0, 1, 0)), q = new Q().setFromRotationMatrix(m);
     const ctl = game.debug.xrDevice.controllers.right; ctl.position.set(lo.x, lo.y, lo.z); ctl.quaternion.set(q.x,q.y,q.z,q.w);
   };`);
-  const stick = async (ms = 700) => { await G("game.debug.xrDevice.controllers.left.updateButtonValue('thumbstick', 1)"); await page.waitForTimeout(ms); await G("game.debug.xrDevice.controllers.left.updateButtonValue('thumbstick', 0)"); await wait(); };
+  const stick = async (ms = 150) => { await G("game.debug.xrDevice.controllers.left.updateButtonValue('thumbstick', 1)"); await page.waitForTimeout(ms); await G("game.debug.xrDevice.controllers.left.updateButtonValue('thumbstick', 0)"); await wait(); };
   const select = async (label: string) => { await G(`__aimUI(${JSON.stringify(label)})`); await wait(); await G("game.debug.xrDevice.controllers.right.updateButtonValue('trigger', 1)"); await wait(); await G("game.debug.xrDevice.controllers.right.updateButtonValue('trigger', 0)"); await wait(); };
-  assert.equal(await G('return game.frontendXR.isOpen()'), false); await stick(150); assert.equal(await G('return game.frontendXR.isOpen()'), false); console.log('PASS a stick tap does not open the menu');
+  assert.equal(await G('return game.frontendXR.isOpen()'), false);
+  await G("game.debug.xrDevice.controllers.left.updateAxes('thumbstick', 0, -1)"); await stick(); await G("game.debug.xrDevice.controllers.left.updateAxes('thumbstick', 0, 0)"); await wait();
+  assert.equal(await G('return game.frontendXR.isOpen()'), false); await stick(1100); assert.equal(await G('return game.frontendXR.isOpen()'), false); console.log('PASS a click while walking, or a long hold, does not open the menu');
   await stick(); assert.equal(await G('return game.frontendXR.isOpen()'), true);
+  const at = await G(`const V = game.debug.rig.position.constructor, r = game.frontendXR.root.getWorldPosition(new V()), c = game.debug.xrDevice.controllers.left, rig = game.debug.rig;
+    rig.updateWorldMatrix(true, false); const l = rig.localToWorld(new V(c.position.x, c.position.y, c.position.z)), h = game.xrPose().head;
+    return { hand: Math.hypot(r.x - l.x, r.y - l.y), above: r.z - l.z, head: Math.hypot(r.x - h[0], r.y - h[1], r.z - h[2]) }`) as any;
+  assert.ok(at.hand < 0.05 && at.above > 0.1 && at.above < 0.25 && at.head < 0.9, JSON.stringify(at)); console.log('PASS a stick click opens the panel on the left hand, within reach', JSON.stringify(at));
   assert.equal(await page.locator('#frontend').isVisible(), true); console.log('PASS controller opens spatial menu while desktop companion remains available');
   const before = await G('return JSON.stringify(game.layout())');
   await select('Vision'); await select('Off · Night view'); assert.equal(await page.isChecked('#night'), true);
@@ -33,6 +39,13 @@ try {
   assert.equal(await G("return game.frontendXR.root.children.some(c => c.userData.label?.includes('Cost estimate pending'))"), true); console.log('PASS VR cost view preserves pending estimates');
   await select('Back'); await select('Inspect items'); await wait();
   assert.equal(await G('return game.frontendXR.inspectionRoot.visible'), true); console.log('PASS Inspect uses an in-scene detail card');
+  const rig0 = await G('return game.xrPose().rig');
+  await stick(); await select('Fly'); assert.equal(await G('return game.frontendXR.isOpen()'), false);
+  await G("game.debug.xrDevice.controllers.right.updateAxes('thumbstick', 0, -1)"); await page.waitForTimeout(600); await G("game.debug.xrDevice.controllers.right.updateAxes('thumbstick', 0, 0)"); await wait();
+  const rig1 = await G('return game.xrPose().rig') as any, z1 = await G('return game.debug.rig.position.z') as number;
+  assert.ok(Math.hypot(rig1.x - (rig0 as any).x, rig1.y - (rig0 as any).y) + Math.abs(z1) > 0.3, JSON.stringify({ rig0, rig1, z1 }));
+  await stick(); await select('Flying'); assert.equal(await G('return game.debug.xrFly()'), false); await G("game.frontendXR.close()"); await wait();
+  console.log('PASS Fly on the right of the panel: the right stick flies where the right hand points, and it switches off', ((rig1.x - (rig0 as any).x) ** 2 + (rig1.y - (rig0 as any).y) ** 2) ** .5, z1);
   await stick(); await select('Explore'); assert.equal(await G('return game.frontendXR.isOpen()'), false); console.log('PASS navigation selection closes the menu and returns control to the scene');
   assert.deepEqual(errors, []); console.log('PASS no VR browser exceptions');
 } finally { await browser.close(); }

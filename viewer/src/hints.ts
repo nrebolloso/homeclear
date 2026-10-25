@@ -57,11 +57,11 @@ export function controlHints(x: HintCtx): Hints {
       break;
     case 'inspect':
       label = 'Inspecting';
-      chips = vr ? [c('menu', 'Hold stick click')] : [c('previous', '←'), c('next', '→'), c('leave', 'Esc')];
+      chips = vr ? [c('menu', 'Click stick')] : [c('previous', '←'), c('next', '→'), c('leave', 'Esc')];
       break;
     case 'route':
       label = 'Following route';
-      chips = vr ? [c('menu', 'Hold stick click'), c('doorway', 'X'), c('stairs', 'Y')]
+      chips = vr ? [c('menu', 'Click stick'), c('doorway', 'X'), c('stairs', 'Y')]
         : [c('look', 'Mouse'), c('take over', 'W', 'A', 'S', 'D'), c('mark', 'M'), c('all keys', 'F1')];
       break;
     case 'fly':
@@ -74,8 +74,8 @@ export function controlHints(x: HintCtx): Hints {
       break;
     default:   // free walk
       label = chair ? 'Driving' : 'Walking';
-      chips = vr ? (x.mounted ? [c('walk', 'Stick ↑↓'), c('turn', 'Stick ←→'), c('menu', 'Hold stick click')]
-          : [c('walk', 'Left stick'), c('turn', 'Right stick'), c('menu', 'Hold stick click')])   // three rows read from the controller; X / Y still mark
+      chips = vr ? (x.mounted ? [c('walk', 'Stick ↑↓'), c('turn', 'Stick ←→'), c('menu', 'Click stick')]
+          : [c('walk', 'Left stick'), c('turn', 'Right stick'), c('menu', 'Click stick')])   // three rows read from the controller; X / Y still mark
         : x.locked ? [c('look', 'Mouse'), ...wasd, c('act at dot', 'Click'), c('unlock', 'Esc')].slice(0, MAX_CHIPS)
         : chair ? [...wasd, c('look', 'Mouse'), c('mark', 'M', '1/2')]
         : x.mismatch ? [c('walker ≠ view', 'C'), ...wasd, c('look', 'Mouse'), c('mark', 'M', '1/2')]   // the amber arrow is on: C turns the walker to face the view

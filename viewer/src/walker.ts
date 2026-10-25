@@ -7,6 +7,9 @@ export interface WalkerCfg {
   device?: 'walker' | 'cane' | 'wheelchair';
 }
 
+/** The front end of the left foam grip (x forward from the body centre, y left): the zip-tied controller sits just ahead of it */
+export const gripFront = (w: WalkerCfg): [number, number] => [w.user_gap_m + w.depth_m - 0.1, w.width_m / 2 - w.leg_radius_m];
+
 const METAL = 0xd4d8dd, RED = 0xff3030, GREY = 0x8a8f96, RUBBER = 0x5a5e64;
 const WHEEL_R = 0.0635;   // 5" front wheels
 
@@ -72,7 +75,7 @@ export function buildWalker(w: WalkerCfg) {
   for (const s of [1, -1]) {
     const y = s * hy;
     bent([v(x0, y, h - BEND), v(x0 + 0.012, y, h - 0.012), v(x0 + BEND, y, h), v(x1 - BEND, y, h), v(x1 - 0.012, y, h - 0.012), v(x1, y, h - BEND)]);
-    bar(v(x0 + 0.07, y, h + 0.004), v(x1 - 0.1, y, h + 0.004), tube * 2, rubber);   // foam grip
+    bar(v(x0 + 0.07, y, h + 0.004), v(gripFront(w)[0], y, h + 0.004), tube * 2, rubber);   // foam grip
     bar(v(x0, y, h - 0.13), v(x1, y, h - 0.17));                                      // upper side brace
     bent([v(x0, y, 0.4), v(x0 + 0.06, y, 0.47), v((x0 + x1) / 2, y, 0.5), v(x1, y, 0.52)]);   // lower side brace
     bar(v(x1, y, h - 0.4), v(x1, y, h - 0.17), tube * 1.3, greyMat);                 // grey sleeve on the front leg

@@ -15,11 +15,11 @@ const SHOTS: Record<string, { panel: string; run: string }> = {
   // a held-out PhysioNet walker as "the user": the embedding is fitted live from walker + head, then "Re-plan for me"
   personalization: { panel: 'gaitfitpanel', run: `await game.gait.play(8); document.getElementById('planfixpanel').scrollIntoView();
     await game.gait.replan(); await new Promise(r => setTimeout(r, 6000))` },
-  // the world model life-size (demo mode: pass ...&demo=1): two gait styles from the fridge, a swap, the futures fan near the
+  // the world model life-size (demo mode: pass ...&demo=1): Average and Shuffler from the fridge, the futures fan near the
   // mat, then a month of trips as scanned and after the planner's fixes
   ghosts_kitchen: { panel: 'wmghostpanel', run: `const W = game.wmghosts, wait = ms => new Promise(r => setTimeout(r, ms));
-    await W.twoStyles('P07 (training)'); await wait(11000); await W.twoStyles('P10 (training)'); await wait(3000);
-    await W.twoStyles('P10 (training)'); game.setFly(-0.9, -0.6, 1.7, 54, -40); await wait(8000);
+    await W.twoStyles(); await wait(11000);
+    await W.twoStyles(); game.setFly(-0.9, -0.6, 1.7, 54, -40); await wait(8000);
     await W.month('before'); await wait(21000); await W.month('after'); await wait(21000); W.stop(); await game.planfix.goto(game.planfix.layouts().scan)` },
   // the live futures fan (demo mode), standing at the fridge before the walker moves: the fork over / around the mat with
   // the average foot lift, then the low-clearance shuffler (more red at the mat edge), then the mat taped (grid.ts

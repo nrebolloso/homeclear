@@ -31,6 +31,14 @@ export function pushPull(push: number, stickY: number, dt: number): number {
   return Math.max(-PUSH_MAX_M, Math.min(PUSH_MAX_M, push - stickY * PUSH_SPEED_MPS * dt));
 }
 
+/** The held object's turn from the wand stick: a quarter turn per flick (right = clockwise from above), the steps a layout
+ *  keeps (main.ts commitPose rounds to them), so what you see held is what lands. A flick counts once the stick leans past
+ *  0.7 more sideways than up/down (so a push or pull doesn't also turn it); it re-arms near the centre. Returns [spin, ready]. */
+export function spinStep(spin: number, ready: boolean, stickX: number, stickY: number): [number, boolean] {
+  if (ready && Math.abs(stickX) > 0.7 && Math.abs(stickX) > Math.abs(stickY)) return [spin - Math.sign(stickX) * Math.PI / 2, false];
+  return [spin, ready || Math.abs(stickX) < 0.3];
+}
+
 /** Press-and-hold progress 0..1 for the A-button remove (1 = remove now). */
 export const confirmProgress = (heldS: number) => Math.min(1, Math.max(0, heldS / CONFIRM_S));
 

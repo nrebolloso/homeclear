@@ -17,7 +17,7 @@ test('arc length and pose lookup along an imagined trip', () => {
 });
 
 test('a toe catch outranks a brush on the same step', () => {
-  assert.equal(caught({ heel: [0, 0], side: 1, walker: [0, 0, 0], toe: true, brush: 'chair8' }), 'toe catch');
-  assert.equal(caught({ heel: [0, 0], side: 1, walker: [0, 0, 0], toe: false, brush: 'chair8' }), 'chair8');
-  assert.equal(caught({ heel: [0, 0], side: 1, walker: [0, 0, 0], toe: false, brush: null }), null);
+  assert.equal(caught({ heel: [0, 0], side: 1, walker: [0, 0, 0], toe: true, p: 0.01, brush: 'chair8' }), 'toe catch');
+  assert.equal(caught({ heel: [0, 0], side: 1, walker: [0, 0, 0], toe: false, p: 0, brush: 'chair8' }), 'chair8');
+  assert.equal(caught({ heel: [0, 0], side: 1, walker: [0, 0, 0], toe: false, p: 0, brush: null }), null);
 });

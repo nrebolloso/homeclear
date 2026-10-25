@@ -256,7 +256,7 @@ export function createPlanFix(D: PlanFixDeps) {
   /** wmghosts.ts: the room as it is now / the scan / the chosen option, the evaluator's trips with one world model, and a
    *  glide + commit to a planner layout (before / after) */
   const layouts = () => (data ? { now: fromLayout(S(), cfg(), D.base, D.layout()), scan: data.scanned.layout, chosen: data.pareto[opts()[0].k].layout } : null);
-  const imagine = (pl: PlanLayout, wm: WorldModel, n: number, nf = 0) => ready.then(() => ask({ type: 'imagine', pl, wm, n, nf }));
+  const imagine = (pl: PlanLayout, wm: WorldModel, n: number, nf = 0, lift = 1) => ready.then(() => ask({ type: 'imagine', pl, wm, n, nf, lift }));
   async function goto(pl: PlanLayout) { await glide(fromLayout(S(), cfg(), D.base, D.layout()), pl, 900); await D.commit(toLayout(S(), cfg(), D.base, pl), fixesOf(pl)); }
   return { ready, play, apply, improve, replanFor, rankedFixes, stop: () => { playing = false; }, state, score: (pls: PlanLayout[]) => ask({ type: 'score', pls }).then(r => r.scores),
     layouts, imagine, goto };

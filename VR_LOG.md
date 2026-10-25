@@ -34,7 +34,7 @@ unused), and VR in `main.ts` is only a hook block.
 |---|---|
 | `scene=k4_150k` | Which folder in `viewer/public/scene/` |
 | `hz=90` | Refresh rate to request (Quest default 72) |
-| `mount=left` / `mount=right` | That controller is zip-tied to the walker (section 3) |
+| `mount=right` / `mount=off` | The left controller is zip-tied to the walker by default (section 3); `right` swaps it, `off` holds both |
 | `wand=left` | Wand in the left hand (default right) |
 | `scale=1.1` | Shows the home 10% bigger (rig scaled by 1/1.1). Look only: measurements stay in scan metres. A comfort/try-out knob, not a fix (section 4.4) |
 | `floor=3` | Lifts the scan's floor 3 cm against the real one (negative lowers it): you stand that much lower in the scan. For a scan whose floor sits off the real floor (section 4.5) |
@@ -108,7 +108,7 @@ its grip. Not yet looked at in the headset.
 - At 90 Hz on `k4_150k`: tour, night walk, safer room and compare run at ~84-90 fps.
 - Reimagine layout search: ~36 s on the Quest; the morph dips to 52-55 fps.
 - Decision: **72 Hz stays the Quest default**; add `&hz=90` per scene (OK for `k4_150k`).
-- Recommended URL: `http://localhost:5179/?scene=k4_150k&hz=90` (+ `&mount=left` on the walker).
+- Recommended URL: `http://localhost:5179/?scene=k4_150k&hz=90` (the walker mount is the default).
 
 ### 4.2 Scenes (gitignored, `viewer/public/scene/`, on the Mac)
 
@@ -243,8 +243,8 @@ gap everywhere means the floor (fix with `?floor=`), a gap only at one object me
 13. **Results panel in the headset (2026-10-25), removed the same day.** It was five paged cards (safety, hazards, fixes,
    checks, changes and cost) over the story buttons; the desktop has the numbers, and the headset view is cleaner without it.
 14. **One tabbed panel, an empty view (2026-10-25):** the story-button stack, its Results pages and the separate Room menu
-   are one panel (`frontend-xr.ts`): tabs World / Vision / Device / Tour / More, standing 2 m out where you faced when you
-   held the left stick click, upright and not following your head. Tour holds the old story buttons (`xr.ts` `actions`).
+   are one panel (`frontend-xr.ts`): tabs World / Vision / Device / Tour / More. (Since moved onto the left hand: a
+   left-stick click opens it 22 cm above that controller, facing you; the right hand points at it.) Tour holds the old story buttons (`xr.ts` `actions`).
    The off-hand strip is its own canvas (`xrstrip.ts`): the mode, then at most three rows, each a key pill and a word (VR
    shows move / delete / reset when pointing at an object). A drag onto a spot that collides turns the held outline red
    (dropping there leaves the object where it was); a refused walk or turn flashes the device red and buzzes. Hazard, cost

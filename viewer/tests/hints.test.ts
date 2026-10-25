@@ -46,7 +46,7 @@ test('VR: mounted walks along the walker, free walks with sticks, pointing at an
 test('VR shows at most VR_CHIPS rows, and every VR walk state names the menu', () => {
   for (const nav of ['auto', 'free', 'fly'] as const) for (const o of [{}, { mounted: true }, { selected: true }, { grabbing: true }, { editingMarks: true }, { marking: { kind: 'stairs' as const, step: 1, total: 3 } }])
     assert.ok(controlHints(ctx({ device: 'vr', nav, ...o })).chips.length <= VR_CHIPS, JSON.stringify([nav, o]));
-  assert.ok(keys({ device: 'vr' }).includes('Hold stick click') && keys({ device: 'vr', mounted: true }).includes('Hold stick click'));
+  assert.ok(keys({ device: 'vr' }).includes('Click stick') && keys({ device: 'vr', mounted: true }).includes('Click stick'));
 });
 test('hint lines: label, then chips on one line; hint rows: one row per chip', () => {
   const h = controlHints(ctx({ device: 'vr', selected: true }));

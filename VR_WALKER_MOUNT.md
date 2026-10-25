@@ -20,7 +20,7 @@ caps, 7.5 lb, handles 32-39 in, 17 in between the grips, base depth 17.5 in (0.4
 
 **Keep the grey front bar clear**: it carries the two red fold buttons and the hinge.
 
-Left-handed patient: swap them (`?mount=right&wand=left`, strap the right controller by the right grip).
+Left-handed patient: swap them (`?mount=right`, which also moves the wand to the left hand; strap the right controller by the right grip).
 
 ## Or: a second cup holder
 
@@ -62,11 +62,13 @@ grip.
 
 ## Using it
 
-Open the viewer with **`?mount=left`** (e.g. `http://localhost:5179/?scene=k4_150k&hz=90&mount=left`).
+The left mount is the default, so any viewer link works (e.g. `http://localhost:5179/?scene=k4_150k&hz=90`). `?mount=off` holds both controllers in hand.
 
 1. **Stand centred behind the walker, hands on the grips, facing the way it points, and press ENTER VR.** The app takes
    that moment to line the controller up with the walker: which way it points (the strap or holder never holds it exactly
-   straight) and where on the walker it sits.
+   straight). The virtual walker is then put where the real one is: its left grip just under the controller and its
+   handles at the controller's height, so your left hand is on the virtual grip (a "Walker lined up" card gives the
+   height). Where you stand doesn't matter for that.
 2. Left stick **up/down** walks forward/back along the walker's heading (you can look around while you push); **left/right**
    snap-turns 30 deg once per flick, spinning the walker about its own centre like turning a real walker in place (you
    swing round behind it). A turn or a step that would put a walker leg into furniture or off the filmed floor is refused
@@ -78,11 +80,12 @@ Open the viewer with **`?mount=left`** (e.g. `http://localhost:5179/?scene=k4_15
 
 | Piece | Status |
 |---|---|
-| `?mount=left`: stick walks along the walker, snap-turns; virtual walker follows the real one; line-up at entry and on the card; mounted trigger ignored | Built, `viewer/src/xr.ts` (`npm run e2e:xr`, emulated) |
+| Mounted (default): stick walks along the walker, snap-turns; virtual walker follows the real one; line-up at entry and on the card; mounted trigger ignored | Built, `viewer/src/xr.ts` (`npm run e2e:xr`, emulated) |
 | Full walker tracking (2026-10-25): position as well as heading from the controller; any mount angle (cup holder, handle down); snap-turn about the walker's centre; steps and turns that would put a leg into furniture are refused | Built, `e2e:xr` checks (emulated); the refused turn has no emulated check yet |
 | Wand: point, drag, twist, hold-to-delete, teleport; card buttons (dangers tour, night walk, safer room, compare) | Built |
 | Hand pinch as a stand-in for the trigger | Built |
-| Juan's planning menu opens on a **held** left-stick click (0.4 s, short buzz); a click closes it | A tap no longer opens it, so an accidental press on the mounted stick does nothing |
+| The planning panel opens on a left-stick click (2026-10-25), on the left hand: about 34 cm across, 22 cm above the mounted controller, facing you; the right hand points at it; another click closes it | Built, `e2e:frontend:xr`. A click made while the stick leans (walking) or held over 0.5 s doesn't count |
+| Wobble (2026-10-25): the controller twisting up to 10 deg on the bar leaves the virtual walker still; past that it catches up in about 0.3 s | Built, `e2e:xr` (6 deg twist: 0 deg). `MOUNT_WOBBLE_RAD` in `xr.ts` if the strap is looser |
 | Dock detection (wand in its holder = walk mode, lifted = edit mode) | Not built |
 | The feel on the real walker | Needs the parts and charged controllers |
 
@@ -90,4 +93,5 @@ Open the viewer with **`?mount=left`** (e.g. `http://localhost:5179/?scene=k4_15
 
 - Rear glide cap diameter
 - Handle height, set for this patient
-- After fitting: where the controller sits (height, distance behind the grip), as a check on the virtual walker's placement
+- After fitting: how far ahead of the grip's front end the controller's ring sits and how high above the bar (`MOUNT_AHEAD_M`
+  0.06 and `MOUNT_ABOVE_M` 0.04 in `viewer/src/xr.ts`); set those and the virtual grip lands exactly under the hand

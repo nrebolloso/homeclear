@@ -9,7 +9,8 @@ import { contactProb, rng } from './sim.ts';
 import { predict, sampleHeel, smoothRoute, type Pose, type WorldModel } from './worldmodel.ts';
 
 type Walker = { width_m: number; depth_m: number; leg_radius_m: number };
-export interface ImaginedStep { heel: XY; side: number; walker: Pose; toe: boolean; brush: string | null }
+/** p = the chance this step's swing catches the toe (sim.ts, 0 off a bump); toe = whether the drawn trip did */
+export interface ImaginedStep { heel: XY; side: number; walker: Pose; toe: boolean; p: number; brush: string | null }
 export interface Future { walker: XY[]; heels: XY[]; hazard: string | null }
 export interface Imagined {
   trips: ImaginedStep[][];
@@ -26,13 +27,15 @@ function brushAt(S: Init, cfg: PlannerCfg, lay: Layout, ev: Eval, walker: Walker
   return Object.keys(brushes(S, cfg, lay, { ...ev, ghosts: [{ pts: [], hit: [], walker: [p] }] }, walker).by)[0] ?? null;
 }
 
-/** n trips of this layout walked by world model wm; futures (nf of them, `ahead` steps each) at each heel strike of trip 0 */
+/** n trips of this layout walked by world model wm; futures (nf of them, `ahead` steps each) at each heel strike of trip 0.
+ *  lift = this walker's toe clearance vs. the scene persona's (futures.ts LIFTS: 1 average, < 1 the shuffler); the seed is
+ *  the same, so two lifts walk the same steps and differ only in what catches */
 export function imagine(S0: Init, cfg: PlannerCfg, base: ObjPose[],
-                        pl: PlanLayout, walker: Walker, wm: WorldModel, n: number, nf = 0, ahead = 4): Imagined {
-  const S = { ...S0, worldModel: wm, persona: { ...S0.persona, step_model: 'world' as const } }, lay = toLayout(S, cfg, base, pl);
+                        pl: PlanLayout, walker: Walker, wm: WorldModel, n: number, nf = 0, ahead = 4, lift = 1): Imagined {
+  const S = { ...S0, worldModel: wm, persona: { ...S0.persona, step_model: 'world' as const, clearance_scale: (S0.persona.clearance_scale ?? 1) * lift } }, lay = toLayout(S, cfg, base, pl);
   const sc = score(S, cfg, base, pl, walker), ev = sc.ev, rd = S.routes[ev.sel] ?? S.routes[0];
   const trips = ev.ghosts.slice(0, n).map((gh, t) => gh.pts.map((heel, k) => ({ heel, side: t === 0 ? (ev.steps[k]?.side ? 1 : -1) : 0, walker: gh.walker![k],
-    toe: gh.hit[k], brush: brushAt(S, cfg, lay, ev, walker, gh.walker![k]) })));
+    toe: gh.hit[k], p: gh.p?.[k] ?? 0, brush: brushAt(S, cfg, lay, ev, walker, gh.walker![k]) })));
   const snags = sc.snag_by.map(o => { const k = S.objects.findIndex(b => b.name === o.object), p = lay.poses[k]; return { ...o, at: [p.x, p.y] as XY }; });
   const out: Imagined = { trips, futures: [], snags, trips_per_month: rd.trips_per_night * S.risk.days_per_month,
     score: { risk: sc.risk, contacts: sc.contacts, snags: sc.snags, brushes: sc.brushes, brush_by: sc.brush_by } };

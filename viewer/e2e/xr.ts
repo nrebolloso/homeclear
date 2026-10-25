@@ -42,7 +42,7 @@ try {
   const errors: string[] = [];
   p.on('pageerror', e => errors.push(String(e)));
   p.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-  await p.goto(`${BASE}/?scene=game_synth&emulate=quest2`);
+  await p.goto(`${BASE}/?scene=game_synth&emulate=quest2&mount=off`);
   await p.waitForFunction(() => (window as any).game?.ready, null, { timeout: 60000 });
   await p.evaluate(HELPERS);
   const wait = (ms = 250) => p.waitForTimeout(ms);
@@ -297,24 +297,25 @@ try {
   const rest = await G(p, "return { gone: game.inventory(), bed: game.layout().poses[game.items.indexOf('bed')] }");
   check('both grips held reset everything', rest.gone.length === 0 && Math.hypot(rest.bed.x - bed0.x, rest.bed.y - bed0.y) < 0.01, `removed: [${rest.gone.join(', ')}], bed (${rest.bed.x.toFixed(2)}, ${rest.bed.y.toFixed(2)})`);
 
-  // 9b. The card menu is up by default (the three story buttons, Vision and "More"); holding the left stick opens ONE
-  // tabbed panel about 2 m out and the cards step aside; a second click closes it and they return.
+  // 9b. Nothing stands in the room by default (the story cards are off); a left stick click opens ONE tabbed panel on the
+  // left hand; a second click closes it and the room is empty again.
   const idle = await G(p, 'return { shown: game.debug.xrButtons().filter(x => x.at).length, texts: game.debug.xrButtons().map(b => b.text[0]), open: game.frontendXR.isOpen() }');
-  await G(p, "__xr.ctl('left').updateButtonValue('thumbstick', 1)"); await wait(900);
+  await G(p, "__xr.ctl('left').updateButtonValue('thumbstick', 1)"); await wait(150);
   await G(p, "__xr.ctl('left').updateButtonValue('thumbstick', 0)"); await wait(400);
-  const pan = await G(p, `const h = game.xrPose().head, r = game.frontendXR.root.position; return { open: game.frontendXR.isOpen(), d: Math.hypot(r.x - h[0], r.y - h[1]), cards: game.debug.xrButtons().filter(x => x.at).length,
-    tabs: game.frontendXR.root.children.map(c => c.userData.label).slice(0, 5) }`);
+  const pan = await G(p, `const h = game.xrPose().head, r = game.frontendXR.root.position; return { open: game.frontendXR.isOpen(), d: Math.hypot(r.x - h[0], r.y - h[1], r.z - h[2]), cards: game.debug.xrButtons().filter(x => x.at).length,
+    tabs: game.frontendXR.root.children.map(c => c.userData.label).filter(Boolean).slice(0, 6) }`);
   await G(p, "__xr.ctl('left').updateButtonValue('thumbstick', 1)"); await wait(150);
   await G(p, "__xr.ctl('left').updateButtonValue('thumbstick', 0)"); await wait(300);
   const closed = await G(p, 'return { open: game.frontendXR.isOpen(), cards: game.debug.xrButtons().filter(x => x.at).length }');
-  check('the cards stand in the room by default; the tabbed panel opens about 2 m out and they step aside', idle.shown === 5 && !idle.open && !idle.texts.includes('Results') &&
-    pan.open && pan.d > 1.8 && pan.d < 2.2 && pan.cards === 0 && pan.tabs.join(',') === 'World,Vision,Device,Tour,More' && !closed.open && closed.cards === 5,
-    `in the room: ${idle.shown} cards; panel ${pan.open ? 'open' : 'shut'} ${pan.d.toFixed(2)} m out (${pan.cards} cards), tabs ${pan.tabs.join('/')}, closed again=${!closed.open} (${closed.cards} cards)`);
+  check('no cards in the room by default; the tabbed panel opens on the left hand and closes again', idle.shown === 0 && !idle.open && !idle.texts.includes('Results') &&
+    pan.open && pan.d < 0.9 && pan.cards === 0 && pan.tabs.join(',') === 'World,Vision,Device,Tour,More,Fly' && !closed.open && closed.cards === 0,
+    `in the room: ${idle.shown} cards; panel ${pan.open ? 'open' : 'shut'} ${pan.d.toFixed(2)} m from the eyes (${pan.cards} cards), tabs ${pan.tabs.join('/')}, closed again=${!closed.open} (${closed.cards} cards)`);
 
   // 9c. The card menu: the demo's three buttons, Vision and "More" up front, on an arc to your left at chest height (none low,
   // none across your view); "More" shows the rest with Hide and "Back"; "Back" returns
   const menuAt = () => G(p, `const h = game.xrPose().head, c = game.debug.renderer.xr.getCamera(), d = c.getWorldDirection(new (game.debug.rig.position.constructor)());
     return game.debug.xrButtons().filter(b => b.at).map(b => ({ t: b.text[0], z: b.at[2], h: h[2], a: Math.atan2(Math.sin(Math.atan2(b.at[1] - h[1], b.at[0] - h[0]) - Math.atan2(d.y, d.x)), Math.cos(Math.atan2(b.at[1] - h[1], b.at[0] - h[0]) - Math.atan2(d.y, d.x))) }))`);
+  await G(p, 'game.debug.xrMenu(true)'); await wait(300);   // the cards on request (debug only now)
   const frontSet = await menuAt();
   await G(p, "game.debug.xrPress(game.debug.xrButtons().findIndex(b => b.text[0] === 'More...'))"); await wait(300);
   const moreSet = await menuAt();
@@ -327,7 +328,7 @@ try {
     `front: ${frontSet.map((b: { t: string; z: number; a: number }) => `${b.t} ${b.z.toFixed(2)} m ${(b.a * 180 / Math.PI).toFixed(0)} deg`).join(', ')}; more: ${moreSet.map((b: { t: string }) => b.t).join(', ')} (lowest ${Math.min(...moreSet.map((b: { z: number }) => b.z)).toFixed(2)} m)`);
 
   // 9d. Modes stay visible once on: Vision (a card badge plus the chip), Night; the stats card shows only with a fix applied;
-  // a tap of the off-hand grip hides and shows the cards; none of it takes a ray hit
+  // the off-hand grip (squeezed with the walker handle) never brings the cards up; none of it takes a ray hit
   const vi = await G(p, "return game.debug.xrButtons().findIndex(b => b.text[0].startsWith('Vision'))");
   await G(p, `game.debug.xrPress(${vi})`); await wait(300);
   const v1 = await G(p, "return { card: game.debug.xrButtons()[" + vi + "], sel: document.getElementById('vision').value, glance: game.debug.xrGlance() }");
@@ -338,11 +339,12 @@ try {
     `vision ${v1.sel}, on=${v1.card.on}, chip "${v1.glance.chip}", cleared="${v0.chip}", stats "${st}"`);
   await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 1)"); await wait(120);
   await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 0)"); await wait(300);
+  await G(p, 'game.debug.xrMenu(false)'); await wait(300);
   const hid = await G(p, 'return { menu: game.debug.xrMenu(), cards: game.debug.xrButtons().filter(x => x.at).length }');
   await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 1)"); await wait(120);
   await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 0)"); await wait(300);
   const shownAgain = await G(p, 'return { menu: game.debug.xrMenu(), cards: game.debug.xrButtons().filter(x => x.at).length }');
-  check('a tap of the off-hand grip hides the cards and a second tap brings them back', !hid.menu.on && hid.cards === 0 && shownAgain.menu.on && shownAgain.cards === 5, `hidden: ${hid.cards} cards; again: ${shownAgain.cards}`);
+  check('off-hand grip taps leave the room empty', !hid.menu.on && hid.cards === 0 && !shownAgain.menu.on && shownAgain.cards === 0, `after a tap: ${hid.cards} cards; after two: ${shownAgain.cards}`);
 
   // 9e. The ring menu: hold the wand stick click and the story opens as a ring on the right hand (the arc cards step aside);
   // tilting doesn't turn you; letting go on a slice presses it; letting go centred closes without pressing
@@ -362,7 +364,7 @@ try {
   if (night1.on !== night0) { await G(p, "document.getElementById('night').click()"); await wait(200); }
   check('a held wand-stick click opens the ring on the right hand; tilt picks a slice without turning; letting go presses it, centred just closes',
     ringOpen.open && ringOpen.d > 0 && ringOpen.d < 0.25 && ringOpen.cards === 0 && ni >= 0 && lit.ring.hot === ni && Math.abs(lit.yaw - ringYaw0) < 1e-6 &&
-    night1.on !== night0 && !night1.ring.open && night1.cards === 5 && night2.on === night1.on && !night2.ring.open,
+    night1.on !== night0 && !night1.ring.open && night1.cards === 0 && night2.on === night1.on && !night2.ring.open,
     `ring ${ringOpen.labels.join(' / ')} ${ringOpen.d.toFixed(2)} m from the hand (${ringOpen.cards} cards), lit ${lit.ring.hot}, yaw ${(lit.yaw - ringYaw0).toFixed(3)}, night ${night0} -> ${night1.on} -> ${night2.on}`);
   // "Fan out" is on the ring's first page (the arc keeps it behind More): picking it runs the world model's futures fan, again hides it
   const ringPick = async (label: string) => {
@@ -387,12 +389,12 @@ try {
 
   check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | ') || 'none');
 
-  // 10. ?mount=left: the left controller is strapped to the walker (no room to walk). Turning the real walker turns the
+  // 10. Mounted (the default): the left controller is strapped to the walker (no room to walk). Turning the real walker turns the
   // virtual one, its stick walks along the walker's heading (not the view) and snap-turns sideways; its trigger is ignored.
   const m = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const mErrors: string[] = [];
   m.on('pageerror', e => mErrors.push(String(e)));
-  await m.goto(`${BASE}/?scene=game_synth&emulate=quest2&mount=left`);
+  await m.goto(`${BASE}/?scene=game_synth&emulate=quest2`);
   await m.waitForFunction(() => (window as any).game?.ready, null, { timeout: 60000 });
   await m.evaluate(HELPERS);
   await m.getByText('ENTER VR', { exact: true }).click();
@@ -401,6 +403,10 @@ try {
   const M = (f: string) => G(m, f);
   const yawOf = (q: any) => Math.atan2(Math.sin(q), Math.cos(q));
   const m0 = await M('return { body: game.body.yaw, mount: game.debug.xrMount(), head: game.xrPose().head }');
+  await M("const c = __xr.ctl('left'); c.quaternion.set(0, Math.sin(Math.PI / 60), 0, Math.cos(Math.PI / 60))");   // the zip-tied controller twists 6 deg on the bar
+  await m.waitForTimeout(400);
+  const wob = yawOf(await M('return game.body.yaw') - m0.body);
+  check('mounted: the controller twisting a few degrees on the bar does not turn the walker', Math.abs(wob) < 0.005, `walker turned ${(wob * 180 / Math.PI).toFixed(2)} deg for a 6 deg twist`);
   await M("const c = __xr.ctl('left'); c.quaternion.set(0, Math.sin(Math.PI / 8), 0, Math.cos(Math.PI / 8))");   // the real walker turned 45 deg left
   await m.waitForTimeout(400);
   const m1 = await M('return { body: game.body.yaw, head: game.xrPose().head }');
@@ -445,7 +451,7 @@ try {
 
   // 10b. In a cup holder the controller stands handle down, its ray pointing up: the heading comes from its most level axis
   const h = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-  await h.goto(`${BASE}/?scene=game_synth&emulate=quest2&mount=left`);
+  await h.goto(`${BASE}/?scene=game_synth&emulate=quest2`);
   await h.waitForFunction(() => (window as any).game?.ready, null, { timeout: 60000 });
   await h.evaluate(HELPERS);
   const H = (q: string) => G(h, q);
@@ -465,7 +471,7 @@ try {
   // 11. ?floor=5 lifts the scan's floor 5 cm against the real one (you stand 5 cm lower in it); ?measure=1 puts the wand's
   // height above the real floor on a card on the wand.
   const fp = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-  await fp.goto(`${BASE}/?scene=game_synth&emulate=quest2&floor=5&measure=1`);
+  await fp.goto(`${BASE}/?scene=game_synth&emulate=quest2&floor=5&measure=1&mount=off`);
   await fp.waitForFunction(() => (window as any).game?.ready, null, { timeout: 60000 });
   await fp.evaluate(HELPERS);
   await fp.getByText('ENTER VR', { exact: true }).click();
@@ -486,7 +492,7 @@ try {
     const w = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     const wErrors: string[] = [];
     w.on('pageerror', e => wErrors.push(String(e)));
-    await w.goto(`${BASE}/?scene=k4_150k&emulate=quest2`);
+    await w.goto(`${BASE}/?scene=k4_150k&emulate=quest2&mount=off`);
     await w.waitForFunction(() => (window as any).game?.ready, null, { timeout: 90000 });
     await w.evaluate(HELPERS);
     await w.getByText('ENTER VR', { exact: true }).click();

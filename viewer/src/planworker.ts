@@ -92,5 +92,5 @@ self.onmessage = (e: MessageEvent) => {
   if (m.type === 'init') ({ init: S, cfg, base, walker, critic } = m);
   else if (m.type === 'score') postMessage({ id: m.id, scores: m.pls.map((pl: PlanLayout) => ({ check: check(S, cfg, base, pl), ...slim(pl) })) });
   else if (m.type === 'live') postMessage({ id: m.id, ...live(m.judge, m.scan, m.n ?? 4000, m.lam ?? cfg.search?.live_effort_weight ?? 2) });
-  else if (m.type === 'imagine') postMessage({ id: m.id, ...imagine(S, cfg, base, m.pl, walker, m.wm, m.n, m.nf, m.ahead) });   // wmghosts.ts
+  else if (m.type === 'imagine') postMessage({ id: m.id, ...imagine(S, cfg, base, m.pl, walker, m.wm, m.n, m.nf, m.ahead, m.lift) });   // wmghosts.ts
 };

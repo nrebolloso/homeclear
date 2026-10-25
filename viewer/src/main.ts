@@ -5,7 +5,7 @@ import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { stamp, stampFolds, carvedPolys, placementOk, polyCells, edt, worldFootprint, toCell, applyIntervention, placedFixtures, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
-import { buildDevice as deviceMesh, type WalkerCfg } from './walker.ts';
+import { buildDevice as deviceMesh, gripFront, type WalkerCfg } from './walker.ts';
 import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
 import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z, WHEEL_R } from './wheelchair.ts';
 import { chairGeometry, clearOf, driveStep, spinBy, type Chair } from './drive.ts';
@@ -914,11 +914,10 @@ const gait = createGaitFit({ scene, walker: () => walkerCfg, replan: (wm, who, p
 $('gfplay').onclick = () => gait.play(+($('gfspeed') as HTMLSelectElement).value);
 $('gfreplan').onclick = () => gait.replan();
 game.gait = gait;   // VR: feed game.gait.observe() per heel strike, hang game.gait.panel / show game.gait.ghost (HANDOFF_GAIT.md)
-// ---------- world model in the kitchen (wmghosts.ts): two gait styles life-size, futures fan, predicted self, a month of trips ----------
+// ---------- world model in the kitchen (wmghosts.ts): Average vs Shuffler life-size, futures fan, predicted self, a month of trips ----------
 // in VR you stay where you stand (setFly would switch the desktop to fly mode and turn the walker under you)
 const wmg = createWmGhosts({ scene, walker: () => walkerCfg, planfix, view: () => { if (!renderer.xr.isPresenting) game.setFly(-0.7, -2.3, 2.3, 55, -36); } });
 $('wgstyles').onclick = () => wmg.twoStyles();
-$('wgstyle').onchange = () => wmg.twoStyles();
 $('wgmonth').onclick = () => wmg.month();
 $('wgstop').onclick = () => wmg.stop();
 game.wmghosts = wmg;
@@ -2692,8 +2691,10 @@ const xr = await setupXR({
   renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses, contact: () => { xrContactT = 0.35; },
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
   commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m, walkerFits: canPlace, walkerCentre: () => centreOffset,
+  walkerGrip: () => ((walkerCfg.device ?? 'walker') === 'walker' ? gripFront(walkerCfg) : null),
+  setHandleHeight: h => { walkerCfg = { ...walkerCfg, handle_height_m: h }; scene.remove(walker.group); walker = buildDevice(walkerCfg); scene.add(walker.group); },
   lock: k => editLocks.acquire(String(k), 'vr'), unlock: k => editLocks.release(String(k), 'vr'),
-  resetObject, resetAll, home: k => original[k], editor: markerXR, readOnly: () => game.sessionBusy || comparison.previewing(), movement: () => game.comfort?.movement ?? 'all', eyeHeight: () => game.comfort?.seated ? persona.eye_height_m : undefined, hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { ...hintRows(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
+  resetObject, resetAll, home: k => original[k], editor: markerXR, readOnly: () => game.sessionBusy || comparison.previewing(), movement: () => game.comfort?.movement ?? 'all', eyeHeight: () => game.comfort?.seated ? persona.eye_height_m : undefined, setSeated: on => { game.comfort.seated = on; }, hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { ...hintRows(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
   startPose() {   // stay if this floor is seen as well as the route's median spot; else the first such point along the route
     if (!current || current.error) return null;
     const poses: { x: number; y: number; yaw: number }[] = [];
@@ -2796,7 +2797,7 @@ Object.assign(game, {
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
   debug: { renderer, scene, camera, marker: mk3d.root, stairs: stairs3d.root, spark: sparkR, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup],
-    vision, rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrSpawn: xr.spawn, xrButtons: xr.buttons, xrMenu: xr.menu, xrRing: xr.ring, xrGlance: xr.glance, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
+    vision, rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrSpawn: xr.spawn, xrButtons: xr.buttons, xrMenu: xr.menu, xrRing: xr.ring, xrGlance: xr.glance, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount, xrFly: xr.fly },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); headTurn.yaw = 0; chairVel.v = chairVel.w = 0; Object.assign(body, { x, y, yaw }); },
@@ -2904,7 +2905,7 @@ Promise.all([json('version.json'), json('bundle.json')].map(p => p.catch(() => n
   document.body.append(el);
 });
 if (PARAMS.has('classic')) { for (const [n, p, s] of homes) p.insertBefore(n, s); document.body.classList.remove('frontend'); document.getElementById('frontend')!.hidden = true; document.getElementById('left')!.hidden = document.getElementById('right')!.hidden = false; }
-frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend, actions: () => xr.actions });
+frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend, actions: () => xr.actions, hand: () => xr.offHand, fly: xr.fly });
 game.frontend = frontend;
 game.frontendXR = frontendVR;
 // ---------- compare overlay + provenance floor (reimagine.ts, provenance.ts): two more layers, wired like the existing toggles ----------

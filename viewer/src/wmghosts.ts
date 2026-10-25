@@ -1,18 +1,20 @@
 // The world model, life-size in the kitchen (desktop and demo mode). Everything here is imagined and labelled so.
-// - Two gait styles start together at the fridge: the population-mean embedding ("average person") and one
-//   participant's, as translucent mannequins with walkers. A ghost flashes red where its step catches a toe or its
-//   frame brushes something.
+// - Two walkers leave the fridge, Average and Shuffler (low foot lift): the same network (population-mean embedding), the
+//   same seed and so the same steps; only the shuffler's toe clearance is lower (futures.ts LIFTS). Each leaves footprints
+//   shaded by that step's toe-catch chance (green -> red) and carries its toe catches/month. The shuffler starts STAGGER_M
+//   behind so the two mannequins don't overlap. A ghost flashes red where its step catches a toe or its frame brushes something.
 // - A fan of imagined futures is drawn ahead of the average ghost at each heel strike, and its predicted self (the
 //   model's own walker pose ~0.5 s ahead) walks in front of it.
 // - A month of trips (60) runs at once as low-detail ghosts, before and after the planner's fixes, with a counter.
 // Trips are planner.ts score()'s own rollouts (imagine.ts, in the planner worker), walked by the persona network folded
-// with each style's embedding (gaitfit.ts toWorldModel; styles from planner/persona_effect.py).
+// with the mean embedding (gaitfit.ts toWorldModel; styles.json from planner/persona_effect.py).
 import * as THREE from 'three';
 import { buildMannequin, feetAt, type Step } from './mannequin.ts';
 import { buildWalker, type WalkerCfg } from './walker.ts';
 import { toWorldModel, type Persona } from './gaitfit.ts';
 import { card } from './reimagine.ts';
 import { rng } from './sim.ts';
+import { LIFTS } from './futures.ts';
 import type { Imagined, ImaginedStep } from './imagine.ts';
 import type { PlanLayout } from './planner.ts';
 import type { WorldModel } from './worldmodel.ts';
@@ -20,9 +22,14 @@ import type { WorldModel } from './worldmodel.ts';
 export interface Style { name: string; e: number[]; placement: { step_cm: number; lateral_cm: number; vs_mean_cm: number | null; steps: number }; scanned: { risk: number; brushes: number; contacts: number } }
 export interface WmGhostDeps {
   scene: THREE.Scene; walker: () => WalkerCfg; view: () => void;   // a camera that sees the whole route (first person sits inside the ghosts)
-  planfix: { layouts(): { now: PlanLayout; scan: PlanLayout; chosen: PlanLayout } | null; imagine(pl: PlanLayout, wm: WorldModel, n: number, nf?: number): Promise<Imagined>; goto(pl: PlanLayout): Promise<void> };
+  planfix: { layouts(): { now: PlanLayout; scan: PlanLayout; chosen: PlanLayout } | null; imagine(pl: PlanLayout, wm: WorldModel, n: number, nf?: number, lift?: number): Promise<Imagined>; goto(pl: PlanLayout): Promise<void> };
 }
-const SPEED = 0.45, AHEAD_S = 0.5, FLASH_S = 0.5, TAG = 'imagined (world model)';
+const SPEED = 0.45, AHEAD_S = 0.5, FLASH_S = 0.5, TAG = 'imagined (world model)', STAGGER_M = 1.0;
+/** a footprint at this toe-catch chance or more is full red (one step; the mat edge is ~0.3% at average lift) */
+export const P_FULL = 0.01;
+const green = new THREE.Color(0x3ddc84), hot = new THREE.Color(0xff3030);
+/** a footprint's colour: green (no catch chance) -> red (P_FULL or more) */
+export const shade = (p: number, c = new THREE.Color()) => c.copy(green).lerp(hot, Math.min(1, p / P_FULL));
 const $ = (id: string) => document.getElementById(id)!;
 
 /** arc length of the walker centre at each step: the clock every ghost is played on (one speed for all: the model
@@ -51,17 +58,15 @@ export function createWmGhosts(D: WmGhostDeps) {
   const ready = Promise.all([fetch(`${import.meta.env.BASE_URL}gait/persona.json`).then(r => (r.ok ? r.json() : null)), fetch(`${import.meta.env.BASE_URL}gait/styles.json`).then(r => (r.ok ? r.json() : null))])
     .then(([m, s]) => {
       M = m; styles = s?.styles ?? [];
-      const sel = $('wgstyle') as HTMLSelectElement;
-      sel.innerHTML = styles.slice(1).map(st => `<option>${st.name}</option>`).join('');
       $('wgstatus').textContent = M && styles.length ? '' : 'no persona model / styles (planner/persona_effect.py)';
     });
   const wmOf = (e: number[]) => { const w = D.walker(); return toWorldModel(M!, e, w.user_gap_m + w.depth_m / 2 - M!.mean_gap_m); };
   const offset = () => D.walker().user_gap_m + D.walker().depth_m / 2;   // body centre -> walker frame centre
 
   const walks = new Map<string, Promise<Imagined>>();
-  const walk = (pl: PlanLayout, st: Style, nf: number) => {
-    const key = JSON.stringify([pl, st.name, nf]);
-    if (!walks.has(key)) walks.set(key, D.planfix.imagine(pl, wmOf(st.e), 1, nf));
+  const walk = (pl: PlanLayout, lift: number, nf: number) => {
+    const key = JSON.stringify([pl, lift, nf]);
+    if (!walks.has(key)) walks.set(key, D.planfix.imagine(pl, wmOf(styles[0].e), 1, nf, lift));
     return walks.get(key)!;
   };
   function tag(lines: string[], fg = '#e9f6ff') { const s = card(lines, fg, 'rgba(14,20,28,0.78)', 0.07); s.renderOrder = 6; root.add(s); return s; }
@@ -80,22 +85,28 @@ export function createWmGhosts(D: WmGhostDeps) {
     return { mats, flash: (on: boolean) => mats.forEach(m => (on ? m.emissive.setHex(0xff2020) : m.emissive.copy(glow))) };
   }
 
-  // ---------- two gait styles, life-size ----------
+  // ---------- two walkers, life-size ----------
   interface Actor { name: string; trip: ImaginedStep[]; W: [number, number, number][]; d: number[]; steps: Step[]; stride: number; man: ReturnType<typeof buildMannequin>;
-    walker: ReturnType<typeof buildWalker>; look: ReturnType<typeof translucent>; label: THREE.Sprite | null; flashT: number; next: number; caught: string[] }
+    walker: ReturnType<typeof buildWalker>; look: ReturnType<typeof translucent>; label: THREE.Sprite | null; flashT: number; next: number; caught: string[];
+    lift: number; catches: number; delay: number; prints: THREE.InstancedMesh }
   let actors: Actor[] = [], futures: Imagined['futures'] = [], fan: THREE.Group | null = null, fanTag: THREE.Sprite | null = null, ahead: { walker: ReturnType<typeof buildWalker>; label: THREE.Sprite } | null = null;
   let s = 0, mode: 'off' | 'styles' | 'month' = 'off', fanShown = { k: -1, n: 0, hazard: 0, toe: 0 }, runId = 0;
 
-  function actor(name: string, trip: ImaginedStep[], tint: number): Actor {
-    const W = trip.map(t => t.walker), d = arc(W), man = buildMannequin(1.65), walker = buildWalker(D.walker()), g = new THREE.Group();
+  /** ring = the shuffler's footprints as rings round the average's discs: the two walk the same steps */
+  function actor(name: string, im: Imagined, tint: number, lift: number, delay: number, ring: boolean): Actor {
+    const trip = im.trips[0], W = trip.map(t => t.walker), d = arc(W), man = buildMannequin(1.65), walker = buildWalker(D.walker()), g = new THREE.Group();
     g.add(man.group, walker.group); root.add(g);
     const look = translucent(g, tint, 0.62), L = d[d.length - 1] / Math.max(1, d.length - 1);
+    const geo = ring ? new THREE.RingGeometry(0.055, 0.08, 20) : new THREE.CylinderGeometry(0.042, 0.042, 0.01, 14).rotateX(Math.PI / 2);
+    const prints = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.9, depthTest: false, side: THREE.DoubleSide }), Math.max(1, trip.length));
+    trip.forEach((t, k) => { prints.setMatrixAt(k, m4.makeTranslation(t.heel[0], t.heel[1], 0.03)); prints.setColorAt(k, shade(t.p)); });
+    prints.count = 0; prints.renderOrder = 6; prints.frustumCulled = false; root.add(prints);
     return { name, trip, W, d, steps: trip.map((t, k) => ({ xy: t.heel, side: t.side > 0 ? 1 : 0, hit: !!caught(t), s: d[k] })), stride: 1.6 * L, man, walker, look,
-      label: null, flashT: 0, next: 0, caught: [] };
+      label: null, flashT: 0, next: 0, caught: [], lift, catches: im.score.contacts, delay, prints };
   }
   function clear() {
     runId++;
-    for (const a of actors) { a.man.group.parent?.removeFromParent(); untag(a.label); }
+    for (const a of actors) { a.man.group.parent?.removeFromParent(); untag(a.label); a.prints.removeFromParent(); a.prints.geometry.dispose(); (a.prints.material as THREE.Material).dispose(); }
     actors = [];
     if (fan) { fan.removeFromParent(); fan.traverse(o => (o as THREE.Mesh).geometry?.dispose()); fan = null; }
     untag(fanTag); fanTag = null;
@@ -104,19 +115,17 @@ export function createWmGhosts(D: WmGhostDeps) {
     mode = 'off'; s = 0; fanShown = { k: -1, n: 0, hazard: 0, toe: 0 };
   }
 
-  /** the average person and one participant's style, side by side from the fridge, in the room as it is now */
-  async function twoStyles(name = ($('wgstyle') as HTMLSelectElement).value) {
+  /** Average and Shuffler (low foot lift) from the fridge, in the room as it is now */
+  async function twoStyles() {
     await ready;
-    const L = D.planfix.layouts(), st = styles.find(x => x.name === name) ?? styles[1];
-    if (!M || !L || !st) return null;
-    ($('wgstyle') as HTMLSelectElement).value = st.name;
+    const L = D.planfix.layouts();
+    if (!M || !L || !styles.length) return null;
     clear(); D.view();
-    const id = runId;
-    $('wgstatus').textContent = `imagining the kitchen route for ${st.name}…`;
-    const [a, b] = await Promise.all([walk(L.now, styles[0], 30), walk(L.now, st, 0)]);
-    styles.slice(1).forEach(x => walk(L.now, x, 0));   // the other styles in the background: the swap is instant
+    const id = runId, low = LIFTS.shuffler.scale;
+    $('wgstatus').textContent = 'imagining the kitchen route for Average and Shuffler…';
+    const [a, b] = await Promise.all([walk(L.now, 1, 30), walk(L.now, low, 0)]);
     if (id !== runId) return null;
-    actors = [actor('average person', a.trips[0], 0x4dc9f0), actor(`${st.name.split(' ')[0]}-style`, b.trips[0], 0xffb347)];
+    actors = [actor('Average', a, 0x4dc9f0, 1, 0, false), actor('Shuffler (low foot lift)', b, 0xffb347, low, STAGGER_M, true)];
     futures = a.futures;
     fan = new THREE.Group(); fan.renderOrder = 4; root.add(fan);
     const w = buildWalker(D.walker());
@@ -124,9 +133,9 @@ export function createWmGhosts(D: WmGhostDeps) {
     root.add(w.group);
     ahead = { walker: w, label: tag([`predicted self +${AHEAD_S} s`, TAG], '#ffffff') };
     mode = 'styles';
-    const pl = (x: Style) => `${x.placement.step_cm} cm steps, ${x.placement.lateral_cm} cm off the route`;
-    $('wgstatus').innerHTML = `<b>${TAG}</b>: average person (${pl(styles[0])}) vs ${st.name} (${pl(st)}; heel ${st.placement.vs_mean_cm} cm from the average's)` +
-      `<br>this room: ${a.score.contacts.toFixed(2)} vs <b>${b.score.contacts.toFixed(2)}</b> toe catches/month (search objective ${a.score.risk.toFixed(1)} vs ${b.score.risk.toFixed(1)}; brushes ${a.score.brushes.toFixed(1)} vs ${b.score.brushes.toFixed(1)})`;
+    $('wgstatus').innerHTML = `<b>${TAG}</b>: Average vs Shuffler (low foot lift): the same gait network, seed and steps; the shuffler's toe clearance is ×${low.toFixed(2)} ` +
+      `(the published curve's 16th percentile, an ASSUMPTION)<br>this room: ${a.score.contacts.toFixed(2)} vs <b>${b.score.contacts.toFixed(2)}</b> toe catches/month · ` +
+      `footprints green → red by that step's toe-catch chance (red at ${P_FULL * 100}%); the shuffler's are the rings`;
     return state();
   }
 
@@ -221,15 +230,17 @@ export function createWmGhosts(D: WmGhostDeps) {
     s += SPEED * dt;
     if (mode === 'styles') {
       actors.forEach((a, n) => {
-        while (a.next < a.d.length && a.d[a.next] <= s) {   // heel a.next lands now
+        const sa = s - a.delay;
+        while (a.next < a.d.length && a.d[a.next] <= sa) {   // heel a.next lands now
           const c = caught(a.trip[a.next]);
           if (c) { a.flashT = FLASH_S; a.caught.push(c); }
           if (n === 0) showFutures(a.next);
-          a.next++;
+          a.next++; a.prints.count = a.next;
         }
         a.flashT = Math.max(0, a.flashT - dt);
         a.look.flash(a.flashT > 0);
-        const body = place(a, s), k = Math.max(0, a.next - 1), lines = [a.name, a.flashT > 0 ? `caught: ${a.trip[k] && caught(a.trip[k])}` : TAG], key = lines.join('|');
+        const body = place(a, Math.max(0, sa)), k = Math.max(0, a.next - 1);
+        const lines = [a.name, `${a.catches.toFixed(2)} toe catches/month`, ...(a.flashT > 0 ? [`caught: ${a.trip[k] && caught(a.trip[k])}`] : []), TAG], key = lines.join('|');
         if (a.label?.userData.key !== key) { untag(a.label); a.label = tag(lines, n ? '#ffd9a8' : '#bfeaff'); a.label.userData.key = key; }
         a.label.position.set(body.x, body.y, 2.05 + 0.3 * n);   // two labels never sit on each other
       });
@@ -238,8 +249,8 @@ export function createWmGhosts(D: WmGhostDeps) {
         ahead.walker.group.position.set(x - Math.cos(yaw) * offset(), y - Math.sin(yaw) * offset(), 0); ahead.walker.group.rotation.z = yaw;
         ahead.label.position.set(x, y, 1.0);
       }
-      if (actors.length && s > Math.max(...actors.map(a => a.d[a.d.length - 1])) + 1.5) {   // both arrived: loop
-        s = 0; actors.forEach(a => { a.next = 0; a.caught = []; });
+      if (actors.length && s > Math.max(...actors.map(a => a.d[a.d.length - 1] + a.delay)) + 1.5) {   // both arrived: loop
+        s = 0; actors.forEach(a => { a.next = 0; a.caught = []; a.prints.count = 0; });
       }
     } else if (month) {
       const M2 = month, w = D.walker();
@@ -279,7 +290,8 @@ export function createWmGhosts(D: WmGhostDeps) {
   }
 
   const state = () => ({ mode, s, styles: styles.map(x => x.name),
-    actors: actors.map(a => ({ name: a.name, steps: a.trip.length, heels: a.trip.map(t => t.heel), caught: [...a.caught], flashing: a.flashT > 0, done: a.next >= a.d.length })),
+    actors: actors.map(a => ({ name: a.name, lift: a.lift, catches_month: a.catches, steps: a.trip.length, heels: a.trip.map(t => t.heel), p: a.trip.map(t => t.p), prints: a.prints.count,
+      caught: [...a.caught], flashing: a.flashT > 0, done: a.next >= a.d.length })),
     fan: fanShown, futures_steps: futures.filter(f => f.length).length,
     month: month ? { which: month.which, trips: month.trips.length, counts: { ...month.counts }, done: month.next.every((k, i) => k >= month!.trips[i].length), expected: month.im.score } : null });
   return { ready, twoStyles, month: runMonth, stop: clear, update, state };

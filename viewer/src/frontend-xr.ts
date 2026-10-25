@@ -2,23 +2,24 @@ import { onThree, own } from './lifetime.ts';
 import * as THREE from 'three';
 import type { FrontendAdapter, mountFrontend } from './frontend.ts';
 import { summarizeChanges } from './frontend-model.ts';
-import { pulse, MENU_HOLD_S } from './controls.ts';
+import { pulse } from './controls.ts';
 import { LAYERS, PRESETS } from './layers.ts';
 import { PROFILES } from './vision.ts';
 import { groupScans } from './scan-catalog.ts';
 import type { XrButton } from './xr.ts';
 
 // Scene meshes, not DOM: the same frontend actions remain available in WebXR.
-// The one panel in the headset: tabs World / Vision / Device / Tour / More, standing 2 m out where you faced. The view is
-// empty until it opens; the story buttons (xr.ts actions) are its Tour tab.
-// Holding the left stick click opens the menu (a tap is too easy to hit by accident; clicking while it is open closes it).
-// Renovation marking doesn't use it; trigger gestures are consumed while the menu is open.
-export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.Camera; adapter: FrontendAdapter; frontend: ReturnType<typeof mountFrontend>; actions?: () => XrButton[] }) {
+// The one panel in the headset: tabs World / Vision / Device / Tour / More and a Fly switch, fixed to the off-hand controller
+// (the left, the one on the walker) like the Google Earth VR menu: a small tilted tablet just above the handle, the wand
+// hand pointing at it. The view is empty until it opens; the story buttons (xr.ts actions) are its Tour tab. A click of the
+// off-hand stick opens it and another closes it; a click made while the stick leans hard (walking the walker) doesn't count.
+// Renovation marking doesn't use it; trigger gestures are consumed while it is open.
+export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.Camera; adapter: FrontendAdapter; frontend: ReturnType<typeof mountFrontend>; actions?: () => XrButton[]; hand?: () => XRHandedness; fly?: (on?: boolean) => boolean }) {
   const root = new THREE.Group(); root.name = 'frontend-xr-menu'; root.visible = false; D.scene.add(root);
   const ray = new THREE.Raycaster(), v = new THREE.Vector3(), dir = new THREE.Vector3();
   const controllers = [D.renderer.xr.getController(0), D.renderer.xr.getController(1)];
   const sources = new Map<THREE.Object3D, XRInputSource>(); const consumed = new Set<THREE.Object3D>();
-  let stickWas = false, stickSince = 0, stickFired = false, page = 'scans', fingerprint = '', offset = 0, notice = '';
+  let stickWas = false, stickSince = 0, stickLean = 0, page = 'scans', fingerprint = '', offset = 0, notice = '';
   const game = () => (window as any).game;
   const library = () => (window as any).scanLibrary;
   function go(next: string) { page = next; offset = 0; notice = ''; fingerprint = ''; }
@@ -40,17 +41,27 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
     return line;
   });
   function clear() { root.clear(); hitTargets.length = 0; disposable.splice(0).forEach(x => x.dispose()); }
-  function tile(text: string, x: number, y: number, width: number, height: number, action?: () => void, accent = false, parent = root) {
-    const canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = Math.round(1024 * height / width);
-    const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = accent ? '#244a46' : '#18252f'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = accent ? '#49d4c7' : '#455b6b'; ctx.lineWidth = 4; ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
-    const lines = text.split('\n').flatMap(line => line.match(/.{1,34}(?:\s|$)|.{1,34}/g)?.map(s => s.trim()) ?? ['']), font = Math.min(76, (canvas.height - 28) / lines.length * .82);
-    ctx.font = `600 ${font}px system-ui`; ctx.fillStyle = accent ? '#bafff4' : '#e8f2f8'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    lines.forEach((line, i) => ctx.fillText(line, 512, canvas.height / 2 + (i - (lines.length - 1) / 2) * (font * 1.5), 960));
+  // Tiles are flat rounded shapes on one dark sheet: rows a step lighter than the sheet, the open tab (and Fly when on) a
+  // light pill, a setting that is on a teal dot (the only colour), the pointed-at tile at full brightness and the rest dimmed.
+  const DIM = new THREE.Color(.8, .8, .8), FULL = new THREE.Color(1, 1, 1), PX = 1400;
+  function tile(text: string, x: number, y: number, width: number, height: number, action?: () => void, accent = false, parent = root, sheet = false) {
+    const canvas = document.createElement('canvas'); canvas.width = Math.round(width * PX); canvas.height = Math.round(height * PX);   // one pixel density, so type is the same size on every tile
+    const ctx = canvas.getContext('2d')!, W = canvas.width, H = canvas.height, tab = parent === root && y > .4, row = !!action && width > .5;
+    ctx.beginPath(); ctx.roundRect(2, 2, W - 4, H - 4, sheet ? 44 : Math.min(H * .3, 34));
+    ctx.fillStyle = sheet ? 'rgba(13,17,21,.94)' : tab && accent ? '#e7ecef' : tab ? 'rgba(255,255,255,.06)' : action ? '#2b343d' : '#1b2228'; ctx.fill();
+    if (sheet) { ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.lineWidth = 3; ctx.stroke(); }
+    if (row && accent) { ctx.fillStyle = '#5fd3c4'; ctx.beginPath(); ctx.arc(W - 56, H / 2, 14, 0, Math.PI * 2); ctx.fill(); }
+    const lines = text.split('\n').flatMap(line => line.match(/.{1,38}(?:\s|$)|.{1,38}/g)?.map(s => s.trim()) ?? ['']).filter(Boolean);
+    const font = Math.min(56, (H - 20) / (Math.max(1, lines.length) * 1.3)), left = row || (!action && width > .5 && lines.length > 1);
+    ctx.textAlign = left ? 'left' : 'center'; ctx.textBaseline = 'middle';
+    lines.forEach((line, i) => {
+      ctx.font = `${i ? 400 : 600} ${i ? font * .78 : font}px system-ui, sans-serif`;
+      ctx.fillStyle = tab ? (accent ? '#0d1216' : '#a7b2bb') : i ? '#93a1ad' : '#eef2f5';
+      ctx.fillText(line, left ? 44 : W / 2, H / 2 + (i - (lines.length - 1) / 2) * font * 1.3, W - (left ? 130 : 24));
+    });
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
-    const geometry = new THREE.PlaneGeometry(width, height), material = new THREE.MeshBasicMaterial({ map: texture, depthTest: false, depthWrite: false, side: THREE.DoubleSide });
-    const mesh = new THREE.Mesh(geometry, material); mesh.position.set(x, y, 0); mesh.renderOrder = 10; mesh.userData.label = text; parent.add(mesh);
+    const geometry = new THREE.PlaneGeometry(width, height), material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide, color: action ? DIM : FULL });
+    const mesh = new THREE.Mesh(geometry, material); mesh.position.set(x, y, 0); mesh.renderOrder = sheet ? 9 : 10; if (!sheet) mesh.userData.label = text; parent.add(mesh);
     (parent === root ? disposable : parent === toastRoot ? toastResources : inspectionResources).push(texture, geometry, material);
     if (action) { mesh.userData.activate = action; hitTargets.push(mesh); }
   }
@@ -62,9 +73,11 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
   const tabOf = (p: string) => (p.startsWith('room:') ? 'scans' : OWNER[p] ?? 'main');
   function draw() {
     clear(); const s = D.adapter.snapshot(), costs = summarizeChanges(s.changes);
+    tile('', 0, -.03, 1.04, 1.1, undefined, false, root, true);
     type Row = [string, () => unknown, boolean?];
     const here = tabOf(page);
-    TABS.forEach(([name, target], i) => tile(name, (i - 2) * .195, .43, .185, .09, () => go(target), here === target));
+    TABS.forEach(([name, target], i) => tile(name, -.42 + i * .165, .43, .155, .09, () => go(target), here === target));
+    if (D.fly) { const on = D.fly(); tile(on ? 'Flying' : 'Fly', .415, .43, .16, .09, () => { D.fly!(!on); fingerprint = ''; if (!on) close(); }, on); }   // on the right, apart from the tabs; turning it on closes the panel so you can go
     const back = () => go('main');
     const rows = (entries: Row[], parent = 'main') => {
       const count = 5, slice = entries.slice(offset, offset + count);
@@ -116,7 +129,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
     } else if (page === 'changes') {
       rows([['Find proposed layouts', async () => { await D.adapter.suggest(); notice = 'Options ready. Choose on desktop or try proposed layout.'; }], ['Try proposed layout / restore room', () => game().debug.xrPress(2)], [s.comparison === 0 ? 'Show proposed' : 'Show original', () => D.adapter.compare(s.comparison === 0 ? 1 : 0)], ['Undo last edit', () => game().history.undo()], ['Redo last edit', () => game().history.redo()], ['Light the path at night', () => D.adapter.lightPath?.()], ['Changes & cost', () => go('costs')]]);
     } else if (page === 'comfort') {
-      rows([['Normal vision', () => game().setVision('normal')], ['Recenter at route start', () => game().recenter()], [`Movement: ${game().comfort?.movement ?? 'all'}`, () => game().comfort.cycle()], ['Toggle larger menu', () => { root.scale.setScalar(root.scale.x > PANEL_SCALE ? PANEL_SCALE : PANEL_SCALE * 1.2); }], ['Pause route', () => { if (!s.paused) D.adapter.pause(); }], [game().comfort.seated ? 'Standing height' : 'Seated viewing height', () => { game().comfort.seated = !game().comfort.seated; }]]);
+      rows([['Normal vision', () => game().setVision('normal')], ['Recenter at route start', () => game().recenter()], [`Movement: ${game().comfort?.movement ?? 'all'}`, () => game().comfort.cycle()], ['Toggle larger menu', () => { big = !big; root.scale.setScalar(PANEL_SCALE * (big ? 1.3 : 1)); }], ['Pause route', () => { if (!s.paused) D.adapter.pause(); }], [game().comfort.seated ? 'Standing height' : 'Seated viewing height', () => { game().comfort.seated = !game().comfort.seated; }]]);
     } else if (page === 'bookmarks') {
       rows([['Save current viewpoint', () => { game().bookmarks.save(); notice = 'Viewpoint saved'; }], ...(game().bookmarks?.list() ?? []).map((b: any): Row => [b.label, () => { game().bookmarks.restore(b.id); close(); }])]);
     } else {
@@ -127,34 +140,37 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
     if (!notice && page === 'presets' && game().perf.on()) tile('Performance mode keeps heavier layers off', 0, -.47, .96, .10);
     if (notice) tile(notice, 0, -.47, .96, .10);
   }
-  // The panel is a wall screen, not a hand-held card: 2 m out, level with the eyes, standing where you faced when it opened
-  // and staying there (it does not follow your head). Yaw only: it stays upright however you tilt your head.
-  const PANEL_DIST = 2.0, PANEL_SCALE = 2.3, PANEL_DROP = .05;
-  const basis = new THREE.Matrix4(), bx = new THREE.Vector3(), by = new THREE.Vector3(0, 0, 1), bz = new THREE.Vector3();
-  function open() {
-    D.camera.getWorldPosition(v); D.camera.getWorldDirection(dir);
-    dir.z = 0; if (dir.lengthSq() < 1e-4) dir.set(1, 0, 0); dir.normalize();   // looking straight up or down: fall back to +x
-    root.position.copy(v).addScaledVector(dir, PANEL_DIST); root.position.z = v.z - PANEL_DROP;
-    bz.copy(dir).negate(); bx.crossVectors(by, bz).normalize();
-    root.quaternion.setFromRotationMatrix(basis.makeBasis(bx, by, bz)); root.scale.setScalar(PANEL_SCALE);
-    root.visible = true; fingerprint = ''; draw();
+  // The panel rides on the off-hand controller, never out in the room: about 28 cm across, 15 cm above the controller, turned
+  // the way the controller points (its back toward you) and leaned back TILT so you read it by glancing down, like a tablet
+  // held in that hand. Only the controller's heading counts, so a strap that rolls it doesn't tip the panel.
+  const PANEL_SCALE = .28, PANEL_ABOVE = .15, TILT = 50 * Math.PI / 180, CLICK_S = .8, LEAN = .75;
+  let big = false;
+  const menuHand = () => D.hand?.() ?? 'left', up = new THREE.Vector3(0, 0, 1), back = new THREE.Vector3();
+  const handCtl = () => controllers.find(c => sources.get(c)?.handedness === menuHand()) ?? null;
+  function place(o: THREE.Object3D, above: number) {
+    const c = handCtl(); if (!c) return;
+    c.updateWorldMatrix(true, false); c.getWorldPosition(v); c.getWorldDirection(back).setZ(0);   // +z of the ray space: back toward you
+    if (back.lengthSq() < .01) { D.camera.getWorldPosition(dir); back.subVectors(dir, v).setZ(0); }   // pointing straight up or down
+    o.position.copy(v).setZ(v.z + above); o.up.copy(up); o.lookAt(dir.copy(o.position).add(back.normalize())); o.rotateX(-TILT);
   }
+  function open() { root.scale.setScalar(PANEL_SCALE * (big ? 1.3 : 1)); root.visible = true; fingerprint = ''; place(root, PANEL_ABOVE); draw(); }
   function close() { root.visible = false; pointers.forEach(p => p.visible = false); }
   function intersection(controller: THREE.XRTargetRaySpace) { controller.updateWorldMatrix(true, false); ray.setFromXRController(controller); root.updateWorldMatrix(true, true); return ray.intersectObjects(hitTargets, false)[0]; }
   onThree(D.renderer.xr, 'sessionstart', () => { document.body.classList.add('xr-active'); close(); });
   onThree(D.renderer.xr, 'sessionend', () => { document.body.classList.remove('xr-active'); close(); inspectionRoot.visible = false; fade.visible = false; transition = null; consumed.clear(); stickWas = false; });
   return {
-    root, inspectionRoot, open, close, notify(text: string) { notice = text; fingerprint = ''; toastRoot.clear(); toastResources.splice(0).forEach(r => r.dispose()); tile(text, 0, 0, .8, .13, undefined, false, toastRoot); toastRoot.scale.setScalar(1.6); toastUntil = performance.now() + 4500; }, showPage(name: string) { go(name); open(); }, isOpen: () => root.visible,
+    root, inspectionRoot, open, close, notify(text: string) { notice = text; fingerprint = ''; toastRoot.clear(); toastResources.splice(0).forEach(r => r.dispose()); tile(text, 0, 0, .9, .13, undefined, false, toastRoot); toastRoot.scale.setScalar(PANEL_SCALE); toastUntil = performance.now() + 4500; }, showPage(name: string) { go(name); open(); }, isOpen: () => root.visible,
     transition(task: () => void) { transition = { start: performance.now(), task }; fade.visible = true; },
     activate(controller: THREE.XRTargetRaySpace) {
       if (!root.visible) return false;
-      consumed.add(controller); const hit = intersection(controller); (hit?.object.userData.activate as (() => void) | undefined)?.(); return true;
+      consumed.add(controller); if (controller === handCtl()) return true;   // the hand holding the panel doesn't point at it
+      const hit = intersection(controller); (hit?.object.userData.activate as (() => void) | undefined)?.(); return true;
     },
     release(controller: THREE.XRTargetRaySpace) { return consumed.delete(controller); },
     update() {
       if (!D.renderer.xr.isPresenting) return;
       toastRoot.visible = performance.now() < toastUntil;
-      if (toastRoot.visible) { D.camera.getWorldPosition(v); D.camera.getWorldDirection(dir); toastRoot.position.copy(v).addScaledVector(dir, 1.6); toastRoot.position.z -= .75; toastRoot.quaternion.copy(D.camera.getWorldQuaternion(new THREE.Quaternion())); }   // low and ahead, off the line of sight
+      if (toastRoot.visible) place(toastRoot, PANEL_ABOVE + (root.visible ? .19 : 0));   // on the hand too, over the panel when it is open
       if (transition) {
         const elapsed = (performance.now() - transition.start) / 160;
         D.camera.getWorldPosition(fade.position); (fade.material as THREE.MeshBasicMaterial).opacity = Math.min(1, elapsed < 1 ? elapsed : 2 - elapsed);
@@ -174,15 +190,19 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
         }
         inspectionRoot.quaternion.copy(D.camera.getWorldQuaternion(new THREE.Quaternion()));
       }
-      const left = [...D.renderer.xr.getSession()?.inputSources ?? []].find(s => s.handedness === 'left');
-      const pressed = !!left?.gamepad?.buttons[3]?.pressed;
-      if (pressed && !stickWas) { stickSince = performance.now(); stickFired = false; }
-      if (pressed && !stickFired && (root.visible || performance.now() - stickSince >= MENU_HOLD_S * 1000)) { stickFired = true; root.visible ? close() : open(); pulse(left?.gamepad, 0.4, 40); }
+      const pad = [...D.renderer.xr.getSession()?.inputSources ?? []].find(s => s.handedness === menuHand())?.gamepad;
+      const pressed = !!pad?.buttons[3]?.pressed;
+      if (pressed && !stickWas) { stickSince = performance.now(); stickLean = 0; }
+      if (pressed) stickLean = Math.max(stickLean, Math.hypot(pad?.axes[2] ?? 0, pad?.axes[3] ?? 0));
+      if (!pressed && stickWas && stickLean < LEAN && performance.now() - stickSince < CLICK_S * 1000) { root.visible ? close() : open(); pulse(pad, 0.4, 40); }
       stickWas = pressed;
       if (!root.visible) return;
-      const s = D.adapter.snapshot(), next = JSON.stringify([page, offset, notice, (document.getElementById('vision') as HTMLSelectElement).value, s.patient, s.route, game().comfort?.movement, s.paused, s.comparison === 0, s.changes.length, ...(page === 'tour' ? (D.actions?.() ?? []).map(b => [b.text()[0], b.tone?.()]) : []),...['night', 'particle-path', 'spot', 'improvement-highlights', 'reimghosts'].map(id => box(id).checked)]);
+      place(root, PANEL_ABOVE);
+      const s = D.adapter.snapshot(), next = JSON.stringify([page, offset, notice, (document.getElementById('vision') as HTMLSelectElement).value, s.patient, s.route, game().comfort?.movement, D.fly?.(), s.paused, s.comparison === 0, s.changes.length, ...(page === 'tour' ? (D.actions?.() ?? []).map(b => [b.text()[0], b.tone?.()]) : []),...['night', 'particle-path', 'spot', 'improvement-highlights', 'reimghosts'].map(id => box(id).checked)]);
       if (fingerprint !== next) { fingerprint = next; draw(); }
-      controllers.forEach((c, i) => { pointers[i].visible = sources.has(c); if (pointers[i].visible) { const hit = intersection(c); pointers[i].scale.z = hit?.distance ?? 2.5; } });
+      let hot: THREE.Object3D | undefined;
+      controllers.forEach((c, i) => { pointers[i].visible = sources.has(c) && sources.get(c)!.handedness !== menuHand(); if (pointers[i].visible) { const hit = intersection(c); hot ??= hit?.object; pointers[i].scale.z = hit?.distance ?? .6; } });
+      hitTargets.forEach(m => (m.material as THREE.MeshBasicMaterial).color.copy(m === hot ? FULL : DIM));
     },
   };
 }

@@ -17,7 +17,7 @@ const errors: string[] = [];
 async function open(scene: string, xr = false) {
   const p = await browser.newPage({ viewport: { width: 1600, height: 900 } });
   p.on('pageerror', e => errors.push(String(e)));
-  await p.goto(`${BASE}/?scene=${scene}${xr ? '&emulate=quest2' : ''}`);
+  await p.goto(`${BASE}/?scene=${scene}${xr ? '&emulate=quest2&mount=off' : ''}`);
   await p.waitForFunction(() => (window as any).game?.ready, null, { timeout: 60000 });
   return p;
 }

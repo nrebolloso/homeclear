@@ -6,7 +6,7 @@
 // (-z) along yaw.
 // Moving: walk for real (1:1). Holding a pinch or trigger on the non-wand hand glides forward where you look, only where
 // free walk could stand (walls, furniture and unfilmed floor stop it). Left stick walks (same checks), right stick snap-turns
-// 30 deg about the head; a held left-stick click is the planning shell's menu (frontend-xr.ts), not movement. A wand-stick
+// 30 deg about the head; a left-stick click opens the planning panel on that hand (frontend-xr.ts), not movement. A wand-stick
 // click undoes the last object edit (with the off-hand grip held: redoes); held, it opens the ring menu on the wand hand
 // (xrradial.ts), and the stick then chooses a slice instead of turning.
 // Wand (right hand or controller; ?wand=left): point at furniture and hold to drag it (twist the wrist to turn it; the wand
@@ -19,14 +19,14 @@ import { bindXR } from './xr-session.ts';
 import { onThree, own } from './lifetime.ts';
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 import type { Pose, XY } from './grid.ts';
-import { floorHit, rayPlaneHit, pushPull, confirmProgress, twistAngle, snapQuarter, holdProgress, DELETE_HOLD_S, DELETE_SHOW_S, DRAG_DEADZONE_M } from './wand.ts';
+import { floorHit, rayPlaneHit, pushPull, spinStep, confirmProgress, twistAngle, snapQuarter, holdProgress, DELETE_HOLD_S, DELETE_SHOW_S, DRAG_DEADZONE_M } from './wand.ts';
 import { tierAtLoad, xrCfg, type Tier } from './perf.ts';
 import { resetHoldProgress } from './resets.ts';
 import { card } from './reimagine.ts';
 import { pulse } from './controls.ts';
 import { stripSprite } from './xrstrip.ts';
 import { dragFeedback } from './xrdrag.ts';
-import { radialMenu } from './xrradial.ts';
+import { radialMenu, glass, textShadow, shadowOff, type RingItem } from './xrradial.ts';
 
 export interface XrItem { proxy: THREE.Object3D; group: THREE.Object3D; outline: THREE.LineSegments }
 export interface XrHost {
@@ -73,9 +73,15 @@ export interface XrHost {
    *  its frame's centre is (walker.json legs), the point a mounted snap-turn spins it about */
   walkerFits?(b: { x: number; y: number; yaw: number }): boolean;
   walkerCentre?(): number;
+  /** the left grip's front end in the walker's frame (walker.ts gripFront); null for a cane or wheelchair */
+  walkerGrip?(): [number, number] | null;
+  /** the virtual walker's handles at this height: the line-up takes it from the mounted controller */
+  setHandleHeight?(h: number): void;
   /** a move was refused (the device ran into furniture, a wall or unfilmed floor): flash it red */
   contact?(): void;
   eyeHeight?(): number | undefined;
+  /** seated viewing height on or off (frontend-xr.ts Comfort has the same switch) */
+  setSeated?(on: boolean): void;
   /** The planning shell (frontend-xr.ts) lays a menu over the wand: it can swallow a trigger press, freeze locomotion while
    *  its menu is open, drive the body along the route, and hears which furniture the wand points at. */
   shell?: XrShell;
@@ -120,10 +126,12 @@ export async function setupXR(host: XrHost) {
   // ?floor=3 lifts the scan's floor 3 cm against the headset's (negative lowers it), for a scan whose floor sits off the
   // real one; check with ?measure=1 (a controller resting on the real floor should rest on the scan's)
   const floorLift = (Number(params.get('floor')) || 0) / 100;
-  const xrRig = { x: 0, y: 0, yaw: 0 }; let lastSpawn = { ...xrRig }, pendingSpawn: { x: number; y: number; yaw: number } | null = null;
+  const SEATED_BELOW_M = 1.3;
+  const FLY_MS = 2.5, FLY_TOP_M = 6;   // Fly: top speed, and how far above the floor it goes   // headset eyes below this on entering VR: seated viewing height (step)
+  const xrRig = { x: 0, y: 0, yaw: 0 }; let flyZ = 0, flying = false, lastSpawn = { ...xrRig }, pendingSpawn: { x: number; y: number; yaw: number } | null = null;
   const TILT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2), UP = new THREE.Vector3(0, 0, 1);
   const placeRig = () => {
-    rig.position.set(xrRig.x, xrRig.y, (host.eyeHeight?.() == null ? 0 : Math.max(0, host.eyeHeight()! - camera.position.y)) - floorLift);
+    rig.position.set(xrRig.x, xrRig.y, (host.eyeHeight?.() == null ? 0 : Math.max(0, host.eyeHeight()! - camera.position.y)) - floorLift + (flying ? flyZ : 0));
     rig.quaternion.setFromAxisAngle(UP, xrRig.yaw - Math.PI / 2).multiply(TILT);
   };
   const head = new THREE.Vector3(), headDir = new THREE.Vector3();
@@ -132,17 +140,26 @@ export async function setupXR(host: XrHost) {
   const readHead = () => { camera.getWorldPosition(head); camera.getWorldDirection(headDir); return Math.atan2(headDir.y, headDir.x); };
 
   // ---------- wand ----------
-  const WAND: XRHandedness = params.get('wand') === 'left' ? 'left' : 'right';
-  // ?mount=left: that controller is fixed on the walker (VR_WALKER_MOUNT.md; no room to walk). Its stick drives: up/down
+  // The left controller is zip-tied to the walker (VR_WALKER_MOUNT.md), so that is the default: ?mount=right for a
+  // left-handed patient (the wand moves to the left hand), ?mount=off to hold both controllers.
+  const MOUNT: XRHandedness | null = params.get('mount') === 'off' ? null : params.get('mount') === 'right' ? 'right' : 'left';
+  const WAND: XRHandedness = (params.get('wand') ?? (MOUNT === 'right' ? 'left' : 'right')) === 'left' ? 'left' : 'right';
+  // Mounted: that controller is fixed on the walker (VR_WALKER_MOUNT.md; no room to walk). Its stick drives: up/down
   // walks along the walker's heading, left/right snap-turns 30 deg; the virtual walker points where the real one does.
   // The strap (or cup holder) holds it at any angle and anywhere on the frame, so on entering VR (person standing centred
   // behind the walker, facing its way) the line-up takes which controller axis lies most level, its yaw offset from the
-  // head, and where it sits in the walker's frame; from then on the virtual walker is where the real one is, wherever you
+  // head, and the handle height (the walker's grip is put under it); from then on the virtual walker is where the real one is, wherever you
   // stand. The "Line up the walker" button retakes it. Its trigger is ignored.
-  const MOUNT: XRHandedness | null = params.get('mount') === 'left' ? 'left' : params.get('mount') === 'right' ? 'right' : null;
+  // Where the controller sits on the walker (VR_WALKER_MOUNT.md): just ahead of the grip on the upper side bar, its tracked
+  // point this far above the bar. Tape them once fitted; a few cm off shows as the hand a few cm off the virtual grip.
+  const MOUNT_AHEAD_M = 0.06, MOUNT_ABOVE_M = 0.04;
+  // A zip-tied controller twists a little on the bar, and the walker must not swing with it: its heading holds until the
+  // controller turns more than MOUNT_WOBBLE_RAD from it (a real turn), then catches up at MOUNT_CATCH per second and holds again.
+  const MOUNT_WOBBLE_RAD = 10 * Math.PI / 180, MOUNT_CATCH = 10;
   let mountOffset: number | null = null, mountAxis: THREE.Vector3 | null = null, mountAt: [number, number] | null = null;
+  let mountHeld: number | null = null, mountCatching = false, mountT = 0;
   const rayYaw = new THREE.Vector3(), mountPos = new THREE.Vector3();
-  const unmount = () => { mountOffset = null; mountAxis = null; mountAt = null; };
+  const unmount = () => { mountOffset = null; mountAxis = null; mountAt = null; mountHeld = null; };
   type Ctl = { group: THREE.XRTargetRaySpace; source?: XRInputSource; ray: THREE.Line };
   const wandRay = new THREE.Raycaster(), RED3 = new THREE.Color(0xff3030);
   const tpRing = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.24, 32),
@@ -151,9 +168,9 @@ export async function setupXR(host: XrHost) {
   scene.add(tpRing);
   // planeZ: the height of the plane the ray drags along (where it first hit the object, so a far or low-aimed ray doesn't jump);
   // push: metres added along the ray by the wand stick; from: the pose it was grabbed at (the arrow's tail)
-  let grab: { k: number; off: XY; start: XY; drag: number; t0: number; yaw0: number; q0: THREE.Quaternion; planeZ: number; push: number; from: Pose; valid?: Pose; blocked?: boolean } | null = null;
+  let grab: { k: number; off: XY; start: XY; drag: number; t0: number; yaw0: number; q0: THREE.Quaternion; planeZ: number; push: number; spin: number; spinReady: boolean; from: Pose; valid?: Pose; blocked?: boolean } | null = null;
   const fb = dragFeedback(scene, items, card);
-  let hoverHit: THREE.Vector3 | null = null, wandStickY = 0;
+  let hoverHit: THREE.Vector3 | null = null, wandStickX = 0, wandStickY = 0;
   const ground = (o: THREE.Vector3, d: THREE.Vector3, z: number) => (z > 0.02 ? rayPlaneHit(o, d, z) : null) ?? floorHit(o, d);
   const VERBS = ['drag · hold still to delete', 'hold A delete · grip put back'];
   let aiming = false, hover = -1;
@@ -191,7 +208,7 @@ export async function setupXR(host: XrHost) {
     if (hover < 0) { aiming = true; return; }
     const planeZ = Math.max(0, hoverHit?.z ?? 0), f = ground(r.origin, r.direction, planeZ), p = host.poses()[hover], at: XY = f ? [f.x, f.y] : [p.x, p.y];
     if (host.lock && !host.lock(hover)) return;
-    grab = { k: hover, off: [p.x - at[0], p.y - at[1]], start: at, drag: 0, t0: performance.now(), yaw0: p.yaw, q0: c.group.getWorldQuaternion(new THREE.Quaternion()), planeZ, push: 0, from: { x: p.x, y: p.y, yaw: p.yaw } };
+    grab = { k: hover, off: [p.x - at[0], p.y - at[1]], start: at, drag: 0, t0: performance.now(), yaw0: p.yaw, q0: c.group.getWorldQuaternion(new THREE.Quaternion()), planeZ, push: 0, spin: 0, spinReady: true, from: { x: p.x, y: p.y, yaw: p.yaw } };
   }
   function wandUp() {
     if (toolHeld) { toolHeld = false; const c = ctls.find(isWand); if (c) host.editor?.up(aim(c)); return; }
@@ -253,8 +270,9 @@ export async function setupXR(host: XrHost) {
     if (c) {
       const r = aim(c), f0 = grab ? ground(r.origin, r.direction, grab.planeZ) : floorHit(r.origin, r.direction);
       let f = f0;
-      if (grab && f0) {   // the wand stick pushes the object away along the ray (up) or pulls it in (down)
-        grab.push = pushPull(grab.push, wandStickY, dt);
+      if (grab && f0) {   // the wand stick pushes the object away along the ray (up) or pulls it in (down); sideways turns it
+        [grab.spin, grab.spinReady] = spinStep(grab.spin, grab.spinReady, wandStickX, wandStickY);
+        grab.push = pushPull(grab.push, Math.abs(wandStickY) >= Math.abs(wandStickX) ? wandStickY : 0, dt);
         const hd = Math.hypot(r.direction.x, r.direction.y);
         if (grab.push && hd > 0.05) f = new THREE.Vector3(f0.x + r.direction.x / hd * grab.push, f0.y + r.direction.y / hd * grab.push, f0.z);
       }
@@ -268,9 +286,9 @@ export async function setupXR(host: XrHost) {
       if (grab) {
         const it = items[grab.k], twist = snapQuarter(twistAngle(grab.q0, c.group.getWorldQuaternion(new THREE.Quaternion())));
         if (f) grab.drag = Math.max(grab.drag, Math.hypot(f.x - grab.start[0], f.y - grab.start[1]));
-        if (twist) grab.drag = Math.max(grab.drag, DRAG_DEADZONE_M * 2);   // a turn is an edit too: never a delete
+        if (twist || grab.spin) grab.drag = Math.max(grab.drag, DRAG_DEADZONE_M * 2);   // a turn is an edit too: never a delete
         if (f && grab.drag > DRAG_DEADZONE_M) {
-          const p: Pose = { x: f.x + grab.off[0], y: f.y + grab.off[1], yaw: grab.yaw0 - twist };
+          const p: Pose = { x: f.x + grab.off[0], y: f.y + grab.off[1], yaw: grab.yaw0 - twist + grab.spin };
           // it follows the wand either way; a spot that collides (furniture, a wall, unfilmed floor) turns it red and is never committed
           it.group.position.set(p.x, p.y, 0); it.group.rotation.z = p.yaw;
           const fits = host.canPlace(grab.k, p);
@@ -307,7 +325,8 @@ export async function setupXR(host: XrHost) {
 
   // ---------- buttons: cards on an arc 0.7 m around where you stood, to the left of where you faced. Canvas text on a plane (a
   // mesh, so the wand's ray hits it), drawn over the splats like the other overlays. The demo story is up front
-  // (host.primary of the host's buttons); the rest are behind "More". Tap the off-hand grip to hide or show the lot.
+  // (host.primary of the host's buttons); the rest are behind "More". Off unless asked for (menu(true)): nothing stands in
+  // front of you; the same actions are the hand panel's Tour tab (frontend-xr.ts).
   const BW = 0.46, BH = 0.15, GAP = 0.025;   // up to three lines: headline, a plain sentence, a small hint
   const dash = new THREE.Group(); dash.name = 'xr-story-menu';
   dash.visible = false;
@@ -316,11 +335,14 @@ export async function setupXR(host: XrHost) {
   const actions: XrButton[] = [...(host.buttons ?? []), ...(MOUNT ? [lineUp] : [])];   // the planning panel's Tour tab lists these too
   const FRONT = Math.min(actions.length, host.primary ?? actions.length);
   const pinned = actions.slice(FRONT).filter(b => b.ring);   // the same actions as a ring on the wand hand (held wand-stick click)
-  const ring = radialMenu(scene, [...actions.slice(0, FRONT), ...pinned, ...actions.slice(FRONT).filter(b => !b.ring)], FRONT + pinned.length);
+  const rest = actions.slice(FRONT).filter(b => !b.ring);
+  const ringRoot: RingItem[] = [...actions.slice(0, FRONT), ...pinned,
+    ...(rest.length ? [{ text: () => ['More', 'the rest of the actions'], short: () => 'More', items: () => rest, press: () => {} }] : [])];
+  const ring = radialMenu(scene, 'xr-wand-ring');
   own(() => ring.dispose());
-  let more = false, menuOn = true;
+  let more = false, menuOn = false;
   const moreBtn: XrButton = { text: () => ['More...', actions.slice(FRONT).map(b => b.text()[0].split(':')[0].toLowerCase()).slice(0, 3).join(', ')], tone: () => 'plain', press: () => { more = true; } };
-  const hideBtn: XrButton = { text: () => ['Hide this menu', 'tap the off-hand grip to bring it back'], tone: () => 'plain', press: () => { setMenu(false); } };
+  const hideBtn: XrButton = { text: () => ['Hide this menu', 'the Tour tab on the left hand has these too'], tone: () => 'plain', press: () => { setMenu(false); } };
   const backBtn: XrButton = { text: () => ['Back'], tone: () => 'plain', press: () => { more = false; } };
   const extra = FRONT < actions.length ? [moreBtn, hideBtn, backBtn] : [hideBtn];
   const btns = [...actions, ...extra].map(b => {
@@ -350,8 +372,8 @@ export async function setupXR(host: XrHost) {
       x.key = key;
       const c = x.cv.getContext('2d')!, W = x.cv.width, H = x.cv.height;
       c.clearRect(0, 0, W, H);
-      c.fillStyle = on ? 'rgba(16,64,44,0.94)' : 'rgba(14,20,28,0.88)'; c.strokeStyle = on ? '#4fe08f' : TONE[tone]; c.lineWidth = hot === i ? 14 : 6;
-      c.beginPath(); c.roundRect(8, 8, W - 16, H - 16, 36); c.fill(); c.stroke();
+      const box = () => { c.beginPath(); c.roundRect(8, 8, W - 16, H - 16, 36); };   // glass, as the ring (xrradial.ts); the tone shows in the rim
+      glass(c, box, on ? 'rgba(20,82,54,0.6)' : 'rgba(20,30,42,0.52)', 8, H - 8, hot === i ? '#ffffff' : on ? '#4fe08f' : TONE[tone], hot === i ? 10 : 4);
       if (on) {   // a mode that is on stays visible: a filled badge in the corner
         c.fillStyle = '#4fe08f'; c.beginPath(); c.roundRect(W - 150, 24, 114, 54, 27); c.fill();
         c.fillStyle = '#0b2418'; c.font = '700 36px system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('ON', W - 93, 52);
@@ -361,7 +383,7 @@ export async function setupXR(host: XrHost) {
       lines.slice(0, 3).forEach((ln, r) => {
         c.font = `${r ? 400 : 600} ${rows[0][r]}px system-ui, sans-serif`;
         c.fillStyle = r === 0 ? '#f2f7fb' : r === 1 ? '#c6d3de' : TONE[tone];
-        c.fillText(ln, W / 2, H * rows[1][r], W - 56 - (on && r === 0 ? 120 : 0));
+        textShadow(c); c.fillText(ln, W / 2, H * rows[1][r], W - 56 - (on && r === 0 ? 120 : 0)); shadowOff(c);
       });
       x.tex.needsUpdate = true;
     });
@@ -388,43 +410,47 @@ export async function setupXR(host: XrHost) {
   let btnHover = -1, btnPressed = -1;
   function setMenu(on: boolean) {
     menuOn = on; more = false; btnHover = -1; btnPressed = -1; anchor.set = false;
-    if (!on) toast(['Menu hidden', 'tap the off-hand grip to show it'], '#a9c8ff');
+    if (!on) toast(['Cards hidden', 'click the left stick for the hand panel'], '#a9c8ff');
   }
 
-  // ---------- glance: a chip of the modes that are on (above the strip on the off-hand controller, else low in front) and, while a
-  // fix is applied, two lines of stats low in front. Sprites, never in a ray test: a press, grab or teleport passes through them.
+  // ---------- glance: a chip of the modes that are on and, while a fix is applied, two lines of stats, both above the off-hand
+  // controller (low in front only when it isn't tracked). Sprites, never in a ray test: a press, grab or teleport passes through them.
   let chip: THREE.Sprite | null = null, chipKey = '', statsCard: THREE.Sprite | null = null, statsKey = '', statsSince = 0;
   const lowAhead = (s: THREE.Sprite, yaw: number, dz: number) => s.position.set(head.x + Math.cos(yaw) * 1.6, head.y + Math.sin(yaw) * 1.6, head.z + dz);   // level, not along the gaze: it stays put as you look down
-  function glanceStep(yaw: number, other?: Ctl) {
+  /** a glance card on the off-hand controller (the walker handle), dz above it; low ahead only when that hand isn't tracked */
+  function onHand(s: THREE.Sprite, dz: number) {
+    const hand = ctls.find(o => o.source?.gamepad && !isWand(o))?.group;
+    if (s.parent !== scene) scene.add(s);
+    if (!hand) { lowAhead(s, Math.atan2(headDir.y, headDir.x), -0.6); return; }
+    hand.updateWorldMatrix(true, false); hand.getWorldPosition(s.position); s.position.z += dz;   // world up, whatever way the strap turned it
+  }
+  function glanceStep() {
     const modes = host.status?.() ?? [], key = modes.join(' · '), hidden = !!host.editor?.active() || !!grab;
     if (key !== chipKey) {
       chipKey = key; chip?.removeFromParent(); chip?.material.dispose(); chip = null;
       if (key) { chip = card([key], '#9be8b0', 'rgba(8,12,18,0.95)', 0.034); chip.renderOrder = 4; }
     }
     if (chip) {
-      const hand = other?.source?.gamepad ? other.group : null;
-      if (hand) { if (chip.parent !== hand) hand.add(chip); chip.position.set(0, 0.31, -0.1); }
-      else { if (chip.parent !== scene) scene.add(chip); lowAhead(chip, yaw, -0.5); }
+      onHand(chip, 0.3);
       chip.visible = !hidden && !host.shell?.open();
     }
     const lines = host.stats?.() ?? null, sk = lines?.join('\n') ?? '';
     if (sk !== statsKey) {
       statsKey = sk; statsSince = performance.now(); statsCard?.removeFromParent(); statsCard?.material.dispose(); statsCard = null;
-      if (lines) { statsCard = card(lines, '#9be8b0', 'rgba(8,12,18,0.95)', 0.05); statsCard.renderOrder = 4; scene.add(statsCard); }
+      if (lines) { statsCard = card(lines, '#9be8b0', 'rgba(8,12,18,0.95)', 0.034); statsCard.renderOrder = 4; scene.add(statsCard); }
     }
     if (statsCard) {   // shown for 8 s after it changes, then whenever you look down at it
-      lowAhead(statsCard, yaw, -0.62);
-      statsCard.visible = !hidden && (performance.now() - statsSince < 8000 || headDir.z < -0.3);
+      onHand(statsCard, 0.38);
+      statsCard.visible = !hidden && !host.shell?.open() && (performance.now() - statsSince < 8000 || headDir.z < -0.3);
     }
   }
   function toast(lines: string[], color = '#9be8b0') {
-    toastCard?.removeFromParent(); toastCard?.material.dispose(); toastCard = card(lines, color); scene.add(toastCard); toastUntil = performance.now() + 1800;
+    toastCard?.removeFromParent(); toastCard?.material.dispose(); toastCard = card(lines, color, 'rgba(8,12,18,0.95)', 0.034); toastCard.renderOrder = 4; scene.add(toastCard); toastUntil = performance.now() + 1800;
   }
 
   // Controller shortcuts share the same priority as the wand: annotation gestures consume input before furniture.
   let clickWas = false, clickRedo = false, toastCard: THREE.Sprite | null = null, toastUntil = 0;
   let aHeld = 0, aTarget = -1, aFired = false;   // A held on an object: it goes once held CONFIRM_S
-  let opGripWas = false, opGripT = 0, opGripClean = false;
   let gripWas = false, aWas = false, bothHeld = 0, resetFired = false, ringN = 0, ringCard: THREE.Sprite | null = null;
   /** remove object k and say so, with the way back: a delete should never be silent */
   function removeWithToast(k: number, unlockAfter = false) {
@@ -440,7 +466,7 @@ export async function setupXR(host: XrHost) {
     // the wand stick click: a short click undoes (on release, so a held one can open the ring instead); redo if the
     // off-hand grip was held when it went down
     if (click && !clickWas) clickRedo = !!op?.buttons[1]?.pressed;
-    const ringEv = ring.step(dt, wp, ctls.find(isWand)?.group, head, !!consumed || !!grab);
+    const ringEv = ring.step(dt, wp, ctls.find(isWand)?.group, head, !!consumed || !!grab, ringRoot, 'Actions');
     if (consumed) {
       if (grab) { host.resync(); host.unlock?.(grab.k); }
       grab = null; aiming = false; aHeld = 0; aFired = true;
@@ -469,16 +495,10 @@ export async function setupXR(host: XrHost) {
         host.history[clickRedo ? 'redo' : 'undo']().then(text => toast([text]));
       }
     }
-    // a quick tap of the off-hand grip alone hides or shows the card menu (the wand grip resets an object, both held reset all)
-    const opGrip = !!op?.buttons[1]?.pressed;
-    if (opGrip && !opGripWas) { opGripT = performance.now(); opGripClean = true; }
-    if (opGrip && (grip || click)) opGripClean = false;
-    if (!opGrip && opGripWas && opGripClean && !consumed && performance.now() - opGripT < 350) setMenu(!menuOn);
-    opGripWas = opGrip;
     gripWas = grip; aWas = a; clickWas = click;
     if (toastCard) {
       if (performance.now() > toastUntil) { toastCard.removeFromParent(); toastCard.material.dispose(); toastCard = null; }
-      else toastCard.position.copy(head).addScaledVector(headDir, 1.6).setZ(head.z - 0.75);   // low and ahead (about 25 deg down), off the line of sight
+      else { onHand(toastCard, 0.22); toastCard.visible = true; }
     }
     bothHeld = both && !consumed ? bothHeld + dt : 0;
     if (consumed && both) resetFired = true;   // cancelling an edit cannot turn into a global reset before both grips are released
@@ -508,11 +528,33 @@ export async function setupXR(host: XrHost) {
     }
     rayYaw.copy(mountAxis).transformDirection(c.group.matrixWorld);
     if (Math.hypot(rayYaw.x, rayYaw.y) < 0.2) return null;
-    const raw = Math.atan2(rayYaw.y, rayYaw.x);
+    // held in the room's frame (less the rig's turn): a snap-turn or a stick walk turns the rig, not the real walker
+    const real = Math.atan2(rayYaw.y, rayYaw.x) - xrRig.yaw, now = performance.now();
+    if (mountHeld == null || mountOffset == null) { mountHeld = real; mountCatching = false; }
+    else {
+      const d = Math.atan2(Math.sin(real - mountHeld), Math.cos(real - mountHeld));
+      if (Math.abs(d) > MOUNT_WOBBLE_RAD) mountCatching = true;
+      if (mountCatching) {
+        if (Math.abs(d) < 0.02) { mountHeld = real; mountCatching = false; }
+        else mountHeld += d * Math.min(1, (now - mountT) / 1000 * MOUNT_CATCH);
+      }
+    }
+    mountT = now;
+    const raw = mountHeld + xrRig.yaw;
     mountOffset ??= headYaw - raw;
     const yaw = raw + mountOffset, cs = Math.cos(yaw), sn = Math.sin(yaw);
     c.group.getWorldPosition(mountPos);
-    if (!mountAt) { const dx = mountPos.x - head.x, dy = mountPos.y - head.y; mountAt = [cs * dx + sn * dy, -sn * dx + cs * dy]; }
+    if (!mountAt) {
+      // the virtual walker goes where the real one is: its grip under the controller, its handles at the controller's
+      // height (the real ones adjust 0.81-0.99 m), not wherever the head stood. A cane or wheelchair: from the head.
+      const grip = host.walkerGrip?.();
+      if (grip) {
+        mountAt = [grip[0] + MOUNT_AHEAD_M, MOUNT === 'left' ? grip[1] : -grip[1]];
+        const h = Math.min(1.1, Math.max(0.7, mountPos.z - MOUNT_ABOVE_M));
+        host.setHandleHeight?.(h);
+        toast(['Walker lined up', `grips at ${h.toFixed(2)} m, under the ${MOUNT} controller`]);
+      } else { const dx = mountPos.x - head.x, dy = mountPos.y - head.y; mountAt = [cs * dx + sn * dy, -sn * dx + cs * dy]; }
+    }
     return { x: mountPos.x - (cs * mountAt[0] - sn * mountAt[1]), y: mountPos.y - (sn * mountAt[0] + cs * mountAt[1]), yaw };
   }
 
@@ -531,13 +573,20 @@ export async function setupXR(host: XrHost) {
       if (!pose) return;
       const { position: p, orientation: q } = pose.transform; camera.position.set(p.x, p.y, p.z); camera.quaternion.set(q.x, q.y, q.z, q.w);
       const destination = pendingSpawn; pendingSpawn = null; place(destination.x, destination.y, destination.yaw);
+      // Eyes this low on entering are someone sitting (at a desk over Link) or a floor the headset has wrong, not a person
+      // standing: the 1:1 view would sit at the walker's handlebars. Lift it to the patient's eye height, and say so.
+      if (p.y < SEATED_BELOW_M && host.eyeHeight?.() == null && host.setSeated) {
+        host.setSeated(true); placeRig();
+        toast(['Seated height', `your eyes were ${p.y.toFixed(2)} m up; raised to the patient's · Comfort switches back`]);
+      }
     }
-    if (host.shell?.open()) { dash.visible = false; ring.close(); if (chip) chip.visible = false; if (statsCard) statsCard.visible = false; return; }
+    if (host.shell?.open()) { dash.visible = false; ring.close(); for (const o of [chip, statsCard, toastCard, strip]) if (o) o.visible = false; return; }   // the hand panel has that spot
     const yaw = readHead();
     if (host.shell?.follow(dt)) { dash.visible = false; xrRig.x += body.x - head.x; xrRig.y += body.y - head.y; placeRig(); wandStep(); return; }   // the route drives the body
     const pads: Record<string, Gamepad> = {};
     for (const source of renderer.xr.getSession()?.inputSources ?? []) if (source.gamepad) pads[source.handedness] = source.gamepad;
-    wandStickY = grab ? pads[WAND]?.axes[3] ?? 0 : 0;   // while holding an object the wand stick pushes and pulls it, so it doesn't also walk or turn you
+    // while holding an object the wand stick pushes and pulls it (up/down) or turns it a quarter per flick (left/right), so it doesn't also walk or turn you
+    wandStickX = grab ? pads[WAND]?.axes[2] ?? 0 : 0; wandStickY = grab ? pads[WAND]?.axes[3] ?? 0 : 0;
     if (pinching.size && !host.readOnly?.() && (host.movement?.() ?? 'all') === 'all') {   // glide forward in sub-steps of at most half a cell, as in free walk
       const v = 0.6 * dt, dx = Math.cos(yaw) * v, dy = Math.sin(yaw) * v, n = Math.max(1, Math.ceil(v / (host.cellM / 2)));
       let i = 0;
@@ -546,6 +595,15 @@ export async function setupXR(host: XrHost) {
       }
       if (i < n) refused();
     }
+    // Fly (the hand panel's switch), as in Google Earth VR: the wand stick pushes you along where the wand points, up and down
+    // too, through walls and furniture; its left/right still snap-turns. Off again, you land on the floor where you are.
+    const flyStick = flying && !grab && !ring.isOpen() && !pads[WAND]?.buttons[3]?.pressed ? -(pads[WAND]?.axes[3] ?? 0) : 0;
+    if (Math.abs(flyStick) > 0.2 && !host.readOnly?.()) {
+      const wg = ctls.find(isWand)?.group, d = new THREE.Vector3();
+      if (wg) { wg.updateWorldMatrix(true, false); wg.getWorldDirection(d).negate(); } else d.copy(headDir);
+      const v = FLY_MS * dt * flyStick * Math.abs(flyStick);   // squared: gentle near the centre
+      xrRig.x += d.x * v; xrRig.y += d.y * v; flyZ = Math.min(FLY_TOP_M, Math.max(0, flyZ + d.z * v)); placeRig(); anchor.set = false;
+    }
     if (!host.readOnly?.() && (host.movement?.() ?? 'all') === 'all') {   // thumbsticks: left walks (forward/back, sideways, relative to where you look), right snap-turns
       const stick = (g?: Gamepad) => (g ? [g.axes[2] ?? 0, g.axes[3] ?? 0].map(a => (Math.abs(a) < 0.2 ? 0 : a)) : [0, 0]);
       const wp = MOUNT ? walkerPose(yaw) : null, wy = wp?.yaw ?? null;
@@ -553,7 +611,7 @@ export async function setupXR(host: XrHost) {
       // mounted: one stick, up/down along the walker's heading, left/right snap-turns; held: left walks relative to the view
       const [mx, my] = MOUNT ? stick(pads[MOUNT]) : [0, 0];
       const [sx, sy] = MOUNT ? [0, my] : (grab || choosing) && WAND === 'left' ? [0, 0] : stick(pads.left), [tx] = MOUNT ? [mx] : choosing && WAND === 'right' ? [0] : stick(pads.right), dir = wy ?? yaw;
-      if (sx || sy) {   // sub-steps of at most half a cell, as in free walk
+      if ((sx || sy) && !(flying && MOUNT)) {   // sub-steps of at most half a cell, as in free walk (flying, the walker's stick rests: the wand flies)
         const v = 0.6 * dt, dx = (-sy * Math.cos(dir) + sx * Math.sin(dir)) * v, dy = (-sy * Math.sin(dir) - sx * Math.cos(dir)) * v;
         const n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / (host.cellM / 2)));
         // mounted: the real walker's legs must clear too (it moves with you); held: where you stand
@@ -588,7 +646,7 @@ export async function setupXR(host: XrHost) {
       btns.forEach((x, n) => { x.mesh.visible = shown(n); });
       placeDash(yaw); drawButtons(btnHover);
     }
-    glanceStep(yaw, ctls.find(o => o.source && !isWand(o)));
+    glanceStep();
   }
   /** Put the head at floor-frame (x, y) looking along yaw by moving the rig: scripted viewpoints on a headset nobody wears. */
   function place(x: number, y: number, yaw: number) {
@@ -621,7 +679,7 @@ export async function setupXR(host: XrHost) {
     frameBufferScaleFactor: cfg.scale, fixedFoveation: cfg.foveation,
     onEnterXr: enterRoom,
     onExitXr: () => {
-      camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1; btnHover = -1; dash.visible = false; ring.close(); opGripWas = false; fb.clear(); aHeld = 0; aTarget = -1; aFired = false;
+      camera.removeFromParent(); pinching.clear(); flying = false; flyZ = 0; dropWand(); hover = -1; btnHover = -1; dash.visible = false; ring.close(); fb.clear(); aHeld = 0; aTarget = -1; aFired = false;
       chip?.removeFromParent(); chip?.material.dispose(); chip = null; chipKey = ''; statsCard?.removeFromParent(); statsCard?.material.dispose(); statsCard = null; statsKey = '';
       ringCard?.removeFromParent(); ringCard?.material.dispose(); ringCard = null; ringN = 0; bothHeld = 0; gripWas = false; aWas = false; clickWas = false;
       toastCard?.removeFromParent(); toastCard?.material.dispose(); toastCard = null;
@@ -632,11 +690,15 @@ export async function setupXR(host: XrHost) {
 
   const w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3));
   return {
-    tier, device, rig, place, step, resume: enterRoom, spawn: () => ({ ...lastSpawn }), moveHead, rigState, restoreRig, mount: () => ({ hand: MOUNT, offset: mountOffset, at: mountAt, axis: mountAxis?.toArray() ?? null }),
+    tier, device, rig, place, step, resume: enterRoom, spawn: () => ({ ...lastSpawn }), moveHead, rigState, restoreRig, mount: () => ({ hand: MOUNT, held: mountHeld, offset: mountOffset, at: mountAt, axis: mountAxis?.toArray() ?? null }),
     presenting: () => renderer.xr.isPresenting,
     /** where the XR camera and the user camera in its rig are (floor frame), and what is tracked */
     pose: () => ({ xr: renderer.xr.isPresenting, head: w(renderer.xr.getCamera()), userCam: w(camera), rig: { ...xrRig },
       inputs: [...renderer.xr.getSession()?.inputSources ?? []].map(s => `${s.handedness}:${s.hand ? 'hand' : 'controller'}`), pinching: pinching.size }),
+    /** the hand that holds the planning panel (frontend-xr.ts): the one that isn't the wand, the walker's on the walker */
+    offHand: (WAND === 'left' ? 'right' : 'left') as XRHandedness,
+    /** Fly on or off (no argument: read it); off drops you back to the floor */
+    fly: (on?: boolean) => { if (on != null && on !== flying) { flying = on; flyZ = 0; placeRig(); toast(on ? ['Flying', 'right stick: go where the right hand points'] : ['Back on the floor']); } return flying; },
     /** the story actions the panel's Tour tab lists (live objects: text() and tone() are read when drawn) */
     actions,
     /** the cards: each one's text, whether it shows now and where its centre is (floor frame), for scripted presses */

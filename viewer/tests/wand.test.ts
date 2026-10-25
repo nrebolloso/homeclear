@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { floorHit, rayPlaneHit, pushPull, confirmProgress, twistAngle, snapQuarter, holdProgress, DELETE_HOLD_S, CONFIRM_S, PUSH_MAX_M } from '../src/wand.ts';
+import { floorHit, rayPlaneHit, pushPull, spinStep, confirmProgress, twistAngle, snapQuarter, holdProgress, DELETE_HOLD_S, CONFIRM_S, PUSH_MAX_M } from '../src/wand.ts';
 
 const close = (a: number, b: number, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
 
@@ -53,6 +53,14 @@ test('pushPull: stick up pushes away, down pulls in, a rest stick does nothing, 
   assert.ok(pushPull(0, 1, 0.5) < -0.5);
   assert.equal(pushPull(PUSH_MAX_M - 0.01, -1, 10), PUSH_MAX_M);
   assert.equal(pushPull(-PUSH_MAX_M, 1, 10), -PUSH_MAX_M);
+});
+
+test('spinStep: a flick right turns the held object a quarter clockwise, left anticlockwise, once per flick; up/down does not', () => {
+  assert.deepEqual(spinStep(0, true, 0.9, 0), [-Math.PI / 2, false]);
+  assert.deepEqual(spinStep(-Math.PI / 2, false, 0.9, 0), [-Math.PI / 2, false]);   // still held over: no second turn
+  assert.deepEqual(spinStep(-Math.PI / 2, false, 0.1, 0), [-Math.PI / 2, true]);    // back near the centre: re-armed
+  assert.deepEqual(spinStep(0, true, -0.9, 0), [Math.PI / 2, false]);
+  assert.deepEqual(spinStep(0, true, 0.75, -0.9), [0, true]);                      // mostly a push
 });
 
 test('confirmProgress: A held CONFIRM_S fills the ring; a tap does not', () => {

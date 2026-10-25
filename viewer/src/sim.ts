@@ -17,7 +17,7 @@ export interface Risk {
   dark_contact_multiplier: number; ghosts: number; contact_table: Record<string, { height_m: number[]; p_per_stride: number[] }>;
 }
 export interface Light { x: number; y: number; r: number }
-export interface Ghost { pts: XY[]; hit: boolean[]; walker?: Pose[] }   // walker: world model only, one pose per step
+export interface Ghost { pts: XY[]; hit: boolean[]; walker?: Pose[]; p?: number[] }   // walker: world model only, one pose per step; p: each step's toe-catch chance (0 off a bump)
 /** Per-cell sums over all trips (flat i*ny + j): footsteps landing there, and expected toe contacts on the swing into it. */
 export interface Heat { steps: Float32Array; hits: Float32Array }
 export interface RolloutResult {
@@ -93,7 +93,7 @@ export function rollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, rou
     const clearance = Math.exp(R.n() * persona.toe_clearance_cv) * (persona.clearance_scale ?? 1);   // this trip's toe clearance vs. typical
     const step = learned ? model!.hand_rule_fit!.stride_m : Math.max(0.15, persona.stride_m * (1 + R.n() * persona.stride_cv));
     const last: (XY | null)[] = [null, null];
-    const ghost: Ghost = { pts: [], hit: [] };
+    const ghost: Ghost = { pts: [], hit: [], p: [] };
     // learned: the 3 latest heels (newest first), seeded with hand-rule steps behind the start
     const heels: XY[] = [];
     let u = R.u() * step, ci = Math.round(u / 0.01);
@@ -125,7 +125,7 @@ export function rollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, rou
         if (bi <= ci) bi = ci + Math.max(5, Math.round(a * 100));
         ci = bi; u = ci * 0.01;
       }
-      let hit = false;
+      let hit = false, pk = 0;
       const from = last[side];
       if (from) {   // the swing from this foot's last placement: highest bump it passes over
         const n = Math.max(2, Math.ceil(Math.hypot(foot[0] - from[0], foot[1] - from[1]) / (g.cell_m / 2)));
@@ -142,11 +142,11 @@ export function rollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, rou
           // stride at 1 cm); the draw only decides which ghost dots turn red
           total += p; batchHits[b] += p; perComp[comp] = (perComp[comp] || 0) + p;
           if (heat) heat.hits[toCell(g, foot)[0] * ny + toCell(g, foot)[1]] += p;
-          hit = R.u() < p;
+          hit = R.u() < p; pk = p;
         }
       }
       last[side] = foot;
-      if (trip < risk.ghosts) { ghost.pts.push(body); ghost.hit.push(hit); }
+      if (trip < risk.ghosts) { ghost.pts.push(body); ghost.hit.push(hit); ghost.p!.push(pk); }
       if (trip === 0) steps.push({ xy: foot, side, hit });
       if (heat) { const [i, j] = toCell(g, foot); heat.steps[i * ny + j]++; }
     }
@@ -189,7 +189,7 @@ function worldRollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, route
     const at = (a: number, l: number): XY => [rt[0][0] + a * ux - l * uy, rt[0][1] + a * uy + l * ux];
     const heels: XY[] = [at(L0 / 2, s0 * Wd / 2), at(-L0 / 2, -s0 * Wd / 2), at(-1.5 * L0, s0 * Wd / 2)], sides = [s0, -s0, s0];
     const last: XY[] = s0 > 0 ? [heels[1], heels[0]] : [heels[0], heels[1]];   // index 0 = right foot, 1 = left foot
-    const ghost: Ghost = { pts: [], hit: [], walker: [] };
+    const ghost: Ghost = { pts: [], hit: [], walker: [], p: [] };
     for (let k = 0, step = 0; step < 400; step++) {
       const mid: XY = [(heels[0][0] + heels[1][0]) / 2, (heels[0][1] + heels[1][1]) / 2];
       let best = Infinity, bk = k;
@@ -198,7 +198,7 @@ function worldRollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, route
       if (k >= n0 - 16) break;
       const action = [25, 50, 100].map(o => ext[Math.min(k + o, ext.length - 1)]);
       const p = predict(m, heels, sides, action), foot = sampleHeel(p, R.u, R.n), side = -sides[0], fi = side > 0 ? 1 : 0;
-      let hit = false;
+      let hit = false, pk = 0;
       const from = last[fi];
       const ns = Math.max(2, Math.ceil(Math.hypot(foot[0] - from[0], foot[1] - from[1]) / (g.cell_m / 2)));
       let h = 0, comp = 0;
@@ -212,11 +212,11 @@ function worldRollouts(g: GridMeta, bump: Float32Array, comps: Int32Array, route
         const pc = Math.min(1, contactProb(table, h / clearance) * (lit ? 1 : risk.dark_contact_multiplier));
         total += pc; batchHits[b] += pc; perComp[comp] = (perComp[comp] || 0) + pc;
         if (heat) heat.hits[toCell(g, foot)[0] * ny + toCell(g, foot)[1]] += pc;
-        hit = R.u() < pc;
+        hit = R.u() < pc; pk = pc;
       }
       last[fi] = foot;
       heels.unshift(foot); heels.length = 3; sides.unshift(side); sides.length = 3;
-      if (trip < risk.ghosts) { ghost.pts.push(foot); ghost.hit.push(hit); ghost.walker!.push(p.walker); }
+      if (trip < risk.ghosts) { ghost.pts.push(foot); ghost.hit.push(hit); ghost.walker!.push(p.walker); ghost.p!.push(pk); }
       if (trip === 0) steps.push({ xy: foot, side: fi, hit });
       if (heat) { const [i, j] = toCell(g, foot); heat.steps[i * ny + j]++; }
     }
