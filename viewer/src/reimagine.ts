@@ -180,6 +180,7 @@ export interface Parts { ghosts: boolean; arrows: boolean; tags: 'all' | 'select
 export const ALL_PARTS: Parts = { ghosts: true, arrows: true, tags: 'selected', receipt: true, rings: true, ringLabels: true };
 type Eh = Hz & { height_m?: number; min_side_clearance_m?: number };
 
+const camPos = new THREE.Vector3();
 export function createReimagine(D: ReimagineDeps) {
   const root = new THREE.Group(), ghosts = new THREE.Group(), arrows = new THREE.Group(), tags = new THREE.Group(), receipt = new THREE.Group(), marks = new THREE.Group(), proposed = new THREE.Group();
   root.add(ghosts, arrows, tags, receipt, marks, proposed);
@@ -234,8 +235,8 @@ export function createReimagine(D: ReimagineDeps) {
         arrow.traverse(x => { const m = (x as THREE.Mesh).material as THREE.Material | undefined; if (m) { m.depthTest = false; m.transparent = true; } x.renderOrder = 3; });
         arrows.add(arrow);
       }
-      const tag = card([c.label, c.cost.source === 'placeholder' ? 'Cost & setup: pending estimate' : costText(c.cost)], c.kind === 'remove' ? '#ffd27a' : '#8fe3ff', undefined, 0.055);
-      tag.position.set(c.at[0], c.at[1], Math.max(0.65, (o?.height_m ?? 0) + 0.35, (c.z ?? 0) + 0.4));   // above the hazard labels (0.15)
+      const tag = card([c.label, c.cost.source === 'placeholder' ? 'Cost & setup: pending estimate' : costText(c.cost)], c.kind === 'remove' ? '#ffd27a' : '#8fe3ff', undefined, 0.07);   // larger text; update() grows it with distance
+      tag.position.set(c.at[0], c.at[1], Math.max(0.85, (o?.height_m ?? 0) + 0.45, (c.z ?? 0) + 0.5));   // above the hazard labels, higher so it sits clear of the object
       tag.userData.k = c.k;
       tag.userData.iv = c.iv;
       tags.add(tag);
@@ -249,8 +250,8 @@ export function createReimagine(D: ReimagineDeps) {
         ring.renderOrder = 3;
         ring.userData.shared = true;
         if (parts.ringLabels) {
-          const s = card([`${word}: ${hzText(h)}`], word === 'fixed' ? '#7dffa8' : '#ff9a9a', 'rgba(14,20,28,0.75)', 0.045);
-          s.position.set(0, 0, 0.15);
+          const s = card([`${word}: ${hzText(h)}`], word === 'fixed' ? '#7dffa8' : '#ff9a9a', 'rgba(14,20,28,0.75)', 0.06);
+          s.position.set(0, 0, 0.3);
           ring.add(s);
         }
         ring.userData.word = word;
@@ -329,10 +330,12 @@ export function createReimagine(D: ReimagineDeps) {
     playing: () => !!anim,
     /** per frame */
     update(dt: number) {
-      if (D.camera && root.visible)
+      if (D.camera && root.visible) {
+        D.camera.getWorldPosition(camPos);   // world, not the camera's rig-local pose: in a headset the camera rides in a rig
         for (const grp of [tags, receipt]) if (grp.visible)
-          for (const s of grp.children as THREE.Sprite[]) if (s.visible && s.userData.base)   // shrink up close: a card at arm's length filled the view
-            s.scale.copy(s.userData.base).multiplyScalar(Math.min(1, Math.max(0.3, D.camera.position.distanceTo(s.position) / 2.5)));
+          for (const s of grp.children as THREE.Sprite[]) if (s.visible && s.userData.base)   // keeps a constant look: smaller up close (a card at arm's length filled the view), bigger far off so it still reads
+            s.scale.copy(s.userData.base).multiplyScalar(THREE.MathUtils.clamp(camPos.distanceTo(s.position) / 2, 0.4, 2));
+      }
       if (!anim) return;
       setT(t + dt / anim.dur);
       if (t >= 1) anim = null;

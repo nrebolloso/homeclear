@@ -10,7 +10,7 @@ import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
 import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z, WHEEL_R } from './wheelchair.ts';
 import { chairGeometry, clearOf, driveStep, spinBy, type Chair } from './drive.ts';
 import { keyIntent, createHistory, createKeyOverlay } from './controls.ts';
-import { controlHints, hintLines, type HintCtx } from './hints.ts';
+import { controlHints, hintRows, type HintCtx } from './hints.ts';
 import { pathLights, createLights3d } from './lights.ts';
 import { strokePersona } from './stroke.ts';
 import { bathroomFixes, createBathroom3d } from './bathroom.ts';
@@ -60,7 +60,7 @@ import { createEditLocks } from './edit-locks.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
 import type { Ghost } from './sim.ts';
 import type { WorldModel } from './worldmodel.ts';
-import { setupXR, type XrEditor, type XrPage, type XrRow } from './xr.ts';
+import { setupXR, type XrEditor } from './xr.ts';
 import { plainSpot, tourStand } from './xrtour.ts';
 import { createXRComparison } from './xrcompare.ts';
 import { createPlanFix } from './planfix.ts';
@@ -398,8 +398,9 @@ function drawPlan(r: Eval) {
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.22, 32), new THREE.MeshBasicMaterial({ color: bump ? 0xff8a1f : 0xffe14d, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide }));
     ring.position.set(h.position[0], h.position[1], 0.03);
     ring.userData.s = routeS[h.a] ?? 0;
-    const t = wantXR || inXR ? card([text], bump ? '#ffcf99' : '#fff0a8', 'rgba(14,20,28,0.8)', 0.05) : label(text);   // DOM labels don't render in WebXR
-    t.position.set(0, 0, 0.35);
+    const t = wantXR || inXR ? card([text], bump ? '#ffcf99' : '#fff0a8', 'rgba(14,20,28,0.8)', 0.07) : label(text);   // DOM labels don't render in WebXR
+    t.position.set(0, 0, 0.6);
+    if (t instanceof THREE.Sprite) ring.userData.card = t;   // headset cards are laid out per frame (xrHazardCards)
     ring.add(t);
     hazardGroup.add(ring);
   }
@@ -2611,29 +2612,6 @@ const wmButton = {
     } finally { wmBusy = false; }
   },
 };
-// ---------- results in the headset (xr.ts results panel): the desktop panels' numbers, page by page ----------
-const n1 = (x: number) => x.toFixed(x > 0 && x < 0.05 ? 2 : 1);
-function xrResults(): XrPage[] {
-  const ev = current && !current.error ? current : null, base = baseEvals[selRoute] ?? null, ch = reim.changes(), who = personas[personaKey]?.label ?? personaKey;
-  const safety: XrRow[] = ev ? [
-    { text: () => [`${n1(ev.per_month)} toe catches a month`, `likely ${n1(ev.per_month_lo)}-${n1(ev.per_month_hi)} · ${who}`, 'simulated over all the routes'] },
-    ...(base && ch.length ? [{ text: () => [`As scanned: ${n1(base.per_month)} a month`, `${ch.length} change${ch.length === 1 ? '' : 's'}: ${base.per_month > 0 ? Math.round(100 * (base.per_month - ev.per_month) / base.per_month) : 0}% fewer`] }] : []),
-    ...ev.routes.map(r => ({ text: () => [`${r.name}: ${n1(r.per_month)} a month`, `${r.trips_per_night} trip${r.trips_per_night === 1 ? '' : 's'} a night · ${r.length_m.toFixed(1)} m${r.min_side_m !== undefined ? ` · tightest ${(r.min_side_m * 100).toFixed(0)} cm a side` : ''}`] })),
-  ] : [{ text: () => ['No numbers yet', current?.error ?? 'the route is still being worked out'] }];
-  const hazards: XrRow[] = spotList.length ? [...spotList].sort((a, b) => b.severity - a.severity).map(sp => ({ text: () => [sp.label, sp.detail] })) : [{ text: () => ['No hazards on this route'] }];
-  const fx = game.fixes as any[] | undefined, ivOf = (id: string) => interventions.find(i => i.id === id);
-  const fixes: XrRow[] = !fx ? [{ text: () => ['Work out the fixes', 'tries each fix on this route alone', 'point here (a few seconds)'], tone: () => 'go' as const, press: () => $('planfixes').click() }]
-    : !fx.length ? [{ text: () => ['No fixes for this route'] }]
-    : [...fx].sort((a, b) => b.reduction - a.reduction).map(f => ({
-      text: () => [f.label, f.error ? 'blocks the route' : `${n1(Math.max(0, f.reduction))} fewer a month · $${ivOf(f.id)?.cost_usd ?? '?'}${ivOf(f.id)?.minutes ? `, ${ivOf(f.id)!.minutes} min` : ''}`, applied.includes(f.id) ? 'applied' : f.error ? '' : 'point here to apply'],
-      tone: () => (applied.includes(f.id) || f.error ? 'plain' as const : 'go' as const), press: () => { if (!f.error && !applied.includes(f.id)) return applyFix(f.id); } }));
-  const checks: XrRow[] = ev?.checks.length ? ev.checks.map(c => ({ text: () => [c.label, `${c.verdict}${c.note ? `: ${c.note}` : ''}`], tone: () => (c.verdict === 'ok' ? 'go' as const : c.verdict === 'fail' ? 'busy' as const : 'plain' as const) })) : [{ text: () => ['No checks for this room'] }];
-  const usd = ch.reduce((t, c) => t + (c.cost?.usd ?? 0), 0), mins = ch.reduce((t, c) => t + (c.cost?.minutes ?? 0), 0);
-  const changes: XrRow[] = ch.length ? [{ text: () => [`${ch.length} change${ch.length === 1 ? '' : 's'}: $${Math.round(usd)}`, `about ${Math.round(mins)} min in all`] },
-    ...ch.map(c => ({ text: () => [c.label, `$${Math.round(c.cost?.usd ?? 0)} · ${Math.round(c.cost?.minutes ?? 0)} min · ${c.cost?.helpers ?? 0} helper${c.cost?.helpers === 1 ? '' : 's'}`] }))] : [{ text: () => ['No changes yet', 'move furniture or apply a fix'] }];
-  return [{ title: 'Safety on this route', rows: safety }, { title: 'Hazards on this route', rows: hazards }, { title: 'Fixes', rows: fixes },
-    { title: 'Transfers, reach, emergencies', rows: checks }, { title: 'Changes and cost', rows: changes }];
-}
 const dangersButton = {
   text() {
     const n = spotList.length;
@@ -2649,12 +2627,13 @@ const dangersButton = {
     else { dangerVR.k = -1; tourSpot = -1; }
   },
 };
+let xrContactT = 0;   // seconds the device stays red after a refused move (xr.ts contact)
 const xr = await setupXR({
-  renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses,
+  renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses, contact: () => { xrContactT = 0.35; },
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
-  commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m, walkerFits: canPlace, walkerCentre: () => centreOffset, results: xrResults,
+  commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m, walkerFits: canPlace, walkerCentre: () => centreOffset,
   lock: k => editLocks.acquire(String(k), 'vr'), unlock: k => editLocks.release(String(k), 'vr'),
-  resetObject, resetAll, editor: markerXR, readOnly: () => game.sessionBusy || comparison.previewing(), movement: () => game.comfort?.movement ?? 'all', eyeHeight: () => game.comfort?.seated ? persona.eye_height_m : undefined, hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { lines: hintLines(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
+  resetObject, resetAll, editor: markerXR, readOnly: () => game.sessionBusy || comparison.previewing(), movement: () => game.comfort?.movement ?? 'all', eyeHeight: () => game.comfort?.seated ? persona.eye_height_m : undefined, hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { ...hintRows(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
   startPose() {   // stay if this floor is seen as well as the route's median spot; else the first such point along the route
     if (!current || current.error) return null;
     const poses: { x: number; y: number; yaw: number }[] = [];
@@ -2671,13 +2650,26 @@ const xr = await setupXR({
     say();
   },
   exit() { comparison.endPreview(); inXR = false; game.xr = false; dangerVR.k = -1; tourSpot = -1; applyPerf(perfBeforeXR, false); if (current) drawPlan(current); say(); },
-  buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton, wmButton, { text: () => ['Room menu', 'Scans, experience, findings and controls'], press: () => frontendVR?.open() }],   // the story for a family: what's risky, how night feels, the fix
+  buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton, wmButton],   // the story for a family: what's risky, how night feels, the fix (the panel's Tour tab)
   shell: {   // the planning shell (frontend.ts) over the wand; frontendVR is created after the first frame, so look it up lazily
     activate: c => !!frontendVR?.activate(c), release: c => !!frontendVR?.release(c), open: () => !!frontendVR?.isOpen(),
     follow(dt) { if (!xrFollowRoute || mode !== 'auto') return false; autoStep(dt); return true; },
     hover: k => reim.selectChange(k),
   },
 });
+// ---------- hazard cards in the headset: sit behind the hazard (away from you), grow with distance, hide when you stand over one ----------
+const cardHead = new THREE.Vector3();
+function xrHazardCards() {
+  camera.getWorldPosition(cardHead);
+  for (const ring of hazardGroup.children as THREE.Mesh[]) {
+    const c = ring.userData.card as THREE.Sprite | undefined;
+    if (!c) continue;
+    const dx = ring.position.x - cardHead.x, dy = ring.position.y - cardHead.y, d = Math.hypot(dx, dy) || 1;
+    c.visible = d > 0.9;   // arm's length: a card there fills the view
+    c.position.set(dx / d * 0.35, dy / d * 0.35, 0.6);
+    if (c.userData.base) c.scale.copy(c.userData.base).multiplyScalar(THREE.MathUtils.clamp(d / 1.5, 1, 3));
+  }
+}
 /** One headset frame: the monitor's world updates (walker, glow, the reimagined room, stairs, live checks), but no camera
  *  placement (the headset is the camera), no DOM labels and no post pass (it can't run per eye). Live physics follows
  *  without holding the body back: in VR the body is wherever the person physically stands. */
@@ -2694,7 +2686,9 @@ function xrFrame(dt: number, t: number) {
   comparison.step(dt);
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
   if (!comparison.previewing()) labelStep();
+  xrHazardCards();
   liveChecks(t);
+  if (xrContactT > 0) { xrContactT -= dt; walker.setFrameRed(true); }   // after liveChecks, which sets the clearance colour each frame
   const helper = tc.getHelper(), helperVisible = helper.visible; helper.visible = false;
   vision.renderXR(); helper.visible = helperVisible;
   companion?.frame(t * 1000);
@@ -2732,7 +2726,7 @@ Object.assign(game, {
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
   debug: { renderer, scene, camera, marker: mk3d.root, stairs: stairs3d.root, spark: sparkR, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup],
-    vision, rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrSpawn: xr.spawn, xrButtons: xr.buttons, xrPanel: xr.panel, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
+    vision, rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrSpawn: xr.spawn, xrButtons: xr.buttons,xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); headTurn.yaw = 0; chairVel.v = chairVel.w = 0; Object.assign(body, { x, y, yaw }); },
@@ -2840,7 +2834,7 @@ Promise.all([json('version.json'), json('bundle.json')].map(p => p.catch(() => n
   document.body.append(el);
 });
 if (PARAMS.has('classic')) { for (const [n, p, s] of homes) p.insertBefore(n, s); document.body.classList.remove('frontend'); document.getElementById('frontend')!.hidden = true; document.getElementById('left')!.hidden = document.getElementById('right')!.hidden = false; }
-frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
+frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend, actions: () => xr.actions });
 game.frontend = frontend;
 game.frontendXR = frontendVR;
 // ---------- compare overlay + provenance floor (reimagine.ts, provenance.ts): two more layers, wired like the existing toggles ----------

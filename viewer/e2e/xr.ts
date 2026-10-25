@@ -135,6 +135,20 @@ try {
     Math.abs(Math.abs(bed1.pose.yaw - bed0.yaw) - Math.PI / 2) < 0.01 && !bed1.err && Math.abs(bed1.len - len0) > 0.01,
     `hover=${hov.hover} grab=${grabbed.grab}; bed (${bed0.x.toFixed(2)}, ${bed0.y.toFixed(2)}, ${(bed0.yaw * 180 / Math.PI).toFixed(0)}) -> (${bed1.pose.x.toFixed(2)}, ${bed1.pose.y.toFixed(2)}, ${(bed1.pose.yaw * 180 / Math.PI).toFixed(0)} deg), route ${len0.toFixed(2)} -> ${bed1.len?.toFixed(2)} m`);
 
+  // 6b. a drag onto a spot that collides (no filmed floor there) turns the held outline red; dropping it there leaves the bed where it was
+  await G(p, `__xr.aim(__xr.ctl('right'), ${JSON.stringify(await G(p, "return __xr.proxy('bed')"))})`);
+  await wait();
+  await G(p, "__xr.ctl('right').updateButtonValue('trigger', 1)");
+  await wait();
+  await G(p, `__xr.aim(__xr.ctl('right'), [-6, -6, 0])`);
+  await wait(400);
+  const blockedNow = await G(p, "const c = game.debug.items[game.items.indexOf('bed')].outline.material.color; return { r: c.r, g: c.g, b: c.b, grab: game.debug.wand().grab, valid: game.debug.wand().valid }");
+  await G(p, "__xr.ctl('right').updateButtonValue('trigger', 0)");
+  await wait(500);
+  const bedAfter = await G(p, "return game.layout().poses[game.items.indexOf('bed')]");
+  check('dragging onto a collision turns the held object red and a drop there puts it back', blockedNow.grab === 'bed' && blockedNow.r > 0.9 && blockedNow.g < 0.3 && blockedNow.valid === null &&
+    Math.hypot(bedAfter.x - bed1.pose.x, bedAfter.y - bed1.pose.y) < 0.01, `outline rgb (${blockedNow.r.toFixed(2)}, ${blockedNow.g.toFixed(2)}, ${blockedNow.b.toFixed(2)}), valid=${JSON.stringify(blockedNow.valid)}; bed (${bedAfter.x.toFixed(2)}, ${bedAfter.y.toFixed(2)}) vs (${bed1.pose.x.toFixed(2)}, ${bed1.pose.y.toFixed(2)})`);
+
   // 7. hold still on the nightstand for 1.5 s: it's deleted; the outline goes red first
   const ns = await G(p, "return __xr.proxy('nightstand')");
   await G(p, `__xr.aim(__xr.ctl('right'), ${JSON.stringify(ns)})`);
@@ -164,13 +178,11 @@ try {
   check('hand pinch teleports like the trigger', inputs.includes('right:hand') && Math.hypot(t2[0] - tp2[0], t2[1] - tp2[1]) < 0.15,
     `inputs ${inputs.join(' ')}; landed ${f2(t2)} for target ${f2(tp2)}`);
 
-  const press = async (hand: string, i = 0) => {
-    await G(p, `const b = game.debug.xrButtons()[${i}]; __xr.aim(__xr.hand('${hand}'), b.at)`);
-    await wait();
-    const hov = await G(p, 'return game.debug.wand().button');
-    await G(p, `__xr.hand('${hand}').updatePinchValue(1)`); await wait(150);
-    await G(p, `__xr.hand('${hand}').updatePinchValue(0)`);
-    return hov;
+  // the story actions live in the panel's Tour tab now (checked in 9b): press one as a point-and-pinch on its row would
+  const press = async (_hand: string, i = 0) => {
+    await G(p, `game.debug.xrPress(${i})`);
+    await wait(150);
+    return i;
   };
 
   // 8b. "Show me the dangers": each press stands you in front of the next hazard, on filmed floor, facing it, with what it
@@ -182,13 +194,12 @@ try {
     await wait(400);
     stops.push(await G(p, `const h = game.xrPose().head, c = game.debug.renderer.xr.getCamera(), V = game.debug.rig.position.constructor, d = c.getWorldDirection(new V()),
       s = game.spots()[${Math.min(k, nSpots - 1)}]; return { hv: ${hv}, text: game.debug.xrButtons()[0].text, head: h, cell: game.cell(h[0], h[1]),
-      card: (b => b.at ? Math.atan2(Math.sin(Math.atan2(b.at[1] - h[1], b.at[0] - h[0]) - Math.atan2(d.y, d.x)), Math.cos(Math.atan2(b.at[1] - h[1], b.at[0] - h[0]) - Math.atan2(d.y, d.x))) : 9)(game.debug.xrButtons()[0]),
       dist: Math.hypot(s.xy[0] - h[0], s.xy[1] - h[1]), off: Math.atan2(Math.sin(Math.atan2(s.xy[1] - h[1], s.xy[0] - h[0]) - Math.atan2(d.y, d.x)), Math.cos(Math.atan2(s.xy[1] - h[1], s.xy[0] - h[0]) - Math.atan2(d.y, d.x))) }`));
   }
   const tourOk = nSpots > 0 && stops.slice(0, nSpots).every((s, k) => s.text[0].startsWith(`${k + 1} of ${nSpots}:`) && s.cell.floor && !s.cell.obst && s.cell.cov > 0 &&
-    s.dist > 0.4 && s.dist < 2.1 && Math.abs(s.off) < 0.17 && s.card > 0.3 && s.card < 0.7) && stops[nSpots].text[0] === 'Show me the dangers';
-  check('"Show me the dangers" stands you in front of each hazard, the card off to the left', tourOk,
-    stops.slice(0, nSpots).map(s => `"${s.text[0]}" ${s.dist.toFixed(2)} m, ${(s.off * 180 / Math.PI).toFixed(0)} deg off, card ${(s.card * 180 / Math.PI).toFixed(0)} deg left`).join('; ') + ` -> "${stops[nSpots]?.text[0]}"`);
+    s.dist > 0.4 && s.dist < 2.1 && Math.abs(s.off) < 0.17) && stops[nSpots].text[0] === 'Show me the dangers';
+  check('"Show me the dangers" stands you in front of each hazard, facing it', tourOk,
+    stops.slice(0, nSpots).map(s => `"${s.text[0]}" ${s.dist.toFixed(2)} m, ${(s.off * 180 / Math.PI).toFixed(0)} deg off`).join('; ') + ` -> "${stops[nSpots]?.text[0]}"`);
 
   // 8c. "Night walk": the lights go down and the button offers them back
   await press('right', 1); await wait(300);
@@ -200,12 +211,12 @@ try {
 
   // Layout changes replan; the separate comparison is visual only and leaves the active checks untouched.
   const originalRoom = await G(p, 'return { layout: game.layout(), pm: game.current().per_month, len: game.current().length_m, actions: game.describeChanges() }');
-  const card0 = await G(p, 'const b = game.debug.xrButtons()[2], h = game.xrPose().head; return { ...b, d: b.at ? Math.hypot(b.at[0] - h[0], b.at[1] - h[1]) : null }');
+  const card0 = await G(p, 'return game.debug.xrButtons()[2]');
   await G(p, 'window.__ts = []; window.__ti = setInterval(() => __ts.push(game.reimagine.t()), 100)');
   const hov1 = await press('right', 2);
   await p.waitForFunction(() => { const g = (window as any).game; return g.debug.xrButtons()[2].text[0] === 'Restore my room' && g.reimagine.t() === 1; }, null, { timeout: 120000 });
   const saferRoom = await G(p, "clearInterval(__ti); return { layout: game.layout(), pm: game.current().per_month, evals: game.evals, n: game.reimagine.changes().length, mid: __ts.filter(v => v > 0.05 && v < 0.95).length }");
-  check('"See a safer room" applies a layout and morphs the room around you', card0.text[0] === 'See a safer room' && card0.d > 0.35 && card0.d < 0.9 && hov1 === 2 &&
+  check('"See a safer room" applies a layout and morphs the room around you', card0.text[0] === 'See a safer room' && hov1 === 2 &&
     saferRoom.n > 0 && saferRoom.mid >= 3, `${saferRoom.n} changes, ${saferRoom.mid} in-between frames`);
   await press('right', 3);
   await p.waitForFunction(() => (window as any).game.debug.xrComparison().previewT === 0, null, { timeout: 10000 });
@@ -272,26 +283,19 @@ try {
   const rest = await G(p, "return { gone: game.inventory(), bed: game.layout().poses[game.items.indexOf('bed')] }");
   check('both grips held reset everything', rest.gone.length === 0 && Math.hypot(rest.bed.x - bed0.x, rest.bed.y - bed0.y) < 0.01, `removed: [${rest.gone.join(', ')}], bed (${rest.bed.x.toFixed(2)}, ${rest.bed.y.toFixed(2)})`);
 
-  // 9b. Results panel: the desktop's numbers in the headset. "Results" swaps the story buttons for a header (press: next
-  // page), four rows and Close; on Fixes, "Work out the fixes" rolls them out and pointing at one applies it.
-  await G(p, "game.debug.xrPress(game.debug.xrButtons().findIndex(b => b.text[0] === 'Results'))");
-  await p.waitForTimeout(300);
-  const rp0 = await G(p, 'const b = game.debug.xrButtons(); return { shown: b.filter(x => x.at).map(x => x.text[0]), panel: game.debug.xrPanel() }');
-  const hdr = await G(p, "return game.debug.xrButtons().findIndex(b => b.text[0] === 'Safety on this route')");
-  for (let i = 0; i < 6 && (await G(p, `return game.debug.xrButtons()[${hdr}].text[0]`)) !== 'Fixes'; i++) { await G(p, `game.debug.xrPress(${hdr})`); await p.waitForTimeout(150); }
-  await G(p, `game.debug.xrPress(${hdr + 1})`);   // "Work out the fixes"
-  await p.waitForFunction(() => Array.isArray((window as any).game.fixes), null, { timeout: 30000 });
-  await p.waitForTimeout(300);
-  const fixRows = await G(p, `return game.debug.xrButtons().slice(${hdr + 1}, ${hdr + 5}).map(b => b.text)`);
-  const k = fixRows.findIndex((t: string[]) => t[2] === 'point here to apply');
-  const ch0 = await G(p, 'return game.reimagine.changes().length');
-  if (k >= 0) { await G(p, `game.debug.xrPress(${hdr + 1 + k})`); await p.waitForFunction(n => (window as any).game.reimagine.changes().length > n, ch0, { timeout: 30000 }); }
-  const ch1 = await G(p, 'return game.reimagine.changes().length');
-  await G(p, `game.debug.xrPress(${hdr + 5})`); await p.waitForTimeout(300);   // Close
-  const rp1 = await G(p, 'return { shown: game.debug.xrButtons().filter(x => x.at).map(x => x.text[0]), panel: game.debug.xrPanel() }');
-  check('results panel: pages of the desktop numbers; a fix applied from it; Close brings the story buttons back',
-    rp0.panel && rp0.shown[0] === 'Safety on this route' && /toe catches a month/.test(rp0.shown[1]) && k >= 0 && ch1 > ch0 && !rp1.panel && rp1.shown.includes('Results'),
-    `open: ${rp0.shown.slice(0, 3).join(' | ')}; fixes: ${fixRows.map((t: string[]) => t[0]).join(', ')}; applied "${fixRows[k]?.[0]}", changes ${ch0} -> ${ch1}; closed: ${rp1.shown.length} story buttons`);
+  // 9b. The view is empty until the panel opens: no button cards stand in the room and Results is gone. Holding the left
+  // stick opens ONE panel about 2 m out with tabs; its Tour tab lists the story actions; a second click closes it.
+  const idle = await G(p, 'return { shown: game.debug.xrButtons().filter(x => x.at).length, texts: game.debug.xrButtons().map(b => b.text[0]), open: game.frontendXR.isOpen() }');
+  await G(p, "__xr.ctl('left').updateButtonValue('thumbstick', 1)"); await wait(900);
+  await G(p, "__xr.ctl('left').updateButtonValue('thumbstick', 0)"); await wait(400);
+  const pan = await G(p, `const h = game.xrPose().head, r = game.frontendXR.root.position; return { open: game.frontendXR.isOpen(), d: Math.hypot(r.x - h[0], r.y - h[1]),
+    tabs: game.frontendXR.root.children.map(c => c.userData.label).slice(0, 5) }`);
+  await G(p, "__xr.ctl('left').updateButtonValue('thumbstick', 1)"); await wait(150);
+  await G(p, "__xr.ctl('left').updateButtonValue('thumbstick', 0)"); await wait(300);
+  const closed = await G(p, 'return game.frontendXR.isOpen()');
+  check('the view is empty until the panel opens; one tabbed panel stands about 2 m out', idle.shown === 0 && !idle.open && !idle.texts.includes('Results') && idle.texts.length >= 5 &&
+    pan.open && pan.d > 1.8 && pan.d < 2.2 && pan.tabs.join(',') === 'World,Vision,Device,Tour,More' && !closed,
+    `in the room: ${idle.shown} cards; panel ${pan.open ? 'open' : 'shut'} ${pan.d.toFixed(2)} m out, tabs ${pan.tabs.join('/')}, closed again=${!closed}; actions: ${idle.texts.join(' | ')}`);
 
   // 9. leaving VR puts the monitor back: DOM labels, performance mode as it was before entering
   await G(p, 'await game.debug.renderer.xr.getSession().end()');
