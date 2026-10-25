@@ -60,7 +60,7 @@ import { createEditLocks } from './edit-locks.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
 import type { Ghost } from './sim.ts';
 import type { WorldModel } from './worldmodel.ts';
-import { setupXR, type XrEditor } from './xr.ts';
+import { setupXR, type XrEditor, type XrPage, type XrRow } from './xr.ts';
 import { plainSpot, tourStand } from './xrtour.ts';
 import { createXRComparison } from './xrcompare.ts';
 import { createPlanFix } from './planfix.ts';
@@ -2611,6 +2611,29 @@ const wmButton = {
     } finally { wmBusy = false; }
   },
 };
+// ---------- results in the headset (xr.ts results panel): the desktop panels' numbers, page by page ----------
+const n1 = (x: number) => x.toFixed(x > 0 && x < 0.05 ? 2 : 1);
+function xrResults(): XrPage[] {
+  const ev = current && !current.error ? current : null, base = baseEvals[selRoute] ?? null, ch = reim.changes(), who = personas[personaKey]?.label ?? personaKey;
+  const safety: XrRow[] = ev ? [
+    { text: () => [`${n1(ev.per_month)} toe catches a month`, `likely ${n1(ev.per_month_lo)}-${n1(ev.per_month_hi)} · ${who}`, 'simulated over all the routes'] },
+    ...(base && ch.length ? [{ text: () => [`As scanned: ${n1(base.per_month)} a month`, `${ch.length} change${ch.length === 1 ? '' : 's'}: ${base.per_month > 0 ? Math.round(100 * (base.per_month - ev.per_month) / base.per_month) : 0}% fewer`] }] : []),
+    ...ev.routes.map(r => ({ text: () => [`${r.name}: ${n1(r.per_month)} a month`, `${r.trips_per_night} trip${r.trips_per_night === 1 ? '' : 's'} a night · ${r.length_m.toFixed(1)} m${r.min_side_m !== undefined ? ` · tightest ${(r.min_side_m * 100).toFixed(0)} cm a side` : ''}`] })),
+  ] : [{ text: () => ['No numbers yet', current?.error ?? 'the route is still being worked out'] }];
+  const hazards: XrRow[] = spotList.length ? [...spotList].sort((a, b) => b.severity - a.severity).map(sp => ({ text: () => [sp.label, sp.detail] })) : [{ text: () => ['No hazards on this route'] }];
+  const fx = game.fixes as any[] | undefined, ivOf = (id: string) => interventions.find(i => i.id === id);
+  const fixes: XrRow[] = !fx ? [{ text: () => ['Work out the fixes', 'tries each fix on this route alone', 'point here (a few seconds)'], tone: () => 'go' as const, press: () => $('planfixes').click() }]
+    : !fx.length ? [{ text: () => ['No fixes for this route'] }]
+    : [...fx].sort((a, b) => b.reduction - a.reduction).map(f => ({
+      text: () => [f.label, f.error ? 'blocks the route' : `${n1(Math.max(0, f.reduction))} fewer a month · $${ivOf(f.id)?.cost_usd ?? '?'}${ivOf(f.id)?.minutes ? `, ${ivOf(f.id)!.minutes} min` : ''}`, applied.includes(f.id) ? 'applied' : f.error ? '' : 'point here to apply'],
+      tone: () => (applied.includes(f.id) || f.error ? 'plain' as const : 'go' as const), press: () => { if (!f.error && !applied.includes(f.id)) return applyFix(f.id); } }));
+  const checks: XrRow[] = ev?.checks.length ? ev.checks.map(c => ({ text: () => [c.label, `${c.verdict}${c.note ? `: ${c.note}` : ''}`], tone: () => (c.verdict === 'ok' ? 'go' as const : c.verdict === 'fail' ? 'busy' as const : 'plain' as const) })) : [{ text: () => ['No checks for this room'] }];
+  const usd = ch.reduce((t, c) => t + (c.cost?.usd ?? 0), 0), mins = ch.reduce((t, c) => t + (c.cost?.minutes ?? 0), 0);
+  const changes: XrRow[] = ch.length ? [{ text: () => [`${ch.length} change${ch.length === 1 ? '' : 's'}: $${Math.round(usd)}`, `about ${Math.round(mins)} min in all`] },
+    ...ch.map(c => ({ text: () => [c.label, `$${Math.round(c.cost?.usd ?? 0)} · ${Math.round(c.cost?.minutes ?? 0)} min · ${c.cost?.helpers ?? 0} helper${c.cost?.helpers === 1 ? '' : 's'}`] }))] : [{ text: () => ['No changes yet', 'move furniture or apply a fix'] }];
+  return [{ title: 'Safety on this route', rows: safety }, { title: 'Hazards on this route', rows: hazards }, { title: 'Fixes', rows: fixes },
+    { title: 'Transfers, reach, emergencies', rows: checks }, { title: 'Changes and cost', rows: changes }];
+}
 const dangersButton = {
   text() {
     const n = spotList.length;
@@ -2629,7 +2652,7 @@ const dangersButton = {
 const xr = await setupXR({
   renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses,
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
-  commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m, walkerFits: canPlace, walkerCentre: () => centreOffset,
+  commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m, walkerFits: canPlace, walkerCentre: () => centreOffset, results: xrResults,
   lock: k => editLocks.acquire(String(k), 'vr'), unlock: k => editLocks.release(String(k), 'vr'),
   resetObject, resetAll, editor: markerXR, readOnly: () => game.sessionBusy || comparison.previewing(), movement: () => game.comfort?.movement ?? 'all', eyeHeight: () => game.comfort?.seated ? persona.eye_height_m : undefined, hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { lines: hintLines(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
   startPose() {   // stay if this floor is seen as well as the route's median spot; else the first such point along the route
@@ -2709,7 +2732,7 @@ Object.assign(game, {
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
   debug: { renderer, scene, camera, marker: mk3d.root, stairs: stairs3d.root, spark: sparkR, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup],
-    vision, rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrSpawn: xr.spawn, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
+    vision, rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrSpawn: xr.spawn, xrButtons: xr.buttons, xrPanel: xr.panel, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); headTurn.yaw = 0; chairVel.v = chairVel.w = 0; Object.assign(body, { x, y, yaw }); },

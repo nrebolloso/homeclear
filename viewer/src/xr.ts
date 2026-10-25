@@ -60,6 +60,8 @@ export interface XrHost {
    *  its frame's centre is (walker.json legs), the point a mounted snap-turn spins it about */
   walkerFits?(b: { x: number; y: number; yaw: number }): boolean;
   walkerCentre?(): number;
+  /** the results panel's pages (toe catches, hazards, fixes, checks, changes), rebuilt while it is open */
+  results?(): XrPage[];
   eyeHeight?(): number | undefined;
   /** The planning shell (frontend-xr.ts) lays a menu over the wand: it can swallow a trigger press, freeze locomotion while
    *  its menu is open, drive the body along the route, and hears which furniture the wand points at. */
@@ -70,6 +72,9 @@ export interface XrShell {
   open(): boolean; follow(dt: number): boolean; hover(k: number): void;
 }
 export interface XrButton { text(): string[]; press(): unknown; tone?(): 'go' | 'busy' | 'plain' }
+/** a page of the results panel: the desktop panels' numbers as rows (a row with press() acts, e.g. applies a fix) */
+export type XrRow = Omit<XrButton, 'press'> & { press?(): unknown };
+export interface XrPage { title: string; rows: XrRow[] }
 export interface XrEditor {
   active(): boolean;
   down(ray: THREE.Ray, rotation: THREE.Quaternion): boolean;
@@ -243,7 +248,7 @@ export async function setupXR(host: XrHost) {
         prog = holdProgress((performance.now() - grab.t0) / 1000, grab.drag);
         if (prog >= 1) { const k = grab.k; grab = null; Promise.resolve(host.remove(k)).finally(() => host.unlock?.(k)); prog = -1; }
       } else {
-        const bh = dash.visible ? wandRay.intersectObjects(btns.map(x => x.mesh))[0] : undefined;   // buttons sit in front of the room
+        const bh = dash.visible ? wandRay.intersectObjects(btns.filter(x => x.mesh.visible).map(x => x.mesh))[0] : undefined;   // buttons sit in front of the room
         btnHover = bh ? btns.findIndex(x => x.mesh === bh.object) : -1;
         const poses = host.poses();
         const hit = bh || host.readOnly?.() ? undefined : wandRay.intersectObjects(items.filter((_, k) => !poses[k].removed).map(i => i.proxy))[0];
@@ -270,7 +275,26 @@ export async function setupXR(host: XrHost) {
   dash.visible = false;
   scene.add(dash);
   const lineUp: XrButton = { text: () => ['Line up the walker', 'stand behind it facing its way, then pinch'], tone: () => 'plain', press: unmount };
-  const btns = [...(host.buttons ?? []), ...(MOUNT ? [lineUp] : [])].map((b, i) => {
+  // the results panel: a "Results" button swaps the story buttons for a header (press: next rows / next page), four rows
+  // and Close, raised to eye height; the pages come from the host each time they are drawn, so the numbers stay live
+  const PANEL_ROWS = 4;
+  let panel: { page: number; from: number } | null = null;
+  const pages = () => host.results?.() ?? [];
+  function panelRow(i: number): XrRow | null {
+    const ps = pages();
+    if (!panel || !ps.length) return null;
+    const pg = ps[panel.page % ps.length], more = pg.rows.length > panel.from + PANEL_ROWS;
+    if (i === 0) return { text: () => [pg.title, `page ${panel!.page % ps.length + 1} of ${ps.length}${pg.rows.length > PANEL_ROWS ? ` · ${panel!.from + 1}-${Math.min(pg.rows.length, panel!.from + PANEL_ROWS)} of ${pg.rows.length}` : ''}`, more ? 'point here: more' : 'point here: next page'], tone: () => 'go', press: () => { if (more) panel!.from += PANEL_ROWS; else panel = { page: panel!.page + 1, from: 0 }; } };
+    if (i === PANEL_ROWS + 1) return { text: () => ['Close results'], press: () => { panel = null; } };
+    return pg.rows[panel.from + i - 1] ?? null;
+  }
+  const results: XrButton = { text: () => ['Results', 'toe catches, hazards, fixes, checks'], tone: () => 'plain', press: () => { panel = { page: 0, from: 0 }; } };
+  const panelSlots: XrButton[] = Array.from({ length: PANEL_ROWS + 2 }, (_, i) => ({
+    text: () => panelRow(i)?.text() ?? [''], tone: () => panelRow(i)?.tone?.() ?? 'plain', press: () => panelRow(i)?.press?.(),
+  }));
+  const story = [...(host.buttons ?? []), ...(host.results ? [results] : []), ...(MOUNT ? [lineUp] : [])];
+  const btns = [...story, ...(host.results ? panelSlots : [])].map((b, n) => {
+    const i = n < story.length ? n : n - story.length;   // panel slots stack from the top like the story buttons
     const cv = document.createElement('canvas');
     cv.width = 768; cv.height = 250;
     const tex = new THREE.CanvasTexture(cv);
@@ -307,7 +331,7 @@ export async function setupXR(host: XrHost) {
     const turned = Math.abs(Math.atan2(Math.sin(yaw - anchor.yaw), Math.cos(yaw - anchor.yaw))) > 0.7;
     if (!anchor.set || turned || Math.hypot(head.x - anchor.x, head.y - anchor.y) > 0.6) Object.assign(anchor, { x: head.x, y: head.y, yaw, set: true });
     const a = anchor.yaw + 0.5, d = 0.7;   // 0.7 m out, about 29 deg to the left of where you faced: off the line you look along
-    dash.position.set(anchor.x + Math.cos(a) * d, anchor.y + Math.sin(a) * d, Math.max(0.8, head.z - 0.3));   // the top button; the rest stack down
+    dash.position.set(anchor.x + Math.cos(a) * d, anchor.y + Math.sin(a) * d, panel ? head.z + 0.1 : Math.max(0.8, head.z - 0.3));   // the top button; the rest stack down
     dash.lookAt(head.x, head.y, head.z);   // three's lookAt points +z at the eyes (tilted back, read square-on); -y faces you after:
     dash.rotateX(-Math.PI / 2);
   }
@@ -430,7 +454,14 @@ export async function setupXR(host: XrHost) {
     controllerButtons(dt, pads);
     dash.visible = btns.length > 0 && !host.editor?.active();
     wandStep();
-    if (btns.length) { placeDash(yaw); drawButtons(btnHover); }
+    if (btns.length) {
+      let row = 0;   // a short page packs its rows together, Close right under the last one
+      btns.forEach((x, n) => {
+        x.mesh.visible = n < story.length ? !panel : !!panel && !!panelRow(n - story.length);
+        if (n >= story.length && x.mesh.visible) x.mesh.position.z = -(row++) * (BH + GAP);
+      });
+      placeDash(yaw); drawButtons(btnHover);
+    }
   }
   /** Put the head at floor-frame (x, y) looking along yaw by moving the rig: scripted viewpoints on a headset nobody wears. */
   function place(x: number, y: number, yaw: number) {
@@ -451,7 +482,7 @@ export async function setupXR(host: XrHost) {
       Object.assign(xrRig, { x: body.x, y: body.y, yaw: body.yaw }); placeRig(); rig.add(camera);
       lastSpawn = { x: body.x, y: body.y, yaw: body.yaw };
       pendingSpawn = { ...lastSpawn }; camera.position.set(0, 0, 0); camera.quaternion.identity();
-      anchor.set = false; dash.visible = btns.length > 0; unmount();
+      anchor.set = false; dash.visible = btns.length > 0; unmount(); panel = null;
       host.enter(tier);
       // a lower refresh gives each frame more time (90 Hz = 11.1 ms, 72 Hz = 13.9 ms); the Quest 2 offers 60-120
       if (cfg.hz) renderer.xr.getSession()?.updateTargetFrameRate?.(cfg.hz).catch(() => {});
@@ -480,7 +511,9 @@ export async function setupXR(host: XrHost) {
     pose: () => ({ xr: renderer.xr.isPresenting, head: w(renderer.xr.getCamera()), userCam: w(camera), rig: { ...xrRig },
       inputs: [...renderer.xr.getSession()?.inputSources ?? []].map(s => `${s.handedness}:${s.hand ? 'hand' : 'controller'}`), pinching: pinching.size }),
     /** the button card: each button's text and where its centre is (floor frame), for scripted presses */
-    buttons: () => btns.map(x => ({ text: x.b.text(), at: dash.visible ? w(x.mesh) : null })),
+    buttons: () => btns.map(x => ({ text: x.b.text(), at: dash.visible && x.mesh.visible ? w(x.mesh) : null })),
+    /** the results panel: open or not, its page and first row */
+    panel: () => (panel ? { ...panel } : null),
     /** press a card button as a pinch on it would (scripted checks on a headset nobody wears) */
     press: (i: number) => btns[i]?.b.press(),
     /** the strip card on the off-hand controller: its words and whether it shows */

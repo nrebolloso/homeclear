@@ -240,6 +240,12 @@ gap everywhere means the floor (fix with `?floor=`), a gap only at one object me
    behind it). Any mount angle works (it tracks the controller's most level axis), so a handle-down cup holder is fine.
    Snap-turn spins the walker about its centre (`centreOffset`, 0.5 m ahead of the body for the kitchen walker); a turn or
    step that puts a leg into furniture or off filmed floor is refused (turn: buzz). `e2e:xr` 34/34. Needs a real-walker try.
+13. **Results panel in the headset (2026-10-25, ours; Juan's room menu may cover the same, pick one together):** a
+   "Results" card button swaps the story buttons for 5 pages: safety on this route (toe catches/month with the range, each
+   route's trips a night, length and tightest gap), hazards (by severity), fixes ("Work out the fixes", then point at one to
+   apply it), transfers/reach/emergencies (checks with verdicts), changes and cost. The header flips pages, 4 rows at a
+   time, Close brings the story buttons back. Data: `main.ts` `xrResults()`; drawing: `xr.ts` (same cards as the story
+   buttons). `e2e:xr` 35/35.
 10. Tell Juan (security review of `viewer/session-plugin.ts`, the companion relay): a device is known only by the
    `client` name in its URL, and those names are sent to every device, so anyone who can reach the dev server can post
    as another device (even the headset host). Fine on `127.0.0.1` and over adb; not with `--host` on a shared network.

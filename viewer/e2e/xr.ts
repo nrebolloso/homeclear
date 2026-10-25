@@ -272,6 +272,27 @@ try {
   const rest = await G(p, "return { gone: game.inventory(), bed: game.layout().poses[game.items.indexOf('bed')] }");
   check('both grips held reset everything', rest.gone.length === 0 && Math.hypot(rest.bed.x - bed0.x, rest.bed.y - bed0.y) < 0.01, `removed: [${rest.gone.join(', ')}], bed (${rest.bed.x.toFixed(2)}, ${rest.bed.y.toFixed(2)})`);
 
+  // 9b. Results panel: the desktop's numbers in the headset. "Results" swaps the story buttons for a header (press: next
+  // page), four rows and Close; on Fixes, "Work out the fixes" rolls them out and pointing at one applies it.
+  await G(p, "game.debug.xrPress(game.debug.xrButtons().findIndex(b => b.text[0] === 'Results'))");
+  await p.waitForTimeout(300);
+  const rp0 = await G(p, 'const b = game.debug.xrButtons(); return { shown: b.filter(x => x.at).map(x => x.text[0]), panel: game.debug.xrPanel() }');
+  const hdr = await G(p, "return game.debug.xrButtons().findIndex(b => b.text[0] === 'Safety on this route')");
+  for (let i = 0; i < 6 && (await G(p, `return game.debug.xrButtons()[${hdr}].text[0]`)) !== 'Fixes'; i++) { await G(p, `game.debug.xrPress(${hdr})`); await p.waitForTimeout(150); }
+  await G(p, `game.debug.xrPress(${hdr + 1})`);   // "Work out the fixes"
+  await p.waitForFunction(() => Array.isArray((window as any).game.fixes), null, { timeout: 30000 });
+  await p.waitForTimeout(300);
+  const fixRows = await G(p, `return game.debug.xrButtons().slice(${hdr + 1}, ${hdr + 5}).map(b => b.text)`);
+  const k = fixRows.findIndex((t: string[]) => t[2] === 'point here to apply');
+  const ch0 = await G(p, 'return game.reimagine.changes().length');
+  if (k >= 0) { await G(p, `game.debug.xrPress(${hdr + 1 + k})`); await p.waitForFunction(n => (window as any).game.reimagine.changes().length > n, ch0, { timeout: 30000 }); }
+  const ch1 = await G(p, 'return game.reimagine.changes().length');
+  await G(p, `game.debug.xrPress(${hdr + 5})`); await p.waitForTimeout(300);   // Close
+  const rp1 = await G(p, 'return { shown: game.debug.xrButtons().filter(x => x.at).map(x => x.text[0]), panel: game.debug.xrPanel() }');
+  check('results panel: pages of the desktop numbers; a fix applied from it; Close brings the story buttons back',
+    rp0.panel && rp0.shown[0] === 'Safety on this route' && /toe catches a month/.test(rp0.shown[1]) && k >= 0 && ch1 > ch0 && !rp1.panel && rp1.shown.includes('Results'),
+    `open: ${rp0.shown.slice(0, 3).join(' | ')}; fixes: ${fixRows.map((t: string[]) => t[0]).join(', ')}; applied "${fixRows[k]?.[0]}", changes ${ch0} -> ${ch1}; closed: ${rp1.shown.length} story buttons`);
+
   // 9. leaving VR puts the monitor back: DOM labels, performance mode as it was before entering
   await G(p, 'await game.debug.renderer.xr.getSession().end()');
   await p.waitForFunction(() => !(window as any).game.xr, null, { timeout: 5000 }).catch(() => {});
