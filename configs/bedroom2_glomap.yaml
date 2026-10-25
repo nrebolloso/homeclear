@@ -35,6 +35,10 @@ clean:
   floater_min_neighbours: 8
   lighter_crop_m: 0.3   # viewer-only: blobs past the floor grid ringed the room from above
   lighter_air: {min_opacity: 0.4, max_scale_m: 0.04}   # viewer-only: faint/large haze above the floor band (nicoroom1 values)
+  # viewer-only: only the floor-band rule (keep_max_scale_m) bites; > 15 cm Gaussians in and under the floor band (2.6% of
+  # main, 2.3k of them under the floor) drew the white streaks across the room at eye height. min_solid 0: the air is lighter_air's
+  lighter_support: {radius_m: 0.08, min_solid: 0, max_scale_m: 0.04, keep_max_scale_m: 0.15}
+  lighter_carve: {}   # viewer-only: haze the capture cameras looked through to a solid surface (freespace.carve; dropped the red smear)
 floor:
   ransac_iters: 2000
   inlier_m: 0.02

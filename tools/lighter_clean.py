@@ -87,6 +87,8 @@ def main():
     drop = np.zeros(len(v), bool) if raw else ((neighbours(p) < MIN_NEIGHBOURS) & (p[:, 2] > FLOOR_BAND_M)) | (p[:, 2] > ceiling)
     if not raw and cfg["clean"].get("lighter_camera_clear_m"):   # fog in the air the phone moved through (freespace.py)
         drop |= cKDTree(freespace.camera_path(Path(cfg["work_dir"]))).query(p)[0] < cfg["clean"]["lighter_camera_clear_m"]
+    if not raw and cfg["clean"].get("lighter_carve") is not None:   # haze the cameras looked through (freespace.carve)
+        drop |= freespace.carve(Path(cfg["work_dir"]), p, p[freespace.solid(v)], **cfg["clean"]["lighter_carve"])
     big = cfg["clean"].get("lighter_big_above")   # {z, scale_m}: streaks in air the capture never filmed (an upper floor's ceiling)
     if not raw and big:
         drop |= (p[:, 2] > big["z"]) & (np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)).max(1) > big["scale_m"])
