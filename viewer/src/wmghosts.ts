@@ -241,7 +241,8 @@ export function createWmGhosts(D: WmGhostDeps) {
         a.flashT = Math.max(0, a.flashT - dt);
         a.look.flash(a.flashT > 0);
         const body = place(a, Math.max(0, sa)), k = Math.max(0, a.next - 1);
-        const lines = [a.name, `${a.catches.toFixed(2)} toe catches/month`, ...(a.flashT > 0 ? [`caught: ${a.trip[k] && caught(a.trip[k])}`] : []), TAG], key = lines.join('|');
+        // the toe clearance goes on the label itself: in the headset this sprite is the only place the numbers show (#wgstatus is desktop DOM)
+        const lines = [a.name, `${a.catches.toFixed(2)} toe catches/month`, `toe clearance ×${a.lift.toFixed(2)}`, ...(a.flashT > 0 ? [`caught: ${a.trip[k] && caught(a.trip[k])}`] : []), TAG], key = lines.join('|');
         if (a.label?.userData.key !== key) { untag(a.label); a.label = tag(lines, n ? '#ffd9a8' : '#bfeaff'); a.label.userData.key = key; }
         a.label.position.set(body.x, body.y, 2.05 + 0.3 * n);   // two labels never sit on each other
       });

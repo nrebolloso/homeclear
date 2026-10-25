@@ -2628,7 +2628,7 @@ const WM_NEXT = [['World model: two walking styles', 'imagined, life-size, from 
   ['World model: imagined futures', 'now: a month of trips'], ['Hide the world model', 'now: imagined futures as you walk']];
 const wmButton = {
   text: () => (wmBusy ? ['Imagining...', 'world model'] : wmNone ? ['World model', 'no planner data for this scene'] : WM_NEXT[wmStep]),
-  tone: () => (wmBusy ? 'busy' as const : 'plain' as const),
+  tone: () => (wmBusy ? 'busy' as const : 'plain' as const), ring: true,   // on the wand ring, not behind "More": Average vs Shuffler is the demo's opener
   async press() {
     if (wmBusy || wmNone) return;
     wmBusy = true;
