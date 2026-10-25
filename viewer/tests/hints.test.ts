@@ -40,7 +40,7 @@ test('marking shows the step and the placing keys; VR uses the controller', () =
 test('VR: mounted walks along the walker, free walks with sticks, pointing at an object offers move, delete, reset', () => {
   assert.deepEqual(keys({ device: 'vr', mounted: true }).slice(0, 2), ['Stick ↑↓', 'Stick ←→']);
   assert.deepEqual(keys({ device: 'vr' }).slice(0, 2), ['Left stick', 'Right stick']);
-  assert.deepEqual(keys({ device: 'vr', selected: true }), ['Trigger', 'A', 'Grip']);
+  assert.deepEqual(keys({ device: 'vr', selected: true }), ['Trigger', 'Hold A', 'Grip']);
   assert.deepEqual(controlHints(ctx({ device: 'vr', selected: true })).chips.map(k => k.text), ['move', 'delete', 'reset']);
 });
 test('VR shows at most VR_CHIPS rows, and every VR walk state names the menu', () => {
@@ -51,8 +51,8 @@ test('VR shows at most VR_CHIPS rows, and every VR walk state names the menu', (
 test('hint lines: label, then chips on one line; hint rows: one row per chip', () => {
   const h = controlHints(ctx({ device: 'vr', selected: true }));
   const l = hintLines(h);
-  assert.equal(l.length, 2); assert.match(l[1], /Trigger move · A delete · Grip reset/);
-  assert.deepEqual(hintRows(h).rows, [{ key: 'Trigger', text: 'move' }, { key: 'A', text: 'delete' }, { key: 'Grip', text: 'reset' }]);
+  assert.equal(l.length, 2); assert.match(l[1], /Trigger move · Hold A delete · Grip reset/);
+  assert.deepEqual(hintRows(h).rows, [{ key: 'Trigger', text: 'move' }, { key: 'Hold A', text: 'delete' }, { key: 'Grip', text: 'reset' }]);
   assert.equal(hintRows(h).label, 'Pointing at an object');
 });
 test('status pills: persona, view, mode, and the marking step first', () => {

@@ -45,7 +45,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
     const ctx = canvas.getContext('2d')!;
     ctx.fillStyle = accent ? '#244a46' : '#18252f'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = accent ? '#49d4c7' : '#455b6b'; ctx.lineWidth = 4; ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
-    const lines = text.split('\n').flatMap(line => line.match(/.{1,42}(?:\s|$)|.{1,42}/g)?.map(s => s.trim()) ?? ['']), font = Math.min(60, (canvas.height - 28) / lines.length * .68);
+    const lines = text.split('\n').flatMap(line => line.match(/.{1,34}(?:\s|$)|.{1,34}/g)?.map(s => s.trim()) ?? ['']), font = Math.min(76, (canvas.height - 28) / lines.length * .82);
     ctx.font = `600 ${font}px system-ui`; ctx.fillStyle = accent ? '#bafff4' : '#e8f2f8'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     lines.forEach((line, i) => ctx.fillText(line, 512, canvas.height / 2 + (i - (lines.length - 1) / 2) * (font * 1.5), 960));
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
@@ -129,7 +129,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
   }
   // The panel is a wall screen, not a hand-held card: 2 m out, level with the eyes, standing where you faced when it opened
   // and staying there (it does not follow your head). Yaw only: it stays upright however you tilt your head.
-  const PANEL_DIST = 2.0, PANEL_SCALE = 1.55, PANEL_DROP = .05;
+  const PANEL_DIST = 2.0, PANEL_SCALE = 2.3, PANEL_DROP = .05;
   const basis = new THREE.Matrix4(), bx = new THREE.Vector3(), by = new THREE.Vector3(0, 0, 1), bz = new THREE.Vector3();
   function open() {
     D.camera.getWorldPosition(v); D.camera.getWorldDirection(dir);
@@ -144,7 +144,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
   onThree(D.renderer.xr, 'sessionstart', () => { document.body.classList.add('xr-active'); close(); });
   onThree(D.renderer.xr, 'sessionend', () => { document.body.classList.remove('xr-active'); close(); inspectionRoot.visible = false; fade.visible = false; transition = null; consumed.clear(); stickWas = false; });
   return {
-    root, inspectionRoot, open, close, notify(text: string) { notice = text; fingerprint = ''; toastRoot.clear(); toastResources.splice(0).forEach(r => r.dispose()); tile(text, 0, 0, .8, .13, undefined, false, toastRoot); toastUntil = performance.now() + 4500; }, showPage(name: string) { go(name); open(); }, isOpen: () => root.visible,
+    root, inspectionRoot, open, close, notify(text: string) { notice = text; fingerprint = ''; toastRoot.clear(); toastResources.splice(0).forEach(r => r.dispose()); tile(text, 0, 0, .8, .13, undefined, false, toastRoot); toastRoot.scale.setScalar(1.6); toastUntil = performance.now() + 4500; }, showPage(name: string) { go(name); open(); }, isOpen: () => root.visible,
     transition(task: () => void) { transition = { start: performance.now(), task }; fade.visible = true; },
     activate(controller: THREE.XRTargetRaySpace) {
       if (!root.visible) return false;
@@ -170,7 +170,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
           const title = item.title.match(/.{1,42}(?:\s|$)|.{1,42}/g)?.map(s => s.trim()).join('\n') ?? item.title;
           const cost = item.change ? item.change.cost.source === 'placeholder' ? 'Cost & installation: pending estimate' : `$${item.change.cost.usd} · ${item.change.cost.minutes} min · ${item.change.cost.helpers} helper(s)` : 'Finding for occupational therapist review';
           tile(`${title}\n${item.detail.slice(0, 90)}\n${cost}\nMenu: Findings to flag or save`, 0, 0, .7, .25, undefined, false, inspectionRoot);
-          inspectionRoot.position.set(item.at[0], item.at[1], 1.15);
+          inspectionRoot.position.set(item.at[0], item.at[1], 1.3); inspectionRoot.scale.setScalar(1.6);
         }
         inspectionRoot.quaternion.copy(D.camera.getWorldQuaternion(new THREE.Quaternion()));
       }
