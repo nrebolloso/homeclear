@@ -20,7 +20,7 @@ import { createHeatOverlay, nights, drawTimeline } from './heat.ts';
 import { buildMannequin, feetAt, type Step } from './mannequin.ts';
 import { loadRigged } from './rig.ts';
 import { createLivePhys, type LivePhys } from './livephys.ts';
-import { createLockstep, demoSeed, TICK_S } from './demorun.ts';
+import { createLockstep, demoSeed, gaitSeed, TICK_S } from './demorun.ts';
 import { initClips, exportForCosmos, listClips, type ExportOpts } from './cosmos.ts';
 import { layoutKey } from './prerender.ts';
 import { drawTopdown } from './topdown.ts';
@@ -68,6 +68,7 @@ import { createPlanFix } from './planfix.ts';
 import { createGaitFit } from './gaitfit.ts';
 import { createWmGhosts } from './wmghosts.ts';
 import { createFuturesFan } from './futuresfan.ts';
+import { createGaitGhosts } from './gaitghosts.ts';
 import { createRoundTrip } from './roundtrip.ts';
 import { createRugCascade, P_FOLD } from './rugcascade.ts';
 
@@ -915,7 +916,8 @@ $('gfreplan').onclick = () => gait.replan();
 game.gait = gait;   // VR: feed game.gait.observe() per heel strike, hang game.gait.panel / show game.gait.ghost (HANDOFF_GAIT.md)
 // ---------- world model in the kitchen (wmghosts.ts): two gait styles life-size, futures fan, predicted self, a month of trips ----------
 // in VR you stay where you stand (setFly would switch the desktop to fly mode and turn the walker under you)
-const wmg = createWmGhosts({ scene, walker: () => walkerCfg, planfix, view: () => { if (!renderer.xr.isPresenting) game.setFly(-0.7, -2.3, 2.3, 55, -36); } });
+let manOn = PARAMS.has('mannequin');   // the mannequin is off for now (the gait ghosts, gaitghosts.ts, replace it): ?mannequin[=basic] or the Gait panel's box brings it back
+const wmg = createWmGhosts({ scene, walker: () => walkerCfg, planfix, mannequin: () => manOn, view: () => { if (!renderer.xr.isPresenting) game.setFly(-0.7, -2.3, 2.3, 55, -36); } });
 $('wgstyles').onclick = () => wmg.twoStyles();
 $('wgstyle').onchange = () => wmg.twoStyles();
 $('wgmonth').onclick = () => wmg.month();
@@ -1657,13 +1659,25 @@ $('fanmodel').onchange = e => fanFan.setModel((e.target as HTMLSelectElement).va
 $('fanstyle').onchange = e => fanFan.setStyle((e.target as HTMLSelectElement).value);
 $('fanlift').onchange = e => fanFan.setLift((e.target as HTMLSelectElement).value as 'average' | 'shuffler');
 game.fan = { ...fanFan, tapeMat: () => tapeObject('mat') };   // VR: bind a button to game.fan.set(!game.fan.on())
+// ---------- walking gait ghosts (gaitghosts.ts; gaitplan.ts in fanworker.ts): one ghost per gait, each its own way round the mat ----------
+let gaitFor: unknown = null, gaitSc: any = null;
+const gaitGhosts = createGaitGhosts({ scene, walker: () => walkerCfg, worldModel,
+  fanScene: () => (gaitFor === persona ? gaitSc : (gaitFor = persona, gaitSc = { g, base, est, objects: objs, persona, risk, rules: sc.hazard_rules, plan: init.plan })),
+  route: () => (current && !current.error ? current.xy : null), layout: () => layout, fold: () => live?.fold() ?? layout.folds?.[0] ?? null,
+  night: () => routes[selRoute].night, seed: SEED, defaultSeed: gaitSeed(RUN),
+  onToggle: on => { if (on) { ghostDots.visible = false; $<HTMLInputElement>('ghosts').checked = false; $<HTMLInputElement>('gaittraces').checked = false; } },   // the walks replace the path traces
+  view: () => { if (!renderer.xr.isPresenting) game.setFly(-0.7, -2.3, 2.3, 55, -36); } });
+gaitGhosts.bind(); $<HTMLInputElement>('gaitman').checked = manOn;
+$('gaittraces').onchange = e => { ghostDots.visible = (e.target as HTMLInputElement).checked; $<HTMLInputElement>('ghosts').checked = ghostDots.visible; };
+$('gaitman').onchange = e => { manOn = (e.target as HTMLInputElement).checked; };
+game.gaitGhosts = gaitGhosts;
 // ---------- deterministic demo autoplay (demorun.ts): lockstep clock while seeded; Reset demo ----------
 const lockstepOn = () => SEED !== null && mode === 'auto' && !xr.presenting();
 const lock = createLockstep(() => (live?.idle() ?? true) && fanFan.idle(TICK_S) && game.pending() === 0, () => lockstepOn() && !game.manual);
 /** the demo's starting state: every object as scanned (no tape, moves, removals, folds, fixes), a fresh physics world on
  *  the same seed, fan off, planner replay stopped, autoplay from the route's start */
 async function resetDemo() {
-  planfix.stop(); fanFan.set(false); rugCascade.reset();
+  planfix.stop(); fanFan.set(false); gaitGhosts.set(false); rugCascade.reset();
   for (let k = 0; k < 2; k++) await new Promise(r => requestAnimationFrame(r));   // the replay's last glide frame lands first
   $('pfresult').innerHTML = ''; $('pfoptions').innerHTML = ''; $('physevents').innerHTML = ''; live?.events.splice(0);
   await resetAll();
@@ -2520,6 +2534,7 @@ function step(dt: number, t: number, draw = true) {
   tourStep(dt);
   wmg.update(dt);
   fanFan.update(dt);
+  gaitGhosts.update(dt);
   const wb = walkerPose();
   walker.group.position.set(wb.x, wb.y, 0);
   walker.group.rotation.z = wb.yaw;
@@ -2537,7 +2552,7 @@ function step(dt: number, t: number, draw = true) {
   markStep(); grabStep();
   const showMan = view.third && mode === 'auto' && heroSteps.length > 0 && trip.leg() === 'out';   // the inbound leg isn't simulated: no hero steps
   const seatedMan = isChair() && mode === 'free' && !explore.on;   // driving: the person sits in the chair; first person has no head in the way
-  mannequin.group.visible = showMan || seatedMan;
+  mannequin.group.visible = (showMan || seatedMan) && manOn;
   mannequin.head.visible = !seatedMan || view.third;
   stepCloudUpdate(showMan);
   if (isChair() && (showMan || seatedMan)) { manPose = mannequin.seated(body, SEAT_Z, walkerCfg.legs[0][1] + 0.025, { x: walkerCfg.legs[0][0], z: WHEEL_R, r: WHEEL_R - 0.04 }); manShadows?.hide(); }   // the chair's own blobs ground it
@@ -2622,7 +2637,7 @@ const wmButton = {
     wmBusy = true;
     try {
       const next = (wmStep + 1) % 4;
-      wmg.stop(); fanFan.set(false);
+      wmg.stop(); fanFan.set(false); gaitGhosts.set(false);
       let ok: unknown = true;   // the ghosts give null without the gait model or a planner search for this scene
       if (next === 1) ok = await wmg.twoStyles(); else if (next === 2) ok = await wmg.month(); else if (next === 3) fanFan.set(true);
       if (!ok) { wmNone = true; wmg.stop(); return; }
@@ -2705,6 +2720,7 @@ function xrFrame(dt: number, t: number) {
   pulseSpots(t);
   reim.update(dt);
   fanFan.update(dt);
+  gaitGhosts.update(dt);
   wmg.update(dt);
   comparison.step(dt);
   stairs3d.update(t, $<HTMLInputElement>('night').checked);

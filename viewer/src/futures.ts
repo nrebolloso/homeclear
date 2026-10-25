@@ -7,9 +7,10 @@
 // multiplier), so the fan's catches/month and the viewer's, planner's and OT report's are the same number. crossed = the edge
 // it rose over (caught or not); hazard = a brush with furniture (not a toe catch). Imagined, never measured. Pure: node tests
 // run it on the exported scene.
-import { stamp, edt, TAPED_EDGE_M, plan, toCell, cellXY, carvedPolys, worldFootprint, polyCells, type GridMeta, type Layers, type Layout, type PlanParams, type XY } from './grid.ts';
+import { stamp, edt, TAPED_EDGE_M, plan, toCell, cellXY, carvedPolys, worldFootprint, polyCells, stampFolds, type GridMeta, type Layers, type Layout, type PlanParams, type XY } from './grid.ts';
 import { contactProb, rng, type Persona, type Risk } from './sim.ts';
 import { predict, sampleHeel, smoothRoute, type Pose, type WorldModel } from './worldmodel.ts';
+import { CAPS_FACTOR, FOLD_LIFT_M, FOLD_SIZE_M } from './rugcascade.ts';
 
 export interface FanScene {
   g: GridMeta; base: Layers; est: Uint8Array; persona: Persona; risk: Risk; rules: { bump_min_m: number };
@@ -20,7 +21,9 @@ export interface FanScene {
 /** a folded corner (livephys flapInfo while folded): the doubled-over cloth stands up near that corner */
 export interface Fold { corner: XY; lift_m: number; size_m: number }
 /** crossed = the edge (mat, cord, folded corner) a swing rose over, hit or not; route = index into Fan.routes */
-export interface Future { walker: XY[]; heels: XY[]; end: Pose; hazard: string | null; at: XY | null; p: number; crossed: string | null; route: number }
+export interface Future { walker: XY[]; heels: XY[]; end: Pose; hazard: string | null; at: XY | null; p: number; crossed: string | null; route: number;
+  /** a rug corner this future folded on its way (opts.fold): which heel it came with, and the corner; later swings meet it as a taller bump */
+  fold?: Fold; foldStep?: number; /** per swing: the chance the toe caught on it (opts.fold or full_route only), to flash the ghost */ swings?: number[] }
 /** catches_month = the fan's mean p x trips/night x days/month: expected toe catches per month if every trip passed here as these futures do */
 export interface RouteOption { label: string; xy: XY[]; length_m: number; p: number; fork: XY | null }
 export interface Fan {
@@ -42,8 +45,17 @@ export const LIFTS = {
 export type Lift = keyof typeof LIFTS;
 /** route odds: ASSUMPTION, a softmax on planned path length, each extra ROUTE_TAU_M of walking e times less likely (not fitted to people's choices) */
 export const ROUTE_TAU_M = 0.5;
+/** gait-aware route odds (gaitplan.ts): ASSUMPTION, metres of detour a walker trades for a 100% chance of a toe catch on a route,
+ *  i.e. 1 m of walking per 1% catch chance (a route with a 3% catch chance counts as 3 m longer). Not fitted to people's choices. */
+export const ROUTE_RISK_M = 45;
+/** softmax of -(length + ROUTE_RISK_M x risk) / ROUTE_TAU_M over the options; risk = mean catch chance along each (0 = the length-only odds) */
+export function routeOdds(lengths_m: number[], risks: number[], risk_m = ROUTE_RISK_M): number[] {
+  const c = lengths_m.map((l, i) => l + risk_m * (risks[i] ?? 0)), m = Math.min(...c), e = c.map(v => Math.exp(-(v - m) / ROUTE_TAU_M)), z = e.reduce((a, b) => a + b, 0);
+  return e.map(v => v / z);
+}
 const AHEAD_S: [number, number] = [4, 5];
-export interface Stamped { L: Layers; owner: Int16Array; dist: Float32Array; lights: { x: number; y: number; r: number }[] }
+/** rugs = the layout's rugs (index into S.objects, footprint, taped), for the fold draw; caps = glide caps on the walker's rear legs */
+export interface Stamped { L: Layers; owner: Int16Array; dist: Float32Array; lights: { x: number; y: number; r: number }[]; rugs: { k: number; poly: XY[]; taped: boolean }[]; caps: boolean }
 
 const FOLD = -2, CORD = -1;
 /** the layout's floor map plus who owns each bump / obstacle cell, and the distance (m) to the nearest furniture
@@ -73,7 +85,8 @@ export function prepare(S: FanScene, lay: Layout, fold: Fold | null): Stamped {
   for (let c = 0; c < d.length; c++) d[c] *= g.cell_m;
   // shortcut: nightlight objects only (evaluate.ts also counts added light fixtures); upgrade if the fan is used on a lit-path layout
   const lights = S.objects.flatMap((o, k) => (o.kind === 'nightlight' && !lay.poses[k].removed ? [{ x: lay.poses[k].x, y: lay.poses[k].y, r: o.light_radius_m ?? 1.5 }] : []));
-  return { L, owner, dist: d, lights };
+  const rugs = S.objects.flatMap((o, k) => (o.kind === 'rug' && !lay.poses[k].removed ? [{ k, poly: worldFootprint(o as any, lay.poses[k]), taped: !!lay.poses[k].taped }] : []));
+  return { L, owner, dist: d, lights, rugs, caps: !!lay.walker_caps };
 }
 
 /** what a swing crossed, by the cell that set its highest point: "mat edge" when the swing came from off the mat */
@@ -193,28 +206,44 @@ export function horizonS(S: FanScene, routes: RouteOption[], state: { x: number;
 /** n futures from `state` (the person: body centre + heading). wm = the learned world model, null = the hand rule.
  *  routes (routeOptions): each future follows one, drawn by its odds; none = the planned route (or straight ahead). */
 export function fan(S: FanScene, st: Stamped, wm: WorldModel | null, state: { x: number; y: number; yaw: number }, route: XY[] | null,
-                    n: number, seed: number, opts: { ahead_s?: number; night?: boolean; routes?: RouteOption[]; lift?: Lift } = {}): Fan {
+                    n: number, seed: number, opts: { ahead_s?: number; night?: boolean; routes?: RouteOption[]; lift?: Lift;
+                    /** gaitghosts.ts: walk the whole route (state = the person at its start) instead of ahead_s, up to max_steps heels */
+                    full_route?: boolean; max_steps?: number;
+                    /** a rug edge a future's swing rises over folds a corner with chance p (per crossing, MEASURED: rugcascade P_FOLD; x CAPS_FACTOR with glide caps; none if taped); later swings of that future meet it */
+                    fold?: { p: number } | null } = {}): Fan {
   const { g, persona: pe, risk } = S, ny = g.shape[1], table = risk.contact_table[pe.gait_profile];
   if (!table) throw new Error(`no contact_table for gait profile ${pe.gait_profile}`);
-  const ahead_s = opts.ahead_s ?? AHEAD_S[0], ahead = ahead_s * (S.speed_mps ?? pe.speed_mps ?? 0.45), off0 = S.walker.user_gap_m + S.walker.depth_m / 2;
+  const ahead_s = opts.ahead_s ?? AHEAD_S[0], ahead = opts.full_route ? Infinity : ahead_s * (S.speed_mps ?? pe.speed_mps ?? 0.45), off0 = S.walker.user_gap_m + S.walker.depth_m / 2;
+  const maxSteps = opts.max_steps ?? 30, tail = 150 + 16;   // pathAhead extends the path 1.5 m past the goal; a full route stops 16 cm short of it, as worldRollouts does
   const main = pathAhead(state, route), kind = main.kind, R = rng(seed), counts: Record<string, number> = {}, crossed: Record<string, number> = {}, futures: Future[] = [];
   const opt = kind === 'route' && opts.routes && opts.routes.length > 1 ? opts.routes : null;
   const paths = opt ? opt.map(r => pathAhead(state, r.xy).P) : [main.P], lift = opts.lift ?? 'average', ls = LIFTS[lift].scale;
   const routes: Fan['routes'] = (opt ?? [{ label: 'as planned', p: 1, fork: null }]).map((r, i) => ({ label: r.label, p: r.p, n: 0, fork: r.fork, tip: paths[i][Math.min(paths[i].length - 1, Math.round(ahead * 0.8 / 0.01))] }));
   let P = paths[0];
-  const lights = st.lights, night = opts.night ?? true;
+  const lights = st.lights, night = opts.night ?? true, perSwing = !!(opts.full_route || opts.fold);
+  // bump: this future's own map: the shared one until it folds a rug corner, then a copy with the corner stamped in
+  let bump = st.L.bump;
   // the swing check of the main rollouts, plus its name and where
   const swing = (from: XY, foot: XY, clearance: number, fu: Future) => {
     const ns = Math.max(2, Math.ceil(Math.hypot(foot[0] - from[0], foot[1] - from[1]) / (g.cell_m / 2)));
     let h = 0, hc = -1;
-    for (let q = 0; q <= ns; q++) { const [i, j] = toCell(g, [from[0] + (foot[0] - from[0]) * q / ns, from[1] + (foot[1] - from[1]) * q / ns]), c = i * ny + j; if (st.L.bump[c] > h) { h = st.L.bump[c]; hc = c; } }
-    if (h <= 0) return;
+    for (let q = 0; q <= ns; q++) { const [i, j] = toCell(g, [from[0] + (foot[0] - from[0]) * q / ns, from[1] + (foot[1] - from[1]) * q / ns]), c = i * ny + j; if (bump[c] > h) { h = bump[c]; hc = c; } }
+    if (h <= 0) { if (perSwing) fu.swings!.push(0); return; }
     const lit = lights.some(l => Math.hypot(foot[0] - l.x, foot[1] - l.y) <= l.r), dark = night && !lit ? risk.dark_contact_multiplier : 1;
-    fu.p = 1 - (1 - fu.p) * (1 - Math.min(1, contactProb(table, h / clearance) * dark));
+    const ps = Math.min(1, contactProb(table, h / clearance) * dark);
+    fu.p = 1 - (1 - fu.p) * (1 - ps);
+    if (perSwing) fu.swings!.push(ps);
     // an edge the swing rises over (stepping along the top of a mat or down off it is not)
-    const [fi, fj] = toCell(g, from), rise = h - st.L.bump[fi * ny + fj];
+    const [fi, fj] = toCell(g, from), rise = h - bump[fi * ny + fj];
     if (rise < S.rules.bump_min_m) return;
     if (!fu.crossed) { fu.crossed = bumpName(S, st, hc, true).replace(/ edge$/, ''); fu.at ??= cellXY(g, hc); }
+    // a rug edge crossed: the corner nearest the crossing folds with chance p (one fold per future; a taped rug can't)
+    const own = st.owner[hc], rug = opts.fold && !fu.fold && own > 0 ? st.rugs.find(r => r.k === own - 1) : undefined;
+    if (rug && !rug.taped && R.u() < opts.fold!.p * (st.caps ? CAPS_FACTOR : 1)) {
+      const [cx, cy] = cellXY(g, hc), corner = rug.poly.reduce((b, q) => (Math.hypot(q[0] - cx, q[1] - cy) < Math.hypot(b[0] - cx, b[1] - cy) ? q : b));
+      fu.fold = { corner: [corner[0], corner[1]], lift_m: FOLD_LIFT_M, size_m: FOLD_SIZE_M }; fu.foldStep = fu.heels.length;
+      bump = st.L.bump.slice(); stampFolds(g, bump, [fu.fold]);
+    }
   };
   const frame = (p: Pose, fu: Future) => { if (fu.hazard) return; const b = brushName(S, st, p); if (b) { fu.hazard = b.name; fu.at = b.at; } };
   const travel = (fu: Future) => { let d = 0; for (let k = 1; k < fu.walker.length; k++) d += Math.hypot(fu.walker[k][0] - fu.walker[k - 1][0], fu.walker[k][1] - fu.walker[k - 1][1]); return d; };
@@ -225,15 +254,17 @@ export function fan(S: FanScene, st: Stamped, wm: WorldModel | null, state: { x:
     for (let u = R.u(); r < routes.length - 1 && (u -= routes[r].p) > 0; r++);
     P = paths[r]; routes[r].n++;
     const clearance = Math.exp(R.n() * pe.toe_clearance_cv) * (pe.clearance_scale ?? 1) * ls;
-    const fu: Future = { walker: [c0], heels: [], end: [c0[0], c0[1], state.yaw], hazard: null, at: null, p: 0, crossed: null, route: r };
+    const fu: Future = { walker: [c0], heels: [], end: [c0[0], c0[1], state.yaw], hazard: null, at: null, p: 0, crossed: null, route: r, ...(perSwing ? { swings: [] } : {}) };
+    bump = st.L.bump;
     if (wm) {
       // worldRollouts: heels seeded around the person, mid-heels at the body; actions = path points 25/50/100 cm ahead
       const L0 = pe.stride_m, Wd = pe.foot_sep_m, s0 = R.u() < 0.5 ? -1 : 1, ux = Math.cos(state.yaw), uy = Math.sin(state.yaw);
       const at = (a: number, l: number): XY => [state.x + a * ux - l * uy, state.y + a * uy + l * ux];
       const heels: XY[] = [at(L0 / 2, s0 * Wd / 2), at(-L0 / 2, -s0 * Wd / 2), at(-1.5 * L0, s0 * Wd / 2)], sides = [s0, -s0, s0];
       const last: XY[] = s0 > 0 ? [heels[1], heels[0]] : [heels[0], heels[1]];
-      for (let k = 0, s = 0; s < 30 && travel(fu) < ahead; s++) {
+      for (let k = 0, s = 0; s < maxSteps && travel(fu) < ahead; s++) {
         k = nearest([(heels[0][0] + heels[1][0]) / 2, (heels[0][1] + heels[1][1]) / 2], k, 120);
+        if (opts.full_route && k >= P.length - tail) break;
         const p = predict(wm, heels, sides, [25, 50, 100].map(o => P[Math.min(k + o, P.length - 1)])), foot = sampleHeel(p, R.u, R.n), side = -sides[0], fi = side > 0 ? 1 : 0;
         swing(last[fi], foot, clearance, fu); frame(p.walker, fu);
         last[fi] = foot; heels.unshift(foot); heels.length = 3; sides.unshift(side); sides.length = 3;
@@ -244,11 +275,12 @@ export function fan(S: FanScene, st: Stamped, wm: WorldModel | null, state: { x:
       const off = R.n() * risk.path_offset_sd_m, step = Math.max(0.15, pe.stride_m * (1 + R.n() * pe.stride_cv));
       let j = nearest([state.x, state.y], 0, 200), u = j, side = R.u() < 0.5 ? 1 : 0;
       const last: (XY | null)[] = [null, null];
-      for (let s = 0; s < 30 && travel(fu) < ahead; s++, side ^= 1) {
+      for (let s = 0; s < maxSteps && travel(fu) < ahead; s++, side ^= 1) {
         u += step / 0.01; j = Math.min(P.length - 2, Math.round(u));
+        if (opts.full_route && j >= P.length - tail) break;
         const t: XY = [P[j + 1][0] - P[j][0], P[j + 1][1] - P[j][1]], tl = Math.hypot(t[0], t[1]) || 1, nx = -t[1] / tl, nyv = t[0] / tl;
         const lat = off + (side ? 1 : -1) * pe.foot_sep_m / 2 + R.n() * risk.step_jitter_m, foot: XY = [P[j][0] + nx * lat, P[j][1] + nyv * lat];
-        if (last[side]) swing(last[side]!, foot, clearance, fu);
+        if (last[side]) swing(last[side]!, foot, clearance, fu); else if (perSwing) fu.swings!.push(0);
         last[side] = foot;
         const cj = Math.min(P.length - 2, j + Math.round(off0 / 0.01)), w: Pose = [P[cj][0] + nx * off, P[cj][1] + nyv * off, Math.atan2(P[cj + 1][1] - P[cj][1], P[cj + 1][0] - P[cj][0])];
         frame(w, fu);

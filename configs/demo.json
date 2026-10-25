@@ -1,4 +1,4 @@
 {
   "_note": "Seeds for the deterministic demo autoplay (viewer/src/demorun.ts): ?demo=1 or ?seed uses the scene's seed for live physics and the futures fan, and the sim steps in fixed 1/60 s ticks. Picked with e2e/seed_search.ts on ?scene=kitchen4_lighter&demo=1&rugfold=1 (shuffler, fan on, round trip): seed 7 = no furniture pushes or cord catches, the inbound pass folds a mat corner (4.2 cm, at 11.75 s), the return fan is 30/30 red at ~1.6 toe catches/month. Seeds 2-6 and 8-9 slide the mat 0.75-1.55 m.",
-  "kitchen4_lighter": { "seed": 7 }
+  "kitchen4_lighter": { "seed": 7, "gait_seed": 13 }
 }

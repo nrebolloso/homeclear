@@ -14,6 +14,9 @@ export function demoSeed(params: URLSearchParams, run: string): number | null {
   return Number(params.get('seed')) || (demo as unknown as Record<string, { seed?: number }>)[run]?.seed || 1;
 }
 
+/** the seed the gait ghosts' route draw starts on (configs/demo.json gait_seed): one where the average walker goes over the mat and the shuffler around it */
+export const gaitSeed = (run: string): number => (demo as unknown as Record<string, { gait_seed?: number }>)[run]?.gait_seed ?? 1;
+
 export const MAX_LAG_S = 0.25;   // a stall longer than this (a slow fan, a hidden tab) slows the demo instead of fast-forwarding it
 
 export function createLockstep(idle: () => boolean, on: () => boolean) {
