@@ -52,7 +52,7 @@ const tg = Date.now();
 await p.goto(url);
 await p.waitForFunction(() => (window as any).game?.ready, null, { timeout: 120000 });
 await p.evaluate(`(async () => { const game = window.game; game.setFly(0.4, 0.1, 5.2, -90, -89); await game.planfix.ready;
-  const panel = document.getElementById('${S.panel}'), pane = panel.closest('.pane'); if (pane) document.getElementById('tab-' + pane.id.slice(5)).click();
+  const panel = document.getElementById('${S.panel}'), pane = panel.closest('.pane'); panel.closest('details')?.setAttribute('open', ''); if (pane) document.getElementById('tab-' + pane.id.slice(5)).click();
   panel.scrollIntoView(); })()`);   // top-down over the kitchen, the panel in view (its tab in the planning drawer, frontend.ts)
 await p.waitForTimeout(1500);
 const t0 = Date.now();

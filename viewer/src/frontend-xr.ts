@@ -1,7 +1,8 @@
 import { onThree, own } from './lifetime.ts';
 import * as THREE from 'three';
 import type { FrontendAdapter, mountFrontend } from './frontend.ts';
-import { summarizeChanges } from './frontend-model.ts';
+import { summarizeChanges, orderedProposals } from './frontend-model.ts';
+import { costText } from './reimagine.ts';
 import { pulse, MENU_HOLD_S } from './controls.ts';
 import { LAYERS, PRESETS } from './layers.ts';
 import { PROFILES } from './vision.ts';
@@ -18,7 +19,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
   const ray = new THREE.Raycaster(), v = new THREE.Vector3(), dir = new THREE.Vector3();
   const controllers = [D.renderer.xr.getController(0), D.renderer.xr.getController(1)];
   const sources = new Map<THREE.Object3D, XRInputSource>(); const consumed = new Set<THREE.Object3D>();
-  let stickWas = false, stickSince = 0, stickFired = false, page = 'scans', fingerprint = '', offset = 0, notice = '';
+  let stickWas = false, stickSince = 0, stickFired = false, page = 'scans', fingerprint = '', offset = 0, notice = '', proposal = 0;
   const game = () => (window as any).game;
   const library = () => (window as any).scanLibrary;
   function go(next: string) { page = next; offset = 0; notice = ''; fingerprint = ''; }
@@ -114,13 +115,21 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
         if (spot) { game().review.note(spot, 'Needs measurement / occupational therapist review'); notice = 'Flag saved for desktop review'; } else notice = 'Inspect a finding first';
       }], ['Save viewpoint', () => { game().bookmarks?.save(); notice = 'Viewpoint saved'; }]]);
     } else if (page === 'changes') {
-      rows([['Find proposed layouts', async () => { await D.adapter.suggest(); notice = 'Options ready. Choose on desktop or try proposed layout.'; }], ['Try proposed layout / restore room', () => game().debug.xrPress(2)], [s.comparison === 0 ? 'Show proposed' : 'Show original', () => D.adapter.compare(s.comparison === 0 ? 1 : 0)], ['Undo last edit', () => game().history.undo()], ['Redo last edit', () => game().history.redo()], ['Light the path at night', () => D.adapter.lightPath?.()], ['Changes & cost', () => go('costs')]]);
+      const list = orderedProposals(s.options), at = Math.min(proposal, Math.max(0, list.length - 1)), shown = list[at]?.option;
+      const stepTo = async (to: number) => { if (to < 0 || to >= list.length) return; proposal = to; await D.adapter.preview?.(list[to].index); notice = `Proposal ${to + 1} of ${list.length}: ${list[to].option.name}`; };
+      rows([['Generate proposals', async () => { await D.adapter.suggest(); const first = orderedProposals(D.adapter.snapshot().options); proposal = 0; if (first.length) { await D.adapter.preview?.(first[0].index); notice = `Proposal 1 of ${first.length}: ${first[0].option.name}`; } else notice = 'No suggested changes'; }],
+        ...(list.length ? [
+          [`Next option\n${at + 1} of ${list.length} · ${shown.name} · ${shown.per_month.toFixed(1)}/month`, () => stepTo(at + 1)] as Row,
+          ['Previous option', () => stepTo(at - 1)] as Row,
+          ['Apply this proposal', () => { D.adapter.commit?.(); notice = 'Applied. Review it under Changes & cost.'; }, true] as Row,
+          ['Reset room', async () => { await D.adapter.reset?.(); notice = 'Room restored'; }] as Row] : []),
+        ['Try proposed layout / restore room', () => game().debug.xrPress(2)], [s.comparison === 0 ? 'Show proposed' : 'Show original', () => D.adapter.compare(s.comparison === 0 ? 1 : 0)], ['Undo last edit', () => game().history.undo()], ['Redo last edit', () => game().history.redo()], ['Light the path at night', () => D.adapter.lightPath?.()], ['Changes & cost', () => go('costs')]]);
     } else if (page === 'comfort') {
       rows([['Normal vision', () => game().setVision('normal')], ['Recenter at route start', () => game().recenter()], [`Movement: ${game().comfort?.movement ?? 'all'}`, () => game().comfort.cycle()], ['Toggle larger menu', () => { root.scale.setScalar(root.scale.x > PANEL_SCALE ? PANEL_SCALE : PANEL_SCALE * 1.2); }], ['Pause route', () => { if (!s.paused) D.adapter.pause(); }], [game().comfort.seated ? 'Standing height' : 'Seated viewing height', () => { game().comfort.seated = !game().comfort.seated; }]]);
     } else if (page === 'bookmarks') {
       rows([['Save current viewpoint', () => { game().bookmarks.save(); notice = 'Viewpoint saved'; }], ...(game().bookmarks?.list() ?? []).map((b: any): Row => [b.label, () => { game().bookmarks.restore(b.id); close(); }])]);
     } else {
-      tile(`${costs.count} changes · ${costs.unpriced} unpriced\n${costs.unpriced || !costs.count ? 'Cost estimate pending' : `Known subtotal $${costs.knownSubtotal}`}\n${costs.untimed || !costs.count ? 'Setup time pending' : `${costs.setupMinutes} min hands-on`}\nHelpers: ${costs.helpers ?? 'pending'}`, 0, .12, .96, .32);
+      tile(`${costs.count} changes · ${costs.unpriced} unpriced\n${costs.unpriced || !costs.count ? 'Cost estimate pending' : `Known subtotal $${costs.knownSubtotal}`}\n${costs.count ? `Effort ${costs.effort.toFixed(1)}` : 'Effort pending'}\nHelpers: ${costs.helpers ?? 'pending'}`, 0, .12, .96, .32);
       tile('Selected item cost labels', 0, -.13, .96, .095, () => { const el = document.getElementById('reimtags') as HTMLSelectElement; el.value = 'selected'; el.dispatchEvent(new Event('change')); close(); });
       tile('Back', 0, -.34, .96, .085, back);
     }
@@ -168,7 +177,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
         if (key !== inspectionKey) {
           inspectionKey = key; inspectionRoot.clear(); inspectionResources.splice(0).forEach(r => r.dispose());
           const title = item.title.match(/.{1,42}(?:\s|$)|.{1,42}/g)?.map(s => s.trim()).join('\n') ?? item.title;
-          const cost = item.change ? item.change.cost.source === 'placeholder' ? 'Cost & installation: pending estimate' : `$${item.change.cost.usd} · ${item.change.cost.minutes} min · ${item.change.cost.helpers} helper(s)` : 'Finding for occupational therapist review';
+          const cost = item.change ? item.change.cost.source === 'placeholder' ? 'Cost & installation: pending estimate' : costText(item.change.cost) : 'Finding for occupational therapist review';
           tile(`${title}\n${item.detail.slice(0, 90)}\n${cost}\nMenu: Findings to flag or save`, 0, 0, .7, .25, undefined, false, inspectionRoot);
           inspectionRoot.position.set(item.at[0], item.at[1], 1.3); inspectionRoot.scale.setScalar(1.6);
         }
@@ -180,7 +189,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
       if (pressed && !stickFired && (root.visible || performance.now() - stickSince >= MENU_HOLD_S * 1000)) { stickFired = true; root.visible ? close() : open(); pulse(left?.gamepad, 0.4, 40); }
       stickWas = pressed;
       if (!root.visible) return;
-      const s = D.adapter.snapshot(), next = JSON.stringify([page, offset, notice, (document.getElementById('vision') as HTMLSelectElement).value, s.patient, s.route, game().comfort?.movement, s.paused, s.comparison === 0, s.changes.length, ...(page === 'tour' ? (D.actions?.() ?? []).map(b => [b.text()[0], b.tone?.()]) : []),...['night', 'particle-path', 'spot', 'improvement-highlights', 'reimghosts'].map(id => box(id).checked)]);
+      const s = D.adapter.snapshot(), next = JSON.stringify([page, offset, notice, (document.getElementById('vision') as HTMLSelectElement).value, s.patient, s.route, game().comfort?.movement, s.paused, s.comparison === 0, s.changes.length, proposal, ...(page === 'tour' ? (D.actions?.() ?? []).map(b => [b.text()[0], b.tone?.()]) : []),...['night', 'particle-path', 'spot', 'improvement-highlights', 'reimghosts'].map(id => box(id).checked)]);
       if (fingerprint !== next) { fingerprint = next; draw(); }
       controllers.forEach((c, i) => { pointers[i].visible = sources.has(c); if (pointers[i].visible) { const hit = intersection(c); pointers[i].scale.z = hit?.distance ?? 2.5; } });
     },

@@ -5,7 +5,8 @@
 // The GPU search (planner/) mirrors this file; planner/rescore.ts re-scores its answers here so the viewer shows these numbers.
 import { polyCells, worldFootprint, toCell, type Layout, type Pose, type XY } from './grid.ts';
 import { evaluate, type Init, type Eval } from './evaluate.ts';
-import { moveCost, fixCost } from './movecost.ts';
+import { moveCost, fixCost, helpersFor } from './movecost.ts';
+import { effortKind } from './effort.ts';
 
 type Opt = { label: string; cost_usd: number; minutes: number; effort: number; product?: string; assumption?: string } | { from_fix: string };
 export interface PlannerCfg {
@@ -25,7 +26,7 @@ export interface PlanLayout {
   /** glide caps / tennis balls on the walker's rear legs (options.walker.caps) */
   caps?: boolean;
 }
-export interface Item { key: string; label: string; usd: number; minutes: number; effort: number; product?: string; assumption?: string }
+export interface Item { key: string; label: string; usd: number; minutes: number; effort: number; helpers: number; product?: string; assumption?: string }
 export interface Cost { usd: number; minutes: number; effort: number; items: Item[] }
 export interface PlanScore {
   /** contacts + snags + brushes per month, and its range: the contacts' and brushes' 10-90% over batches of trips
@@ -131,14 +132,14 @@ export function cost(S: Init, cfg: PlannerCfg, from: PlanLayout, pl: PlanLayout)
     if ('from_fix' in o) {
       const iv = S.interventions.find(i => i.id === o.from_fix);
       if (!iv) throw new Error(`planner: no fix ${o.from_fix}`);
-      const c = fixCost(iv);
-      return { key, label: iv.label ?? fallback, usd: c.usd, minutes: c.minutes, effort: c.effort, product: iv.product };
+      const on = S.objects.find(o => o.name === iv.object), c = fixCost(iv, on && effortKind(on));
+      return { key, label: iv.label ?? fallback, usd: c.usd, minutes: c.minutes, effort: c.effort, helpers: c.helpers, product: iv.product };
     }
-    return { key, label: o.label, usd: o.cost_usd, minutes: o.minutes, effort: o.effort, product: o.product, assumption: o.assumption };
+    return { key, label: o.label, usd: o.cost_usd, minutes: o.minutes, effort: o.effort, helpers: helpersFor(o.effort), product: o.product, assumption: o.assumption };
   };
   const mv = (key: string, label: string, n: string, a: number[], b: number[]) => {
     const c = moveCost(O(n), { x: a[0], y: a[1], yaw: rad(a[2]) }, { x: b[0], y: b[1], yaw: rad(b[2]) });
-    items.push({ key, label, usd: c.usd, minutes: c.minutes, effort: c.effort });
+    items.push({ key, label, usd: c.usd, minutes: c.minutes, effort: c.effort, helpers: c.helpers });
   };
   for (const n of cfg.chairs) {
     const a = from.chairs[n], b = pl.chairs[n];

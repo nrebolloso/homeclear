@@ -9,6 +9,7 @@ import { card, poseAt } from './reimagine.ts';
 import type { Init } from './evaluate.ts';
 import type { WorldModel } from './worldmodel.ts';
 import type { Layout, Pose } from './grid.ts';
+import type { OptionOut } from './optimize.ts';
 
 const cfgs = import.meta.glob('../../configs/planner/*.json', { eager: true, import: 'default' });
 
@@ -160,14 +161,14 @@ export function createPlanFix(D: PlanFixDeps) {
     const p = data!.pareto[k], before = data!.scanned.confirm ?? data!.scanned.score;
     await glide(fromLayout(S(), cfg(), D.base, D.layout()), p.layout, 900);
     await D.commit(toLayout(S(), cfg(), D.base, p.layout), fixesOf(p.layout));
-    const items = cost(S(), cfg(), data!.scanned.layout, p.layout).items;
+    const items = priced(k).items;
     $('pfresult').innerHTML = `<b>Before</b>: ${range(before)}/month<br>${parts(before)}<br><b>After</b>: <span class="delta-good">${range(p.confirm)}</span>/month<br>${parts(p.confirm)}` +
       `<br><small>both re-run on fresh trips (seed ${data!.stats.confirm_seed}), not the search's own draws</small>` +
       `<ol>${items.map(i => `<li>${i.label} <small class="cost">${i.usd ? `$${i.usd} · ` : ''}${i.minutes} min${i.assumption ? ` · ${i.assumption}` : ''}</small></li>`).join('')}</ol>`;
     $('pfoptions').innerHTML = '';
     for (const o of opts()) {
-      const q = data!.pareto[o.k], li = document.createElement('li'), b = document.createElement('button');
-      li.innerHTML = `${o.why}: <b>${f1(q.confirm.contacts)}</b> toe catches/month · effort ${q.cost.effort.toFixed(1)} · $${q.cost.usd} · ${parts(q.confirm)} `;
+      const q = data!.pareto[o.k], c = priced(o.k), li = document.createElement('li'), b = document.createElement('button');
+      li.innerHTML = `${o.why}: <b>${f1(q.confirm.contacts)}</b> toe catches/month · effort ${c.effort.toFixed(1)} · $${c.usd} · ${parts(q.confirm)} `;
       b.textContent = o.k === k ? 'Applied' : 'Apply'; b.disabled = o.k === k;
       b.onclick = () => apply(o.k);
       li.appendChild(b); $('pfoptions').appendChild(li);
@@ -224,6 +225,26 @@ export function createPlanFix(D: PlanFixDeps) {
     return { current_population: pop, current_you: r.judge.s, best_you: r.best.s, changed: diff, layout: r.best.pl, searched: r.searched };
   }
 
+  /** what option k takes from the scanned room, priced now (movecost.ts / effort.ts). The search's own cost.effort is
+   *  kept for its chart and order only: engine.py still prices moves with the old per-kind table. */
+  const priced = (k: number) => cost(S(), cfg(), data!.scanned.layout, data!.pareto[k].layout);
+
+  /** the precomputed options as Reimagine proposals, in the planner's order (Easiest first); null = no search for this scene.
+   *  `applied` is what main.ts records as the layout's fixes; the range is left out (the search's lo/hi are of its objective, not toe catches) */
+  async function proposals(): Promise<(OptionOut & { applied: string[] })[] | null> {
+    await ready;
+    if (!data) return null;
+    return opts().map(o => {
+      const q = data!.pareto[o.k], c = priced(o.k);
+      return { name: o.why, lambda: 0, layout: toLayout(S(), cfg(), D.base, q.layout), applied: fixesOf(q.layout),
+        actions: c.items.map(i => ({ id: `plan:${i.key}`, label: i.label, cost_usd: i.usd, minutes: i.minutes, product: i.product })),
+        per_month: q.confirm.contacts, per_month_lo: NaN, per_month_hi: NaN, effort: c.effort, cost_usd: c.usd, minutes: c.minutes,
+        score: q.confirm.risk, checks_failed: 0, min_side_m: NaN, planned: true };
+    });
+  }
+  /** the "Keep my mat" filter exists only where the search also ran with the mat kept */
+  const keepMatOffered = () => !!data?.options_keep_mat?.length;
+
   const state = () => ({ loaded: !!data, playing, frame, frames: data?.replay.length ?? 0, stats: data?.stats, options: data ? opts().map(o => ({ ...o, ...data!.pareto[o.k] })) : undefined });
   /** OT report: the planner's layout (the live search's if one ran, else the chosen option), one change at a time on the
    *  room as it is now, each scored for real and ranked by toe catches removed (the search objective breaks ties). null =
@@ -249,18 +270,17 @@ export function createPlanFix(D: PlanFixDeps) {
       .map(({ pl, n }) => {
       const it = cost(S(), cfg(), cur, pl).items[0], sc = scores[n + 1], cut = before - sc.contacts;
       return { label: it?.label ?? changed(cfg(), cur, pl)[0], error: sc.check.length ? sc.check.join('; ') : sc.error, reduction: Math.max(0, cut), share: before > 0 ? cut / before : 0,
-        objective_cut: scores[0].risk - sc.risk, clearance_gain_m: 0, cost_usd: it?.usd, minutes: it?.minutes, effort: it?.effort };
+        objective_cut: scores[0].risk - sc.risk, clearance_gain_m: 0, cost_usd: it?.usd, effort: it?.effort, helpers: it?.helpers };
     }).sort((a, b) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.objective_cut - a.objective_cut));
   }
   /** OT report: the options on show (Easiest / Keep my mat / Safest), each confirmed on fresh trips; null = no planner search */
-  const optionsOut = () => (data ? opts().map(o => { const q = data!.pareto[o.k];
-    return { name: o.why, per_month: q.confirm.contacts, cost_usd: q.cost.usd, minutes: q.cost.minutes, effort: q.cost.effort,
-      changes: cost(S(), cfg(), data!.scanned.layout, q.layout).items.map(i => i.label) }; }) : null);
+  const optionsOut = () => (data ? opts().map(o => { const q = data!.pareto[o.k], c = priced(o.k);
+    return { name: o.why, per_month: q.confirm.contacts, cost_usd: c.usd, effort: c.effort, helpers: Math.max(1, ...c.items.map(i => i.helpers)), changes: c.items.map(i => i.label) }; }) : null);
   /** wmghosts.ts: the room as it is now / the scan / the chosen option, the evaluator's trips with one world model, and a
    *  glide + commit to a planner layout (before / after) */
   const layouts = () => (data ? { now: fromLayout(S(), cfg(), D.base, D.layout()), scan: data.scanned.layout, chosen: data.pareto[opts()[0].k].layout } : null);
   const imagine = (pl: PlanLayout, wm: WorldModel, n: number, nf = 0) => ready.then(() => ask({ type: 'imagine', pl, wm, n, nf }));
   async function goto(pl: PlanLayout) { await glide(fromLayout(S(), cfg(), D.base, D.layout()), pl, 900); await D.commit(toLayout(S(), cfg(), D.base, pl), fixesOf(pl)); }
-  return { ready, play, apply, improve, replanFor, rankedFixes, optionsOut, stop: () => { playing = false; }, state, score: (pls: PlanLayout[]) => ask({ type: 'score', pls }).then(r => r.scores),
+  return { ready, proposals, keepMatOffered, play, apply, improve, replanFor, rankedFixes, optionsOut, stop: () => { playing = false; }, state, score: (pls: PlanLayout[]) => ask({ type: 'score', pls }).then(r => r.scores),
     layouts, imagine, goto };
 }
