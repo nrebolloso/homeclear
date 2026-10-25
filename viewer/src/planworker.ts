@@ -55,7 +55,8 @@ export function propose(pl: PlanLayout, scan: PlanLayout, u: () => number): Plan
     } else if (r < 0.75) {
       q.mat = pick(['present', 'taped', 'removed', 'moved'] as const); delete q.mat_at;
       if (q.mat === 'moved') { const m = S.objects.find(o => o.name === cfg.mat)!.pivot; q.mat_at = [snap(m[0] + (u() - 0.5) * 1.2, g), snap(m[1] + (u() - 0.5) * 1.2, g), pick([0, 90])]; }
-    } else if (r < 0.87) q.cord = pick(['present', 'taped', 'rerouted'] as const);
+    } else if (r < 0.8) { if (cfg.options.walker?.caps) q.caps = !q.caps; }
+    else if (r < 0.87) q.cord = pick(['present', 'taped', 'rerouted'] as const);
     else { q.nightlight = pick([...Object.keys(cfg.outlets), 'off']); delete q.nightlight_at; }
     if (JSON.stringify(q) !== JSON.stringify(pl) && !check(S, cfg, base, q).length) return q;
   }

@@ -31,7 +31,11 @@
       "rerouted": { "label": "Run the cord along the wall instead of across the path", "cost_usd": 6, "minutes": 25, "effort": 2, "product": "adhesive cord clips",
         "assumption": "ASSUMPTION: the cord leaves the floor box entirely (same map effect as taping), clips and labour estimated" }
     },
-    "nightlight": { "kitchen": { "from_fix": "add_nightlight" }, "off": { "label": "Unplug the nightlight", "cost_usd": 0, "minutes": 1, "effort": 1 } }
+    "nightlight": { "kitchen": { "from_fix": "add_nightlight" }, "off": { "label": "Unplug the nightlight", "cost_usd": 0, "minutes": 1, "effort": 1 } },
+    "walker": {
+      "caps": { "label": "Glide caps or slit tennis balls on the walker's rear legs", "cost_usd": 8, "minutes": 5, "effort": 1, "product": "walker glide caps (or 2 tennis balls, slit)",
+        "assumption": "ASSUMPTION: caps cut the glide-on-rug friction to 0.10-0.20 (not measured); the mat's slide / fold events scale by the cloth-rug sim's fold-or-drag rate with caps over without (physics/rug_calib.json)" }
+    }
   },
   "brush_m": 0.03,
   "search": { "steps": 800, "chains_per_weight": 16, "t0": 20, "t1": 0.3, "effort_weight": [0, 1, 2, 4, 8, 16, 32, 64], "live_effort_weight": 2,

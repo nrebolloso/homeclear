@@ -12,6 +12,9 @@ import torch
 from scipy.ndimage import distance_transform_edt
 
 ROOT = Path(__file__).resolve().parents[1]
+_rc = json.loads((ROOT / "physics" / "rug_calib.json").read_text())["arms"]
+_pool = lambda a: sum(r["disturbed"] * r["n"] for r in a.values()) / sum(r["n"] for r in a.values())
+CAPS_FACTOR = _pool(_rc["glide_caps"]) / _pool(_rc["fitted"])   # rugcascade.ts CAPS_FACTOR
 MOVE_EFFORT = {"bed": 5, "nightstand": 2, "chair": 2, "nightlight": 1, "rug": 1, "other": 3, "door": 99}   # optimize.ts DEFAULTS
 EFFORT_PER_M = 0.3
 
@@ -430,6 +433,8 @@ def cost(S, frm, pl):
         items.append(opt("cord", cfg["options"]["cord"][pl["cord"]]))
     if pl["nightlight"] != frm["nightlight"]:
         items.append(opt("nightlight", cfg["options"]["nightlight"][pl["nightlight"]]))
+    if pl.get("caps") and not frm.get("caps"):
+        items.append(opt("caps", cfg["options"]["walker"]["caps"]))
     return {"usd": sum(i[1] for i in items), "minutes": sum(i[2] for i in items), "effort": sum(i[3] for i in items), "items": [i[0] for i in items]}
 
 
@@ -488,6 +493,8 @@ def prepare(S, pl, _cache={}):
                         S.plan_p["walker_width_m"] / 2, S.risk["path_offset_sd_m"])
     if pl["mat"] == "taped":   # config ASSUMPTION: taped edges stop the simulated slide / fold
         snags = [e for e in snags if e[0] != S.cfg["mat"]]
+    elif pl.get("caps"):       # glide caps: evaluate.ts CAPS_FACTOR (rugcascade.ts), from physics/rug_calib.json
+        snags = [(o, ev, pm * CAPS_FACTOR, lo * CAPS_FACTOR, hi * CAPS_FACTOR) if o == S.cfg["mat"] else (o, ev, pm, lo, hi) for o, ev, pm, lo, hi in snags]
     lights = [(P[k][0], P[k][1], o.get("light_radius_m") or 1.5) for k, o in enumerate(S.objects) if o["kind"] == "nightlight" and not P[k][3]]
     assert len(lights) <= 1, "shortcut: one light per layout on the GPU"
     return {"rt": smooth_route(xy).astype(np.float32), "xy": xy, "bump": bump.ravel().astype(np.float32), "brush": brush,

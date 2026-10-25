@@ -10,6 +10,8 @@ import type { Init } from './evaluate.ts';
 import type { WorldModel } from './worldmodel.ts';
 import type { Layout, Pose } from './grid.ts';
 
+const cfgs = import.meta.glob('../../configs/planner/*.json', { eager: true, import: 'default' });
+
 type Slim = { risk: number; lo: number; hi: number; contacts: number; snags: number; brushes: number; error?: string };
 interface Search {
   scene: string; cfg: PlannerCfg & { search: any }; stats: Record<string, any>;
@@ -44,11 +46,14 @@ export function createPlanFix(D: PlanFixDeps) {
     if (!workers[who]) {
       const w = workers[who] = new Worker(new URL('./planworker.ts', import.meta.url), { type: 'module' });
       w.onmessage = e => { waiting.get(e.data.id)?.(e.data); waiting.delete(e.data.id); };
-      w.postMessage({ type: 'init', init: wm ? { ...D.init(), worldModel: wm } : D.init(), cfg: data!.cfg, base: D.base, walker: D.walker(), critic });
+      w.postMessage({ type: 'init', init: wm ? { ...D.init(), worldModel: wm } : D.init(), cfg: cfg(), base: D.base, walker: D.walker(), critic });
     }
     return new Promise<any>(res => { const id = ++seq; waiting.set(id, res); workers[who].postMessage({ ...msg, id }); });
   }
-  const S = () => D.init(), cfg = () => data!.cfg;
+  // fix options from configs/planner/<scene>.json over the search's frozen copy: a fix added since the B200 search shows up
+  // in the live planner and the OT report without re-running it (the replayed search never proposes it)
+  const own = (cfgs[`../../configs/planner/${D.run}.json`] as { options?: PlannerCfg['options'] } | undefined)?.options;
+  const S = () => D.init(), cfg = (): PlannerCfg => (own ? { ...data!.cfg, options: { ...data!.cfg.options, ...own } } : data!.cfg);
   /** the configured fixes a planner layout uses, for the receipt (reimagine.ts labels them) */
   const fixesOf = (pl: PlanLayout) => [cfg().options.mat[pl.mat], cfg().options.cord[pl.cord], cfg().options.nightlight[pl.nightlight]]
     .flatMap(o => (o && 'from_fix' in o ? [o.from_fix] : []));
@@ -221,13 +226,18 @@ export function createPlanFix(D: PlanFixDeps) {
       if (k in q.chairs) q.chairs[k] = goal.chairs[k];
       else if (k === 'mat') { q.mat = goal.mat; q.mat_at = goal.mat_at; }
       else if (k === 'cord') q.cord = goal.cord;
+      else if (k === 'caps') q.caps = goal.caps;
       else { q.nightlight = goal.nightlight; q.nightlight_at = goal.nightlight_at; }
       return q;
     };
-    const keys = changed(cfg(), cur, goal), { scores } = await ask({ type: 'score', pls: [cur, ...keys.map(one)] }), before = scores[0].risk;
-    return keys.map((k, n) => {
-      const it = cost(S(), cfg(), cur, one(k)).items[0], sc = scores[n + 1], cut = before - sc.risk;
-      return { label: it?.label ?? k, error: sc.check.length ? sc.check.join('; ') : sc.error, reduction: Math.max(0, cut), share: before > 0 ? cut / before : 0,
+    const pls = changed(cfg(), cur, goal).map(one);
+    // the rug's two cheap fixes side by side, whichever the search picked: tape its edge, or cap the walker's rear glides
+    if (cur.mat === 'present') for (const q of [{ ...cur, mat: 'taped' as const }, ...(cfg().options.walker?.caps && !cur.caps ? [{ ...cur, caps: true }] : [])])
+      if (!pls.some(p => JSON.stringify(p) === JSON.stringify(q))) pls.push(q);
+    const { scores } = await ask({ type: 'score', pls: [cur, ...pls] }), before = scores[0].risk;
+    return pls.map((pl, n) => {
+      const it = cost(S(), cfg(), cur, pl).items[0], sc = scores[n + 1], cut = before - sc.risk;
+      return { label: it?.label ?? changed(cfg(), cur, pl)[0], error: sc.check.length ? sc.check.join('; ') : sc.error, reduction: Math.max(0, cut), share: before > 0 ? cut / before : 0,
         clearance_gain_m: 0, cost_usd: it?.usd, minutes: it?.minutes, effort: it?.effort };
     }).sort((a, b) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction));
   }
