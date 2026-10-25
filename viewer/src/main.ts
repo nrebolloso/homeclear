@@ -1,3 +1,4 @@
+import { onWindow, onDocument, every, later, onCanvas } from './lifetime.ts';
 import { cameraToW2C } from './frame.ts';   // first: sets the +z-up convention before any camera exists
 import * as THREE from 'three';
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
@@ -55,6 +56,7 @@ import { setupXR, type XrEditor } from './xr.ts';
 import { plainSpot, tourStand } from './xrtour.ts';
 import { createXRComparison } from './xrcompare.ts';
 
+export async function mountViewer(runtime: { renderer: THREE.WebGLRenderer; scope: import('./lifetime.ts').Lifetime }) {
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 // model and scene text (Cosmos Reason notes, hazard details) goes into innerHTML escaped; same as report.ts's, which can't
 // be imported: that module renders the report page when loaded
@@ -103,7 +105,7 @@ let inXR = false;   // presenting in a headset (xr.ts): hazard labels are scene 
 const tier = tierAtLoad(location.search, wantXR);
 let perfOn = perfAtLoad(location.search, tier, (() => { try { return localStorage.getItem('homeclear.perf'); } catch { return null; } })());
 // the drawing buffer is kept on the monitor for screenshots (fix card, e2e); a headset frame doesn't need the extra copy
-const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: !wantXR });
+const renderer = runtime.renderer;
 renderer.setPixelRatio(Math.min(devicePixelRatio, perfOn ? PERF.pixel_ratio : FULL.pixel_ratio));
 renderer.setSize(innerWidth, innerHeight);
 $('view').appendChild(renderer.domElement);
@@ -122,7 +124,7 @@ const HEMI_ENV = 0.6;   // the hemisphere's share once the room's env map lights
 const nightLamp = new THREE.PointLight(0xffb36b, 0, 1.5, 2);   // night: the nightlight on the meshes (updateNight)
 scene.add(nightLamp);
 const vision = createVision(renderer, scene, camera);
-addEventListener('resize', () => {
+onWindow('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight); css.setSize(innerWidth, innerHeight); vision.resize();
 });
@@ -313,7 +315,8 @@ worker.onmessage = e => {
 };
 const ask = (msg: object) => new Promise<any>(res => { const id = ++seq; waiting.set(id, res); worker.postMessage({ ...msg, id }); });
 
-const game: any = { ready: false, fps: 0, evals: 0 };
+const game: any = { ready: false, fps: 0, evals: 0, pending: () => waiting.size };
+runtime.scope.own(() => { worker.terminate(); renderer.setAnimationLoop(null); });
 (window as any).game = game;
 
 function replanRoute(k: number) {
@@ -513,8 +516,8 @@ function tourStep(dt: number) {
   }
 }
 $('tour').onclick = startTour;
-renderer.domElement.addEventListener('pointerdown', endTour);
-addEventListener('keydown', e => { if (tour.on && (e.target as HTMLElement).tagName !== 'BUTTON') endTour(); });
+onCanvas(renderer.domElement, 'pointerdown', endTour);
+onWindow('keydown', e => { if (tour.on && (e.target as HTMLElement).tagName !== 'BUTTON') endTour(); });
 
 // ---------- furniture editing ----------
 const tc = new TransformControls(camera, renderer.domElement);
@@ -1231,7 +1234,7 @@ async function resetParked(id: string) {
   await replan();
 }
 const ndc = (e: { clientX: number; clientY: number }) => document.pointerLockElement === renderer.domElement ? new THREE.Vector2() : new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);   // locked mouse: the crosshair
-renderer.domElement.addEventListener('pointerdown', e => {   // capture: before furniture picking and the gizmo
+onCanvas(renderer.domElement, 'pointerdown', e => {   // capture: before furniture picking and the gizmo
   if (renderer.xr.isPresenting) return;
   if (grabbing) { e.stopImmediatePropagation(); if (e.button === 0) dropGrab(); else if (e.button === 2) cancelGrab(); return; }   // G: click drops, right click cancels
   markRay.setFromCamera(ndc(e), camera);
@@ -1251,18 +1254,18 @@ renderer.domElement.addEventListener('pointerdown', e => {   // capture: before 
   mouseAt = ndc(e); lastAim = '';
   press = { x: e.clientX, y: e.clientY, moved: 0 };   // a click places, a drag looks around (the look handler below starts it)
 }, { capture: true });
-addEventListener('pointermove', e => {
+onWindow('pointermove', e => {
   mouseAt = ndc(e); shiftHeld = e.shiftKey;
   if (press) press.moved = Math.max(press.moved, Math.hypot(e.clientX - press.x, e.clientY - press.y));
 });
-addEventListener('pointerup', e => {
+onWindow('pointerup', e => {
   if (handleDrag) { commitHandle(); return; }
   if (parkDrag) { commitPark(); return; }
   const p = press; press = null;
   if (p && mk && e.button === 0 && p.moved < 5) { markRay.setFromCamera(ndc(e), camera); markPlace(markHit(markRay.ray, !e.shiftKey)?.p ?? null); }
 });
-renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());   // the right button looks or undoes: never a browser menu
-addEventListener('keydown', e => {
+onCanvas(renderer.domElement, 'contextmenu', e => e.preventDefault());   // the right button looks or undoes: never a browser menu
+onWindow('keydown', e => {
   if ((!mk && !editing && !parkDrag) || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) return;
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { shiftHeld = true; lastAim = ''; return; }
   if (e.code === 'Escape') { if (parkDrag) { parkDrag = null; drawStairs(); say(); } else if (mk) cancelMark(); else if (editing) setEditing(false); }
@@ -1749,13 +1752,13 @@ function toggleLock() {
   if (document.pointerLockElement === c) return document.exitPointerLock();
   Promise.resolve(c.requestPointerLock()).catch(() => keyHelp.toast('The browser would not lock the mouse'));
 }
-document.addEventListener('pointerlockchange', () => {
+onDocument('pointerlockchange', () => {
   const on = document.pointerLockElement === renderer.domElement;
   keyHelp.setLocked(on); look = null; lastAim = '';
   mouseAt = on ? new THREE.Vector2() : mouseAt;
   if (on) keyHelp.toast('Mouse locked: move to look, click acts at the dot, Esc lets go', 3500);
 });
-addEventListener('keydown', e => {
+onWindow('keydown', e => {
   if (renderer.xr.isPresenting) return;
   const el = e.target as HTMLElement, typing = /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable;
   const it = keyIntent(e, { typing, grabbing: !!grabbing, choosing });
@@ -1783,7 +1786,7 @@ addEventListener('keydown', e => {
 
 // ---------- input ----------
 const keys = new Set<string>();
-addEventListener('keydown', e => {
+onWindow('keydown', e => {
   if (e.defaultPrevented || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) return;
   if (selected >= 0 && e.code.startsWith('Arrow')) { nudge(e.code); e.preventDefault(); return; }   // arrows move the selected object, not you
   keys.add(e.code);
@@ -1797,11 +1800,11 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyF') { if (mode === 'fly') goWalk(); else setWalk('fly'); }
   else if (/^(Key[WASD]|Arrow)/.test(e.code) && mode !== 'fly') setWalk('free');
 });
-addEventListener('keyup', e => { keys.delete(e.code); shiftHeld = e.shiftKey; });
+onWindow('keyup', e => { keys.delete(e.code); shiftHeld = e.shiftKey; });
 const ray = new THREE.Raycaster();
 // a drag with the left or right button looks; `right` + `act`: a right click that didn't move runs act (undo a mark point...)
 let look: { x: number; y: number; moved: number; right?: boolean; act?: () => unknown } | null = null;
-renderer.domElement.addEventListener('pointerdown', e => {
+onCanvas(renderer.domElement, 'pointerdown', e => {
   if ((e.button !== 0 && e.button !== 2) || renderer.xr.isPresenting || handleDrag || parkDrag || tc.dragging || (tc as any).axis) return;
   if (e.button === 2) { look = { x: e.clientX, y: e.clientY, moved: 0, right: true }; return; }
   if (mk || editing) { look = { x: e.clientX, y: e.clientY, moved: 0 }; return; }
@@ -1810,7 +1813,7 @@ renderer.domElement.addEventListener('pointerdown', e => {
   if (hit) { select(items.findIndex(i => i.proxy === hit.object)); return; }
   look = { x: e.clientX, y: e.clientY, moved: 0 };
 });
-renderer.domElement.addEventListener('dblclick', e => {   // double-click an object: back where it started
+onCanvas(renderer.domElement, 'dblclick', e => {   // double-click an object: back where it started
   if (mk || editing || parkDrag || renderer.xr.isPresenting || performance.now() - droppedAt < 600) return;
   ray.setFromCamera(ndc(e), camera);
   const hit = ray.intersectObjects(items.filter((_, k) => !layout.poses[k].removed).map(i => i.proxy))[0];
@@ -1824,7 +1827,7 @@ function lookBy(dx: number, dy: number) {
   if (mode !== 'fly' && !COUPLED) headTurn.yaw = THREE.MathUtils.clamp(headTurn.yaw - dx * 0.004, -HEAD_MAX, HEAD_MAX); else body.yaw -= dx * 0.004;
   body.pitch = THREE.MathUtils.clamp(body.pitch - dy * 0.004, mode === 'fly' ? -1.5 : -1.2, mode === 'fly' ? 1.5 : 0.6);
 }
-addEventListener('pointermove', e => {
+onWindow('pointermove', e => {
   if (document.pointerLockElement === renderer.domElement) {   // L: the locked mouse looks without a button held
     if (e.movementX || e.movementY) { if (mode === 'auto') setWalk('free'); lookBy(e.movementX, e.movementY); }
     return;
@@ -1835,7 +1838,7 @@ addEventListener('pointermove', e => {
   lookBy(dx, dy);
   if (mode === 'auto' && look.moved > 4) setWalk('free');
 });
-addEventListener('pointerup', () => {
+onWindow('pointerup', () => {
   if (look && (look.right ? look.moved < 4 && look.act : look.moved < 3)) { if (look.right) look.act!(); else select(-1); }
   look = null;
 });
@@ -1856,7 +1859,7 @@ function dolly(d: number) {
     Object.assign(body, next);
   }
 }
-renderer.domElement.addEventListener('wheel', e => {
+onCanvas(renderer.domElement, 'wheel', e => {
   if (renderer.xr.isPresenting || tour.on) return;
   e.preventDefault();   // also stops a pinch (ctrl + wheel) from zooming the page
   const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;   // lines and pages to pixels
@@ -2002,7 +2005,7 @@ function driveFree(dt: number) {
   const k = (c: string) => keys.has(c), axis = (a: string[], b: string[]) => +a.some(k) - +b.some(k);
   driveStep(body, chairVel, { throttle: axis(['KeyW', 'ArrowUp'], ['KeyS', 'ArrowDown']), steer: axis(['KeyA', 'ArrowLeft'], ['KeyD', 'ArrowRight']), spin: axis(['KeyQ'], ['KeyE']) }, dt, chairOf(), chairOk());
 }
-addEventListener('blur', () => keys.clear());   // a key released in another window must not leave the chair rolling
+onWindow('blur', () => keys.clear());   // a key released in another window must not leave the chair rolling
 
 function freeStep(dt: number) {
   if (isChair()) return driveFree(dt);
@@ -2257,7 +2260,7 @@ const xr = await setupXR({
   renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses,
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
   commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m,
-  resetObject, resetAll, editor: markerXR, readOnly: comparison.previewing, hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { lines: hintLines(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
+  resetObject, resetAll, editor: markerXR, readOnly: () => game.sessionBusy || comparison.previewing(), hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { lines: hintLines(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
   startPose() {   // stay if this floor is seen as well as the route's median spot; else the first such point along the route
     if (!current || current.error) return null;
     const poses: { x: number; y: number; yaw: number }[] = [];
@@ -2296,7 +2299,7 @@ function xrFrame(dt: number, t: number) {
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
   if (!comparison.previewing()) labelStep();
   liveChecks(t);
-  renderer.render(scene, camera);
+  vision.renderXR();
 }
 // ---------- start ----------
 setWalk('auto');
@@ -2307,7 +2310,7 @@ else { const [sx, sy] = routes[selRoute].start; Object.assign(body, { x: sx - ce
 // the splat rendered into an env map from the room's middle, 1 m up, before the loop (it sorts the splats for the cube
 // camera; the loop would re-sort them for the main one mid-capture). Capped wait: a slow load keeps the old flat light.
 if (GROUND) {
-  const ready = await Promise.race([Promise.all(splats.map(s => s.initialized)).then(() => true), new Promise<boolean>(r => setTimeout(() => r(false), 10000))]);
+  const ready = await Promise.race([Promise.all(splats.map(s => s.initialized)).then(() => true), new Promise<boolean>(r => later(() => r(false), 10000))]);
   if (ready) {
     await roomEnvironment(sparkR, scene, new THREE.Vector3(g.origin_xy[0] + (g.shape[0] * g.cell_m) / 2, g.origin_xy[1] + (g.shape[1] * g.cell_m) / 2, 1.0));
     updateNight();
@@ -2330,7 +2333,7 @@ Object.assign(game, {
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
   debug: { renderer, scene, camera, marker: mk3d.root, stairs: stairs3d.root, spark: sparkR, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup],
-    rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
+    vision, rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); headTurn.yaw = 0; chairVel.v = chairVel.w = 0; Object.assign(body, { x, y, yaw }); },
@@ -2407,7 +2410,7 @@ const homes = [...document.querySelectorAll('#left *, #right *')].map(n => [n, n
 const frontend = mountFrontend(frontendAdapter);
 // demo mode (?demo=1, H toggles; shot.ts records with it): debug rows, ranges and the fps line hidden (style.css .demo)
 document.body.classList.toggle('demo', PARAMS.get('demo') === '1');
-addEventListener('keydown', e => { if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) document.body.classList.toggle('demo'); });
+onWindow('keydown', e => { if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) document.body.classList.toggle('demo'); });
 game.setDemo = (on: boolean) => document.body.classList.toggle('demo', on);
 if (PARAMS.has('classic')) { for (const [n, p, s] of homes) p.insertBefore(n, s); document.body.classList.remove('frontend'); document.getElementById('frontend')!.hidden = true; document.getElementById('left')!.hidden = document.getElementById('right')!.hidden = false; }
 frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
@@ -2441,3 +2444,26 @@ const review = mountReview({ scene: RUN, spots: () => allSpots, onChange: () => 
 spotFilter = review.filter; onSpots = review.refresh;
 game.review = review;
 if (current) drawSpots(current);
+
+// Room state never crosses scan identities. Annotations already have per-scan storage keys.
+game.saveSession = () => structuredClone({ layout, applied, body, fly, personaKey, selRoute, mode, autoS, explore });
+game.restoreSession = async (saved: any) => {
+  if (!saved || saved.layout?.poses?.length !== objs.length) return;
+  if (personas[saved.personaKey] && personaKey !== saved.personaKey) await setPersona(saved.personaKey);
+  layout = structuredClone(saved.layout); applied = [...saved.applied]; selRoute = Math.min(saved.selRoute, routes.length - 1);
+  $<HTMLSelectElement>('routesel').value = String(selRoute); syncObjects(); await replan();
+  Object.assign(body, saved.body); Object.assign(fly, saved.fly); Object.assign(explore, saved.explore);
+  autoS = saved.autoS; setWalk(saved.mode); routePaused = true;
+  if (renderer.xr.isPresenting) xr.place(body.x, body.y, body.yaw);
+};
+runtime.scope.own(() => {
+  for (const i of [0, 1]) { renderer.xr.getHand(i).removeFromParent(); renderer.xr.getController(i).removeFromParent(); }
+  frontend.dispose(); live?.dispose(); tc.dispose(); vision.dispose();
+  for (const s of splats) s.dispose();
+  const resources = new Set<any>();
+  scene.traverse((o: any) => { if (o.geometry) resources.add(o.geometry); for (const m of o.material ? Array.isArray(o.material) ? o.material : [o.material] : []) { resources.add(m); for (const v of Object.values(m)) if ((v as any)?.isTexture) resources.add(v); } });
+  for (const resource of resources) resource.dispose();
+  scene.environment?.dispose(); sparkR.dispose(); scene.clear(); css.domElement.remove(); renderer.renderLists.dispose();
+});
+return game;
+}

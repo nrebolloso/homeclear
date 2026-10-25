@@ -1,3 +1,4 @@
+import { onWindow, onDocument, every, later } from './lifetime.ts';
 // Layers: one always-visible control for what the room shows. Four presets (Clean, Hazards, Compare, Evidence), a grouped
 // popover of every layer, and "Hide UI" (V) that removes the panels and HUD and leaves only the room.
 // It adds no rendering: it drives the checkboxes and selects that already exist (spot, heights, heat, ...) by setting them
@@ -178,7 +179,7 @@ export function mountLayers(opts: LayersOpts = {}): LayersApi {
     for (const b of dock.querySelectorAll<HTMLButtonElement>('[data-preset]')) b.setAttribute('aria-pressed', String(b.dataset.preset === a));
     q('#lay-custom').hidden = a !== 'custom';
   };
-  const say = (t: string) => { live.textContent = ''; setTimeout(() => { live.textContent = t; }, 30); };
+  const say = (t: string) => { live.textContent = ''; later(() => { live.textContent = t; }, 30); };
 
   const api: LayersApi = {
     apply(name) { const ch = applyPreset(name, io, { perf: perf() }); sync(); say(`${PRESETS[name].label} layers.${perf() ? ' Performance mode keeps heavy overlays off.' : ''}`); return ch; },
@@ -197,19 +198,19 @@ export function mountLayers(opts: LayersOpts = {}): LayersApi {
   q('#lay-more').onclick = () => { pop.hidden = !pop.hidden; q('#lay-more').setAttribute('aria-expanded', String(!pop.hidden)); sync(); };
   q('#lay-hide').onclick = () => api.setChrome(true);
   q('#lay-show').onclick = () => api.setChrome(false);
-  addEventListener('keydown', e => {
+  onWindow('keydown', e => {
     if (chromeKey(e, !!opts.busy?.())) { e.preventDefault(); api.setChrome(!hidden); }
     else if (e.code === 'Escape' && !pop.hidden && dock.contains(document.activeElement)) { pop.hidden = true; q('#lay-more').setAttribute('aria-expanded', 'false'); q('#lay-more').focus(); }
   });
-  document.addEventListener('change', e => { if (!dock.contains(e.target as Node)) sync(); });   // any layer changed elsewhere (View tab, classic panel, code)
-  document.addEventListener('pointerdown', e => { if (!pop.hidden && !dock.contains(e.target as Node)) { pop.hidden = true; q('#lay-more').setAttribute('aria-expanded', 'false'); } });
+  onDocument('change', e => { if (!dock.contains(e.target as Node)) sync(); });   // any layer changed elsewhere (View tab, classic panel, code)
+  onDocument('pointerdown', e => { if (!pop.hidden && !dock.contains(e.target as Node)) { pop.hidden = true; q('#lay-more').setAttribute('aria-expanded', 'false'); } });
   // sit just above the walk-mode bar (frontend.ts) rather than over it; ?classic has no bar, so the dock keeps its corner
   const place = () => {
     const bar = document.getElementById('mode-route')?.parentElement, r = bar?.getBoundingClientRect();
     dock.style.bottom = r && r.height > 0 && getComputedStyle(bar!).display !== 'none' ? `${Math.max(8, Math.round(innerHeight - r.top + 8))}px` : '';
   };
-  addEventListener('resize', place);
-  setInterval(() => { place(); if (!info.hidden && !hidden) renderInfo(); }, 800);
+  onWindow('resize', place);
+  every(() => { place(); if (!info.hidden && !hidden) renderInfo(); }, 800);
   place();   // the before/after numbers arrive after a re-plan, with no change event
   sync();
   return api;

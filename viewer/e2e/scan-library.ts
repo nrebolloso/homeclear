@@ -1,0 +1,33 @@
+import { chromium } from 'playwright-core';
+import { CHROME } from './env.ts';
+import assert from 'node:assert/strict';
+const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+page.setDefaultTimeout(20000);
+const errors: string[] = []; page.on('pageerror', e => errors.push(String(e))); page.on('console', m => { if (m.type() === 'error') console.error(m.text().slice(0, 400)); });
+const base = process.argv[2] ?? 'http://127.0.0.1:5182';
+try {
+  await page.goto(`${base}/?scene=game_synth&noground&nophys&emulate=quest2`);
+  await page.waitForFunction(() => (window as any).game?.scanLibrary, null, { timeout: 60000 });
+  assert.ok(await page.evaluate(() => (window as any).scanLibrary.entries().length >= 3));
+  await page.locator('#scan-picker').click(); assert.ok(await page.locator('#scan-gallery').isVisible());
+  const first = await page.evaluate(() => ({ layout: (window as any).game.layout(), canvases: document.querySelectorAll('#view canvas').length }));
+  assert.equal(first.canvases, 1);
+  assert.equal(await page.evaluate(() => (window as any).scanLibrary.switch('game_synth_narrow')), true);
+  assert.equal(await page.evaluate(() => (window as any).scanLibrary.current()), 'game_synth_narrow');
+  assert.equal(await page.evaluate(() => (window as any).scanLibrary.switch('game_synth')), true);
+  assert.deepEqual(await page.evaluate(() => (window as any).game.layout()), first.layout);
+  assert.equal(await page.locator('#frontend').count(), 1); assert.equal(await page.locator('#layers').count(), 1);
+  assert.equal(await page.evaluate(() => (window as any).scanLibrary.switch('missing_scan')), false);
+  assert.equal(await page.evaluate(() => (window as any).scanLibrary.current()), 'game_synth');
+  console.log('PASS catalog, same-page switches, isolated state, single frontend and failed-load recovery');
+  await page.locator('#scan-close').click();
+  await page.getByText('ENTER VR', { exact: true }).click(); await page.waitForFunction(() => (window as any).game.xr);
+  const session = await page.evaluate(() => { (window as any).__session = (window as any).game.debug.renderer.xr.getSession(); return !!(window as any).__session; });
+  assert.ok(session);
+  assert.equal(await page.evaluate(() => (window as any).scanLibrary.switch('game_synth_narrow')), true);
+  assert.equal(await page.evaluate(() => (window as any).game.debug.renderer.xr.getSession() === (window as any).__session), true);
+  assert.equal(await page.evaluate(() => (window as any).game.xr), true);
+  console.log('PASS scan switching preserves the same immersive XR session');
+  assert.deepEqual(errors, []);
+} finally { await browser.close(); }

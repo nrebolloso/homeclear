@@ -1,3 +1,4 @@
+import { later } from './lifetime.ts';
 // Desktop controls that don't need the scene: what a key press means, the undo history for room edits, and the F1 key
 // overlay with its toast. main.ts supplies the actions (grab, remove, mark...) and calls these from one hook block.
 // The pure parts (keyIntent, createHistory) touch no DOM so tests/controls.test.ts can run them.
@@ -137,7 +138,7 @@ export function createKeyOverlay() {
     isOpen, open, close: hide, toggle: () => (isOpen() ? hide() : open()),
     toast(text: string, ms = 2200) {
       toastEl.textContent = text; toastEl.hidden = false; clearTimeout(timer);
-      timer = window.setTimeout(() => { toastEl.hidden = true; }, ms);
+      timer = later(() => { toastEl.hidden = true; }, ms);
     },
     setLocked(on: boolean) { cross.hidden = !on; },
   };

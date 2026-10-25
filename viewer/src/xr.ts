@@ -12,7 +12,8 @@
 // still to delete it; point at filmed floor and release to teleport. A pinch and a trigger are the same WebXR "select".
 // Moves go through the host's placement check and re-plan, like a desktop drag.
 import * as THREE from 'three';
-import { SparkXr } from '@sparkjsdev/spark';
+import { bindXR } from './xr-session.ts';
+import { onThree, own } from './lifetime.ts';
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 import type { Pose, XY } from './grid.ts';
 import { floorHit, twistAngle, snapQuarter, holdProgress, DELETE_HOLD_S, DELETE_SHOW_S, DRAG_DEADZONE_M } from './wand.ts';
@@ -76,9 +77,10 @@ export async function setupXR(host: XrHost) {
   const { renderer, scene, camera, params, body, items } = host;
   // ?emulate=quest2: IWER replaces navigator.xr with a scripted Quest 2 (head, controllers, hands). Loaded only with the
   // flag, before SparkXr checks support; forceInstall because desktop Chrome has its own (deviceless) navigator.xr.
-  const device = params.has('emulate')
+  const device = (window as any).__xrEmulator ?? (params.has('emulate')
     ? await import('iwer').then(({ XRDevice, metaQuest2 }) => { const d = new XRDevice(metaQuest2); d.installRuntime({ forceInstall: true }); return d; })
-    : null;
+    : null);
+  if (device) (window as any).__xrEmulator = device;
   // Quest Browser renders by itself (performance mode, Quest settings); a desktop browser in VR is streaming over Link
   const tier: Tier = /OculusBrowser|Quest/i.test(navigator.userAgent) || device ? tierAtLoad(location.search, true) : 'link';
   const cfg = xrCfg(location.search, tier);
@@ -122,16 +124,17 @@ export async function setupXR(host: XrHost) {
     const ray = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x66ccff }));
     ray.visible = false;
     group.add(ray); rig.add(group);
-    const c: Ctl = { group, ray };
-    group.addEventListener('connected', e => { c.source = e.data; });
-    group.addEventListener('disconnected', () => { if (isWand(c)) dropWand(); pinching.delete(c); c.source = undefined; });
-    group.addEventListener('selectstart', () => { if (host.shell?.activate(group)) return; if (isMount(c)) return; isWand(c) ? wandDown(c) : pinching.add(c); });
-    group.addEventListener('selectend', () => { if (host.shell?.release(group)) return; isWand(c) ? wandUp() : pinching.delete(c); });
+    const c: Ctl = { group, ray, source: [...renderer.xr.getSession()?.inputSources ?? []][i] };
+    own(() => { ray.removeFromParent(); group.removeFromParent(); });
+    onThree(group, 'connected', e => { c.source = e.data; });
+    onThree(group, 'disconnected', () => { if (isWand(c)) dropWand(); pinching.delete(c); c.source = undefined; });
+    onThree(group, 'selectstart', () => { if (host.shell?.activate(group)) return; if (isMount(c)) return; isWand(c) ? wandDown(c) : pinching.add(c); });
+    onThree(group, 'selectend', () => { if (host.shell?.release(group)) return; isWand(c) ? wandUp() : pinching.delete(c); });
     return c;
   });
   // tracked hands drawn in the rig like the controllers; models served locally (models/hands/, webxr-input-profiles, MIT)
   const handModels = new XRHandModelFactory().setPath('models/hands/');
-  for (const i of [0, 1]) { const hand = renderer.xr.getHand(i); hand.add(handModels.createHandModel(hand, 'mesh')); rig.add(hand); }
+  for (const i of [0, 1]) { const hand = renderer.xr.getHand(i); if (!hand.children.length) hand.add(handModels.createHandModel(hand, 'mesh')); own(() => hand.removeFromParent()); rig.add(hand); }
 
   function aim(c: Ctl) {   // the controller's pose is rig-local (reference space): refresh its world matrix through the rig
     c.group.updateWorldMatrix(true, false);
@@ -229,7 +232,7 @@ export async function setupXR(host: XrHost) {
   // when you turn past 40 deg or walk off, so it's always one point-and-pinch away. Canvas text on a plane (a mesh, so the
   // wand's ray hits it), drawn over the splats like the other overlays.
   const BW = 0.46, BH = 0.15, GAP = 0.025;   // up to three lines: headline, a plain sentence, a small hint
-  const dash = new THREE.Group();
+  const dash = new THREE.Group(); dash.name = 'xr-story-menu';
   dash.visible = false;
   scene.add(dash);
   const lineUp: XrButton = { text: () => ['Line up the walker', 'stand behind it facing its way, then pinch'], tone: () => 'plain', press: () => { mountOffset = null; } };
@@ -384,7 +387,7 @@ export async function setupXR(host: XrHost) {
   const rigState = () => ({ ...xrRig });
   function restoreRig(r: { x: number; y: number; yaw: number }) { Object.assign(xrRig, r); placeRig(); }
 
-  new SparkXr({   // adds the Enter VR button; "VR not supported" where WebXR isn't available
+  bindXR({   // adds the Enter VR button; "VR not supported" where WebXR isn't available
     renderer, mode: 'vr', referenceSpaceType: 'local-floor', enableHands: true,
     frameBufferScaleFactor: cfg.scale, fixedFoveation: cfg.foveation,
     onEnterXr: () => {

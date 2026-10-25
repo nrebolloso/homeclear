@@ -1,3 +1,4 @@
+import { onThree } from './lifetime.ts';
 import * as THREE from 'three';
 import type { FrontendAdapter, mountFrontend } from './frontend.ts';
 import { summarizeChanges } from './frontend-model.ts';
@@ -21,7 +22,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
   const pointers = controllers.map(c => {
     const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x49d4c7 }));
     line.visible = false; c.add(line);
-    c.addEventListener('connected', e => sources.set(c, e.data)); c.addEventListener('disconnected', () => sources.delete(c));
+    onThree(c, 'connected', e => sources.set(c, e.data)); onThree(c, 'disconnected', () => sources.delete(c));
     return line;
   });
   function clear() { root.clear(); hitTargets.length = 0; disposable.splice(0).forEach(x => x.dispose()); }
@@ -75,8 +76,8 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
   }
   function close() { root.visible = false; pointers.forEach(p => p.visible = false); }
   function intersection(controller: THREE.XRTargetRaySpace) { controller.updateWorldMatrix(true, false); ray.setFromXRController(controller); root.updateWorldMatrix(true, true); return ray.intersectObjects(hitTargets, false)[0]; }
-  D.renderer.xr.addEventListener('sessionstart', () => { document.body.classList.add('xr-active'); close(); });
-  D.renderer.xr.addEventListener('sessionend', () => { document.body.classList.remove('xr-active'); close(); inspectionRoot.visible = false; fade.visible = false; transition = null; consumed.clear(); stickWas = false; });
+  onThree(D.renderer.xr, 'sessionstart', () => { document.body.classList.add('xr-active'); close(); });
+  onThree(D.renderer.xr, 'sessionend', () => { document.body.classList.remove('xr-active'); close(); inspectionRoot.visible = false; fade.visible = false; transition = null; consumed.clear(); stickWas = false; });
   return {
     root, inspectionRoot, open, close, isOpen: () => root.visible,
     transition(task: () => void) { transition = { start: performance.now(), task }; fade.visible = true; },

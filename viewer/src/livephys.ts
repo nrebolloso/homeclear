@@ -1,3 +1,4 @@
+import { onWindow } from './lifetime.ts';
 // Live object physics, main-thread side: owns physworker.ts, moves each object's splat with its rigid body, and makes
 // every walker contact felt: haptic pulse (headset), a sound, a red flash on the object, a line in the events log.
 // Masses/frictions are sampled per run from physics_ranges.json and shown as "sampled from an assumed range".
@@ -44,7 +45,7 @@ export function createLivePhys(D: LivePhysDeps) {
 
   // ---------- feedback ----------
   let audio: AudioContext | null = null;
-  addEventListener('pointerdown', () => { audio ??= new AudioContext(); void audio.resume(); }, { once: false });
+  onWindow('pointerdown', () => { audio ??= new AudioContext(); void audio.resume(); }, { once: false });
   function sound(kind: PhysEvent['kind']) {
     if (!audio || audio.state !== 'running') return;
     const t = audio.currentTime, [f, dur, noise] = ({ bumped: [140, 0.12, 0.4], moved: [110, 0.25, 0.7], tipped: [70, 0.6, 0.6], slid: [600, 0.35, 1], corner_caught: [900, 0.06, 0.2], corner_folded: [300, 0.2, 0.5] } as const)[kind];
@@ -149,7 +150,7 @@ export function createLivePhys(D: LivePhysDeps) {
         if (d > 0.15 && d < 0.4) { body.x = walkerPose.x + (dx / d) * 0.15; body.y = walkerPose.y + (dy / d) * 0.15; }
       }
     },
-    dispose() { worker.terminate(); flapMesh.removeFromParent(); },
+    dispose() { worker.terminate(); void audio?.close(); flapMesh.removeFromParent(); },
   };
 }
 export type LivePhys = ReturnType<typeof createLivePhys>;

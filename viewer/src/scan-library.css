@@ -1,0 +1,13 @@
+#scan-library { position:fixed; top:16px; left:188px; z-index:60; font:14px system-ui; color:#e8f2f8; }
+#scan-library button { background:#182a35; color:#e8f2f8; border:1px solid #496373; border-radius:10px; padding:10px 14px; cursor:pointer; }
+#scan-library button:hover, #scan-library button[aria-pressed=true] { border-color:#49d4c7; background:#244a46; }
+#scan-library button:focus-visible { outline:3px solid #bafff4; outline-offset:3px; }
+#scan-current { color:#9bded6; margin-left:6px; }
+#scan-gallery { position:fixed; top:72px; left:16px; width:min(620px,calc(100vw - 32px)); max-height:calc(100vh - 100px); overflow:auto; background:#10202bf5; border:1px solid #496373; border-radius:16px; padding:20px; box-shadow:0 16px 60px #0008; }
+.scan-heading { display:flex; justify-content:space-between; align-items:center; } .scan-heading h2 { margin:0; }
+#scan-rooms > section { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:18px; }
+#scan-rooms h3 { grid-column:1/-1; margin:4px 0; }
+#scan-library .scan-card { display:flex; flex-direction:column; text-align:left; gap:8px; } .scan-card img { width:100%; border-radius:6px; } .scan-card small { color:#a8bdc9; line-height:1.5; }
+#scan-loading { position:fixed; inset:0; display:grid; place-items:center; background:#0a1727d9; font-size:22px; pointer-events:all; }
+#scan-library [hidden] { display:none; }
+@media(max-width:650px) { #scan-library { left:154px; } #scan-current { display:none; } }
