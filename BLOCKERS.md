@@ -104,3 +104,7 @@
    - Removal fills in the demo are lama (HPG only). A local rebuild has ns fills, which show a magenta "imagined"
      column above the counter. Re-run 12b with lama on HPG before replacing the demo folder.
    Compare scenes: `kitchen4_oldexport_lighter`, `kitchen4_newexport_lighter` (viewer `?scene=`).
+   **Re-checked 2026-10-25 with the code after the main merge and the stool2 fix (ae6d976):** identical to the b7c2484
+   rebuild (objects, splat, all five grids, route, hazards, walker) apart from the new empty `reach_points` key; 200-trip
+   toe catches/month 1.1 (1.1-1.2) in both. Route renders differ only in the walker labels (0.66 vs 0.61 m) and the
+   standing chairs' cut. `kitchen4_lighter` was not touched. Compare scene: `kitchen4_headexport_lighter`.
