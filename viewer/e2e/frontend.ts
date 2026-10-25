@@ -4,7 +4,7 @@ import { CHROME } from './env.ts';
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 const base = process.argv[2] ?? 'http://127.0.0.1:5180';
-const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: [`--use-angle=${process.platform === 'win32' ? 'd3d11' : process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 const errors: string[] = []; page.on('pageerror', e => errors.push(String(e)));
 const game = (code: string) => page.evaluate(`(async () => { const game = window.game; ${code} })()`);

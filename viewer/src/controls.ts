@@ -1,11 +1,12 @@
+import { later } from './lifetime.ts';
 // Desktop controls that don't need the scene: what a key press means, the undo history for room edits, and the F1 key
 // overlay with its toast. main.ts supplies the actions (grab, remove, mark...) and calls these from one hook block.
 // The pure parts (keyIntent, createHistory) touch no DOM so tests/controls.test.ts can run them.
 
-export type Intent = 'help' | 'undo' | 'redo' | 'mark' | 'mark-stairs' | 'mark-door' | 'choose-cancel' | 'remove' | 'grab'
+export type Intent = 'help' | 'undo' | 'redo' | 'mark' | 'mark-stairs' | 'mark-door' | 'mark-point' | 'choose-cancel' | 'remove' | 'grab'
   | 'grab-drop' | 'grab-cancel' | 'grab-turn' | 'lock' | 'recenter' | 'persona' | 'nav-route' | 'nav-walk' | 'nav-explore' | 'nav-fly' | null;
 export interface KeyLike { code: string; key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }
-/** typing: focus is in a text field; grabbing: G is carrying an object; choosing: M was pressed and 1/2 is awaited */
+/** typing: focus is in a text field; grabbing: G is carrying an object; choosing: M was pressed and 1/2/3 is awaited */
 export interface KeyCtx { typing: boolean; grabbing: boolean; choosing: boolean }
 
 export function keyIntent(e: KeyLike, c: KeyCtx): Intent {
@@ -21,6 +22,7 @@ export function keyIntent(e: KeyLike, c: KeyCtx): Intent {
   if (c.choosing) {   // M was pressed: 1 or 2 picks the tool, Esc or any other key drops the choice (the key still does its own job)
     if (e.code === 'Digit1' || e.code === 'Numpad1') return 'mark-stairs';
     if (e.code === 'Digit2' || e.code === 'Numpad2') return 'mark-door';
+    if (e.code === 'Digit3' || e.code === 'Numpad3') return 'mark-point';
     return 'choose-cancel';
   }
   if (c.grabbing) return e.code === 'Escape' ? 'grab-cancel' : e.code === 'Enter' || e.code === 'KeyG' ? 'grab-drop' : e.code === 'KeyR' ? 'grab-turn' : null;
@@ -89,7 +91,7 @@ const GROUPS: [string, [string, string][]][] = [
     ['Ctrl+Z / Ctrl+Shift+Z', 'undo / redo any of the above (Ctrl+Y also redoes)'],
   ]],
   ['Mark stairs and doorways', [
-    ['M, then 1 or 2', '1 stairs, 2 doorway (M again cancels)'],
+    ['M, then 1, 2 or 3', '1 stairs, 2 doorway, 3 a point to check on the reach map (M again cancels)'],
     ['Click or Space', 'place a point (Space: at the screen centre)'],
     ['Shift', 'hold to skip snapping'],
     ['Right click, Backspace, Ctrl+Z', 'undo the last point'],
@@ -137,7 +139,7 @@ export function createKeyOverlay() {
     isOpen, open, close: hide, toggle: () => (isOpen() ? hide() : open()),
     toast(text: string, ms = 2200) {
       toastEl.textContent = text; toastEl.hidden = false; clearTimeout(timer);
-      timer = window.setTimeout(() => { toastEl.hidden = true; }, ms);
+      timer = later(() => { toastEl.hidden = true; }, ms);
     },
     setLocked(on: boolean) { cross.hidden = !on; },
   };

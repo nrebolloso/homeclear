@@ -61,6 +61,15 @@ const base: Stair = { name: 'stairs', bottom: [[0.9, 0], [0, 0]], top: [0.45, 2.
   tread_depth_m: 0.27, width_m: 0.9, rails: { left: 'seen', right: 'none' }, measured: 'tape' };
 const verdict = (cs: ReturnType<typeof stairChecks>, w: string) => cs.find(c => c.id === `stairs:stairs:${w}`)?.verdict;
 
+test('a flight from a landing (bottom_z): risers count from the landing, treads measured above it', () => {
+  const { pts, st } = synthStair(Array(10).fill(0.18));
+  for (let i = 2; i < pts.length; i += 4) pts[i] += 2;
+  const m = measureStair(pts, { ...st, bottom_z: 2 });
+  assert.equal(m.treads_z!.length, 10, `${m.treads_z}`);
+  assert.ok(Math.abs(m.treads_z![0] - 2.18) < 0.01 && Math.abs(m.treads_z![9] - 3.8) < 0.01, `${m.treads_z}`);
+  assert.equal(verdict(stairChecks({ ...base, bottom_z: 2, treads_z: [2.18, 2.36, 2.54] }, ctx()), 'risers'), 'ok', 'not a 2.18 m first riser');
+});
+
 test('risers, variation, tread, width against code', () => {
   assert.equal(verdict(stairChecks(base, ctx()), 'risers'), 'ok');
   const steep = stairChecks({ ...base, treads_z: [0.16, 0.36, 0.57] }, ctx());

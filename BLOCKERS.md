@@ -32,3 +32,15 @@
    headless fps to about 16-22 (it was 60 plugged in), and the e2e fps check fails. Plug in and switch to the
    balanced or performance profile first.
 9. **Quest 2 test with taped controllers: fps + tracking (VR team).**
+10. **Lounge object removal: three leftovers need a call (branch merge-juan, 2026-10-24).** Removing each of the 17
+   lounge objects now takes the whole object (fix 71649ea). Exceptions:
+   - **sofa2:** a few long thin streak Gaussians (0.4-0.9 m) about 0.5 m off its back stay in the air. They are white,
+     and only look blue from some angles (view-dependent colour). Neither 6c's point vote nor the render lift
+     (`--lift render`) labels them. Two options: accept them, or retrain the lounge with a cap on Gaussian size.
+   - **stool2:** a small dark patch stays. It is most likely the unlabelled bench beside the stool, or floor the
+     stool hid from the camera.
+   - Furniture 6c never detected (the bench, the table by chair3, the sofa near the rug) can't be removed at all.
+   **Render lift, not adopted:** it finds 25 objects instead of 17. That includes a door, but also overlapping sofa
+   pieces (sofa4/5/6), and it doesn't fix the leftovers above. It is in `out/gator_lounge_lift` on HPG if you want it.
+   The new stage 12 rules apply to every `objects: auto` scene. Only the lounge has been re-exported: kitchen4_lighter
+   and the others keep their old export until rebuilt. Pushing commits d012fb8..71649ea to main waits for your OK.

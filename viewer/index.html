@@ -58,6 +58,20 @@
       <span class="measured">measured</span> from the splat geometry and the simulation ·
       <span class="imagined">imagined, not measured</span> generated content, never used for numbers
     </div>
+    <h2>Where the device can go</h2>
+    <label title="the floor from the route's start: green reachable, amber tight (OT to verify), red cut off (striped), grey not scanned; computed from the floor map"><input type="checkbox" id="reach" /> Reach map</label>
+    <label title="the widest way from the route's start to each goal, picked point and room corner; it stops where the device can't pass (computed, not simulated)"><input type="checkbox" id="coverage" checked /> Coverage ghosts</label>
+    <label title="contact ghosts: only the simulated trips that touch something"><input type="checkbox" id="hitghosts" /> Only trips with a contact</label>
+    <label title="what if the device were this wide: the map repaints as you slide">Device width <input type="range" id="reachwidth" min="45" max="100" step="1" value="66" /> <output id="reachwidthout" for="reachwidth"></output></label>
+    <button id="reachplay" title="the wave from the route's start again">Play the wave</button>
+    <button id="markpoint" title="click a spot on the floor (M then 3): checked from the route's start">Pick a point to check</button>
+    <button id="clearpoints" title="forget the points picked in this browser">Clear points</button>
+    <button id="copypoints" title="keep them: paste into config.&lt;scene&gt;.yaml under game:">Copy points as config YAML</button>
+    <div id="reachstatus" class="status"></div>
+    <ul id="reachfindings"></ul>
+    <ul id="reachtargets"></ul>
+    <canvas id="reachcost" width="300" height="64" hidden></canvas>
+    <div id="reachcostinfo" class="hint"></div>
   </aside>
   <aside id="right" class="panel">
     <h2>Fixes</h2>
@@ -130,6 +144,6 @@
     <div id="qrnote" class="hint"></div><button id="closeqr">Close</button></div>
   <div id="tourcap" hidden></div>
   <div id="hud"></div>
-  <script type="module" src="/src/main.ts"></script>
+  <script type="module" src="/src/app.ts"></script>
 </body>
 </html>

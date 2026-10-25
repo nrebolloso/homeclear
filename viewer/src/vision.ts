@@ -17,7 +17,7 @@ export const PROFILES = {
 export type Profile = keyof typeof PROFILES;
 const MODE: Record<Profile, number> = { normal: 0, cataract: 1, macular: 2, glaucoma: 3, low_contrast: 4, hemianopia_left: 5 };
 
-const VisionShader = {
+export const VisionShader = {
   uniforms: { tDiffuse: { value: null }, mode: { value: 0 }, res: { value: new THREE.Vector2(1, 1) }, strength: { value: 1 } },
   vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: /* glsl */ `
@@ -65,6 +65,19 @@ export function createVision(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
   composer.addPass(pass);
   composer.addPass(new OutputPass());
   let profile: Profile = 'normal';
+  const eyes = [0, 1].map(() => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
+  const eyeCamera = new THREE.PerspectiveCamera(); eyeCamera.matrixAutoUpdate = false;
+  const composite = new THREE.Scene(), controls = new THREE.Scene();
+  const material = new THREE.ShaderMaterial({ ...VisionShader, uniforms: THREE.UniformsUtils.clone(VisionShader.uniforms), depthTest: false, depthWrite: false,
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: VisionShader.fragmentShader.replace('gl_FragColor = vec4(c, 1.0);', 'gl_FragColor = vec4(c, 1.0);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>') });
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material); quad.frustumCulled = false; composite.add(quad);
+  let eyeFrames = 0;
+  quad.onBeforeRender = (_r, _s, c) => {
+    const index = renderer.xr.getCamera().cameras.indexOf(c as (typeof renderer.xr.getCamera extends (...args: any[]) => infer R ? R : never)['cameras'][number]);
+    const target = eyes[Math.max(0, index)]; material.uniforms.tDiffuse.value = target.texture;
+    material.uniforms.res.value.set(target.width, target.height);
+  };
   const size = () => {
     const v = renderer.getDrawingBufferSize(new THREE.Vector2());
     pass.uniforms.res.value.set(v.x, v.y);
@@ -73,8 +86,45 @@ export function createVision(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
   size();
   return {
     get profile() { return profile; },
-    set(p: Profile, strength = 1) { profile = p; pass.uniforms.mode.value = MODE[p]; pass.uniforms.strength.value = strength; },
+    set(p: Profile, strength = 1) { profile = p in MODE ? p : 'normal'; pass.uniforms.mode.value = material.uniforms.mode.value = MODE[profile]; pass.uniforms.strength.value = material.uniforms.strength.value = Math.max(0, Math.min(1, strength)); },
     resize: size,
+    dispose() { composer.dispose(); pass.dispose(); eyes.forEach(e => e.dispose()); quad.geometry.dispose(); material.dispose(); },
+    xrStats: () => ({ profile, eyeFrames }),
+    /** Explicit output for the desktop companion; never writes over the XR framebuffer. */
+    renderTo(output: THREE.WebGLRenderTarget) {
+      const target = renderer.getRenderTarget();
+      const input = eyes[0]; if (input.width !== output.width || input.height !== output.height) input.setSize(output.width, output.height);
+      try {
+        renderer.setRenderTarget(input); renderer.render(scene, camera);
+        material.uniforms.tDiffuse.value = input.texture; material.uniforms.res.value.set(input.width, input.height);
+        renderer.setRenderTarget(output); renderer.render(composite, camera);
+      } finally { renderer.setRenderTarget(target); }
+    },
+    /** Render the measured room per eye, then filter each eye separately. UI is drawn afterward in normal vision. */
+    renderXR() {
+      if (profile === 'normal') { renderer.render(scene, camera); return; }
+      const target = renderer.getRenderTarget(), enabled = renderer.xr.enabled, autoClear = renderer.autoClear;
+      const ui: { node: THREE.Object3D; parent: THREE.Object3D }[] = [];
+      for (const name of ['frontend-xr-menu', 'frontend-xr-inspection', 'frontend-xr-notice', 'xr-story-menu', 'xr-loading']) {
+        const node = scene.getObjectByName(name); if (node?.visible && node.parent) { ui.push({ node, parent: node.parent }); controls.attach(node); }
+      }
+      try {
+        renderer.xr.updateCamera(camera as THREE.PerspectiveCamera);
+        const cameras = renderer.xr.getCamera().cameras;
+        renderer.xr.enabled = false;
+        cameras.forEach((eye, i) => {
+          const viewport = eye.viewport, output = eyes[i]; if (!output) return;
+          if (output.width !== viewport.z || output.height !== viewport.w) output.setSize(viewport.z, viewport.w);
+          eyeCamera.matrix.copy(eye.matrixWorld); eyeCamera.matrixWorld.copy(eye.matrixWorld); eyeCamera.matrixWorldInverse.copy(eye.matrixWorldInverse);
+          eyeCamera.projectionMatrix.copy(eye.projectionMatrix); eyeCamera.projectionMatrixInverse.copy(eye.projectionMatrixInverse);
+          renderer.setRenderTarget(output); renderer.clear(); renderer.render(scene, eyeCamera); eyeFrames++;
+        });
+        renderer.xr.enabled = enabled; renderer.setRenderTarget(target); renderer.render(composite, camera);
+        renderer.autoClear = false; renderer.render(controls, camera);
+      } finally {
+        ui.forEach(({ node, parent }) => parent.attach(node)); renderer.autoClear = autoClear; renderer.xr.enabled = enabled; renderer.setRenderTarget(target);
+      }
+    },
     /** Draw the frame: through the pass when a profile is on, else the plain render (identical to no vision module). */
     render() { if (profile === 'normal') renderer.render(scene, camera); else composer.render(); },
   };

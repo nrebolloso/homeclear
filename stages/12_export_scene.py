@@ -31,6 +31,9 @@ GROW_M = 0.10     # ... or this close when it is also inside that object's footp
 ON_TOP_M = 0.3    # unlabelled things in its footprint up to this far above it go with it (a cup on a removed table must not float)
 REACH_M = 0.05    # ... but none whose splat reaches this far past its box (a wall sheet centred inside it)
 STANDS_M = 0.3    # an object labelled from below this stands on the floor: its legs 6c missed go with it down to the floor
+JOIN_M = 0.4      # ... and unlabelled pieces joined to it (3 cm voxels) up to this far across the floor from its labels
+# ... and so does furniture of these labels however high 6c labelled it: it saw a high-top table's top, not its pedestal
+STANDING = {"bed", "nightstand", "bedside table", "table", "chair", "stool", "bench", "sofa", "trash can", "toilet"}
 
 
 def surface_height(z, band):
@@ -158,11 +161,24 @@ def config_objects(gm, w):
         return gm["objects"]
     import yaml
     objs = [o for o in yaml.safe_load((Path(w) / "objects_proposed.yaml").read_text())["objects"] if o["kind"] != "door"]
-    # a low detection inside another one of its kind is a piece of it (a chair's runner 6c split off as its own chair)
-    for o in [o for o in objs if "instance" in o and max(q["z"][1] for q in o["parts"]) < STANDS_M]:
+    # a detection centred inside a bigger one with the same label is a piece of it: a chair's runner 6c split off as its own
+    # chair, a round table's top and pedestal (gator_lounge: removing either left the other standing), one table seen twice.
+    # Not rugs: a rug is cut by the bump patch in its own box (rug_outline), and a merged box finds some other patch
+    area = lambda o: sum(abs(np.cross(*np.c_[np.array(q["poly_xy"])[1:3] - np.array(q["poly_xy"])[0], [0, 0]])[2]) for q in o["parts"])
+    label = lambda o: o.get("detected_as", o["kind"])
+    inside = lambda h, c: any(Path2d(q["poly_xy"]).contains_point(c) for q in h["parts"])
+    for o in sorted([o for o in objs if "instance" in o and o["kind"] != "rug"], key=area):
         c = np.mean([np.mean(q["poly_xy"], 0) for q in o["parts"]], 0)
-        host = next((h for h in objs if h is not o and h["kind"] == o["kind"] and "instance" in h and
-                     any(Path2d(q["poly_xy"]).contains_point(c) for q in h["parts"])), None)
+        host = next((h for h in objs if h is not o and label(h) == label(o) and "instance" in h and area(h) >= area(o) and inside(h, c)), None)
+        if host:
+            host["instances"] = host.get("instances", [host["instance"]]) + o.get("instances", [o["instance"]])
+            host["parts"] = host["parts"] + o["parts"]
+            b = np.array(host["box_xy"] + o["box_xy"], float)
+            host["box_xy"] = [b.min(0).round(3).tolist(), b.max(0).round(3).tolist()]
+            objs.remove(o)
+    for o in [o for o in objs if "instance" in o and o["kind"] == "rug"]:
+        c = np.mean([np.mean(q["poly_xy"], 0) for q in o["parts"]], 0)
+        host = next((h for h in objs if h is not o and h["kind"] == "rug" and "instance" in h and inside(h, c)), None)
         if host:
             host["instances"] = host.get("instances", [host["instance"]]) + [o["instance"]]
             objs.remove(o)
@@ -213,6 +229,18 @@ def half_extent(v):
     return 2 * np.sqrt(((R * s[:, None, :]) ** 2).sum(2))
 
 
+def joined(xyz, seed, cand, vox=0.03):
+    """cand points 26-connected (vox grid) through seed or cand points to a seed point."""
+    m = seed | cand
+    q = np.floor((xyz[m] - xyz[m].min(0)) / vox).astype(int)
+    grid = np.zeros(q.max(0) + 1, int)
+    grid[tuple(q.T)] = 1
+    comp = ndimage.label(grid, np.ones((3, 3, 3)))[0][tuple(q.T)]
+    out = np.zeros(len(xyz), bool)
+    out[m] = np.isin(comp, comp[seed[m]]) & cand[m]
+    return out
+
+
 def object_parts(o, xyz, g, w, lo, cell, shape, v):
     """Gaussians that belong to config object o (its height-limited parts, with a cut margin). tools/lighter_clean.py reuses it."""
     in_xy = lambda q, cm: (near_poly(xyz[:, :2], np.array(q["poly_xy"], float), cm) if "poly_xy" in q else
@@ -227,7 +255,7 @@ def object_parts(o, xyz, g, w, lo, cell, shape, v):
         z0 = z["xyz"][np.isin(z["instance"], ids), 2].min() - 0.02
         # one that stands takes its outline down through the floor: chair7's runners lie flat at 0-3 mm, under the floor
         # band, 14+ cm from any label, and stayed as two yellow bars on its fill (the fill replaces that floor anyway)
-        z0 = -0.03 if z0 < STANDS_M else z0
+        z0 = -0.03 if z0 < STANDS_M or o.get("detected_as", o.get("kind")) in STANDING else z0
         zone = in_parts([{**q, "z": [z0, q["z"][1] + ON_TOP_M]} for q in o["parts"]], 0.02)
         own = np.isin(inst, ids)
         # what is nearest to its own points also goes up to GROW_M past its outline, above the floor: a chair back's
@@ -236,6 +264,15 @@ def object_parts(o, xyz, g, w, lo, cell, shape, v):
         # what is nearest to nobody goes to the one whose labels it stands under, not whichever outline came first: chair7's
         # leg bottoms (labelled from 22 cm) went to chair4 and the table, whose outlines overlap it, and stayed in its fill
         sel = (own & (d <= MEMBER_M)) | (near & own) | (zone & (own | ((inst == -1) & np.isin(col, ids))))
+        # and what 6c never labelled but is joined to it: 200 frames of votes covered only part of most objects (chair3's
+        # back, stool2's top, the sofa's seat edge; the rest got ~30% of its label's votes, under the 50% cut) and the rest
+        # stayed as a dark half-object when it was removed. Unlabelled Gaussians nearest its labels (col: a neighbour's
+        # armrest stays with the neighbour), within JOIN_M of them across the floor, above the floor and under its top
+        from scipy.spatial import cKDTree
+        lab = z["xyz"][np.isin(z["instance"], ids)]
+        cand = ~sel & (inst == -1) & np.isin(col, ids) & (xyz[:, 2] > 0.02) & (xyz[:, 2] < lab[:, 2].max() + 0.05)
+        cand[cand] = cKDTree(lab[:, :2]).query(xyz[cand, :2], distance_upper_bound=JOIN_M)[0] <= JOIN_M
+        sel |= joined(xyz, sel, cand)
         # but never the wall it stands against: the trash can took the white wall behind and above its lid (6c's mask spilt
         # onto it, and the grow and on-top rules took the rest). A wall has the object on one side; a line with 3%+ of its
         # labels on or past it runs through it (a noise line, or a cabinet face it straddles). Up to its top the wall's
@@ -333,7 +370,7 @@ def main(cfg):
     if (w / "removed.ply").exists():   # stage 5b's dropped Gaussians, for the cleanup before/after
         (out / "removed.ply").write_bytes((w / "removed.ply").read_bytes())
 
-    floor, obstacles, bumps, bump_h, _ = layers(xyz[solid & ~taken], g, lo, shape)
+    floor, obstacles, bumps, bump_h, _ = layers(xyz[solid & ~taken], g, lo, shape, *occ.floor_evidence(w, g, lo, shape))
     occ.stamp_synthetic(g, lo, shape, floor, obstacles, bumps, bump_h)
     est = occ.classify_thin(g, bumps, bump_h)
     for o in objects:   # nobody filmed the floor under the furniture: assume the fitted plane (z=0) continues
@@ -414,6 +451,8 @@ def main(cfg):
              "stairs": gm.get("stairs", []),
              # doorways (viewer doors.ts): {name, a, b} = the two jambs' inside faces; the viewer offers ways to widen them
              "doors": gm.get("doors", []),
+             # spots to check on the reach map (viewer reach.ts): {name, at: [x, y]}, from the viewer's "Copy points as config YAML"
+             "reach_points": gm.get("reach_points", []),
              "hazards": "hazards.json", "route": "route.json", "routes": "routes.json", "walker": "walker.json", "personas": "personas.json",
              "persona": "persona.json", "interventions": gm["interventions"], "risk": gm["risk"],
              "plan": {k: cfg["plan"][k] for k in ("preferred_clearance_m", "clearance_weight")},
