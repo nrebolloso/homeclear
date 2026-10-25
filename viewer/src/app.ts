@@ -14,7 +14,7 @@ for (const node of [...document.body.children]) if (node.tagName !== 'SCRIPT') n
 document.body.append(stage);
 const toolbar = document.createElement('div'); toolbar.id = 'scan-library';
 toolbar.innerHTML = `<button id="scan-picker" aria-expanded="false" aria-controls="scan-gallery">Scans <span id="scan-current"></span> ▾</button>
-  <section id="scan-gallery" aria-label="Scan library" hidden><div class="scan-heading"><h2>Explore scans</h2><button id="scan-close" aria-label="Close scan library">×</button></div><p>Real rooms, scan versions, and labeled sample scenes.</p><div id="scan-rooms"></div><details><summary>Connect another device</summary><p>Open this viewer on the laptop and headset. Use the same session name; choose Host on the headset and Companion on the laptop.</p><label>Session <input id="session-code" maxlength="48" placeholder="home-demo"></label><label>Role <select id="session-role"><option value="host">Host / headset</option><option value="companion">Companion / laptop</option></select></label><button id="session-connect">Connect</button><button id="session-disconnect">Disconnect</button><p id="session-status" role="status">Local viewer</p></details><p id="scan-message" role="status"></p></section>
+  <section id="scan-gallery" aria-label="Scan library" hidden><div class="scan-heading"><h2>Explore scans</h2><button id="scan-close" aria-label="Close scan library">×</button></div><p>Real rooms, scan versions, and labeled sample scenes.</p><div class="scan-actions"><button id="scan-resume">Resume current room</button><button id="scan-restart">Restart demo</button></div><div id="scan-rooms"></div><details><summary>Connect another device</summary><p>Open this viewer on the laptop and headset. Use the same session name; choose Host on the headset and Companion on the laptop.</p><label>Session <input id="session-code" maxlength="48" placeholder="home-demo"></label><label>Role <select id="session-role"><option value="host">Host / headset</option><option value="companion">Companion / laptop</option></select></label><button id="session-connect">Connect</button><button id="session-disconnect">Disconnect</button><p id="session-status" role="status">Local viewer</p></details><p id="scan-message" role="status"></p></section>
   <div id="scan-loading" role="status" hidden></div>`;
 document.body.append(toolbar);
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -40,20 +40,30 @@ function showHeadsetLoading(id: string) {
 function message(text: string) { $('scan-message').textContent = text; }
 function gallery(open: boolean) { $('scan-gallery').hidden = !open; $('scan-picker').setAttribute('aria-expanded', String(open)); if (open) $('scan-close').focus(); }
 $('scan-picker').onclick = () => gallery(Boolean($('scan-gallery').hidden));
+$('scan-resume').onclick = () => gallery(false);
+$('scan-restart').onclick = () => void switchScan(current, false);
 $('scan-close').onclick = () => { gallery(false); $('scan-picker').focus(); };
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('scan-gallery').hidden) { gallery(false); $('scan-picker').focus(); } });
 function drawCatalog() {
   $('scan-rooms').replaceChildren();
+  function card(entry: ScanEntry, primary = false) {
+    const button = document.createElement('button'); button.className = 'scan-card'; button.disabled = busy;
+    button.setAttribute('aria-pressed', String(entry.id === current));
+    if (primary && (thumbnails.has(entry.id) || entry.map)) {
+      const image = document.createElement('img'); image.src = thumbnails.get(entry.id) ?? entry.map!;
+      image.alt = thumbnails.has(entry.id) ? `${entry.title} saved viewpoint` : `${entry.title} floor map`; button.append(image);
+    }
+    const title = document.createElement('strong'); title.textContent = primary ? entry.title : entry.version;
+    const capabilities = document.createElement('small'); capabilities.textContent = [primary ? entry.version : '', entry.sample ? 'Synthetic / sample' : 'Real scan', 'Explore', entry.routes ? 'Routes' : '', entry.objects ? `${entry.objects} objects` : 'No object edits', entry.fixes ? 'Configured fixes' : '', `${Math.round(entry.bytes / 1048576)} MB`].filter(Boolean).join(' · ');
+    button.append(title, capabilities); button.title = entry.scaleNote; button.onclick = () => void switchScan(entry.id); return button;
+  }
   for (const group of groupScans(catalog)) {
-    const section = document.createElement('section'), heading = document.createElement('h3'); heading.textContent = group.room; section.append(heading);
-    for (const entry of group.scans) {
-      const button = document.createElement('button'); button.className = 'scan-card'; button.disabled = busy;
-      button.setAttribute('aria-pressed', String(entry.id === current));
-      if (thumbnails.has(entry.id) || entry.map) { const image = document.createElement('img'); image.src = thumbnails.get(entry.id) ?? entry.map!; image.alt = thumbnails.has(entry.id) ? `${entry.title} saved viewpoint` : `${entry.title} floor map`;  button.append(image); }
-      const title = document.createElement('strong'); title.textContent = entry.sample ? entry.title : entry.version;
-      const capabilities = document.createElement('small'); capabilities.textContent = [entry.sample ? 'Synthetic / sample' : 'Real scan', 'Explore', entry.routes ? 'Routes' : '', entry.objects ? `${entry.objects} objects` : 'No object edits', entry.fixes ? 'Configured fixes' : '', `${Math.round(entry.bytes / 1048576)} MB`].filter(Boolean).join(' · ');
-      button.append(title, capabilities); button.title = entry.scaleNote;
-      button.onclick = () => void switchScan(entry.id); section.append(button);
+    const section = document.createElement('section'); section.className = 'scan-room';
+    const preferred = group.scans.find(e => e.id === current) ?? group.scans.find(e => e.id === 'kitchen4_lighter_v1.0.3') ?? group.scans.at(-1)!;
+    section.append(card(preferred, true));
+    if (group.scans.length > 1) {
+      const versions = document.createElement('details'), summary = document.createElement('summary'); summary.textContent = `Other ${preferred.sample ? 'samples' : 'versions'} · ${group.scans.length - 1}`;
+      versions.append(summary); for (const entry of group.scans) if (entry !== preferred) versions.append(card(entry)); section.append(versions);
     }
     $('scan-rooms').append(section);
   }
@@ -91,6 +101,7 @@ async function switchScan(id: string, resume = true, fromHost = false) {
   const previous = current;
   $('scan-loading').hidden = false; $('scan-loading').textContent = `Loading ${catalog.find(e => e.id === id)?.title ?? id}…`;
   let disposed = false;
+  const preferences = game ? { vision: (document.getElementById('vision') as HTMLSelectElement).value, night: (document.getElementById('night') as HTMLInputElement).checked, layers: game.layers.state(), movement: game.comfort.movement, seated: game.comfort.seated, display: game.companion.mode() } : null;
   try {
     await preflight(id);
     if (game) {
@@ -101,7 +112,12 @@ async function switchScan(id: string, resume = true, fromHost = false) {
       if (game.editLocks?.busy()) throw Error('Release the edited object before switching scans.');
     }
     scope?.dispose(); disposed = true; showHeadsetLoading(id);
-    await mount(id, resume); return true;
+    await mount(id, resume);
+    if (preferences) {
+      game.setVision(preferences.vision); game.setNight(preferences.night); game.comfort.movement = preferences.movement; game.comfort.seated = preferences.seated; game.companion.setMode(preferences.display);
+      for (const [key, value] of Object.entries(preferences.layers)) { const control = document.getElementById(key) as HTMLInputElement & HTMLSelectElement; if (!control) continue; if (typeof value === 'boolean') control.checked = value; else control.value = String(value); control.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
+    return true;
   } catch (error) {
     if (disposed && game) { scope?.dispose(); try { await mount(previous, true); } catch (recovery) { console.error('Room recovery failed', recovery); } }
     message(String(error)); gallery(true); return false;

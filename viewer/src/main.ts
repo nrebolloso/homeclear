@@ -109,8 +109,7 @@ const tier = tierAtLoad(location.search, wantXR);
 let perfOn = perfAtLoad(location.search, tier, (() => { try { return localStorage.getItem('homeclear.perf'); } catch { return null; } })());
 // the drawing buffer is kept on the monitor for screenshots (fix card, e2e); a headset frame doesn't need the extra copy
 const renderer = runtime.renderer;
-renderer.setPixelRatio(Math.min(devicePixelRatio, perfOn ? PERF.pixel_ratio : FULL.pixel_ratio));
-renderer.setSize(innerWidth, innerHeight);
+if (!renderer.xr.isPresenting) { renderer.setPixelRatio(Math.min(devicePixelRatio, perfOn ? PERF.pixel_ratio : FULL.pixel_ratio)); renderer.setSize(innerWidth, innerHeight); }
 $('view').appendChild(renderer.domElement);
 const css = new CSS2DRenderer();
 css.setSize(innerWidth, innerHeight);
@@ -129,7 +128,7 @@ scene.add(nightLamp);
 const vision = createVision(renderer, scene, camera);
 onWindow('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight); css.setSize(innerWidth, innerHeight); vision.resize();
+  if (!renderer.xr.isPresenting) renderer.setSize(innerWidth, innerHeight); css.setSize(innerWidth, innerHeight); vision.resize();
 });
 
 const night = nightShader();
@@ -325,6 +324,8 @@ runtime.scope.own(() => { worker.terminate(); renderer.setAnimationLoop(null); }
 (window as any).game = game;
 
 function replanRoute(k: number) {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('selectRoute', [k]);
+
   selRoute = k; autoS = 0;
   showPhysics();
   return replan().then(ms => { if (!renderer.xr.isPresenting && !current?.error) Object.assign(body, routePose(0, 0, Infinity)); return ms; });
@@ -611,7 +612,9 @@ const iconOf = (o: { name: string; kind: string }) =>
 const snap = () => ({ layout, applied });
 const editHist = createHistory<ReturnType<typeof snap>>(s => s.layout);
 const nameOf = (k: number) => objs[k].name.replace(/_/g, ' ');
-function restoreObject(k: number) {   // back where it stood when removed, if that spot is still free
+function restoreObject(k: number) {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('restoreObject', [objs[k].name]);
+   // back where it stood when removed, if that spot is still free
   const poses = layout.poses.map((q, n) => (n === k ? { ...q, removed: false } : q));
   if (!placementOk(g, placeBase, objs, poses, k, overlapOk[k])) return refused();
   const was = snap();
@@ -620,14 +623,18 @@ function restoreObject(k: number) {   // back where it stood when removed, if th
   syncObjects();
   return replan();
 }
-function commitPose(k: number, p: Pose) {
+function commitPose(k: number, p: Pose): Promise<number> {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('moveObject', [objs[k].name, p.x, p.y, p.yaw * 180 / Math.PI]);
+
   const was = snap(), q = layout.poses[k], np = { x: p.x, y: p.y, yaw: Math.round(p.yaw / (Math.PI / 2)) * (Math.PI / 2) };
   layout = { ...layout, poses: layout.poses.map((o, n) => (n === k ? np : o)) };
   if (Math.hypot(np.x - q.x, np.y - q.y) > 1e-4 || Math.abs(Math.atan2(Math.sin(np.yaw - q.yaw), Math.cos(np.yaw - q.yaw))) > 1e-4) editHist.record(`moved ${nameOf(k)}`, was, snap());
   syncObjects();
   return replan();
 }
-function removeObject(k: number) {   // take it out of the room: no footprint, no splat; the spot it covered shows the imagined fill
+function removeObject(k: number) {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('removeObject', [objs[k].name]);
+   // take it out of the room: no footprint, no splat; the spot it covered shows the imagined fill
   const was = snap();
   layout = { ...layout, poses: layout.poses.map((q, n) => (n === k ? { ...q, removed: true } : q)) };
   editHist.record(`removed ${nameOf(k)}`, was, snap());
@@ -663,6 +670,8 @@ $('planfixes').onclick = async () => {
   game.fixes = fixes;
 };
 function applyFix(id: string) {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('applyFix', [id]);
+
   layout = applyIntervention(objs, layout, interventions.find(i => i.id === id)!);
   applied.push(id);
   syncObjects();
@@ -1245,7 +1254,7 @@ async function resetParked(id: string) {
 }
 const ndc = (e: { clientX: number; clientY: number }) => document.pointerLockElement === renderer.domElement ? new THREE.Vector2() : new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);   // locked mouse: the crosshair
 onCanvas(renderer.domElement, 'pointerdown', e => {   // capture: before furniture picking and the gizmo
-  if (renderer.xr.isPresenting) return;
+  if (renderer.xr.isPresenting || game.remoteSession) return;
   if (grabbing) { e.stopImmediatePropagation(); if (e.button === 0) dropGrab(); else if (e.button === 2) cancelGrab(); return; }   // G: click drops, right click cancels
   markRay.setFromCamera(ndc(e), camera);
   const w = mk ? null : markRay.intersectObjects(stairs3d.walkers(), false)[0];
@@ -1483,7 +1492,9 @@ $('fixcard').onclick = () => openFixCard();
 $('closeqr').onclick = () => { $('qr').hidden = true; };
 
 // ---------- reset: one object back where the scan had it, or the whole room (objects, removals, fixes) ----------
-function resetObject(k: number) {   // moved, turned or removed: back to the original spot, if it is still free
+function resetObject(k: number) {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('resetObject', [objs[k].name]);
+   // moved, turned or removed: back to the original spot, if it is still free
   if (!isMoved(layout.poses[k], original[k])) return;
   const poses = layout.poses.map((q, n) => (n === k ? resetPose(original[k]) : q));
   if (!placementOk(g, placeBase, objs, poses, k, overlapOk[k])) return refused();
@@ -1494,7 +1505,9 @@ function resetObject(k: number) {   // moved, turned or removed: back to the ori
   if (selected === k) lastValid = poseOf(k);
   return replan();
 }
-function resetAll() {   // hand-marked stairs and doors are scan annotations, not renovations: they stay
+function resetAll() {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('resetAll', []);
+   // hand-marked stairs and doors are scan annotations, not renovations: they stay
   select(-1);
   const was = snap();
   layout = { poses: original.map(resetPose), flattened: [] }; applied = []; suggestions = [];
@@ -1587,6 +1600,8 @@ function drawNights() {   // 30 nights at the current rate; the selected night s
 $<HTMLInputElement>('nightscrub').oninput = e => { nightSel = +(e.target as HTMLInputElement).value - 1; drawNights(); };
 /** Swap who walks: device mesh + footprint, gait, planner penalties, default eyes; then re-plan everything. */
 async function setPersona(key: string) {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('setPersona', [key]);
+
   const p = personas[key];
   personaKey = key;
   $<HTMLSelectElement>('persona').value = key;
@@ -1608,7 +1623,7 @@ async function setPersona(key: string) {
   $('personanote').textContent = key === 'patient' ? '' : walkerCfg.device === 'wheelchair' ? 'comparison: a typical chair (assumed size); no trip model for a wheelchair, so trips read zero: see the ADA checks. Green: within seated reach (38-122 cm); red: out of reach. Drive: W/S roll, A/D steer while rolling, Q/E spin on the spot'
     : 'comparison: gait and planner numbers for this persona are assumptions, not this patient';
   const ms = await replan();
-  if (!current?.error) Object.assign(body, routePose(0, 0, Infinity));
+  if (!renderer.xr.isPresenting && !current?.error) Object.assign(body, routePose(0, 0, Infinity));
   return ms;
 }
 /** P: the next persona in the Who list, with the keys that drive it. */
@@ -1685,8 +1700,7 @@ function applyPerf(on: boolean, remember = true) {
   $<HTMLInputElement>('perf').checked = on;
   if (on) { perfSaved ??= Object.fromEntries(PERF_BOXES.map(id => [id, $<HTMLInputElement>(id).checked])); PERF_BOXES.forEach(id => setBox(id, false)); }
   else if (perfSaved) { for (const id of PERF_BOXES) setBox(id, perfSaved[id]); perfSaved = null; }
-  renderer.setPixelRatio(Math.min(devicePixelRatio, (on ? PERF : FULL).pixel_ratio));
-  renderer.setSize(innerWidth, innerHeight);
+  if (!renderer.xr.isPresenting) { renderer.setPixelRatio(Math.min(devicePixelRatio, (on ? PERF : FULL).pixel_ratio)); renderer.setSize(innerWidth, innerHeight); }
   const lim = splatCfg(location.search, on);
   sparkR.maxStdDev = lim.max_std_dev; sparkR.maxPixelRadius = lim.max_pixel_radius;
   const fog = scene.getObjectByName('fog');
@@ -1770,7 +1784,7 @@ onDocument('pointerlockchange', () => {
   if (on) keyHelp.toast('Mouse locked: move to look, click acts at the dot, Esc lets go', 3500);
 });
 onWindow('keydown', e => {
-  if (renderer.xr.isPresenting) return;
+  if (renderer.xr.isPresenting || game.remoteSession) return;
   const el = e.target as HTMLElement, typing = /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable;
   const it = keyIntent(e, { typing, grabbing: !!grabbing, choosing });
   if (it === 'choose-cancel') { choosing = false; return; }   // the key still does its own job
@@ -1798,7 +1812,7 @@ onWindow('keydown', e => {
 // ---------- input ----------
 const keys = new Set<string>();
 onWindow('keydown', e => {
-  if (renderer.xr.isPresenting || e.defaultPrevented || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) return;
+  if (renderer.xr.isPresenting || game.remoteSession || e.defaultPrevented || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) return;
   if (selected >= 0 && e.code.startsWith('Arrow')) { nudge(e.code); e.preventDefault(); return; }   // arrows move the selected object, not you
   keys.add(e.code);
   if (e.code === 'KeyT') setMode('translate');
@@ -1816,7 +1830,7 @@ const ray = new THREE.Raycaster();
 // a drag with the left or right button looks; `right` + `act`: a right click that didn't move runs act (undo a mark point...)
 let look: { x: number; y: number; moved: number; right?: boolean; act?: () => unknown } | null = null;
 onCanvas(renderer.domElement, 'pointerdown', e => {
-  if ((e.button !== 0 && e.button !== 2) || renderer.xr.isPresenting || handleDrag || parkDrag || tc.dragging || (tc as any).axis) return;
+  if ((e.button !== 0 && e.button !== 2) || renderer.xr.isPresenting || game.remoteSession || handleDrag || parkDrag || tc.dragging || (tc as any).axis) return;
   if (e.button === 2) { look = { x: e.clientX, y: e.clientY, moved: 0, right: true }; return; }
   if (mk || editing) { look = { x: e.clientX, y: e.clientY, moved: 0 }; return; }
   ray.setFromCamera(ndc(e), camera);
@@ -1825,7 +1839,7 @@ onCanvas(renderer.domElement, 'pointerdown', e => {
   look = { x: e.clientX, y: e.clientY, moved: 0 };
 });
 onCanvas(renderer.domElement, 'dblclick', e => {   // double-click an object: back where it started
-  if (mk || editing || parkDrag || renderer.xr.isPresenting || performance.now() - droppedAt < 600) return;
+  if (mk || editing || parkDrag || renderer.xr.isPresenting || game.remoteSession || performance.now() - droppedAt < 600) return;
   ray.setFromCamera(ndc(e), camera);
   const hit = ray.intersectObjects(items.filter((_, k) => !layout.poses[k].removed).map(i => i.proxy))[0];
   if (hit) resetObject(items.findIndex(i => i.proxy === hit.object));
@@ -1871,7 +1885,7 @@ function dolly(d: number) {
   }
 }
 onCanvas(renderer.domElement, 'wheel', e => {
-  if (renderer.xr.isPresenting || tour.on) return;
+  if (renderer.xr.isPresenting || game.remoteSession || tour.on) return;
   e.preventDefault();   // also stops a pinch (ctrl + wheel) from zooming the page
   const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;   // lines and pages to pixels
   if (e.deltaX) { if (mode === 'auto') setWalk('free'); if (isChair() && mode === 'free') spinBy(body, -e.deltaX * unit * 0.002, chairOf(), chairOk()); else body.yaw -= e.deltaX * unit * 0.002; }
@@ -2290,7 +2304,7 @@ const xr = await setupXR({
     say();
   },
   exit() { comparison.endPreview(); inXR = false; game.xr = false; dangerVR.k = -1; tourSpot = -1; applyPerf(perfBeforeXR, false); if (current) drawPlan(current); say(); },
-  buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton],   // the story for a family: what's risky, how night feels, the fix
+  buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton, { text: () => ['Room menu', 'Scans, experience, findings and controls'], press: () => frontendVR?.open() }],   // the story for a family: what's risky, how night feels, the fix
   shell: {   // the planning shell (frontend.ts) over the wand; frontendVR is created after the first frame, so look it up lazily
     activate: c => !!frontendVR?.activate(c), release: c => !!frontendVR?.release(c), open: () => !!frontendVR?.isOpen(),
     follow(dt) { if (!xrFollowRoute || mode !== 'auto') return false; autoStep(dt); return true; },
@@ -2395,8 +2409,9 @@ function hintBase(device: 'desktop' | 'vr'): Omit<HintCtx, 'inspect'> {
 const frontendAdapter: FrontendAdapter = {
   hintContext: () => ({ ...hintBase('desktop'), thirdPerson: view.third, personaLabel: personas[personaKey]?.label ?? personaKey }),   // the controls strip and status pills (hints.ts)
   snapshot: () => ({ room: RUN, patient: personaKey, route: routes[selRoute].name, current, baseline: baseEvals[selRoute] ?? null,
-    changes: reim.changes(), spots: spotList, options: suggestions, selected, selectedName: objs[selected]?.name, mode, explore: explore.on, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
+    changes: reim.changes(), spots: spotList, options: game.remoteOptions ?? suggestions, selected, selectedName: objs[selected]?.name, mode, explore: explore.on, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
   navigate(m) {
+    if (renderer.xr.isPresenting && !game.xrUIAction || game.remoteSession) { companion?.setMode('companion'); return; }
     endTour(); select(-1);
     if (m === 'inspect') { inspectReturn ??= { body: { ...body }, fly: { ...fly }, mode, rig: xr.rigState() }; setWalk(renderer.xr.isPresenting ? 'free' : 'fly'); }
     else if (m === 'route') { xrFollowRoute = renderer.xr.isPresenting; const at = mode === 'free' && !explore.on ? resumeS() : 0; if (mode !== 'auto') { setWalk('auto'); autoS = at; } routePaused = false; }
@@ -2406,15 +2421,16 @@ const frontendAdapter: FrontendAdapter = {
   },
   focus(item) {
     const p = vantage(item.at, current?.xy ?? [item.at], 1.2, 1.1);
-    if (renderer.xr.isPresenting) { if (standable(p.x, p.y)) frontendVR?.transition(() => xr.moveHead(p.x, p.y)); }
+    if ((renderer.xr.isPresenting && !game.xrUIAction) || game.remoteSession) { companion?.setMode('companion'); companion?.focus(p); }
+    else if (renderer.xr.isPresenting) { if (standable(p.x, p.y)) frontendVR?.transition(() => xr.moveHead(p.x, p.y)); }
     else { setWalk('fly'); Object.assign(fly, p); body.yaw = p.yaw; body.pitch = p.pitch; }
     reim.selectChange(item.object, item.change?.iv);
   },
-  leaveInspect() { if (inspectReturn) { const back = inspectReturn; Object.assign(body, back.body); Object.assign(fly, back.fly); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.restoreRig(back.rig)); setWalk(back.mode); inspectReturn = null; } },
+  leaveInspect() { if (renderer.xr.isPresenting && !game.xrUIAction || game.remoteSession) return; if (inspectReturn) { const back = inspectReturn; Object.assign(body, back.body); Object.assign(fly, back.fly); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.restoreRig(back.rig)); setWalk(back.mode); inspectReturn = null; } },
   pause() { routePaused = !routePaused; }, restart() { autoS = 0; autoPause = 0; routePaused = false; }, speed(v) { routeSpeed = v; },
   compare(t) { reim.setT(t); }, animate() { reim.play(); },
-  suggest, async apply(index) { await applyOption(index); setWalk('free'); reim.setT(1); },
-  undo: undoReimagined, select,
+  suggest: () => game.remoteSession ? game.suggest() : suggest(), async apply(index) { await (game.remoteSession ? game.applyPreparedOption(index) : applyOption(index)); setWalk('free'); reim.setT(1); },
+  undo: c => game.remoteSession ? game.sessionLink.request('undoChange', [c.name, c.iv]) : undoReimagined(c), select,
   path(on) { routeLine.visible = on; },
   async lightPath() { const r = await lightPath(); game.setNight(true); return r; },
   highlights(on) { hazardGroup.visible = on; }, improvements(on) { reim.setParts({ rings: on, ringLabels: on }); },
@@ -2466,16 +2482,22 @@ game.bookmarks = createBookmarks(RUN, () => ({ position: camera.getWorldPosition
   if (renderer.xr.isPresenting) { const d = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion().fromArray(point.quaternion)); if (standable(point.position[0], point.position[1])) frontendVR?.transition(() => xr.place(point.position[0], point.position[1], Math.atan2(d.y, d.x))); }
   else { const d = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion().fromArray(point.quaternion)); game.setFly(...point.position, Math.atan2(d.y, d.x) * 180 / Math.PI, Math.asin(d.z) * 180 / Math.PI); }
 });
+game.availableFixes = () => interventions.map(iv => iv.id);
+game.headView = () => ({ position: camera.getWorldPosition(new THREE.Vector3()).toArray(), quaternion: camera.getWorldQuaternion(new THREE.Quaternion()).toArray() });
+game.undoChange = (name: string, iv?: string) => { const change = reim.changes().find(c => c.name === name && c.iv === (iv ?? undefined)); if (!change) throw Error('This change is no longer in the working plan'); return undoReimagined(change); };
 game.editLocks = editLocks;
 game.applyPreparedOption = async (index: number) => { frontendVR?.notify('Desktop is applying a proposed layout'); game.sessionBusy = true; try { return await applyOption(index); } finally { game.sessionBusy = false; } };
 game.sharedEdit = (name: string, task: () => unknown) => editLocks.run(String(objs.findIndex(o => o.name === name)), 'desktop', async () => { const result = await task(); frontendVR?.notify('Room updated by desktop'); return result; });
 game.history = { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') };
 game.recenter = () => { const p = routePose(0, 0, Infinity); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.place(p.x, p.y, p.yaw)); else Object.assign(body, p); };
 game.comfort = { seated: false, movement: 'all', cycle() { const choices = ['all', 'teleport', 'physical']; this.movement = choices[(choices.indexOf(this.movement) + 1) % choices.length]; } };
-game.saveSession = () => structuredClone({ layout, applied, body, fly, personaKey, selRoute, mode, autoS, explore });
+game.saveSession = () => structuredClone({ layout, applied, body, fly, personaKey, selRoute, mode, autoS, explore, marked, markedDoors, strongSide });
 game.restoreSession = async (saved: any) => {
   if (!saved || saved.layout?.poses?.length !== objs.length) return;
   if (personas[saved.personaKey] && personaKey !== saved.personaKey) await setPersona(saved.personaKey);
+  if (Array.isArray(saved.marked)) marked = structuredClone(saved.marked);
+  if (Array.isArray(saved.markedDoors)) markedDoors = structuredClone(saved.markedDoors);
+  strongSide = saved.strongSide ?? null; setupStairs();
   layout = structuredClone(saved.layout); applied = [...saved.applied]; selRoute = Math.min(saved.selRoute, routes.length - 1);
   $<HTMLSelectElement>('routesel').value = String(selRoute); syncObjects(); await replan();
   Object.assign(body, saved.body); Object.assign(fly, saved.fly); Object.assign(explore, saved.explore);

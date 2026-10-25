@@ -18,7 +18,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
   const game = () => (window as any).game;
   const library = () => (window as any).scanLibrary;
   function go(next: string) { page = next; offset = 0; notice = ''; fingerprint = ''; }
-  async function act(task: () => unknown) { try { await task(); } catch (error) { notice = String(error).slice(0, 90); } fingerprint = ''; }
+  async function act(task: () => unknown) { try { const g = game(), before = g.xrUIAction; g.xrUIAction = true; let result: unknown; try { result = task(); } finally { g.xrUIAction = before; } await result; } catch (error) { notice = String(error).slice(0, 90); } fingerprint = ''; }
   const hitTargets: THREE.Mesh[] = []; const disposable: { dispose(): void }[] = [];
   const inspectionRoot = new THREE.Group(); inspectionRoot.name = 'frontend-xr-inspection'; inspectionRoot.visible = false; D.scene.add(inspectionRoot);
   const toastRoot = new THREE.Group(); toastRoot.name = 'frontend-xr-notice'; toastRoot.visible = false; D.scene.add(toastRoot);
@@ -41,7 +41,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
     const ctx = canvas.getContext('2d')!;
     ctx.fillStyle = accent ? '#244a46' : '#18252f'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = accent ? '#49d4c7' : '#455b6b'; ctx.lineWidth = 4; ctx.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
-    const lines = text.split('\n'), font = Math.min(60, (canvas.height - 28) / lines.length * .68);
+    const lines = text.split('\n').flatMap(line => line.match(/.{1,42}(?:\s|$)|.{1,42}/g)?.map(s => s.trim()) ?? ['']), font = Math.min(60, (canvas.height - 28) / lines.length * .68);
     ctx.font = `600 ${font}px system-ui`; ctx.fillStyle = accent ? '#bafff4' : '#e8f2f8'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     lines.forEach((line, i) => ctx.fillText(line, 512, canvas.height / 2 + (i - (lines.length - 1) / 2) * (font * 1.5), 960));
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
@@ -97,7 +97,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
       }), 'presets');
     } else if (page === 'scans') {
       const entries = library()?.entries() ?? [];
-      rows([...new Set<string>(entries.map((e: any) => e.room))].map(room => [room, () => go('room:' + room)]));
+      rows([...new Set<string>(entries.map((e: any) => e.room))].map((room): Row => [room, () => go('room:' + room)]).concat([['Restart current demo', () => { close(); return library().restart(); }]]));
     } else if (page.startsWith('room:')) {
       rows((library()?.entries() ?? []).filter((e: any) => e.room === page.slice(5)).map((e: any) => [`${e.version}\n${e.objects ? e.objects + ' objects' : 'Explore · no object edits'}`, () => { close(); return library().switch(e.id); }, e.id === library().current()]), 'scans');
     } else if (page === 'findings') {
@@ -116,6 +116,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
       tile('Selected item cost labels', 0, -.13, .96, .095, () => { const el = document.getElementById('reimtags') as HTMLSelectElement; el.value = 'selected'; el.dispatchEvent(new Event('change')); close(); });
       tile('Back', 0, -.34, .96, .085, back);
     }
+    if (!notice && page === 'presets' && game().perf.on()) tile('Performance mode keeps heavier layers off', 0, -.47, .96, .10);
     if (notice) tile(notice, 0, -.47, .96, .10);
   }
   function open() {

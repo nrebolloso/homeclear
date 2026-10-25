@@ -1,7 +1,7 @@
 import type { Plugin } from 'vite';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { describeScan } from './src/scan-catalog.ts';
+import { describeScan, validScanId } from './src/scan-catalog.ts';
 
 export function scanCatalogPlugin(publicDir: string): Plugin {
   const map = (id: string) => {
@@ -14,7 +14,7 @@ export function scanCatalogPlugin(publicDir: string): Plugin {
   const catalog = () => {
     const root = join(publicDir, 'scene');
     if (!existsSync(root)) return [];
-    return readdirSync(root).sort().flatMap(id => {
+    return readdirSync(root).filter(validScanId).sort().flatMap(id => {
       try {
         const sc = JSON.parse(readFileSync(join(root, id, 'scene.json'), 'utf8'));
         const splat = join(root, id, sc.splat);

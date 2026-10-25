@@ -20,19 +20,20 @@ export function createSessionLink(D: { game(): any; scan(): string; switchScan(i
         const packet = latest; latest = null; applying = true;
         if (D.scan() !== packet.scene && !await D.switchScan(packet.scene)) throw Error('Host scan could not be loaded on this device');
         const game = D.game(); attach(game);
-        await game.restoreSession(packet.state);
+        game.applyingRemote = true; try { await game.restoreSession(packet.state); } finally { game.applyingRemote = false; }
         game.setVision(packet.vision); game.setNight(packet.night); game.remoteHead = packet.head;
         D.status('Connected to host · room synchronized');
       }
     } catch (error) { D.status(String(error)); } finally { applying = false; busy = false; }
   }
   function attach(game: any) {
-    if (!game) return; game.remoteSession = role === 'companion';
-    if (role !== 'companion') { const original = originals.get(game); if (original) { Object.assign(game, original); originals.delete(game); game.__sessionWrapped = false; } return; }
+    if (!game) return; game.sessionLink = api; game.remoteSession = role === 'companion';
+    if (role !== 'companion') { const original = originals.get(game); if (original) { Object.assign(game, original); originals.delete(game); game.__sessionWrapped = false; game.remoteOptions = undefined; } return; }
     if (game.__sessionWrapped) return;
-    originals.set(game, Object.fromEntries(['moveObject', 'removeObject', 'restoreObject', 'applyPreparedOption', 'recenter', 'history', 'sharedEdit', 'suggest'].map(key => [key, game[key]])));
+    originals.set(game, Object.fromEntries(['moveObject', 'removeObject', 'restoreObject', 'applyPreparedOption', 'recenter', 'history', 'sharedEdit', 'suggest', 'setPersona', 'selectRoute', 'applyFix', 'resetObject', 'resetAll', 'undoChange'].map(key => [key, game[key]])));
     game.__sessionWrapped = true;
-    for (const method of ['moveObject', 'removeObject', 'restoreObject', 'applyPreparedOption', 'recenter', 'suggest']) game[method] = (...args: unknown[]) => request(method, args);
+    for (const method of ['moveObject', 'removeObject', 'restoreObject', 'applyPreparedOption', 'recenter', 'suggest', 'setPersona', 'selectRoute', 'applyFix', 'resetObject', 'resetAll', 'undoChange']) game[method] = (...args: unknown[]) => request(method, args);
+    game.suggest = async () => { const options = await request('suggest'); game.remoteOptions = options; return options; };
     game.history = { undo: () => request('undo'), redo: () => request('redo') };
     game.sharedEdit = (_name: string, task: () => unknown) => task();
   }
@@ -41,6 +42,9 @@ export function createSessionLink(D: { game(): any; scan(): string; switchScan(i
     try {
       if (packet.scene !== D.scan() || packet.baseKey !== game.layoutKey()) throw Error('The host room changed. Wait for synchronization and retry.');
       const args = Array.isArray(packet.args) ? packet.args : [];
+      if (packet.action === 'setPersona' && !game.personas().includes(args[0])) throw Error('Unknown patient profile');
+      if (packet.action === 'selectRoute' && (!Number.isInteger(args[0]) || args[0] < 0 || args[0] >= game.routes.length)) throw Error('Unknown route');
+      if (packet.action === 'applyFix' && !game.availableFixes().includes(args[0])) throw Error('Unknown fix');
       if (packet.action === 'scan' && typeof args[0] === 'string') value = await D.switchScan(args[0]);
       else if (['moveObject', 'removeObject', 'restoreObject'].includes(packet.action) && typeof args[0] === 'string' && game.items.includes(args[0])) {
         if (packet.action === 'moveObject' && (args.length !== 4 || !args.slice(1).every(Number.isFinite))) throw Error('Invalid object pose');
@@ -48,6 +52,8 @@ export function createSessionLink(D: { game(): any; scan(): string; switchScan(i
       } else if (packet.action === 'undo' || packet.action === 'redo') value = await game.history[packet.action]();
       else if (packet.action === 'suggest') value = await game.suggest();
       else if (packet.action === 'applyPreparedOption' && Number.isInteger(args[0])) value = await game.editLocks.run('*', 'desktop', () => game.applyPreparedOption(args[0]));
+      else if (['setPersona', 'selectRoute', 'applyFix', 'resetAll', 'undoChange'].includes(packet.action)) value = await game.editLocks.run('*', 'desktop', () => game[packet.action](...args));
+      else if (packet.action === 'resetObject' && typeof args[0] === 'string' && game.items.includes(args[0])) value = await game.sharedEdit(args[0], () => game.resetObject(args[0]));
       else if (packet.action === 'recenter') value = game.recenter();
       else throw Error('This action must be prepared on the host');
       signature = ''; await post({ kind: 'ack', requestId: packet.requestId, value });
@@ -74,11 +80,12 @@ export function createSessionLink(D: { game(): any; scan(): string; switchScan(i
     };
     timer = window.setInterval(() => {
       const game = D.game(); if (role !== 'host' || !game?.ready || game.sessionBusy || game.pending()) return;
-      const state = game.saveSession(), head = game.xrPose().userCam;
-      const next = JSON.stringify([D.scan(), state.layout, state.applied, state.personaKey, state.selRoute, (document.getElementById('vision') as HTMLSelectElement)?.value, (document.getElementById('night') as HTMLInputElement)?.checked]);
+      const state = game.saveSession(), head = game.headView();
+      const next = JSON.stringify([D.scan(), state.layout, state.applied, state.marked, state.markedDoors, state.strongSide, state.personaKey, state.selRoute, (document.getElementById('vision') as HTMLSelectElement)?.value, (document.getElementById('night') as HTMLInputElement)?.checked]);
       const packet = next === signature ? { kind: 'pose', head } : { kind: 'state', scene: D.scan(), state, head, vision: (document.getElementById('vision') as HTMLSelectElement)?.value ?? 'normal', night: (document.getElementById('night') as HTMLInputElement)?.checked ?? false };
       void post(packet).then(() => signature = next).catch(error => D.status(String(error)));
     }, 500);
   }
-  return { connect, disconnect, attach, request, role: () => role, applying: () => applying };
+  const api = { connect, disconnect, attach, request, role: () => role, applying: () => applying };
+  return api;
 }

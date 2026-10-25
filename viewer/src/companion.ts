@@ -80,9 +80,14 @@ export function createCompanion(D: { renderer: THREE.WebGLRenderer; scene: THREE
     document.body.classList.toggle('companion-headset', mode === 'headset' || mode === 'goggles');
     q<HTMLSelectElement>('companion-mode').value = mode; last = -Infinity;
   }
+  const annotationDefaults = new Map<string, { disabled: boolean; title: string }>(); let wasRemote = false;
   every(() => {
     const next = renderer.xr.isPresenting || !!game.remoteSession;
     if (next !== presenting) { presenting = next; panel.hidden = !next; desktop.hidden = !next; document.body.classList.toggle('companion-active', next); setMode(mode); }
+    if (!!game.remoteSession !== wasRemote) {
+      for (const id of ['markstairs', 'markdoor', 'editstairs', 'editdoors']) { const button = document.getElementById(id) as HTMLButtonElement; if (!button) continue; if (game.remoteSession) { annotationDefaults.set(id, { disabled: button.disabled, title: button.title }); button.disabled = true; button.title = 'Mark from the host/headset, or disconnect to annotate this device locally.'; } else { const saved = annotationDefaults.get(id); if (saved) { button.disabled = saved.disabled; button.title = saved.title; } } }
+      wasRemote = !!game.remoteSession;
+    }
     const shared = (document.getElementById('vision') as HTMLSelectElement)?.value;
     if (linked && shared) select.value = shared;
     q('companion-state').textContent = game.sessionBusy ? 'Loading room…' : game.pending() ? 'Results updating for the shared layout…' : 'Desktop camera is independent. Room edits are shared.';
@@ -101,6 +106,7 @@ export function createCompanion(D: { renderer: THREE.WebGLRenderer; scene: THREE
   }
   own(() => { controls.dispose(); vision.dispose(); output.dispose(); desktop.remove(); panel.remove(); inset.remove(); marker.removeFromParent(); marker.geometry.dispose(); (marker.material as THREE.Material).dispose(); document.body.classList.remove('companion-active', 'companion-goggles', 'companion-headset', 'companion-demo'); });
   return {
+    focus(p: { x: number; y: number; z: number; yaw: number; pitch: number }) { camera.position.set(p.x, p.y, p.z); controls.target.copy(camera.position).add(new THREE.Vector3(Math.cos(p.yaw) * Math.cos(p.pitch), Math.sin(p.yaw) * Math.cos(p.pitch), Math.sin(p.pitch))); controls.update(); },
     camera, controls, mode: () => mode, setMode,
     capture() { return { position: camera.position.toArray(), quaternion: camera.quaternion.toArray() }; },
     restore(point: { position: number[]; quaternion: number[] }) { camera.position.fromArray(point.position); camera.quaternion.fromArray(point.quaternion); controls.target.copy(camera.position).add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(2)); controls.update(); },
@@ -113,7 +119,7 @@ export function createCompanion(D: { renderer: THREE.WebGLRenderer; scene: THREE
       const target = renderer.getRenderTarget(), xrEnabled = renderer.xr.enabled, viewport = renderer.getViewport(new THREE.Vector4()), scissor = renderer.getScissor(new THREE.Vector4()), scissorTest = renderer.getScissorTest();
       const saved: [THREE.Object3D, boolean][] = [];
       const hide = (o?: THREE.Object3D) => { if (o) { saved.push([o, o.visible]); o.visible = false; } };
-      const head = game.remoteHead ? new THREE.Vector3().fromArray(game.remoteHead) : D.head.getWorldPosition(new THREE.Vector3()), rotation = D.head.getWorldQuaternion(new THREE.Quaternion());
+      const head = game.remoteHead?.position ? new THREE.Vector3().fromArray(game.remoteHead.position) : D.head.getWorldPosition(new THREE.Vector3()), rotation = game.remoteHead?.quaternion ? new THREE.Quaternion().fromArray(game.remoteHead.quaternion) : D.head.getWorldQuaternion(new THREE.Quaternion());
       const selected = (document.getElementById('vision') as HTMLSelectElement)?.value as Profile ?? 'normal';
       try {
         renderer.xr.enabled = false; renderer.setRenderTarget(null); renderer.setViewport(0, 0, innerWidth, innerHeight); renderer.setScissorTest(false);

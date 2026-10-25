@@ -11,3 +11,5 @@
 #scan-loading { position:fixed; inset:0; display:grid; place-items:center; background:#0a1727d9; font-size:22px; pointer-events:all; }
 #scan-library [hidden] { display:none; }
 @media(max-width:650px) { #scan-library { left:154px; } #scan-current { display:none; } }
+
+#scan-rooms { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:16px; } #scan-rooms > section.scan-room { display:block; margin:0; min-width:0; } .scan-room > .scan-card { width:100%; min-height:190px; } .scan-room .scan-card img { height:110px; object-fit:contain; background:#142732; } .scan-room details { margin-top:8px; } .scan-room summary { cursor:pointer; padding:8px 0; color:#b8d7df; } .scan-room details .scan-card { margin-top:6px; width:100%; } .scan-actions { display:flex; gap:8px; margin-top:14px; }

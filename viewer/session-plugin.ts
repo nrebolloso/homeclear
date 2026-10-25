@@ -19,9 +19,9 @@ export function sessionRelayPlugin(): Plugin {
       if (role === 'host') room.host = id;
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
       res.write(': connected\n\n'); room.peers.set(id, { response: res, role });
-      if (room.state && role === 'companion') res.write(room.state);
+      if (room.state && room.host && role === 'companion') res.write(room.state);
       const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 15000);
-      req.on('close', () => { clearInterval(heartbeat); room.peers.delete(id); if (room.host === id) room.host = undefined; room.touched = Date.now(); });
+      req.on('close', () => { clearInterval(heartbeat); if (room.peers.get(id)?.response === res) { room.peers.delete(id); if (room.host === id) room.host = undefined; } room.touched = Date.now(); });
       return;
     }
     if (req.method !== 'POST' || !room.peers.has(id)) { res.statusCode = 403; res.end('Join session first'); return; }
