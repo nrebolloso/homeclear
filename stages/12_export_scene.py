@@ -423,6 +423,8 @@ def main(cfg):
 
     path = json.loads((w / "path.json").read_text()) if (w / "path.json").exists() else {}
     route = {"start": cfg["plan"].get("start") or path.get("start_xy"), "goal": cfg["plan"].get("goal") or path.get("goal_xy")}
+    if cfg["plan"].get("via"):  # waypoints (stage 7): the viewer plans the same legs (route_via.ts)
+        route["via"] = cfg["plan"]["via"]
     assert route["start"] and route["goal"], "no start/goal: set plan.start/goal or run stage 7 first"
     # every route the patient walks, weighted by trips per night; night routes get the darkness multiplier.
     # Without game.routes: the one stage-7 route, at risk.trips_per_night, at night (as before)
