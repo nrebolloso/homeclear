@@ -5,11 +5,13 @@
 import { interventionEffort, moveEffort } from './effort.ts';
 import type { OptimizerCfg } from './optimize.ts';
 import type { Intervention, Pose } from './grid.ts';
+import { catalogFor, typicalMinutes, usdRange, type CatalogEntry } from './catalog.ts';
 
 /** Who might pay. Traditional Medicare Part B covers almost none of the environmental fixes (convenience items). */
 export type Funding = 'self_pay' | 'part_b_dme' | 'ma_ssbci' | 'medicaid_hcbs' | 'va_hisa' | 'unclassified';
-/** source: the model that priced it ('effort.ts v1'; 'placeholder' for configured fixes until products are classified) */
-export interface MoveCost { usd: number; minutes: number; helpers: number; effort: number; funding: Funding; source: string }
+/** source: the model that priced it ('effort.ts v1', 'catalog' for a fix in the fix catalog, else 'placeholder').
+ *  catalog: that entry (price range, install time, who does it, sources); usd/minutes are then its typical values. */
+export interface MoveCost { usd: number; minutes: number; helpers: number; effort: number; funding: Funding; source: string; catalog?: CatalogEntry; length_m?: number }
 
 /** a removed object is carried out of the room: counted as a move this far */
 const REMOVE_CARRY_M = 3;
@@ -29,12 +31,13 @@ export function removeCost(o: { kind: string; name?: string; mass_kg?: number },
   return moveCost(o, at, { ...at, x: REMOVE_CARRY_M }, cfgIn);
 }
 
-/** A configured fix (stage 12 interventions): its own dollars, minutes and effort; a product's funding is not classified yet.
+/** A configured fix (stage 12 interventions): the fix catalog's typical price and install time (catalog.ts), else its own
+ *  dollars and minutes; a product's funding is not classified yet.
  *  Taping or removing a mat or cord is an action, not a carry (effort.ts interventionEffort); kind: the fix's object's. */
 export function fixCost(iv: Intervention, kind?: string): MoveCost {
-  const effort = interventionEffort(iv, kind);
-  return { usd: iv.cost_usd ?? 0, minutes: iv.minutes ?? 10, helpers: helpersFor(effort), effort,
-    funding: iv.product ? 'unclassified' : 'self_pay', source: 'placeholder' };
+  const effort = interventionEffort(iv, kind), e = catalogFor(iv), funding: Funding = iv.product ? 'unclassified' : 'self_pay';
+  if (e) return { usd: usdRange(e, iv.length_m)[1], minutes: typicalMinutes(e), helpers: helpersFor(effort), effort, funding, source: 'catalog', catalog: e, length_m: iv.length_m };
+  return { usd: iv.cost_usd ?? 0, minutes: iv.minutes ?? 10, helpers: helpersFor(effort), effort, funding, source: 'placeholder' };
 }
 
 /** Totals for a list of changes: effort adds up; helpers is the most any one change needs (the same people do them all). */

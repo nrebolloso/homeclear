@@ -297,7 +297,7 @@ export function stairChecks(st: Stair, c: StairCtx): CheckOut[] {
 }
 
 /** The three additions, as configured-fix-style interventions (so Plan fixes, the optimizer, Reimagine, the receipt,
- *  fix card and OT report all see them). Costs are rough US placeholders until the fix catalog has them. */
+ *  fix card and OT report all see them). The fix catalog (catalog.ts) prices them; these numbers are its fallback. */
 export function stairFixes(st: Stair): Intervention[] {
   const F = stairFrame(st), pitch = pitchAt(st), mid = F.run / 2, top = st.top_z ?? pitch(F.run);
   const at = (s: number, t: number, z: number) => [...F.world(s, t), z];
@@ -306,7 +306,7 @@ export function stairFixes(st: Stair): Intervention[] {
     const t = (side === 'left' ? 1 : -1) * F.width / 2, h = st.rails?.height_m?.[side];
     if (st.rails?.[side] !== 'seen') out.push({ id: `stair_rail:${st.name}:${side}`, kind: 'add', label: `Handrail on the ${side} of the ${st.name}, 30 cm past both ends`,
       fixture: { name: `${st.name} ${side} rail`, kind: 'handrail', attach: st.name, side, xyz: at(mid, t, pitch(mid) + 0.9) },
-      cost_usd: 250, minutes: 120, effort: 3, product: 'handrail with returns, brackets into the studs' });
+      cost_usd: 250, minutes: 120, effort: 3, product: 'handrail with returns, brackets into the studs', length_m: +(Math.hypot(F.run, top - pitch(0)) + 0.6).toFixed(2) });   // the flight's slope plus 30 cm each end
     else if (h !== undefined && (h < lo || h > hi))   // a rail is there, at the wrong height: refit it at 90 cm
       out.push({ id: `stair_rail_up:${st.name}:${side}`, kind: 'add', label: `Refit the ${side} rail of the ${st.name} at 90 cm (now ${cm(h)})`,
         fixture: { name: `${st.name} ${side} rail, refitted`, kind: 'handrail', attach: st.name, side, surface_m: 0.9, xyz: at(mid, t, pitch(mid) + 0.9) },
@@ -318,7 +318,7 @@ export function stairFixes(st: Stair): Intervention[] {
   const p = parkedPose(st), roll = st.top_device === 'rollator';
   out.push({ id: `stair_walker:${st.name}`, kind: 'add', label: `${roll ? 'Rollator' : 'Second walker'} kept at the top of the ${st.name}`,
     fixture: { name: `${st.name} top ${roll ? 'rollator' : 'walker'}`, kind: 'walker_parked', attach: st.name, xyz: [p.x, p.y, top], yaw: p.yaw },
-    cost_usd: roll ? 120 : 70, minutes: 5, effort: 1, product: roll ? 'rollator with a seat (a rest after the climb)' : 'folding walker' });
+    cost_usd: roll ? 120 : 70, minutes: 5, effort: 1, product: roll ? 'rollator with a seat (a rest after the climb)' : 'folding walker', catalog: roll ? 'stair_rollator' : undefined });
   // the top, where the hand leaves the rail: extend the scanned rail, or a grab bar on the side it runs
   const gs = grabSide(st);
   if (seen.length) out.push({ id: `stair_rail_ext:${st.name}`, kind: 'add', label: `Extend the ${st.name} rail 30 cm level past the top and bottom step`,

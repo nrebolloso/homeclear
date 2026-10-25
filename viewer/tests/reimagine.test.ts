@@ -5,6 +5,8 @@ import { moveCost, removeCost, fixCost } from '../src/movecost.ts';
 import { actions, DEFAULTS } from '../src/optimize.ts';
 import { applyIntervention, type Layout, type XY } from '../src/grid.ts';
 import { loadScene } from './scene.ts';
+import { CATALOG, typicalMinutes, usdRange } from '../src/catalog.ts';
+const typ = (k: string) => usdRange(CATALOG[k])[1];   // the fix catalog's typical price
 
 test('diffLayouts: a hand move, a configured removal and a taped strip, each costed', () => {
   const { sc, poses } = loadScene('game_synth');
@@ -23,10 +25,10 @@ test('diffLayouts: a hand move, a configured removal and a taped strip, each cos
   const rug = cs.find(c => c.name === 'rug')!;
   assert.equal(rug.kind, 'remove');
   assert.equal(rug.iv, 'remove_rug');
-  assert.equal(rug.cost.minutes, 5, 'a configured fix is costed by the fix');
+  assert.equal(rug.cost.minutes, typicalMinutes(CATALOG.remove_rug), 'a configured fix is costed by the fix catalog');
   const tape = cs.find(c => c.iv === 'tape_cable')!;
   assert.equal(tape.kind, 'fix');
-  assert.equal(tape.cost.usd, 8);
+  assert.equal(tape.cost.usd, typ('tape_cable'));
   assert.equal(diffLayouts(sc.objects, from, from).length, 0, 'nothing changed, nothing listed');
 });
 

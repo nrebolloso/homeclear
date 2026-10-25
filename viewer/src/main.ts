@@ -29,7 +29,8 @@ import { spots, vantage, heightTexels, type Spot } from './spotlight.ts';
 import { summarize, drawPushChart, poseAt, pushColor, sampleText } from './physdebug.ts';
 import { cardState, encodeCard, type ActionOut, type ReportPayload } from './share.ts';
 import { createReimagine, undoChange, costText, card, poseAt as layoutPoseAt, type Change } from './reimagine.ts';
-import { moveCost, removeCost, sumCosts } from './movecost.ts';
+import { moveCost, removeCost, sumCosts, fixCost } from './movecost.ts';
+import { catalogOut } from './catalog.ts';
 import { isMoved, movedText, resetPose } from './resets.ts';
 import { twistAngle, snapQuarter } from './wand.ts';
 import { createObjLabel } from './objlabel.ts';
@@ -1751,15 +1752,16 @@ async function openReport() {
   const p = personas[personaKey], c = current!;
   const { before, fixes } = await ask({ type: 'fixes', layout, sel: selRoute });   // the fixes not yet applied, each rolled out from this layout
   const ranked_fixes = fixes.filter((f: any) => !applied.includes(f.id)).map((f: any) => {
-    const iv = interventions.find(i => i.id === f.id);
+    const iv = interventions.find(i => i.id === f.id), c = iv ? fixCost(iv) : undefined;
     return { label: f.label, error: f.error, reduction: Math.max(0, f.reduction), share: before > 0 ? f.reduction / before : 0, clearance_gain_m: f.clearance_gain_m,
-      cost_usd: iv?.cost_usd, minutes: iv?.minutes, effort: iv?.effort, product: iv?.product };
+      cost_usd: iv?.cost_usd, minutes: iv?.minutes, effort: iv?.effort, product: iv?.product, ...(c?.catalog ? { cost_usd: c.usd, minutes: c.minutes, ...catalogOut(c.catalog, c.length_m) } : {}) };
   }).sort((a: any, b: any) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.clearance_gain_m - a.clearance_gain_m) || ((a.cost_usd ?? 0) - (b.cost_usd ?? 0)));
   const planned = await planfix.rankedFixes();   // kitchen planner scenes: its layout's changes, ranked by real risk removed (planfix.ts)
   // log what goes on paper, then build the payload from the log (newest entry per thing wins)
   const changes = reim.changes().map(ch => {
-    const iv = interventions.find(i => i.id === ch.iv), priced = !iv?.product || iv.cost_usd !== undefined;
-    return { label: ch.label, effort: ch.cost.effort, helpers: ch.cost.helpers, cost_usd: priced ? ch.cost.usd : undefined, product: iv?.product };
+    const iv = interventions.find(i => i.id === ch.iv), priced = !iv?.product || iv.cost_usd !== undefined || !!ch.cost.catalog;
+    return { label: ch.label, effort: ch.cost.effort, helpers: ch.cost.helpers, cost_usd: priced ? ch.cost.usd : undefined, product: iv?.product,
+      ...(ch.cost.catalog ? catalogOut(ch.cost.catalog, ch.cost.length_m) : {}) };
   });
   logEvent(ledger, 'viewer', 'changes', changes, 'simulated', 'report');
   logEvent(ledger, 'viewer', 'actions', describeChanges(), 'simulated', 'report');

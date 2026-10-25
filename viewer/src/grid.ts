@@ -308,6 +308,8 @@ export interface Intervention {
     light_r?: number };
   /** what it takes (fix card, optimizer effort): dollars, minutes, 1 (anyone) .. 5 (two people, heavy furniture) */
   cost_usd?: number; minutes?: number; effort?: number; product?: string;
+  /** fix catalog (catalog.ts): its key when it isn't the id's prefix, and the length a per-foot price is for (a handrail) */
+  catalog?: string; length_m?: number;
 }
 export interface Layout {
   poses: Pose[]; flattened: [XY, XY][];

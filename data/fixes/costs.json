@@ -1,0 +1,287 @@
+{
+  "handyperson_usd_per_h": { "range": [50, 100], "sources": ["https://www.fixr.com/costs/handyman", "https://www.fixr.com/costs/grab-bars-installation"] },
+  "fixes": {
+    "door_widen": {
+      "label": "Widen doorway to 36 in",
+      "who": "contractor",
+      "diy_usd": null,
+      "pro_usd": [600, 1200, 2000],
+      "install_min": [480, 960],
+      "permit": true,
+      "note": "Non-load-bearing wall. Load-bearing runs $2,500-10,000 plus a $300-1,000 engineer; permits $50-500",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.blockrenovation.com/guides/widening-a-doorway-cost-design-and-accessibility-guide"]
+    },
+    "door_offset": {
+      "label": "Swing-clear offset hinges",
+      "who": "you",
+      "diy_usd": [25, 35],
+      "pro_usd": [75, 110, 150],
+      "install_min": [30, 60],
+      "note": "Adds about 1.5-2 in of clear width; pro price is one handyperson hour plus hinges",
+      "provenance": { "usd": "guess", "minutes": "guess" },
+      "sources": ["https://www.fixr.com/costs/handyman"]
+    },
+    "offset_hinges": {
+      "label": "Swing-clear offset hinges",
+      "who": "you",
+      "diy_usd": [25, 35],
+      "pro_usd": [75, 110, 150],
+      "install_min": [30, 60],
+      "note": "Adds about 1.5-2 in of clear width; pro price is one handyperson hour plus hinges",
+      "provenance": { "usd": "guess", "minutes": "guess" },
+      "sources": ["https://www.fixr.com/costs/handyman"]
+    },
+    "door_remove": {
+      "label": "Take door off, hang curtain",
+      "who": "you",
+      "diy_usd": [16, 30],
+      "pro_usd": null,
+      "install_min": [15, 30],
+      "note": "Tension rod $6-15 plus a $10-14 curtain panel; store the door and pins",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=tension+rod+curtain", "https://www.target.com/s?searchTerm=curtain+panel"]
+    },
+    "remove_door": {
+      "label": "Take door off, hang curtain",
+      "who": "you",
+      "diy_usd": [16, 30],
+      "pro_usd": null,
+      "install_min": [15, 30],
+      "note": "Tension rod $6-15 plus a $10-14 curtain panel; store the door and pins",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=tension+rod+curtain", "https://www.target.com/s?searchTerm=curtain+panel"]
+    },
+    "stair_rail": {
+      "label": "New stair handrail",
+      "who": "handyperson",
+      "diy_usd": null,
+      "pro_usd": [520, 650, 900],
+      "usd_per_ft": [40, 50, 60],
+      "install_min": [120, 240],
+      "note": "About 13 ft for a 12-step flight with returns; Bob Vila cites $900 average for 25 ft of railing",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.homewyse.com/services/cost_to_install_stairway_handrail.html", "https://www.bobvila.com/articles/cost-to-replace-stair-railing/"]
+    },
+    "stair_rail_up": {
+      "label": "Re-mount handrail at code height",
+      "who": "handyperson",
+      "diy_usd": null,
+      "pro_usd": [100, 150, 300],
+      "install_min": [60, 120],
+      "note": "Code height is 34-38 in; Fixr lists handyman stair repair at $150-300",
+      "provenance": { "usd": "guess", "minutes": "guess" },
+      "sources": ["https://www.fixr.com/costs/handyman"]
+    },
+    "stair_rail_ext": {
+      "label": "Add handrail extensions",
+      "who": "handyperson",
+      "diy_usd": null,
+      "pro_usd": [100, 150, 250],
+      "install_min": [60, 120],
+      "note": "Matching rail stock and return fittings vary; about 1-2 handyperson hours",
+      "provenance": { "usd": "guess", "minutes": "guess" },
+      "sources": ["https://www.fixr.com/costs/handyman"]
+    },
+    "stair_grab": {
+      "label": "Grab bar at top of stairs",
+      "who": "handyperson",
+      "diy_usd": [20, 40],
+      "pro_usd": [85, 248, 300],
+      "install_min": [30, 60],
+      "note": "Must hit a stud or blocking; Fixr says 18 in bars start around $20",
+      "provenance": { "usd": "catalog", "minutes": "catalog" },
+      "sources": ["https://www.fixr.com/costs/grab-bars-installation"]
+    },
+    "grab_bar_toilet": {
+      "label": "Grab bar beside toilet",
+      "who": "handyperson",
+      "diy_usd": [35, 60],
+      "pro_usd": [85, 248, 300],
+      "install_min": [30, 60],
+      "note": "Tile walls cost more; 42 in bar price is a guess",
+      "provenance": { "usd": "catalog", "minutes": "catalog" },
+      "sources": ["https://www.fixr.com/costs/grab-bars-installation"]
+    },
+    "stair_lights": {
+      "label": "Motion step lights",
+      "who": "you",
+      "diy_usd": [40, 90],
+      "pro_usd": null,
+      "install_min": [20, 45],
+      "note": "Battery stick-on lights on every other step (about 6)",
+      "provenance": { "usd": "guess", "minutes": "guess" },
+      "sources": []
+    },
+    "stair_nosing": {
+      "label": "Anti-slip stair edge tape",
+      "who": "you",
+      "diy_usd": [17, 23],
+      "pro_usd": null,
+      "install_min": [30, 60],
+      "note": "One 35-40 ft roll covers about 12 steps; pick a color that contrasts with the treads",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=non+slip+tape+stairs"]
+    },
+    "stair_walker": {
+      "label": "Folding walker for upstairs",
+      "who": "you",
+      "diy_usd": [38, 75],
+      "pro_usd": null,
+      "install_min": [5, 15],
+      "note": "Set handle height at the wrist crease",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=drive+medical+folding+walker+adult"]
+    },
+    "stair_rollator": {
+      "label": "Rollator with seat for upstairs",
+      "who": "you",
+      "diy_usd": [65, 165],
+      "pro_usd": null,
+      "install_min": [5, 15],
+      "note": "Check that it fits through upstairs doorways",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=rollator+walker+with+seat"]
+    },
+    "stair_lift": {
+      "label": "Straight stairlift",
+      "who": "dealer",
+      "diy_usd": null,
+      "pro_usd": [2000, 4000, 8000],
+      "install_min": [240, 300],
+      "note": "Usually no permit; curved stairs cost far more",
+      "provenance": { "usd": "catalog", "minutes": "catalog" },
+      "sources": ["https://www.fixr.com/costs/stairlift-installation"]
+    },
+    "path_light": {
+      "label": "Motion nightlight on path",
+      "who": "you",
+      "diy_usd": [8, 19],
+      "pro_usd": null,
+      "install_min": [2, 5],
+      "note": "Plug-in 2-packs are about $8 each; rechargeable battery ones about $19",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=motion+sensor+night+light"]
+    },
+    "add_nightlight": {
+      "label": "Plug-in motion nightlight",
+      "who": "you",
+      "diy_usd": [8, 16],
+      "pro_usd": null,
+      "install_min": [2, 5],
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=motion+sensor+night+light"]
+    },
+    "tape_cord": {
+      "label": "Cover cord across walkway",
+      "who": "you",
+      "diy_usd": [13, 25],
+      "pro_usd": null,
+      "install_min": [5, 10],
+      "note": "Gaffer tape $13-25 a roll or a 5 ft floor cord cover about $20",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=gaffer+tape", "https://www.target.com/s?searchTerm=floor+cord+cover"]
+    },
+    "cord_cover": {
+      "label": "Floor cord cover",
+      "who": "you",
+      "diy_usd": [20, 20],
+      "pro_usd": null,
+      "install_min": [5, 10],
+      "note": "Only one 5 ft cover was listed",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=floor+cord+cover"]
+    },
+    "tape_cable": {
+      "label": "Tape cable down",
+      "who": "you",
+      "diy_usd": [13, 25],
+      "pro_usd": null,
+      "install_min": [5, 10],
+      "note": "Use gaffer tape; duct tape is $4 but leaves residue",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=gaffer+tape"]
+    },
+    "cord_reroute": {
+      "label": "Run cord along wall",
+      "who": "you",
+      "diy_usd": [5, 13],
+      "pro_usd": null,
+      "install_min": [15, 25],
+      "note": "Command 4-count cord clips $5; 14-28 packs $7-13",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=adhesive+cord+clips"]
+    },
+    "mat_tape": {
+      "label": "Tape kitchen mat down",
+      "who": "you",
+      "diy_usd": [7, 8],
+      "pro_usd": null,
+      "install_min": [5, 10],
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=rug+gripper+tape"]
+    },
+    "tape_rug_corner": {
+      "label": "Grip rug corners",
+      "who": "you",
+      "diy_usd": [12, 20],
+      "pro_usd": null,
+      "install_min": [5, 10],
+      "note": "4-pack corner grippers",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=rug+gripper+tape"]
+    },
+    "walker_caps": {
+      "label": "Walker glide caps",
+      "who": "you",
+      "diy_usd": [10, 16],
+      "pro_usd": null,
+      "install_min": [2, 5],
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=walker+glides"]
+    },
+    "raised_toilet_seat": {
+      "label": "Raised toilet seat",
+      "who": "you",
+      "diy_usd": [31, 77],
+      "pro_usd": null,
+      "install_min": [5, 15],
+      "note": "Models with arms cost $54-77",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=raised+toilet+seat"]
+    },
+    "threshold_ramp": {
+      "label": "Threshold ramp",
+      "who": "you",
+      "diy_usd": [33, 70],
+      "pro_usd": null,
+      "install_min": [5, 15],
+      "note": "Rubber ramps for a 1-1.5 in rise; taller rises cost more",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=threshold+ramp"]
+    },
+    "bed_risers": {
+      "label": "Bed risers",
+      "who": "you",
+      "diy_usd": [9, 35],
+      "pro_usd": null,
+      "install_min": [10, 20],
+      "note": "Needs two people to lift the bed",
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=bed+risers"]
+    },
+    "touch_lamp": {
+      "label": "Touch lamp by the bed",
+      "who": "you",
+      "diy_usd": [15, 40],
+      "pro_usd": null,
+      "install_min": [2, 5],
+      "provenance": { "usd": "catalog", "minutes": "guess" },
+      "sources": ["https://www.target.com/s?searchTerm=touch+lamp"]
+    },
+    "remove_mat": { "label": "Remove the mat", "who": "you", "diy_usd": [0, 0], "pro_usd": null, "install_min": [1, 2], "provenance": { "usd": "catalog", "minutes": "guess" }, "sources": [] },
+    "remove_rug": { "label": "Remove the rug", "who": "you", "diy_usd": [0, 0], "pro_usd": null, "install_min": [1, 5], "provenance": { "usd": "catalog", "minutes": "guess" }, "sources": [] },
+    "push_in_chair": { "label": "Push the chair in", "who": "you", "diy_usd": [0, 0], "pro_usd": null, "install_min": [1, 1], "provenance": { "usd": "catalog", "minutes": "guess" }, "sources": [] },
+    "nightlight_off": { "label": "Turn nightlight back on", "who": "you", "diy_usd": [0, 0], "pro_usd": null, "install_min": [1, 1], "provenance": { "usd": "catalog", "minutes": "guess" }, "sources": [] }
+  }
+}

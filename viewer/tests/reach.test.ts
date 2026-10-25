@@ -7,6 +7,8 @@ import { doorFixes, needWidth, type Door } from '../src/doors.ts';
 import { applyIntervention, toCell, type GridMeta, type Layout, type XY } from '../src/grid.ts';
 import { WHEELCHAIR } from '../src/wheelchair.ts';
 import { loadScene } from './scene.ts';
+import { CATALOG, typicalMinutes, usdRange } from '../src/catalog.ts';
+const typ = (k: string) => usdRange(CATALOG[k])[1];   // the fix catalog's typical price
 
 // the synthetic bathroom doorway (tests/make_game_scene.py): wall x 4.0-4.1, opening y 1.5 +- door_w / 2
 const door = (w: number): Door => ({ name: 'bathroom door', a: [4.05, 1.5 - w / 2], b: [4.05, 1.5 + w / 2], measured: 'tape' });
@@ -150,14 +152,15 @@ test('reach: what it costs to get through a 75 cm doorway at each width: nothing
   const steps = costToReach(d, widths, { clearance_m: 0.1, margin_m: 0, wheelchair: false });
   const at = (w: number) => steps.find(s => s.width_m === w)!;
   assert.equal(at(0.45).usd, 0);
-  assert.equal(at(0.55).usd, 25); assert.match(at(0.55).label, /Swing-clear/);
-  assert.equal(at(0.59).usd, 30); assert.match(at(0.59).label, /off its hinges/);
-  assert.equal(at(0.7).usd, 1500); assert.match(at(0.7).label, /Widen/);
-  assert.equal(at(0.7).source, 'placeholder');
+  // catalog prices: the door off costs less than offset hinges and opens more, so the hinge tier drops out
+  assert.equal(at(0.55).usd, Math.min(typ('door_offset'), typ('door_remove'))); assert.match(at(0.55).label, typ('door_offset') < typ('door_remove') ? /Swing-clear/ : /off its hinges/);
+  assert.equal(at(0.59).usd, typ('door_remove')); assert.match(at(0.59).label, /off its hinges/);
+  assert.equal(at(0.7).usd, typ('door_widen')); assert.match(at(0.7).label, /Widen/);
+  assert.equal(at(0.7).source, 'catalog');
   // a wheelchair needs ADA's 815 mm at least: no cheap tier through 75 cm
-  assert.equal(costToReach(d, [0.5], { clearance_m: 0.1, margin_m: 0, wheelchair: true })[0].usd, 1500);
+  assert.equal(costToReach(d, [0.5], { clearance_m: 0.1, margin_m: 0, wheelchair: true })[0].usd, typ('door_widen'));
   // the door leaf is an object (it brings its own fixes): only a new opening is a doorway fix
-  assert.equal(costToReach(d, [0.55], { clearance_m: 0.1, margin_m: 0, wheelchair: false, leafObject: true })[0].usd, 1500);
+  assert.equal(costToReach(d, [0.55], { clearance_m: 0.1, margin_m: 0, wheelchair: false, leafObject: true })[0].usd, typ('door_widen'));
 });
 
 test('reach: the field and the report fit the replan budget on the synthetic home', () => {

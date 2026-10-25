@@ -6,6 +6,8 @@ import { applyIntervention, stamp, polyCells, worldFootprint, type Layout } from
 import { diffLayouts, undoChange } from '../src/reimagine.ts';
 import { actions, DEFAULTS } from '../src/optimize.ts';
 import { loadScene } from './scene.ts';
+import { CATALOG, typicalMinutes, usdRange } from '../src/catalog.ts';
+const typ = (k: string) => usdRange(CATALOG[k])[1];   // the fix catalog's typical price
 
 // the synthetic bathroom doorway (tests/make_game_scene.py): wall x 4.0-4.1, opening y 1.5 +- door_w / 2
 const narrow: Door = { name: 'bathroom door', a: [4.05, 1.225], b: [4.05, 1.775], measured: 'tape' };
@@ -90,7 +92,7 @@ test('game_synth_narrow: blocked until the doorway is widened; then the door che
   const cs = diffLayouts(sc.objects, lay0, lay1, S.interventions, [fx[2].id]);
   assert.equal(cs.length, 1);
   assert.equal(cs[0].iv, fx[2].id);
-  assert.equal(cs[0].cost.usd, 1500);
+  assert.equal(cs[0].cost.usd, typ('door_widen'));
   const back = undoChange(lay1, poses, cs[0], S.interventions);
   assert.equal(back.carved!.length, 0);
   assert.ok(evaluate(S, back, { ghosts: false }).error, 'undo closes it again');

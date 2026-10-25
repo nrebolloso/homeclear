@@ -5,6 +5,8 @@ import { onWindow, every } from './lifetime.ts';
 // reads "pending", and funding is a classification to verify, not a coverage promise (frontend-model.ts, AGENTS.md).
 import type { Change } from './reimagine.ts';
 import type { Funding } from './movecost.ts';
+import { priceText, timeText, WHO_TEXT } from './catalog.ts';
+import { difficulty } from './effort.ts';
 
 export type Status = 'known' | 'placeholder' | 'pending';
 export interface CostRow { label: string; value: string; status: Status; note?: string }
@@ -13,6 +15,8 @@ export interface CostCardModel {
   title: string; kind: Change['kind']; rows: CostRow[]; funding: { label: string; note: string };
   /** hazards of the room as it is that this change clears (within `NEAR_M` of it) */
   clears: string[]; placeholder: boolean;
+  /** where the catalog's numbers come from (links) */
+  sources: string[];
 }
 
 export const NEAR_M = 0.8;
@@ -32,8 +36,15 @@ export function nearbyCleared(c: Pick<Change, 'at'>, resolved: HazardRef[], near
 
 export function costCardModel(c: Change, resolved: HazardRef[] = []): CostCardModel {
   const ph = c.cost.source === 'placeholder', st: Status = ph ? 'placeholder' : 'known', cost = c.cost;
-  const usdKnown = Number.isFinite(cost.usd);
-  const rows: CostRow[] = [
+  const usdKnown = Number.isFinite(cost.usd), e = cost.catalog;
+  // a fix in the fix catalog (catalog.ts): sourced ranges, who installs it, and where the numbers come from
+  const rows: CostRow[] = e ? [
+    { label: 'Price', status: e.provenance.usd === 'catalog' ? 'known' : 'placeholder', value: priceText(e, cost.length_m), note: 'US national range, not a quote' },
+    { label: 'Install time', status: e.provenance.minutes === 'catalog' ? 'known' : 'placeholder', value: timeText(e), note: e.provenance.minutes === 'guess' ? 'our estimate: no source gives a time' : undefined },
+    { label: 'People', status: Number.isFinite(cost.helpers) ? 'known' : 'pending', value: cost.helpers > 1 ? `${cost.helpers} people` : '1 person' },
+    { label: 'Who does it', status: 'known', value: WHO_TEXT[e.who] + (e.permit ? ' · permit likely' : ''), note: e.note },
+    { label: 'Effort', status: 'known', value: difficulty(cost.effort) },
+  ] : [
     { label: 'Price', status: usdKnown ? st : 'pending', value: !usdKnown ? 'Pending' : cost.usd ? money(cost.usd) : c.kind === 'fix' ? 'Pending' : 'No purchase',
       note: ph ? 'placeholder estimate: not a quote' : undefined },
     { label: 'Time', status: Number.isFinite(cost.minutes) ? st : 'pending', value: Number.isFinite(cost.minutes) ? `${cost.minutes} min` : 'Pending', note: ph ? 'placeholder estimate' : undefined },
@@ -43,7 +54,7 @@ export function costCardModel(c: Change, resolved: HazardRef[] = []): CostCardMo
   ];
   if (c.kind === 'move') rows.splice(1, 0, { label: 'Move', status: 'known', value: `${c.dist_m.toFixed(1)} m${c.turn_deg ? `, turned ${c.turn_deg}°` : ''}` });
   return {
-    title: c.label, kind: c.kind, rows, placeholder: ph, clears: nearbyCleared(c, resolved),
+    title: c.label, kind: c.kind, rows, placeholder: ph, clears: nearbyCleared(c, resolved), sources: e?.sources ?? [],
     funding: { label: FUNDING_LABEL[cost.funding] ?? FUNDING_LABEL.unclassified, note: 'a classification to verify, not a promise of coverage' },
   };
 }
@@ -73,6 +84,7 @@ export function mountCostCard(D: CostCardDeps) {
       <dl>${m.rows.map(r => `<div class="cc-row" data-status="${r.status}"><dt>${esc(r.label)}</dt><dd>${esc(r.value)}${r.status === 'placeholder' ? ' <span class="cc-badge">placeholder</span>' : r.status === 'pending' ? ' <span class="cc-badge">verify</span>' : ''}${r.note ? `<small>${esc(r.note)}</small>` : ''}</dd></div>`).join('')}
         <div class="cc-row" data-status="pending"><dt>Who might pay</dt><dd>${esc(m.funding.label)}<small>${esc(m.funding.note)}</small></dd></div></dl>
       ${m.clears.length ? `<div class="cc-clears"><b>Clears</b> ${m.clears.map(esc).join(' · ')}</div>` : '<div class="cc-clears muted">No hazard on the route is cleared by this change alone.</div>'}
+      ${m.sources.length ? `<p class="cc-foot">Price and time from ${m.sources.map((u, n) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(new URL(u).hostname.replace(/^www\./, ''))}${m.sources.length > 1 ? ` ${n + 1}` : ''}</a>`).join(', ')}</p>` : ''}
       <p class="cc-foot">Estimates for an OT to verify. The numbers are simulated, not a measurement.</p>`;
     if (html === last) return;   // the 1 s refresh must not replace a button under the pointer
     last = html; el.innerHTML = html;

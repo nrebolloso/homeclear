@@ -24,9 +24,12 @@ function render(p: ReportPayload) {
   // the changes on screen (movecost.ts via the log): effort and helpers per row; totals: effort adds, helpers is the most
   // any one change needs, cost adds the priced rows and counts the rest (never guessed)
   const ch = p.changes ?? p.actions.map(a => ({ label: a.label, effort: 0, helpers: 1, cost_usd: a.cost_usd, product: a.product }));
+  // the fix catalog's sources (catalog.ts), as numbered host links
+  const srcs = (u?: string[]) => (u?.length ? `<div class="dim">${u.map(x => { try { return `<a href="${esc(x)}">${esc(new URL(x).hostname.replace(/^www\./, ''))}</a>`; } catch { return ''; } }).join(', ')}</div>` : '');
   const money = (x?: number) => (x === undefined ? '<span class="ot">price needed</span>' : x ? `$${+x.toFixed(2)}` : 'free');
   const acts = ch.map((a, n) => `<tr><td>${n + 1}</td><td>${esc(a.label)}</td><td>${a.effort ? `${a.effort.toFixed(1)} · ${difficulty(a.effort)}` : ''}</td>`
-    + `<td>${a.helpers}</td><td>${money(a.cost_usd)}</td><td class="dim">${esc(a.product ?? '')}</td></tr>`).join('');
+    + `<td>${a.helpers}</td><td>${'price' in a && a.price ? `${esc(a.price)}<div class="dim">${esc(a.time ?? '')} · ${esc(a.who ?? '')}</div>` : money(a.cost_usd)}</td>`
+    + `<td class="dim">${esc(a.product ?? '')}${'sources' in a ? srcs(a.sources) : ''}</td></tr>`).join('');
   const unpriced = ch.filter(a => a.cost_usd === undefined).length, effTot = ch.reduce((t, a) => t + a.effort, 0);
   const total = ch.length ? `<tr><td></td><td><b>Total</b></td><td><b>${effTot ? `${effTot.toFixed(1)} · ${difficulty(effTot)}` : ''}</b></td>`
     + `<td><b>${Math.max(1, ...ch.map(a => a.helpers))}</b></td><td><b>$${+ch.reduce((t, a) => t + (a.cost_usd ?? 0), 0).toFixed(2)}</b>`
@@ -46,8 +49,8 @@ function render(p: ReportPayload) {
   const ranked = (p.ranked_fixes ?? []).map((f, n) => `<tr><td>${n + 1}</td><td><b>${esc(f.label)}</b>${f.product ? `<div class="dim">${esc(f.product)}</div>` : ''}</td>
     <td>${f.error ? `<span class="bad">${p.ranked_by ? esc(f.error) : 'blocks the route'}</span>` : `<span class="${f.reduction > 0 ? 'ok' : 'dim'}">−${f.reduction.toFixed(2)}</span> (${(f.share * 100).toFixed(0)}%)`}</td>
     <td>${f.clearance_gain_m > 0.005 ? `<span class="ok">+${(f.clearance_gain_m * 100).toFixed(0)} cm</span>` : '–'}</td>
-    <td>${f.cost_usd !== undefined ? (f.cost_usd ? `$${f.cost_usd}` : 'free') : ''}</td><td>${f.minutes ? `${f.minutes} min` : ''}</td><td>${esc(EFF[f.effort ?? 0] ?? (f.effort ?? 0).toFixed(1))}</td></tr>`).join('');
-  const popts = (p.planner_options ?? []).map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${o.per_month.toFixed(2)}</td><td>${o.cost_usd ? `$${o.cost_usd}` : 'free'} · ${o.minutes} min</td>
+    <td>${f.price ? `${esc(f.price)}<div class="dim">${esc(f.who ?? '')}</div>${srcs(f.sources)}` : f.cost_usd !== undefined ? (f.cost_usd ? `$${f.cost_usd}` : 'free') : ''}</td><td>${f.time ? esc(f.time) : f.minutes ? `${f.minutes} min` : ''}</td><td>${esc(EFF[f.effort ?? 0] ?? (f.effort ?? 0).toFixed(1))}</td></tr>`).join('');
+  const popts = (p.planner_options ?? []).map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${o.per_month.toFixed(2)}</td><td>${o.plan ? esc(o.plan) : `${o.cost_usd ? `$${o.cost_usd}` : 'free'} · ${o.minutes} min`}</td>
     <td>${o.effort.toFixed(1)}</td><td>${o.changes.map(esc).join('; ')}</td></tr>`).join('');
   const clips = p.clips.map(k => `<li><span class="imag">${esc(k)}</span></li>`).join('');
   document.getElementById('root')!.innerHTML = `
@@ -85,7 +88,7 @@ function render(p: ReportPayload) {
   ${masses ? `<h2>Furniture weights (for move effort)</h2><table><tr><th>Object</th><th>Mass</th><th>1 m carry</th><th>Helpers</th><th>How we know</th></tr>${masses}</table>` : ''}
   ${p.ranked_fixes ? `<h2>Recommended fixes, ranked</h2><table><tr><th>#</th><th>Fix</th><th>Toe catches/month saved</th><th>Passage gained</th><th>Cost</th><th>Time</th><th>Effort</th></tr>${ranked || '<tr><td colspan="7">every listed fix is already in this layout</td></tr>'}</table>
   <p class="dim">Each fix is simulated on its own from the layout above (${p.rollouts} trips per route); savings are not additive. ${p.ranked_by ? `Ranked by ${esc(p.ranked_by)}.` : 'Ranked by toe catches saved, then passage width, then cost.'}</p>` : ''}
-  ${popts ? `<h2>Planner options</h2><table><tr><th>Option</th><th>Toe catches/month</th><th>Cost · time</th><th>Effort</th><th>Changes from the scanned room</th></tr>${popts}</table>
+  ${popts ? `<h2>Planner options</h2><table><tr><th>Option</th><th>Toe catches/month</th><th>Price · install time · who</th><th>Effort</th><th>Changes from the scanned room</th></tr>${popts}</table>
   <p class="dim">Each option re-run on fresh simulated trips (${p.rollouts} per route), not the search's own draws.</p>` : ''}
   ${sugg ? `<h2>Suggested layouts (optimizer)</h2><table><tr><th>Option</th><th>Contacts/month</th><th>Failed checks</th><th>Cost · effort</th><th>Changes</th></tr>${sugg}</table>` : ''}
   ${objs ? `<h2>Furniture the walker could push (<span class="imag">simulated</span>)</h2><table><tr><th>Object</th><th>Event</th><th>Route</th><th>Approach</th><th>Contact</th><th>P per touch/crossing (95% CI)</th><th>Per month</th></tr>${objs}</table>
@@ -99,6 +102,7 @@ function render(p: ReportPayload) {
     <li>Thin floor items (cables) are classified, not measured: their height is a typical value.</li>
     <li>Floor and walls under or behind furniture that was moved were never filmed; they are shown imagined (tinted) and not measured.</li>
     <li>Toe contacts are not falls; the numbers compare layouts for this person and route, they are not a fall probability.</li>
+    <li>Fix prices and install times are US national ranges from published cost guides and retail listings (sources under each fix), not quotes: local labour rates, permits and what is inside the wall change them. Times marked "estimate" have no source.</li>
     <li>Furniture weights are estimated from the scanned size and a typical density per kind, not weighed; out-of-range values are marked for the OT.</li>
   </ul>
   ${prov ? `<p class="dim">Built from the run's log: ${p.log_entries} entries (${prov}).</p>` : ''}`;

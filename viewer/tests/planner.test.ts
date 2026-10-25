@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { fromLayout, toLayout, check, cost, changed, score, TIE_BREAK, type PlannerCfg } from '../src/planner.ts';
 import { polyCells, stamp, worldFootprint, TAPED_EDGE_M, type Pose } from '../src/grid.ts';
 import { loadScene } from './scene.ts';
+import { CATALOG, typicalMinutes, usdRange } from '../src/catalog.ts';
+const typ = (k: string) => usdRange(CATALOG[k])[1];   // the fix catalog's typical price
 
 const cfg = JSON.parse(readFileSync(new URL('../../configs/planner/kitchen4_lighter.json', import.meta.url), 'utf8')) as PlannerCfg;
 const s = loadScene('kitchen4_lighter');
@@ -42,7 +44,7 @@ test('planner: costs and changes list each item once', () => {
   assert.deepEqual(changed(cfg, scanned, fix), ['chair8', 'mat', 'cord', 'nightlight']);
   const c = cost(s.init, cfg, scanned, fix);
   assert.deepEqual(c.items.map(i => i.key), ['chair8', 'mat', 'cord', 'nightlight']);
-  assert.equal(c.usd, 10 + 8 + 12, 'tape + cord tape + nightlight; a chair move is free');
+  assert.equal(c.usd, typ('mat_tape') + typ('tape_cord') + typ('add_nightlight'), 'tape + cord tape + nightlight; a chair move is free');
   assert.equal(cost(s.init, cfg, scanned, scanned).items.length, 0);
 });
 

@@ -9,6 +9,7 @@ import { card, poseAt } from './reimagine.ts';
 import type { Init } from './evaluate.ts';
 import type { WorldModel } from './worldmodel.ts';
 import type { Layout, Pose } from './grid.ts';
+import { catalogOut, planText, summaryText } from './catalog.ts';
 
 const cfgs = import.meta.glob('../../configs/planner/*.json', { eager: true, import: 'default' });
 
@@ -163,11 +164,12 @@ export function createPlanFix(D: PlanFixDeps) {
     const items = cost(S(), cfg(), data!.scanned.layout, p.layout).items;
     $('pfresult').innerHTML = `<b>Before</b>: ${range(before)}/month<br>${parts(before)}<br><b>After</b>: <span class="delta-good">${range(p.confirm)}</span>/month<br>${parts(p.confirm)}` +
       `<br><small>both re-run on fresh trips (seed ${data!.stats.confirm_seed}), not the search's own draws</small>` +
-      `<ol>${items.map(i => `<li>${i.label} <small class="cost">${i.usd ? `$${i.usd} · ` : ''}${i.minutes} min${i.assumption ? ` · ${i.assumption}` : ''}</small></li>`).join('')}</ol>`;
+      `<ol>${items.map(i => `<li>${i.label} <small class="cost">${i.catalog ? summaryText(i.catalog) : `${i.usd ? `$${i.usd} · ` : ''}${i.minutes} min`}${i.assumption ? ` · ${i.assumption}` : ''}</small></li>`).join('')}</ol>`;
     $('pfoptions').innerHTML = '';
     for (const o of opts()) {
       const q = data!.pareto[o.k], li = document.createElement('li'), b = document.createElement('button');
-      li.innerHTML = `${o.why}: <b>${f1(q.confirm.contacts)}</b> toe catches/month · effort ${q.cost.effort.toFixed(1)} · $${q.cost.usd} · ${parts(q.confirm)} `;
+      // priced live from the fix catalog (planner.ts cost), not the search's own cost: the search ranked on the config's numbers
+      li.innerHTML = `${o.why}: <b>${f1(q.confirm.contacts)}</b> toe catches/month · ${planText(cost(S(), cfg(), data!.scanned.layout, q.layout).items)} · ${parts(q.confirm)} `;
       b.textContent = o.k === k ? 'Applied' : 'Apply'; b.disabled = o.k === k;
       b.onclick = () => apply(o.k);
       li.appendChild(b); $('pfoptions').appendChild(li);
@@ -249,13 +251,13 @@ export function createPlanFix(D: PlanFixDeps) {
       .map(({ pl, n }) => {
       const it = cost(S(), cfg(), cur, pl).items[0], sc = scores[n + 1], cut = before - sc.contacts;
       return { label: it?.label ?? changed(cfg(), cur, pl)[0], error: sc.check.length ? sc.check.join('; ') : sc.error, reduction: Math.max(0, cut), share: before > 0 ? cut / before : 0,
-        objective_cut: scores[0].risk - sc.risk, clearance_gain_m: 0, cost_usd: it?.usd, minutes: it?.minutes, effort: it?.effort };
+        objective_cut: scores[0].risk - sc.risk, clearance_gain_m: 0, cost_usd: it?.usd, minutes: it?.minutes, effort: it?.effort, ...(it?.catalog ? catalogOut(it.catalog) : {}) };
     }).sort((a, b) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.objective_cut - a.objective_cut));
   }
   /** OT report: the options on show (Easiest / Keep my mat / Safest), each confirmed on fresh trips; null = no planner search */
-  const optionsOut = () => (data ? opts().map(o => { const q = data!.pareto[o.k];
-    return { name: o.why, per_month: q.confirm.contacts, cost_usd: q.cost.usd, minutes: q.cost.minutes, effort: q.cost.effort,
-      changes: cost(S(), cfg(), data!.scanned.layout, q.layout).items.map(i => i.label) }; }) : null);
+  const optionsOut = () => (data ? opts().map(o => { const q = data!.pareto[o.k], c = cost(S(), cfg(), data!.scanned.layout, q.layout);
+    return { name: o.why, per_month: q.confirm.contacts, cost_usd: c.usd, minutes: c.minutes, effort: q.cost.effort, plan: planText(c.items),
+      changes: c.items.map(i => i.label) }; }) : null);
   /** wmghosts.ts: the room as it is now / the scan / the chosen option, the evaluator's trips with one world model, and a
    *  glide + commit to a planner layout (before / after) */
   const layouts = () => (data ? { now: fromLayout(S(), cfg(), D.base, D.layout()), scan: data.scanned.layout, chosen: data.pareto[opts()[0].k].layout } : null);
