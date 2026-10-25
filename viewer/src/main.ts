@@ -10,6 +10,7 @@ import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
 import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z, WHEEL_R } from './wheelchair.ts';
 import { chairGeometry, clearOf, driveStep, spinBy, type Chair } from './drive.ts';
 import { keyIntent, createHistory, createKeyOverlay } from './controls.ts';
+import { toggleVrButton } from './xr-session.ts';
 import { controlHints, hintRows, type HintCtx } from './hints.ts';
 import { pathLights, createLights3d } from './lights.ts';
 import { strokePersona } from './stroke.ts';
@@ -2183,6 +2184,7 @@ onWindow('keydown', e => {
   else if (it === 'grab-turn') turnGrab();
   else if (it === 'lock') toggleLock();
   else if (it === 'persona') cyclePersona();
+  else if (it === 'vr-toggle') { const on = toggleVrButton(); keyHelp.toast(on === null ? 'VR is not available in this browser' : on ? 'Enter VR button shown · K hides it' : 'Enter VR button hidden · K shows it'); }
   else if (it.startsWith('nav-')) { if (!mk && !editing && !grabbing) frontend.setNavigation(({ 'nav-route': 'route', 'nav-walk': 'walk', 'nav-explore': 'explore', 'nav-fly': 'fly' } as const)[it as 'nav-route']); }
   else if (it === 'recenter' && isChair()) { if (mode === 'free') { headTurn.yaw -= spinBy(body, headTurn.yaw, chairOf(), chairOk()); keyHelp.toast(Math.abs(headTurn.yaw) < 0.01 ? 'Chair turned to face your view' : 'No room to turn the chair further'); } }
   else if (it === 'recenter') { if (mode === 'free') { const was = body.yaw; body.yaw = viewYaw(); if (!canStand(body)) body.yaw = was; else headTurn.yaw = 0; keyHelp.toast('Walker turned to face your view'); } }

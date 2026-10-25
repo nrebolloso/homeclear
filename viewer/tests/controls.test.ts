@@ -13,6 +13,8 @@ test('hotkeys map to intents', () => {
   assert.equal(keyIntent(k('KeyC'), ctx()), 'recenter');
   assert.equal(keyIntent(k('KeyP'), ctx()), 'persona');
   assert.equal(keyIntent(k('KeyP'), ctx({ typing: true })), null, 'not while typing in a field');
+  assert.equal(keyIntent(k('KeyK'), ctx()), 'vr-toggle');
+  assert.equal(keyIntent(k('KeyK'), ctx({ grabbing: true })), null, 'not while carrying an object');
   for (const drive of ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE']) assert.equal(keyIntent(k(drive), ctx()), null, `${drive} stays with the driving keys`);
   assert.equal(keyIntent(k('KeyZ'), ctx()), null, 'plain Z stays with the existing reset handler');
 });

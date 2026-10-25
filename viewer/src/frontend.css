@@ -227,7 +227,8 @@ button.pill { cursor: pointer; } button.pill:hover { border-color: var(--btn-hov
 body.demo #controls-strip, body.demo #status-pills { display: none; }
 #status-pills .pill { min-height: 0; padding: 3px 11px; border-radius: 999px; }
 .frontend #keyhelp-chip { display: none; }   /* F1 · keys is the button in the controls strip (bottom left) */
-#strip-keys { align-self: flex-start; pointer-events: auto; min-height: 0; padding: 3px 10px; font-size: calc(0.75rem * var(--fs)); }
+#strip-vr[hidden] { display: none; }
+#strip-keys, #strip-vr { align-self: flex-start; pointer-events: auto; min-height: 0; padding: 3px 10px; font-size: calc(0.75rem * var(--fs)); }
 
 /* ---------- drag-to-widen planning panel (panel-size.ts) ---------- */
 #panel-resize { position: absolute; left: 0; top: 0; bottom: 0; width: 12px; cursor: col-resize; z-index: 3; touch-action: none; }

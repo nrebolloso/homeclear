@@ -4,7 +4,7 @@ import { later } from './lifetime.ts';
 // The pure parts (keyIntent, createHistory) touch no DOM so tests/controls.test.ts can run them.
 
 export type Intent = 'help' | 'undo' | 'redo' | 'mark' | 'mark-stairs' | 'mark-door' | 'mark-point' | 'choose-cancel' | 'remove' | 'grab'
-  | 'grab-drop' | 'grab-cancel' | 'grab-turn' | 'lock' | 'recenter' | 'persona' | 'nav-route' | 'nav-walk' | 'nav-explore' | 'nav-fly' | null;
+  | 'grab-drop' | 'grab-cancel' | 'grab-turn' | 'lock' | 'recenter' | 'persona' | 'vr-toggle' | 'nav-route' | 'nav-walk' | 'nav-explore' | 'nav-fly' | null;
 export interface KeyLike { code: string; key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }
 /** typing: focus is in a text field; grabbing: G is carrying an object; choosing: M was pressed and 1/2/3 is awaited */
 export interface KeyCtx { typing: boolean; grabbing: boolean; choosing: boolean }
@@ -29,7 +29,7 @@ export function keyIntent(e: KeyLike, c: KeyCtx): Intent {
   if (e.shiftKey) return null;
   const digit = ({ Digit1: 'nav-route', Digit2: 'nav-walk', Digit3: 'nav-explore', Digit4: 'nav-fly' } as Record<string, Intent>)[e.code];   // 1-4: the toolbar modes (M then 1/2 is the mark chooser above)
   if (digit) return digit;
-  return ({ KeyM: 'mark', KeyX: 'remove', KeyG: 'grab', KeyL: 'lock', KeyC: 'recenter', KeyP: 'persona' } as Record<string, Intent>)[e.code] ?? null;
+  return ({ KeyM: 'mark', KeyX: 'remove', KeyG: 'grab', KeyL: 'lock', KeyC: 'recenter', KeyP: 'persona', KeyK: 'vr-toggle' } as Record<string, Intent>)[e.code] ?? null;
 }
 
 /** Undo/redo over snapshots S. An entry only applies while the room is still exactly as that edit left it (same key): a fix
@@ -97,7 +97,7 @@ const GROUPS: [string, [string, string][]][] = [
     ['Right click, Backspace, Ctrl+Z', 'undo the last point'],
     ['Esc / Enter', 'cancel marking / finish editing marks'],
   ]],
-  ['Anywhere', [['H', 'demo mode (hides the panels)'], ['F1 or ?', 'this list']]],
+  ['Anywhere', [['H', 'demo mode (hides the panels)'], ['K', 'show or hide the Enter VR button (remembered in this browser)'], ['F1 or ?', 'this list']]],
 ];
 
 const CSS = `
