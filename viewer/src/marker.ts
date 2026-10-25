@@ -9,10 +9,11 @@ import type { Stair } from './stairs.ts';
 import type { Door } from './doors.ts';
 
 export type P3 = [number, number, number];
-export type MarkKind = 'stairs' | 'door';
+export type MarkKind = 'stairs' | 'door' | 'point';
 export const MARK_STEPS: Record<MarkKind, string[]> = {
   stairs: ['the front edge of the BOTTOM step, at one end', 'the same edge, at its other end', 'the TOP: on the landing, just past the last step'],
   door: ['the inside face of one jamb', 'the inside face of the other jamb'],
+  point: ['a spot to check, on the floor: can the device get there from the route\'s start?'],   // the reach map (reach.ts)
 };
 export interface Marking { kind: MarkKind; pts: P3[] }
 export const startMarking = (kind: MarkKind): Marking => ({ kind, pts: [] });
@@ -27,6 +28,7 @@ const RISER = 0.18;
 /** Why p can't be the next point (null: it can). Generous: it only catches clicks that are certainly wrong. */
 export function placeError(m: Marking, p: P3): string | null {
   const k = m.pts.length;
+  if (m.kind === 'point') return p[2] > 0.3 ? `that is ${cm(p[2])} up: click the floor` : null;
   if (m.kind === 'stairs') {
     if (k === 0 && p[2] > 0.6) return `that is ${cm(p[2])} up: the bottom step's front edge is near the floor`;
     if (k === 1) {

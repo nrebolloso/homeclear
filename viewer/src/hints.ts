@@ -9,7 +9,7 @@ export interface HintCtx {
   persona: string;                       // 'patient' | 'wheelchair' | 'stroke' | ...
   nav: 'auto' | 'free' | 'fly';          // the viewer's walk mode: auto = following the route
   inspect: boolean;
-  marking: { kind: 'stairs' | 'door'; step: number; total: number } | null;
+  marking: { kind: 'stairs' | 'door' | 'point'; step: number; total: number } | null;
   editingMarks: boolean;
   grabbing: boolean;                     // G on the desktop; a held object under the wand in VR
   selected: boolean;                     // desktop: an object is picked; VR: the wand points at one
@@ -35,7 +35,7 @@ export function controlHints(x: HintCtx): Hints {
   const wasd = chair ? [c('roll', 'W', 'S'), c('steer', 'A', 'D'), c('spin', 'Q', 'E')] : [c('push', 'W', 'S'), c('turn', 'A', 'D')];   // the chair rolls, steers while rolling, spins on the spot
   switch (mode) {
     case 'marking':
-      label = `Marking ${x.marking!.kind === 'stairs' ? 'stairs' : 'doorway'} · ${x.marking!.step}/${x.marking!.total}`;
+      label = `Marking ${x.marking!.kind === 'stairs' ? 'stairs' : x.marking!.kind === 'door' ? 'doorway' : 'a point to check'} · ${x.marking!.step}/${x.marking!.total}`;
       chips = vr ? [c('place', 'Trigger'), c('undo', 'B'), c('cancel', 'Grip'), c('no snap', 'Off-hand grip')]
         : [c('place', 'Click'), c('centre', 'Space'), c('no snap', 'Shift'), c('undo', 'Ctrl', 'Z'), c('cancel', 'Esc')];
       break;

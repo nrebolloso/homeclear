@@ -1,3 +1,4 @@
+import { onWindow, onDocument, every, later, onCanvas } from './lifetime.ts';
 import { cameraToW2C } from './frame.ts';   // first: sets the +z-up convention before any camera exists
 import * as THREE from 'three';
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
@@ -31,18 +32,31 @@ import { isMoved, movedText, resetPose } from './resets.ts';
 import { twistAngle, snapQuarter } from './wand.ts';
 import { createObjLabel } from './objlabel.ts';
 import { measureStair, stairFixes, stairFrame, stairYaml, mirrorRail, inRailBand, stepLights, withRails, pitchAt, parkedPose, walkerPlacement, SPLAT_STRIDE, type Stair, type Side } from './stairs.ts';
-import { createStairs3d } from './stairs3d.ts';
-import { doorFixes, doorYaml, needWidth, hingeSide, growOf, type Door } from './doors.ts';
+import { createStairs3d, type Phase } from './stairs3d.ts';
+import { reducedMotion } from './designed.ts';
+import { railSplats, toneOf, fitRail, NEUTRAL_RAIL, type RGB } from './railsplat.ts';
+import { doorFixes, doorYaml, needWidth, hingeSide, growOf, doorGain, type Door } from './doors.ts';
 import { createDoors3d } from './doors3d.ts';
+import { paintClasses, thresholds, costToReach, causeText, type ReachReport, type ReachTarget } from './reach.ts';
+import { createReach3d, statusLine, drawCostChart, costRuns, costAt } from './reach3d.ts';
+import { routeStart } from './evaluate.ts';
 import { startMarking, place, undo as undoMark, isComplete, prompt as markPrompt, placeError, preview, buildLevels, snapZ, checkAll,
-  stairHandles, moveStairHandle, stairPoints, doorHandles, moveDoorHandle, type Marking, type MarkKind, type P3, type Levels } from './marker.ts';
+  stairHandles, moveStairHandle, stairPoints, doorHandles, moveDoorHandle, MARK_STEPS, type Marking, type MarkKind, type P3, type Levels } from './marker.ts';
 import { createMarker3d } from './marker3d.ts';
 import { MAX_EXTRA_LIGHTS, type PointLight } from './night.ts';
 import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } from './perf.ts';
 import QRCode from 'qrcode';
 import { mountFrontend, type FrontendAdapter } from './frontend.ts';
+import { mountLayers } from './layers.ts';
+import './layers.css';
+import { provenanceTexels, provenanceShare } from './provenance.ts';
+import { mountCostCard } from './costcard.ts';
+import { mountReview } from './hazardreview.ts';
 import { headingMismatch, nearestStandable, routeResume } from './navmode.ts';
 import { createFrontendXR } from './frontend-xr.ts';
+import { createCompanion } from './companion.ts';
+import { createBookmarks } from './bookmarks.ts';
+import { createEditLocks } from './edit-locks.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
 import type { Ghost } from './sim.ts';
 import type { WorldModel } from './worldmodel.ts';
@@ -50,6 +64,7 @@ import { setupXR, type XrEditor } from './xr.ts';
 import { plainSpot, tourStand } from './xrtour.ts';
 import { createXRComparison } from './xrcompare.ts';
 
+export async function mountViewer(runtime: { renderer: THREE.WebGLRenderer; scope: import('./lifetime.ts').Lifetime }) {
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 // model and scene text (Cosmos Reason notes, hazard details) goes into innerHTML escaped; same as report.ts's, which can't
 // be imported: that module renders the report page when loaded
@@ -98,9 +113,8 @@ let inXR = false;   // presenting in a headset (xr.ts): hazard labels are scene 
 const tier = tierAtLoad(location.search, wantXR);
 let perfOn = perfAtLoad(location.search, tier, (() => { try { return localStorage.getItem('homeclear.perf'); } catch { return null; } })());
 // the drawing buffer is kept on the monitor for screenshots (fix card, e2e); a headset frame doesn't need the extra copy
-const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: !wantXR });
-renderer.setPixelRatio(Math.min(devicePixelRatio, perfOn ? PERF.pixel_ratio : FULL.pixel_ratio));
-renderer.setSize(innerWidth, innerHeight);
+const renderer = runtime.renderer;
+if (!renderer.xr.isPresenting) { renderer.setPixelRatio(Math.min(devicePixelRatio, perfOn ? PERF.pixel_ratio : FULL.pixel_ratio)); renderer.setSize(innerWidth, innerHeight); }
 $('view').appendChild(renderer.domElement);
 const css = new CSS2DRenderer();
 css.setSize(innerWidth, innerHeight);
@@ -117,9 +131,9 @@ const HEMI_ENV = 0.6;   // the hemisphere's share once the room's env map lights
 const nightLamp = new THREE.PointLight(0xffb36b, 0, 1.5, 2);   // night: the nightlight on the meshes (updateNight)
 scene.add(nightLamp);
 const vision = createVision(renderer, scene, camera);
-addEventListener('resize', () => {
+onWindow('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight); css.setSize(innerWidth, innerHeight); vision.resize();
+  if (!renderer.xr.isPresenting) renderer.setSize(innerWidth, innerHeight); css.setSize(innerWidth, innerHeight); vision.resize();
 });
 
 const night = nightShader();
@@ -179,7 +193,7 @@ const items = objs.map(o => {
   group.add(proxy, outline);
   scene.add(group);
   const fill = splat(o.fill);
-  fill.recolor = new THREE.Color(1, 0.75, 1);      // tint: imagined, not measured (light, so a generated floor texture still reads)
+  fill.recolor = new THREE.Color(1, 0.9, 1);       // tint: imagined, not measured (faint, so the generated floor reads as floor; the "imagined" tag says the rest)
   fill.visible = false;
   const tag = o.placed ? new THREE.Object3D() : label('imagined, not measured', 'imag');   // staged for the demo: the floor under it was filmed
   tag.position.set(o.pivot[0], o.pivot[1], 0.15);
@@ -288,6 +302,7 @@ function setExplore(on: boolean) { explore.on = on; explore.parked = on ? { x: b
 const chairVel = { v: 0, w: 0 };   // the wheelchair's speed and turn rate (driving: see "wheelchair driving" below)
 const isChair = () => walkerCfg.device === 'wheelchair';
 let mode: 'auto' | 'free' | 'fly' = 'auto', autoS = 0, autoPause = 0;
+let companion: ReturnType<typeof createCompanion> | null = null;
 let routePaused = false, routeSpeed = 1, frontendVR: ReturnType<typeof createFrontendXR> | null = null, xrFollowRoute = false;
 
 // ---------- layout state + worker ----------
@@ -297,7 +312,7 @@ let L = stamp(g, base, objs, layout.poses);
 let current: Eval | null = null, baselinePerMonth: number | null = null;
 let routeS: number[] = [];
 const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
-let init: Init = { g, base, est, objects: objs, routes, persona, risk, interventions, stepModel, worldModel, fixtures: sc.fixtures, transfer: sc.transfer, ems: sc.ems,
+let init: Init = { g, base, est, objects: objs, routes, persona, risk, interventions, stepModel, worldModel, fixtures: sc.fixtures, transfer: sc.transfer, ems: sc.ems, coverage, coverage_good: sc.grid.coverage_good,
   plan: { walker_width_m: walkerCfg.width_m, ...sc.plan }, rules: sc.hazard_rules };
 worker.postMessage({ type: 'init', init });
 let seq = 0, latestEval = 0;
@@ -308,13 +323,17 @@ worker.onmessage = e => {
 };
 const ask = (msg: object) => new Promise<any>(res => { const id = ++seq; waiting.set(id, res); worker.postMessage({ ...msg, id }); });
 
-const game: any = { ready: false, fps: 0, evals: 0 };
+const editLocks = createEditLocks();
+const game: any = { ready: false, fps: 0, evals: 0, pending: () => waiting.size };
+runtime.scope.own(() => { worker.terminate(); renderer.setAnimationLoop(null); });
 (window as any).game = game;
 
 function replanRoute(k: number) {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('selectRoute', [k]);
+
   selRoute = k; autoS = 0;
   showPhysics();
-  return replan().then(ms => { if (!current?.error) Object.assign(body, routePose(0, 0, Infinity)); return ms; });
+  return replan().then(ms => { if (!renderer.xr.isPresenting && !current?.error) Object.assign(body, routePose(0, 0, Infinity)); return ms; });
 }
 async function replan(): Promise<number> {
   const t = performance.now();
@@ -339,6 +358,7 @@ async function replan(): Promise<number> {
   $('status').textContent = r.error ? `No route: ${r.error}` : `route ${r.length_m.toFixed(2)} m · replanned in ${ms.toFixed(0)} ms (worker ${r.ms.toFixed(0)} ms)`;
   $('status').style.color = r.error ? 'var(--red)' : '';
   refreshReimagine();
+  refreshReach();   // the reach map follows the layout (off: returns at once)
   return ms;
 }
 
@@ -356,7 +376,7 @@ function drawPlan(r: Eval) {
     pts.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     pts.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   };
-  dots(ghostDots, r.ghosts, [0.3, 0.79, 0.94]);
+  dots(ghostDots, $<HTMLInputElement>('hitghosts').checked ? r.ghosts.filter(gh => gh.hit.some(Boolean)) : r.ghosts, [0.3, 0.79, 0.94]);   // only trips with a contact
   dots(handDots, r.hand?.ghosts ?? [], [0.92, 0.92, 0.96]);
   for (const c of [...hazardGroup.children]) {
     hazardGroup.remove(c);
@@ -404,24 +424,27 @@ function renderPanels() {
 }
 
 // ---------- hazard spotlights (spotlight.ts): the object behind each measured hazard glows, proposals get pins ----------
-// Measured hazards pulse orange on the object that makes them; Cosmos Reason proposals are pins in their own colours and
+// Measured hazards pulse red on the object that makes them; Cosmos Reason proposals are pins in their own colours and
 // always say "proposed": teal when the measured grids agree, violet when only an OT can check.
 const spotGroup = new THREE.Group();
 spotGroup.renderOrder = 2;
 scene.add(spotGroup);
 const glow = items.map(it => {
-  const m = new THREE.Mesh(it.proxy.geometry, new THREE.MeshBasicMaterial({ color: 0xff8a1f, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const m = new THREE.Mesh(it.proxy.geometry, new THREE.MeshBasicMaterial({ color: 0xff2d2d, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
   m.position.copy(it.proxy.position); m.rotation.copy(it.proxy.rotation); m.visible = false; m.renderOrder = 2;
   it.group.add(m);
   return m;
 });
-const SPOT_RGB = { measured: 0xff8a1f, 'reason-confirmed': 0x2fd6a8, 'reason-ot': 0xb48cff };
+const SPOT_RGB = { measured: 0xff2d2d, 'reason-confirmed': 0x2fd6a8, 'reason-ot': 0xb48cff };
 let spotList: Spot[] = [], tourSpot = -1;
+// every spot on the route vs the ones shown: an OT's dismissals (hazardreview.ts) hide a highlight, never the measurement
+let allSpots: Spot[] = [], spotFilter: (s: Spot) => boolean = () => true, onSpots: (() => void) | null = null;
 function clearGroup(grp: THREE.Group) { for (const c of [...grp.children]) { grp.remove(c); c.traverse(x => { if (x instanceof CSS2DObject) x.element.remove(); }); } }
 function drawSpots(r: Eval) {
   clearGroup(spotGroup);
   glow.forEach(m => { m.visible = false; m.userData.sev = 0; });
-  spotList = r.error ? [] : spots(r.hazards, objs, hzFile.hazards, sc.hazard_rules?.margin_m?.height ?? 0);
+  allSpots = r.error ? [] : spots(r.hazards, objs, hzFile.hazards, sc.hazard_rules?.margin_m?.height ?? 0);
+  spotList = allSpots.filter(spotFilter); onSpots?.();
   if (!$<HTMLInputElement>('spot').checked) return;
   for (const s of spotList) {
     if (s.object >= 0 && !layout.poses[s.object].removed) { glow[s.object].visible = true; glow[s.object].userData.sev = s.severity; }
@@ -445,7 +468,7 @@ function pulseSpots(t: number) {
   glow.forEach((m, k) => {
     if (!m.visible) return;
     const sev = m.userData.sev as number, here = tourSpot >= 0 && spotList[tourSpot]?.object === k;
-    (m.material as THREE.MeshBasicMaterial).opacity = (0.08 + 0.16 * sev + (here ? 0.12 : 0)) * (0.65 + 0.35 * Math.sin(t * 3.2));
+    (m.material as THREE.MeshBasicMaterial).opacity = (0.14 + 0.2 * sev + (here ? 0.12 : 0)) * (0.7 + 0.3 * Math.sin(t * 3.2));
   });
 }
 
@@ -505,8 +528,8 @@ function tourStep(dt: number) {
   }
 }
 $('tour').onclick = startTour;
-renderer.domElement.addEventListener('pointerdown', endTour);
-addEventListener('keydown', e => { if (tour.on && (e.target as HTMLElement).tagName !== 'BUTTON') endTour(); });
+onCanvas(renderer.domElement, 'pointerdown', endTour);
+onWindow('keydown', e => { if (tour.on && (e.target as HTMLElement).tagName !== 'BUTTON') endTour(); });
 
 // ---------- furniture editing ----------
 const tc = new TransformControls(camera, renderer.domElement);
@@ -521,6 +544,8 @@ const poseOf = (k: number): Pose => ({ x: items[k].group.position.x, y: items[k]
 let onSelect: ((k: number) => void) | null = null;   // the reimagined room shows the picked object's cost tag
 function select(k: number) {
   if (selected >= 0) items[selected].outline.visible = false;
+  if (k >= 0 && renderer.xr.isPresenting && editLocks.owner(String(k)) === 'vr') return;
+  if (companion && renderer.xr.isPresenting) tc.camera = companion.camera;
   selected = k;
   onSelect?.(k);
   if (k < 0) { tc.detach(); $<HTMLButtonElement>('remove').disabled = true; return; }
@@ -593,7 +618,9 @@ const iconOf = (o: { name: string; kind: string }) =>
 const snap = () => ({ layout, applied });
 const editHist = createHistory<ReturnType<typeof snap>>(s => s.layout);
 const nameOf = (k: number) => objs[k].name.replace(/_/g, ' ');
-function restoreObject(k: number) {   // back where it stood when removed, if that spot is still free
+function restoreObject(k: number) {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('restoreObject', [objs[k].name]);
+   // back where it stood when removed, if that spot is still free
   const poses = layout.poses.map((q, n) => (n === k ? { ...q, removed: false } : q));
   if (!placementOk(g, placeBase, objs, poses, k, overlapOk[k])) return refused();
   const was = snap();
@@ -602,14 +629,18 @@ function restoreObject(k: number) {   // back where it stood when removed, if th
   syncObjects();
   return replan();
 }
-function commitPose(k: number, p: Pose) {
+function commitPose(k: number, p: Pose): Promise<number> {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('moveObject', [objs[k].name, p.x, p.y, p.yaw * 180 / Math.PI]);
+
   const was = snap(), q = layout.poses[k], np = { x: p.x, y: p.y, yaw: Math.round(p.yaw / (Math.PI / 2)) * (Math.PI / 2) };
   layout = { ...layout, poses: layout.poses.map((o, n) => (n === k ? np : o)) };
   if (Math.hypot(np.x - q.x, np.y - q.y) > 1e-4 || Math.abs(Math.atan2(Math.sin(np.yaw - q.yaw), Math.cos(np.yaw - q.yaw))) > 1e-4) editHist.record(`moved ${nameOf(k)}`, was, snap());
   syncObjects();
   return replan();
 }
-function removeObject(k: number) {   // take it out of the room: no footprint, no splat; the spot it covered shows the imagined fill
+function removeObject(k: number) {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('removeObject', [objs[k].name]);
+   // take it out of the room: no footprint, no splat; the spot it covered shows the imagined fill
   const was = snap();
   layout = { ...layout, poses: layout.poses.map((q, n) => (n === k ? { ...q, removed: true } : q)) };
   editHist.record(`removed ${nameOf(k)}`, was, snap());
@@ -628,7 +659,16 @@ const costOf = (id: string) => {   // what a fix takes: money, time, product (co
 $('planfixes').onclick = async () => {
   // an Apply re-runs this: keep the old list up until the new one is ready (a one-line placeholder shrinks the pane and snaps its scroll to the top)
   if (!$('fixes').childElementCount) $('fixes').innerHTML = '<li>rolling out each fix…</li>';
-  const { before, fixes } = await ask({ type: 'fixes', layout, sel: selRoute });
+  const note = (text: string) => { const li = document.createElement('li'); li.textContent = text; $('fixes').replaceChildren(li); };   // textContent: door names are user input
+  let res: { before: number; fixes: any[] };
+  try { res = await ask({ type: 'fixes', layout, sel: selRoute }); }
+  catch (e) { note(`Could not evaluate the fixes: ${String((e as Error)?.message ?? e)}`); return; }   // say so instead of leaving the list blank
+  const { before, fixes } = res;
+  if (!fixes.length) {   // nothing to roll out: say why (a door no planned route uses has no fixes, and a scene may configure none)
+    const offRoute = current?.checks.filter(c => c.kind === 'door' && c.on_route === false).map(c => c.id.slice('door:'.length)) ?? [];
+    note(`No fixes to evaluate on this route${offRoute.length ? `: ${offRoute.join(', ')} ${offRoute.length === 1 ? 'is' : 'are'} not on a planned route, so ${offRoute.length === 1 ? 'its' : 'their'} fixes are left out` : ' (this scene configures none, or all are applied)'}.`);
+    game.fixes = fixes; return;
+  }
   const items: HTMLLIElement[] = [];
   for (const f of fixes) {
     const li = document.createElement('li');
@@ -645,6 +685,8 @@ $('planfixes').onclick = async () => {
   game.fixes = fixes;
 };
 function applyFix(id: string) {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('applyFix', [id]);
+  commitProposal(false);   // a fix applied by hand is not a proposal: solid from the start
   layout = applyIntervention(objs, layout, interventions.find(i => i.id === id)!);
   applied.push(id);
   syncObjects();
@@ -769,18 +811,22 @@ async function suggest() {
   return suggestions;
 }
 function applyOption(n: number) {
+  if (renderer.xr.isPresenting && (editLocks.owner('*') !== 'desktop' && editLocks.busy())) return Promise.reject(Error('Release the held object before applying a layout.'));
   const o = suggestions[n];
+  const was = snap();
   layout = o.layout;
   applied = o.actions.map((a: any) => a.id);
+  editHist.record('applied proposed layout', was, snap());
   syncObjects();
-  return replan().then(ms => { if (!current?.error) Object.assign(body, routePose(0, 0, Infinity)); setWalk('auto'); reim.play(); return ms; });
+  return replan().then(ms => { if (!renderer.xr.isPresenting && !current?.error) { Object.assign(body, routePose(0, 0, Infinity)); setWalk('auto'); } reim.play(); return ms; });
 }
 $('suggest').onclick = () => suggest();
 
 // ---------- reimagined room (reimagine.ts): the room morphing into the layout on screen, with what each change takes ----------
+let stairsSetT: ((t: number) => void) | null = null;   // stairs3d.ts, made below: its additions build up with the morph
 const reim = createReimagine({ scene, items, objs, original, interventions, sync: syncObjects,
   centre: [g.origin_xy[0] + (nx * g.cell_m) / 2, g.origin_xy[1] + (ny * g.cell_m) / 2],
-  camera, fillsOn: () => $<HTMLInputElement>('imagfill').checked, onT: t => { $<HTMLInputElement>('reimt').value = String(Math.round(t * 100)); } });
+  camera, fillsOn: () => $<HTMLInputElement>('imagfill').checked, onT: t => { $<HTMLInputElement>('reimt').value = String(Math.round(t * 100)); stairsSetT?.(t); } });
 let baseEvals: (Eval | undefined)[] = [];   // the room as filmed, per route: what the reimagined one is compared with
 /** after every re-plan: changes since the room as filmed, overlays, receipt */
 function refreshReimagine() {
@@ -806,6 +852,7 @@ function refreshReimagine() {
   drawStairs();   // added rails / lights / walker follow the layout
 }
 function undoReimagined(c: Change) {
+  commitProposal(false);
   layout = undoChange(layout, original, c, interventions);
   applied = applied.filter(id => id !== c.iv && !(id.startsWith('move:') && id.split(':')[1] === c.name));
   syncObjects();
@@ -839,7 +886,7 @@ const reimParts = () => reim.setParts({ ghosts: $<HTMLInputElement>('reimghosts'
 for (const id of ['reimghosts', 'reimarrows', 'reimtags', 'reimreceipt']) $(id).onchange = reimParts;
 onSelect = k => reim.selectChange(k);
 // for e2e and the VR team: bind a controller to setT / play (AGENTS.md)
-game.reimagine = { run: reimagineRoom, setT: reim.setT, t: reim.t, play: reim.play, playing: reim.playing, refresh: refreshReimagine,
+game.reimagine = { run: reimagineRoom, setT: reim.setT, overlay: reim.overlay, proposedShapes: reim.proposedShapes, delta: reim.delta, t: reim.t, play: reim.play, playing: reim.playing, refresh: refreshReimagine,
   changes: reim.changes, resolved: reim.resolved, undo: (n: number) => undoReimagined(reim.changes()[n]),
   pose: (name: string) => { const gr = items[objs.findIndex(o => o.name === name)].group; return { x: gr.position.x, y: gr.position.y, yaw: gr.rotation.z, visible: gr.visible }; } };
 
@@ -847,8 +894,22 @@ game.reimagine = { run: reimagineRoom, setT: reim.setT, t: reim.t, play: reim.pl
 // From config game.stairs (stage 12) and/or marked here with three clicks and measured from the splat (kept per scene in
 // this browser; "Copy as config YAML" makes it permanent). Their fixes are interventions like any other.
 const mainSplat = splats[0];
-// the second rail: the scanned rail on the other side, mirrored (stairs.ts mirrorRail), as its own tinted splat; cached
-const railCopies = new Map<string, SplatMesh | null>();
+// the second rail: the scanned rail on the other side, mirrored (stairs.ts mirrorRail), then redrawn as a dense bar of splats
+// in the real rail's own colour (railsplat.ts), with level returns and wall brackets; cached. No tint: the card says "designed".
+const railCopies = new Map<string, SplatMesh | null>(), railBars = new Map<string, SplatMesh>(), railTones = new Map<string, RGB>();
+/** a SplatMesh of designed splat records in the room's light (night shader), cached by key; kept across stairs3d rebuilds */
+function splatBars(key: string, recs: () => Float32Array): SplatMesh {
+  let mesh = railBars.get(key);
+  if (mesh) return mesh;
+  const m = recs(), c = new THREE.Vector3(), sc3 = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color();
+  mesh = new SplatMesh({ worldModifier: night.modifier, constructSplats: ps => {
+    for (let i = 0; i < m.length; i += SPLAT_STRIDE)
+      ps.pushSplat(c.set(m[i], m[i + 1], m[i + 2]), sc3.set(m[i + 3], m[i + 4], m[i + 5]), q.set(m[i + 6], m[i + 7], m[i + 8], m[i + 9]), m[i + 10], col.setRGB(m[i + 11], m[i + 12], m[i + 13]));
+  } });
+  mesh.userData.shared = true; mesh.userData.count = m.length / SPLAT_STRIDE;
+  splats.push(mesh); railBars.set(key, mesh);
+  return mesh;
+}
 function scanRail(st: Stair, side: Side): SplatMesh | null {
   const from: Side = side === 'left' ? 'right' : 'left', key = `${JSON.stringify([st.bottom, st.top, st.treads_z, st.rails])}:${side}`;
   if (st.rails?.[from] !== 'seen') return null;
@@ -856,21 +917,50 @@ function scanRail(st: Stair, side: Side): SplatMesh | null {
   const band = inRailBand(st, from), src: number[] = [];
   mainSplat.forEachSplat((_, c, s, q, op, col) => { if (op >= 0.2 && band(c.x, c.y, c.z)) src.push(c.x, c.y, c.z, s.x, s.y, s.z, q.x, q.y, q.z, q.w, op, col.r, col.g, col.b); });
   let mesh: SplatMesh | null = null;
-  if (src.length >= 30 * SPLAT_STRIDE) {   // too few points is a gap in the scan, not a rail: draw the tube instead
-    const m = mirrorRail(new Float32Array(src), st, from), c = new THREE.Vector3(), sc3 = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color();
-    mesh = new SplatMesh({ worldModifier: night.modifier, constructSplats: ps => {
-      for (let i = 0; i < m.length; i += SPLAT_STRIDE)
-        ps.pushSplat(c.set(m[i], m[i + 1], m[i + 2]), sc3.set(m[i + 3], m[i + 4], m[i + 5]), q.set(m[i + 6], m[i + 7], m[i + 8], m[i + 9]), m[i + 10], col.setRGB(m[i + 11], m[i + 12], m[i + 13]));
-    } });
-    mesh.recolor = new THREE.Color(0.82, 1, 0.97);   // designed, not built: a light tint, like the imagined fills
-    mesh.userData.count = m.length / SPLAT_STRIDE;
-    splats.push(mesh);
+  if (src.length >= 30 * SPLAT_STRIDE) {   // too few points is a gap in the scan, not a rail: the neutral designed rail stands in
+    const m = mirrorRail(new Float32Array(src), st, from), tone = toneOf(new Float32Array(src)), fit = fitRail(m, st);
+    railTones.set(JSON.stringify([st.bottom, st.top]), tone);
+    mesh = splatBars(`copy:${key}`, () => railSplats(st, { t: fit.t, z: fit.z, tone }));
   }
   railCopies.set(key, mesh);
   return mesh;
 }
+/** the scanned rail's colour on this stair, once seen (else a neutral metal): for every designed bar */
+function railTone(st: Stair): RGB {
+  const known = railTones.get(JSON.stringify([st.bottom, st.top]));
+  if (known) return known;
+  for (const side of ['left', 'right'] as Side[]) if (st.rails?.[side] === 'seen') {   // sample the real rail even if no copy was asked for
+    const band = inRailBand(st, side), src: number[] = [];
+    mainSplat.forEachSplat((_, c, s, q, op, col) => { if (op >= 0.2 && band(c.x, c.y, c.z)) src.push(c.x, c.y, c.z, s.x, s.y, s.z, q.x, q.y, q.z, q.w, op, col.r, col.g, col.b); });
+    if (src.length >= 30 * SPLAT_STRIDE) { const t = toneOf(new Float32Array(src)); railTones.set(JSON.stringify([st.bottom, st.top]), t); return t; }
+  }
+  return NEUTRAL_RAIL;
+}
+// committed fixtures (rail, brackets, grab bar, edge strips) baked into the scan (bake.ts): one splat mesh per distinct set, cached
+const bakeCache = new Map<string, SplatMesh>();
+function bakeFixtures(key: string, data: Float32Array): SplatMesh | null {
+  const hit = bakeCache.get(key);
+  if (hit) return hit;
+  if (!data.length) return null;
+  const c = new THREE.Vector3(), sc3 = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color();
+  const mesh = new SplatMesh({ worldModifier: night.modifier, constructSplats: ps => {
+    for (let i = 0; i < data.length; i += SPLAT_STRIDE)
+      ps.pushSplat(c.set(data[i], data[i + 1], data[i + 2]), sc3.set(data[i + 3], data[i + 4], data[i + 5]), q.set(data[i + 6], data[i + 7], data[i + 8], data[i + 9]), data[i + 10], col.setRGB(data[i + 11], data[i + 12], data[i + 13]));
+  } });
+  splats.push(mesh); bakeCache.set(key, mesh);
+  for (const [k, old] of bakeCache) {   // the newest few stay: a layout flipped back and forth re-bakes nothing
+    if (bakeCache.size <= 6) break;
+    bakeCache.delete(k); old.removeFromParent(); splats.splice(splats.indexOf(old), 1); old.dispose();
+  }
+  return mesh;
+}
 const parkedWalkerCfg = { ...personas.patient.walker, device: 'walker' as const };
-const stairs3d = createStairs3d(scene, () => buildDevice(parkedWalkerCfg).group, scanRail, () => buildDevice(WHEELCHAIR).group);
+const stairs3d = createStairs3d(scene, () => buildDevice(parkedWalkerCfg).group, scanRail, () => buildDevice(WHEELCHAIR).group, bakeFixtures, railTone);
+stairsSetT = stairs3d.setT;
+// A previewed proposal shows its additions as a see-through hologram; accepting it (Use this layout), inspecting it, or any
+// further change solidifies them into the scan (stairs3d.ts). Nothing else in the room waits on this: it is only how they look.
+let stairPhase: Phase = 'committed';
+function commitProposal(redraw = true) { if (stairPhase === 'proposed') { stairPhase = 'committed'; if (redraw) drawStairs(); } }
 const lights3d = createLights3d(scene), bath3d = createBathroom3d(scene);
 let pathLightKey = '';
 const doors3d = createDoors3d(scene, mainSplat);
@@ -891,7 +981,7 @@ function splatPoints(st: Stair): Float32Array {
   const cs = [F.world(-pad, F.width / 2 + pad), F.world(-pad, -F.width / 2 - pad), F.world(F.run + pad, F.width / 2 + pad), F.world(F.run + pad, -F.width / 2 - pad)];
   const [x0, x1, y0, y1] = [Math.min(...cs.map(c => c[0])), Math.max(...cs.map(c => c[0])), Math.min(...cs.map(c => c[1])), Math.max(...cs.map(c => c[1]))];
   mainSplat.forEachSplat((_, c, s, q, op) => {
-    if (op < 0.3 || c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1 || c.z > 3.2) return;
+    if (op < 0.3 || c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1 || c.z > (st.bottom_z ?? 0) + 3.2) return;
     const k = s.x <= s.y && s.x <= s.z ? 0 : s.y <= s.z ? 1 : 2;
     ax.set(+(k === 0), +(k === 1), +(k === 2)).applyQuaternion(q);
     out.push(c.x, c.y, c.z, Math.abs(ax.z));
@@ -933,10 +1023,10 @@ function setupStairs() {
   markRefresh();
 }
 function drawStairs(lay = layout) {
-  stairs3d.build(stairs, lay.added ?? [], lay.placed ?? {});
+  stairs3d.build(stairs, lay.added ?? [], lay.placed ?? {}, stairPhase);
   const verdict = (d: Door) => current?.checks.find(c => c.id === `door:${d.name}`)?.verdict === 'ok';
   const change = (d: Door) => { const c = lay.carved?.find(x => x.target === d.name); return c ? { gain: c.by_m, grow: growOf(d, c.id.split(':')[0].slice('door_'.length)) } : { gain: 0, grow: 'both' as const }; };
-  doors3d.build(doors, Object.fromEntries(doors.map(d => [d.name, change(d)])), Object.fromEntries(doors.map(d => [d.name, verdict(d)])));
+  doors3d.build(doors, Object.fromEntries(doors.map(d => [d.name, change(d)])), Object.fromEntries(doors.map(d => [d.name, verdict(d)])), stairPhase);   // a previewed proposal: x-ray until accepted
   // motion step lights light the scan itself at night (night.ts); only re-light when they change: it regenerates every splat
   // added nightlights (lights.ts): a bulb, and at night a point light and a halo; they light the scan like the step lights
   const pl = placedFixtures(interventions, lay).filter(f => f.light_r && f.xyz), plKey = JSON.stringify(pl);
@@ -1044,6 +1134,156 @@ game.doors = { mark: markDoor, list: () => doors, clear: () => $('cleardoors').c
   /** apply one option by key: 'offset' | 'remove' | 'widen' (same path as Plan fixes' Apply) */
   apply: (name: string, key: 'offset' | 'remove' | 'widen') => applyFix(`door_${key}:${name}`) };
 
+// ---------- reach map (reach.ts, reach3d.ts): where this device can go from the route's start, and what cuts parts off ----------
+// The same start and goal in every mode (Follow route, Walk, Look around): the selected route's, never the walker's or
+// the camera's spot. Picked points are targets checked from that start, kept per scene in this browser or in config
+// game.reach_points. The worker works out the widest way in once per layout. The width slider repaints here as it moves,
+// then asks for the report (cut-off parts, dead ends, targets) when it settles.
+const REACH_KEY = `homeclear:reach:${RUN}`;
+const cfgPoints: { name: string; at: XY }[] = sc.reach_points ?? [];
+let pickedPoints: { name: string; at: XY }[] = [];
+try { pickedPoints = JSON.parse(localStorage.getItem(REACH_KEY) ?? '[]'); } catch { pickedPoints = []; }
+const reach3d = createReach3d(g, scene);
+let reachField: { id: number; dist: Float32Array; need: Float32Array; len: Float32Array; grey: Uint8Array; hatch: Uint8Array } | null = null;
+let reachReport: ReachReport | null = null, reachSeq = 0, reachWidth: number | null = null, reachPersona = '', reachPlayed = false;
+const reachOn = () => $<HTMLInputElement>('reach').checked;
+const calm = () => reducedMotion() || document.body.dataset.motion === 'reduce';
+const rcm = (m: number) => `${Math.round(m * 100)} cm`;
+const reachPoints = () => [...cfgPoints.filter(c => !pickedPoints.some(p => p.name === c.name)), ...pickedPoints];
+const reachOpts = () => ({ width_m: reachWidth ?? walkerCfg.width_m, clearance_m: init.rules.clearance_margin_m, margin_m: init.rules.margin_m.width, wheelchair: walkerCfg.device === 'wheelchair' });
+const reachStart = (): XY => routeStart(routes[selRoute], objs, layout.poses);
+/** the selected route's goal first, the other routes' goals, then the picked points */
+function reachTargets(): ReachTarget[] {
+  const order = [selRoute, ...routes.map((_, k) => k).filter(k => k !== selRoute)];
+  return [...order.map(k => ({ name: `${routes[k].name}: goal`, at: routes[k].goal, kind: 'goal' as const })),
+    ...reachPoints().map(p => ({ name: p.name, at: p.at, kind: 'point' as const }))];
+}
+function reachRepaint() {
+  if (!reachField) return null;
+  const cls = paintClasses({ g, ...reachField }, thresholds(reachOpts()));
+  reach3d.setCells(cls, reachField.len, reachField.hatch);
+  return cls;
+}
+function syncReachWidth() {
+  const w = reachOpts().width_m;
+  $<HTMLInputElement>('reachwidth').value = String(Math.round(w * 100));
+  $('reachwidthout').textContent = `${rcm(w)}${reachWidth === null ? ` (this ${walkerCfg.device ?? 'walker'})` : ' (what if)'}`;
+}
+/** the wheelchair's seated-reach lens (night.ts) paints the scan green / red too: off while the reach map shows */
+function reachLens() { night.setReach(walkerCfg.device === 'wheelchair' && !reachOn()); for (const s of splats) s.updateVersion(); }
+async function refreshReach() {
+  if (!reachOn()) return;
+  if (personaKey !== reachPersona) { reachPersona = personaKey; reachWidth = null; reachLens(); }   // a new device: its own width again
+  syncReachWidth();
+  const id = ++reachSeq;
+  game.reach.asks++;
+  $('reachstatus').textContent = 'working out where the device can go…';
+  const r = await ask({ type: 'reach', layout, start: reachStart(), opts: reachOpts(), targets: reachTargets(), have: reachField?.id ?? 0 });
+  if (id !== reachSeq || !reachOn()) return;   // a newer layout or width is already on its way
+  if (r.field) reachField = { id: r.fieldId, ...r.field };
+  reachReport = r.report;
+  reachRepaint(); reach3d.setReport(r.report);
+  if (!reachPlayed) { reachPlayed = true; reach3d.play(4, calm()); }   // the wave once when shown, then on Play
+  renderReach();
+}
+async function showReach(on: boolean) {
+  $<HTMLInputElement>('reach').checked = on;
+  reach3d.root.visible = on;
+  reachLens();
+  if (on) { reachPlayed = false; await refreshReach(); } else { reachSeq++; $('reachstatus').textContent = ''; }
+}
+/** the doorway to price: the first target the device doesn't reach well whose way is held by a marked doorway (or `name`'s) */
+function reachCosts(name?: string) {
+  const t = (reachReport?.targets ?? []).find(x => (name ? x.name === name : x.status !== 'ok') && x.cause?.kind === 'door' && doors.some(d => d.name === x.cause!.name));
+  const door = t && doors.find(d => d.name === t.cause!.name);
+  if (!t || !door) return null;
+  const widths = Array.from({ length: 56 }, (_, n) => +(0.45 + n * 0.01).toFixed(2));
+  return { door: door.name, target: t.name, steps: costToReach(door, widths, { ...reachOpts(), gain_m: doorGain(layout, door.name),
+    leafObject: !interventions.some(i => i.id === `door_offset:${door.name}`) }) };
+}
+function renderReach() {
+  const r = reachReport;
+  if (!r) return;
+  const m2 = (x: number) => `${x.toFixed(1)} m²`, li = (text: string, cls = '') => Object.assign(document.createElement('li'), { textContent: text, className: cls });
+  $('reachstatus').textContent = `${rcm(r.width_m)} ${walkerCfg.device ?? 'walker'}, needs ${rcm(r.need_w_m)} to pass with clearance: ${m2(r.areas.ok)} reachable · ${m2(r.areas.tight)} tight · ${m2(r.areas.cut)} cut off` +
+    (r.areas.grey ? ` · ${m2(r.areas.grey)} not scanned` : '') + (r.pockets ? '' : ' · dead ends are checked for a wheelchair (ADA turning space)');
+  $('reachfindings').replaceChildren(
+    ...r.regions.map(x => li(`Cut off: ${m2(x.area_m2)} by ${causeText(x.cause)}${x.pinch ? `, ${rcm(x.pinch.width_m)} at the narrowest` : ''}${x.opens_if_moved ? '; moving it opens this part' : ''}`, 'reach-cut')),
+    ...(r.pockets ?? []).map(p => li(`Dead end: reverse ${p.reverse_m < Infinity ? `${p.reverse_m.toFixed(1)} m` : 'all the way'} to turn round${p.closed_by ? `; the far end is closed by ${causeText(p.closed_by)}` : ''}`, 'reach-tight')));
+  const corners = r.targets.filter(t => t.kind === 'corner'), items = r.targets.filter(t => t.kind === 'goal' || t.kind === 'point').map(t => {
+    const e = li(`${t.name}: ${statusLine(t)}${t.cause ? ` · by ${causeText(t.cause)}` : ''}`, `reach-${t.status}`);
+    if (pickedPoints.some(p => p.name === t.name)) e.append(' ', Object.assign(document.createElement('button'), { textContent: 'Remove', onclick: () => removeReachPoint(t.name) }));
+    return e;
+  });
+  if (corners.length) items.push(li(`Room corners: ${corners.filter(t => t.status === 'ok').length} of ${corners.length} reachable` +
+    `${corners.some(t => t.status === 'tight') ? `, ${corners.filter(t => t.status === 'tight').length} tight` : ''}${corners.some(t => t.status === 'cut') ? `, ${corners.filter(t => t.status === 'cut').length} cut off` : ''}`));
+  $('reachtargets').replaceChildren(...items);
+  // what it costs to get through the doorway that holds the way, at every device width (placeholder prices: movecost.ts)
+  const c = reachCosts(), cv = $<HTMLCanvasElement>('reachcost');
+  cv.hidden = !c;
+  if (!c) { $('reachcostinfo').textContent = ''; return; }
+  drawCostChart(cv, c.steps, r.width_m);
+  cv.setAttribute('aria-label', `Cost to get through the ${c.door} at each device width`);
+  cv.onmousemove = e => { const s = costAt(cv, c.steps, e.offsetX * (cv.width / cv.clientWidth)); cv.title = s ? `${rcm(s.width_m)}: ${s.usd === null ? 'no configured fix' : `$${s.usd.toLocaleString()} · ${s.label}`}` : ''; };
+  const runs = costRuns(c.steps);
+  $('reachcostinfo').textContent = `To reach ${c.target} through the ${c.door}, by device width: ` +
+    runs.map(x => `${Math.round(x.a * 100)}${x.b > x.a ? `–${Math.round(x.b * 100)}` : ''} cm ${x.usd === null ? 'no configured fix' : x.usd ? `$${x.usd.toLocaleString()} (${x.label})` : '$0'}`).join(' · ') +
+    (runs.some(x => x.source === 'placeholder') ? ' · placeholder prices until the effort model lands' : '');
+}
+function savePoints() { try { localStorage.setItem(REACH_KEY, JSON.stringify(pickedPoints)); } catch { /* private window: kept for this visit only */ } }
+/** a spot to check from the route's start (picked by a click, the wand, or game.reach.pick([x, y])) */
+async function addReachPoint(at: XY, name?: string) {
+  let n = reachPoints().length + 1;
+  while (!name && reachPoints().some(p => p.name === `point ${n}`)) n++;
+  const p = { name: name ?? `point ${n}`, at: [+at[0].toFixed(3), +at[1].toFixed(3)] as XY };
+  pickedPoints = [...pickedPoints.filter(q => q.name !== p.name), p];
+  savePoints();
+  await (reachOn() ? refreshReach() : showReach(true));
+  return p.name;
+}
+async function removeReachPoint(name: string) { pickedPoints = pickedPoints.filter(p => p.name !== name); savePoints(); await refreshReach(); }
+async function clearReachPoints() { pickedPoints = []; savePoints(); await refreshReach(); }
+async function copyReachYaml() {
+  const yaml = `  reach_points:\n${reachPoints().map(p => `  - {name: ${JSON.stringify(p.name)}, at: [${p.at[0].toFixed(3)}, ${p.at[1].toFixed(3)}]}`).join('\n')}\n`;
+  try { await navigator.clipboard.writeText(yaml); $('reachstatus').textContent = 'copied: paste under game: in config.<scene>.yaml'; }
+  catch { $('reachstatus').textContent = yaml; }
+  return yaml;
+}
+/** coverage ghosts (the widest way to each target, computed) and contact ghosts (simulated trips): off, either or both */
+function setGhostMode(mode: 'off' | 'coverage' | 'contacts' | 'both') {
+  setBox('coverage', mode === 'coverage' || mode === 'both'); setBox('ghosts', mode === 'contacts' || mode === 'both');
+}
+$('reach').onchange = () => showReach($<HTMLInputElement>('reach').checked);
+$('coverage').onchange = () => { reach3d.ghosts.visible = $<HTMLInputElement>('coverage').checked; };
+$('hitghosts').onchange = () => { if (current) drawPlan(current); };
+$('reachwidth').oninput = () => { reachWidth = +$<HTMLInputElement>('reachwidth').value / 100; syncReachWidth(); reachRepaint(); };   // the field doesn't depend on the width
+$('reachwidth').onchange = () => refreshReach();
+$('reachplay').onclick = () => (reachOn() ? reach3d.play(4, calm()) : showReach(true));
+$('markpoint').onclick = () => beginMark('point');
+$('clearpoints').onclick = () => clearReachPoints();
+$('copypoints').onclick = () => copyReachYaml();
+const areasOf = (cls: Uint8Array | null) => {
+  const a = { ok: 0, tight: 0, cut: 0, grey: 0 }, c2 = g.cell_m ** 2;
+  for (const c of cls ?? []) if (c === 1) a.ok += c2; else if (c === 2) a.tight += c2; else if (c === 3) a.cut += c2; else if (c === 4) a.grey += c2;
+  return a;
+};
+game.reach = { asks: 0,
+  show: (on = true) => showReach(on), refresh: () => refreshReach(),
+  state: () => {
+    const r = reachReport;
+    return { on: reachOn(), start: reachStart(), width_m: reachOpts().width_m, field: !!reachField, t: reach3d.t(), dots: reach3d.dots(), drawn: reach3d.drawn(),
+      coverage: reach3d.root.visible && reach3d.ghosts.visible, contacts: ghostDots.visible, mesh: reach3d.paint.type, inScene: reach3d.root.parent === scene, asks: game.reach.asks,
+      report: r && { width_m: r.width_m, need_w_m: r.need_w_m, areas: r.areas, regions: r.regions, pockets: r.pockets, targets: r.targets.map(({ path, ...t }) => ({ ...t, dots: path.length })) } };
+  },
+  /** what the slider does while it moves: repaint for this width, no worker round-trip; the areas by class (m²) */
+  preview: (w: number) => { reachWidth = w; syncReachWidth(); return areasOf(reachRepaint()); },
+  /** the slider let go at this width (null: the device's own): the full report */
+  setWidth: (w: number | null) => { reachWidth = w; return refreshReach(); },
+  ghosts: setGhostMode, play: (s = 4) => reach3d.play(s, calm()),
+  /** a point to check: at [x, y] directly, or start picking it with a click / the wand */
+  pick: (at?: XY, name?: string) => (at ? addReachPoint(at, name) : beginMark('point')),
+  points: reachPoints, removePoint: removeReachPoint, clearPoints: clearReachPoints, copyYaml: copyReachYaml, costs: reachCosts };
+
 // ---------- marking tool (marker.ts, marker3d.ts): point at the scan to mark stairs and doorways; handles fix them ----------
 // Desktop: a pointer rides the splat under the mouse (green: snapped to a flat level; red: a point there would be refused,
 // and the status says why). A click places a point (a drag still looks around), right click or Backspace takes the last
@@ -1092,7 +1332,7 @@ function say(msg = markMsg || (mk && markHover ? placeError(mk, markHover.p) ?? 
   hud.replaceChildren(Object.assign(document.createElement('b'), { textContent: text }), document.createElement('br'),
     Object.assign(document.createElement('small'), { textContent: msg && msg !== text ? `${msg} · ${help}` : help }));
   hud.classList.toggle('bad', !!msg && !parkDrag);
-  if (text) $(mk?.kind === 'door' ? 'doorstatus' : 'stairstatus').textContent = msg && msg !== text ? `${text} — ${msg}` : text;
+  if (text) $(mk?.kind === 'door' ? 'doorstatus' : mk?.kind === 'point' ? 'reachstatus' : 'stairstatus').textContent = msg && msg !== text ? `${text} — ${msg}` : text;
   $('markcross').hidden = !mk || xr;
   const ahead = camera.getWorldPosition(new THREE.Vector3()).add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(1));
   mk3d.setPrompt(xr && text ? `${text}${msg && msg !== text ? ` — ${msg}` : ''}\n${help}` : null,
@@ -1141,6 +1381,7 @@ function markPlace(p: P3 | null): Promise<unknown> | void {
 async function finishMark() {
   const m = mk!, xy = (p: P3): XY => [p[0], p[1]];
   mk = null; markMsg = ''; mk3d.setPoints([]); mk3d.setPreview({ lines: [], tags: [] });
+  if (m.kind === 'point') { say(); markDraw(); await addReachPoint(xy(m.pts[0])); return; }   // a spot to check (reach map): nothing to edit
   $(m.kind === 'door' ? 'doorstatus' : 'stairstatus').textContent = 'measuring from the splat…';
   if (m.kind === 'stairs') await markStair(xy(m.pts[0]), xy(m.pts[1]), xy(m.pts[2]), m.pts[2][2]);
   else await markDoor(xy(m.pts[0]), xy(m.pts[1]));
@@ -1223,8 +1464,8 @@ async function resetParked(id: string) {
   await replan();
 }
 const ndc = (e: { clientX: number; clientY: number }) => document.pointerLockElement === renderer.domElement ? new THREE.Vector2() : new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);   // locked mouse: the crosshair
-renderer.domElement.addEventListener('pointerdown', e => {   // capture: before furniture picking and the gizmo
-  if (renderer.xr.isPresenting) return;
+onCanvas(renderer.domElement, 'pointerdown', e => {   // capture: before furniture picking and the gizmo
+  if (renderer.xr.isPresenting || game.remoteSession) return;
   if (grabbing) { e.stopImmediatePropagation(); if (e.button === 0) dropGrab(); else if (e.button === 2) cancelGrab(); return; }   // G: click drops, right click cancels
   markRay.setFromCamera(ndc(e), camera);
   const w = mk ? null : markRay.intersectObjects(stairs3d.walkers(), false)[0];
@@ -1243,18 +1484,18 @@ renderer.domElement.addEventListener('pointerdown', e => {   // capture: before 
   mouseAt = ndc(e); lastAim = '';
   press = { x: e.clientX, y: e.clientY, moved: 0 };   // a click places, a drag looks around (the look handler below starts it)
 }, { capture: true });
-addEventListener('pointermove', e => {
+onWindow('pointermove', e => {
   mouseAt = ndc(e); shiftHeld = e.shiftKey;
   if (press) press.moved = Math.max(press.moved, Math.hypot(e.clientX - press.x, e.clientY - press.y));
 });
-addEventListener('pointerup', e => {
+onWindow('pointerup', e => {
   if (handleDrag) { commitHandle(); return; }
   if (parkDrag) { commitPark(); return; }
   const p = press; press = null;
   if (p && mk && e.button === 0 && p.moved < 5) { markRay.setFromCamera(ndc(e), camera); markPlace(markHit(markRay.ray, !e.shiftKey)?.p ?? null); }
 });
-renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());   // the right button looks or undoes: never a browser menu
-addEventListener('keydown', e => {
+onCanvas(renderer.domElement, 'contextmenu', e => e.preventDefault());   // the right button looks or undoes: never a browser menu
+onWindow('keydown', e => {
   if ((!mk && !editing && !parkDrag) || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) return;
   if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { shiftHeld = true; lastAim = ''; return; }
   if (e.code === 'Escape') { if (parkDrag) { parkDrag = null; drawStairs(); say(); } else if (mk) cancelMark(); else if (editing) setEditing(false); }
@@ -1271,6 +1512,8 @@ function markStep() {
   lastAim = aim;
   markRay.setFromCamera(mouseAt, camera);
   if (parkDrag) return moveParked(markRay.ray);
+  const under = editing && !mk && !handleDrag ? markRay.intersectObjects(mk3d.pickables(), false)[0]?.object.userData.handle : null;
+  mk3d.setHover(under ? `${under.owner}:${under.key}` : null);   // the handle under the mouse brightens and says what dragging it does
   const h = markHit(markRay.ray, !shiftHeld);
   if (h) markHover = h; else if (!handleDrag) markHover = null;
   if (handleDrag && h) handleDrag.at = h.p;
@@ -1462,7 +1705,9 @@ $('fixcard').onclick = () => openFixCard();
 $('closeqr').onclick = () => { $('qr').hidden = true; };
 
 // ---------- reset: one object back where the scan had it, or the whole room (objects, removals, fixes) ----------
-function resetObject(k: number) {   // moved, turned or removed: back to the original spot, if it is still free
+function resetObject(k: number) {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('resetObject', [objs[k].name]);
+   // moved, turned or removed: back to the original spot, if it is still free
   if (!isMoved(layout.poses[k], original[k])) return;
   const poses = layout.poses.map((q, n) => (n === k ? resetPose(original[k]) : q));
   if (!placementOk(g, placeBase, objs, poses, k, overlapOk[k])) return refused();
@@ -1473,7 +1718,9 @@ function resetObject(k: number) {   // moved, turned or removed: back to the ori
   if (selected === k) lastValid = poseOf(k);
   return replan();
 }
-function resetAll() {   // hand-marked stairs and doors are scan annotations, not renovations: they stay
+function resetAll() {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('resetAll', []);
+   // hand-marked stairs and doors are scan annotations, not renovations: they stay
   select(-1);
   const was = snap();
   layout = { poses: original.map(resetPose), flattened: [] }; applied = []; suggestions = [];
@@ -1566,6 +1813,8 @@ function drawNights() {   // 30 nights at the current rate; the selected night s
 $<HTMLInputElement>('nightscrub').oninput = e => { nightSel = +(e.target as HTMLInputElement).value - 1; drawNights(); };
 /** Swap who walks: device mesh + footprint, gait, planner penalties, default eyes; then re-plan everything. */
 async function setPersona(key: string) {
+  if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('setPersona', [key]);
+
   const p = personas[key];
   personaKey = key;
   $<HTMLSelectElement>('persona').value = key;
@@ -1587,7 +1836,7 @@ async function setPersona(key: string) {
   $('personanote').textContent = key === 'patient' ? '' : walkerCfg.device === 'wheelchair' ? 'comparison: a typical chair (assumed size); no trip model for a wheelchair, so trips read zero: see the ADA checks. Green: within seated reach (38-122 cm); red: out of reach. Drive: W/S roll, A/D steer while rolling, Q/E spin on the spot'
     : 'comparison: gait and planner numbers for this persona are assumptions, not this patient';
   const ms = await replan();
-  if (!current?.error) Object.assign(body, routePose(0, 0, Infinity));
+  if (!renderer.xr.isPresenting && !current?.error) Object.assign(body, routePose(0, 0, Infinity));
   return ms;
 }
 /** P: the next persona in the Who list, with the keys that drive it. */
@@ -1664,8 +1913,7 @@ function applyPerf(on: boolean, remember = true) {
   $<HTMLInputElement>('perf').checked = on;
   if (on) { perfSaved ??= Object.fromEntries(PERF_BOXES.map(id => [id, $<HTMLInputElement>(id).checked])); PERF_BOXES.forEach(id => setBox(id, false)); }
   else if (perfSaved) { for (const id of PERF_BOXES) setBox(id, perfSaved[id]); perfSaved = null; }
-  renderer.setPixelRatio(Math.min(devicePixelRatio, (on ? PERF : FULL).pixel_ratio));
-  renderer.setSize(innerWidth, innerHeight);
+  if (!renderer.xr.isPresenting) { renderer.setPixelRatio(Math.min(devicePixelRatio, (on ? PERF : FULL).pixel_ratio)); renderer.setSize(innerWidth, innerHeight); }
   const lim = splatCfg(location.search, on);
   sparkR.maxStdDev = lim.max_std_dev; sparkR.maxPixelRadius = lim.max_pixel_radius;
   const fog = scene.getObjectByName('fog');
@@ -1679,7 +1927,7 @@ applyPerf(perfOn, false);
 game.perf = { set: (on: boolean) => applyPerf(on), on: () => perfOn, tier };   // for the VR team: bind a controller button to it
 
 // ---------- desktop hotkeys (controls.ts) ----------
-// M then 1/2 starts marking, G grabs the picked object (it follows the mouse), X removes it, L locks the mouse to look,
+// M then 1/2/3 starts marking (stairs, doorway, a point to check), G grabs the picked object (it follows the mouse), X removes it, L locks the mouse to look,
 // Ctrl+Z / Ctrl+Shift+Z undo and redo object edits, F1 lists them. Registered before the general key handler below, which
 // they pre-empt (R while grabbing turns the object instead of switching the gizmo).
 const keyHelp = createKeyOverlay();
@@ -1725,6 +1973,7 @@ function turnGrab() {
 }
 /** Undo or redo the last object edit; resolves to what happened, in one line (also shown as a toast and, in VR, a card). */
 async function stepHistory(dir: 'undo' | 'redo'): Promise<string> {
+  if (editLocks.busy()) return 'Release the edited object before undo or redo';
   const r = editHist[dir](snap());
   const tell = (m: string) => (keyHelp.toast(m), m);
   if (!r) return tell(dir === 'undo' ? 'Nothing to undo' : 'Nothing to redo');
@@ -1741,14 +1990,14 @@ function toggleLock() {
   if (document.pointerLockElement === c) return document.exitPointerLock();
   Promise.resolve(c.requestPointerLock()).catch(() => keyHelp.toast('The browser would not lock the mouse'));
 }
-document.addEventListener('pointerlockchange', () => {
+onDocument('pointerlockchange', () => {
   const on = document.pointerLockElement === renderer.domElement;
   keyHelp.setLocked(on); look = null; lastAim = '';
   mouseAt = on ? new THREE.Vector2() : mouseAt;
   if (on) keyHelp.toast('Mouse locked: move to look, click acts at the dot, Esc lets go', 3500);
 });
-addEventListener('keydown', e => {
-  if (renderer.xr.isPresenting) return;
+onWindow('keydown', e => {
+  if (renderer.xr.isPresenting || game.remoteSession) return;
   const el = e.target as HTMLElement, typing = /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable;
   const it = keyIntent(e, { typing, grabbing: !!grabbing, choosing });
   if (it === 'choose-cancel') { choosing = false; return; }   // the key still does its own job
@@ -1758,8 +2007,9 @@ addEventListener('keydown', e => {
   if (it === 'help') keyHelp.toggle();
   else if (it === 'undo') { if (grabbing) cancelGrab(); else if (mk) undoPoint(); else stepHistory('undo'); }
   else if (it === 'redo') { if (!mk && !grabbing) stepHistory('redo'); }
-  else if (it === 'mark') { if (mk) { cancelMark(); keyHelp.toast('Marking cancelled'); } else { choosing = true; keyHelp.toast('Mark: 1 stairs · 2 doorway', 4000); } }
+  else if (it === 'mark') { if (mk) { cancelMark(); keyHelp.toast('Marking cancelled'); } else { choosing = true; keyHelp.toast('Mark: 1 stairs · 2 doorway · 3 a point to check', 4000); } }
   else if (it === 'mark-stairs') beginMark('stairs');
+  else if (it === 'mark-point') beginMark('point');
   else if (it === 'mark-door') beginMark('door');
   else if (it === 'remove') { if (selected >= 0 && !mk) { const n = nameOf(selected); removeObject(selected); keyHelp.toast(`Removed ${n} · Ctrl+Z puts it back`); } }
   else if (it === 'grab') startGrab();
@@ -1775,8 +2025,8 @@ addEventListener('keydown', e => {
 
 // ---------- input ----------
 const keys = new Set<string>();
-addEventListener('keydown', e => {
-  if (e.defaultPrevented || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) return;
+onWindow('keydown', e => {
+  if (renderer.xr.isPresenting || game.remoteSession || e.defaultPrevented || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) return;
   if (selected >= 0 && e.code.startsWith('Arrow')) { nudge(e.code); e.preventDefault(); return; }   // arrows move the selected object, not you
   keys.add(e.code);
   if (e.code === 'KeyT') setMode('translate');
@@ -1789,12 +2039,12 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyF') { if (mode === 'fly') goWalk(); else setWalk('fly'); }
   else if (/^(Key[WASD]|Arrow)/.test(e.code) && mode !== 'fly') setWalk('free');
 });
-addEventListener('keyup', e => { keys.delete(e.code); shiftHeld = e.shiftKey; });
+onWindow('keyup', e => { keys.delete(e.code); shiftHeld = e.shiftKey; });
 const ray = new THREE.Raycaster();
 // a drag with the left or right button looks; `right` + `act`: a right click that didn't move runs act (undo a mark point...)
 let look: { x: number; y: number; moved: number; right?: boolean; act?: () => unknown } | null = null;
-renderer.domElement.addEventListener('pointerdown', e => {
-  if ((e.button !== 0 && e.button !== 2) || renderer.xr.isPresenting || handleDrag || parkDrag || tc.dragging || (tc as any).axis) return;
+onCanvas(renderer.domElement, 'pointerdown', e => {
+  if ((e.button !== 0 && e.button !== 2) || renderer.xr.isPresenting || game.remoteSession || handleDrag || parkDrag || tc.dragging || (tc as any).axis) return;
   if (e.button === 2) { look = { x: e.clientX, y: e.clientY, moved: 0, right: true }; return; }
   if (mk || editing) { look = { x: e.clientX, y: e.clientY, moved: 0 }; return; }
   ray.setFromCamera(ndc(e), camera);
@@ -1802,8 +2052,8 @@ renderer.domElement.addEventListener('pointerdown', e => {
   if (hit) { select(items.findIndex(i => i.proxy === hit.object)); return; }
   look = { x: e.clientX, y: e.clientY, moved: 0 };
 });
-renderer.domElement.addEventListener('dblclick', e => {   // double-click an object: back where it started
-  if (mk || editing || parkDrag || renderer.xr.isPresenting || performance.now() - droppedAt < 600) return;
+onCanvas(renderer.domElement, 'dblclick', e => {   // double-click an object: back where it started
+  if (mk || editing || parkDrag || renderer.xr.isPresenting || game.remoteSession || performance.now() - droppedAt < 600) return;
   ray.setFromCamera(ndc(e), camera);
   const hit = ray.intersectObjects(items.filter((_, k) => !layout.poses[k].removed).map(i => i.proxy))[0];
   if (hit) resetObject(items.findIndex(i => i.proxy === hit.object));
@@ -1816,7 +2066,7 @@ function lookBy(dx: number, dy: number) {
   if (mode !== 'fly' && !COUPLED) headTurn.yaw = THREE.MathUtils.clamp(headTurn.yaw - dx * 0.004, -HEAD_MAX, HEAD_MAX); else body.yaw -= dx * 0.004;
   body.pitch = THREE.MathUtils.clamp(body.pitch - dy * 0.004, mode === 'fly' ? -1.5 : -1.2, mode === 'fly' ? 1.5 : 0.6);
 }
-addEventListener('pointermove', e => {
+onWindow('pointermove', e => {
   if (document.pointerLockElement === renderer.domElement) {   // L: the locked mouse looks without a button held
     if (e.movementX || e.movementY) { if (mode === 'auto') setWalk('free'); lookBy(e.movementX, e.movementY); }
     return;
@@ -1827,7 +2077,7 @@ addEventListener('pointermove', e => {
   lookBy(dx, dy);
   if (mode === 'auto' && look.moved > 4) setWalk('free');
 });
-addEventListener('pointerup', () => {
+onWindow('pointerup', () => {
   if (look && (look.right ? look.moved < 4 && look.act : look.moved < 3)) { if (look.right) look.act!(); else select(-1); }
   look = null;
 });
@@ -1848,8 +2098,8 @@ function dolly(d: number) {
     Object.assign(body, next);
   }
 }
-renderer.domElement.addEventListener('wheel', e => {
-  if (renderer.xr.isPresenting || tour.on) return;
+onCanvas(renderer.domElement, 'wheel', e => {
+  if (renderer.xr.isPresenting || game.remoteSession || tour.on) return;
   e.preventDefault();   // also stops a pinch (ctrl + wheel) from zooming the page
   const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;   // lines and pages to pixels
   if (e.deltaX) { if (mode === 'auto') setWalk('free'); if (isChair() && mode === 'free') spinBy(body, -e.deltaX * unit * 0.002, chairOf(), chairOk()); else body.yaw -= e.deltaX * unit * 0.002; }
@@ -1994,7 +2244,7 @@ function driveFree(dt: number) {
   const k = (c: string) => keys.has(c), axis = (a: string[], b: string[]) => +a.some(k) - +b.some(k);
   driveStep(body, chairVel, { throttle: axis(['KeyW', 'ArrowUp'], ['KeyS', 'ArrowDown']), steer: axis(['KeyA', 'ArrowLeft'], ['KeyD', 'ArrowRight']), spin: axis(['KeyQ'], ['KeyE']) }, dt, chairOf(), chairOk());
 }
-addEventListener('blur', () => keys.clear());   // a key released in another window must not leave the chair rolling
+onWindow('blur', () => keys.clear());   // a key released in another window must not leave the chair rolling
 
 function freeStep(dt: number) {
   if (isChair()) return driveFree(dt);
@@ -2016,6 +2266,7 @@ function freeStep(dt: number) {
   }
 }
 const fly = { x: 0, y: 0, z: 0 };   // noclip camera: ignores floor, walls and coverage; the walker stays where it was
+game.setFly = (x: number, y: number, z: number, yawDeg = 0, pitchDeg = 0) => { setWalk('fly'); Object.assign(fly, { x, y, z }); body.yaw = (yawDeg * Math.PI) / 180; body.pitch = (pitchDeg * Math.PI) / 180; };   // e2e: inspect upper floors
 function flyStep(dt: number) {
   const k = (c: string) => keys.has(c), v = (k('ShiftLeft') || k('ShiftRight') ? 4 : 1) * dt;
   const f = +(k('KeyW') || k('ArrowUp')) - +(k('KeyS') || k('ArrowDown')), r = +(k('KeyD') || k('ArrowRight')) - +(k('KeyA') || k('ArrowLeft'));
@@ -2138,7 +2389,9 @@ function frame(now: number) {
 }
 function step(dt: number, t: number) {
   frontendVR?.update();
+  reach3d.tick(dt);   // the reach map's wave (desktop and headset)
   if (xr.presenting()) return xrFrame(dt, t);
+  if (game.remoteSession) { reim.update(dt); companion?.frame(t * 1000); return; }
   if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
   tourStep(dt);
   const wb = walkerPose();
@@ -2148,6 +2401,8 @@ function step(dt: number, t: number) {
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
   if (mode !== 'fly') live?.frame(dt, wb, mode === 'free' && !explore.on, walker.group);
   labelStep(); movementVisuals();
+  camTweenStep(dt);
+  mk3d.update(camera, t);
   if (mode === 'fly') {
     const c = Math.cos(body.pitch);
     camera.position.set(fly.x, fly.y, fly.z);
@@ -2189,7 +2444,7 @@ const comparison = createXRComparison({
   preview(from, to, t) {
     if (!previewVisibility) {
       reim.setT(1);   // stop an automatic morph before drawing this independent comparison
-      previewVisibility = [routeLine, ghostDots, hazardGroup, spotGroup, reim.root].map(o => [o, o.visible]);
+      previewVisibility = [routeLine, ghostDots, hazardGroup, spotGroup, reim.root, reach3d.root].map(o => [o, o.visible]);
       for (const [o] of previewVisibility) o.visible = false;
       objLabel.set(null, [], false);
     }
@@ -2249,7 +2504,8 @@ const xr = await setupXR({
   renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses,
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
   commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m,
-  resetObject, resetAll, editor: markerXR, readOnly: comparison.previewing, hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { lines: hintLines(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
+  lock: k => editLocks.acquire(String(k), 'vr'), unlock: k => editLocks.release(String(k), 'vr'),
+  resetObject, resetAll, editor: markerXR, readOnly: () => game.sessionBusy || comparison.previewing(), movement: () => game.comfort?.movement ?? 'all', eyeHeight: () => game.comfort?.seated ? persona.eye_height_m : undefined, hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { lines: hintLines(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
   startPose() {   // stay if this floor is seen as well as the route's median spot; else the first such point along the route
     if (!current || current.error) return null;
     const poses: { x: number; y: number; yaw: number }[] = [];
@@ -2266,7 +2522,7 @@ const xr = await setupXR({
     say();
   },
   exit() { comparison.endPreview(); inXR = false; game.xr = false; dangerVR.k = -1; tourSpot = -1; applyPerf(perfBeforeXR, false); if (current) drawPlan(current); say(); },
-  buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton],   // the story for a family: what's risky, how night feels, the fix
+  buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton, { text: () => ['Room menu', 'Scans, experience, findings and controls'], press: () => frontendVR?.open() }],   // the story for a family: what's risky, how night feels, the fix
   shell: {   // the planning shell (frontend.ts) over the wand; frontendVR is created after the first frame, so look it up lazily
     activate: c => !!frontendVR?.activate(c), release: c => !!frontendVR?.release(c), open: () => !!frontendVR?.isOpen(),
     follow(dt) { if (!xrFollowRoute || mode !== 'auto') return false; autoStep(dt); return true; },
@@ -2288,24 +2544,27 @@ function xrFrame(dt: number, t: number) {
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
   if (!comparison.previewing()) labelStep();
   liveChecks(t);
-  renderer.render(scene, camera);
+  const helper = tc.getHelper(), helperVisible = helper.visible; helper.visible = false;
+  vision.renderXR(); helper.visible = helperVisible;
+  companion?.frame(t * 1000);
 }
 // ---------- start ----------
 setWalk('auto');
 await replan();
 if ((current as Eval | null)?.error === undefined && current) Object.assign(body, routePose(0, 0, Infinity));
 else { const [sx, sy] = routes[selRoute].start; Object.assign(body, { x: sx - centreOffset, y: sy, yaw: 0 }); }
+if (renderer.xr.isPresenting) xr.resume();
 // ---------- room light on the meshes (ground.ts) ----------
 // the splat rendered into an env map from the room's middle, 1 m up, before the loop (it sorts the splats for the cube
 // camera; the loop would re-sort them for the main one mid-capture). Capped wait: a slow load keeps the old flat light.
-if (GROUND) {
-  const ready = await Promise.race([Promise.all(splats.map(s => s.initialized)).then(() => true), new Promise<boolean>(r => setTimeout(() => r(false), 10000))]);
+if (GROUND && !renderer.xr.isPresenting) {
+  const ready = await Promise.race([Promise.all(splats.map(s => s.initialized)).then(() => true), new Promise<boolean>(r => later(() => r(false), 10000))]);
   if (ready) {
     await roomEnvironment(sparkR, scene, new THREE.Vector3(g.origin_xy[0] + (g.shape[0] * g.cell_m) / 2, g.origin_xy[1] + (g.shape[1] * g.cell_m) / 2, 1.0));
     updateNight();
   }
 }
-renderer.setAnimationLoop(frame);   // not requestAnimationFrame: in a headset session only the XR frame loop runs
+game.startLoop = () => renderer.setAnimationLoop(frame);   // app starts after saved room state has been restored
 
 const ctx = { RUN, sc, objs, layout: () => layout, applied: () => applied, current: () => current, routePose, routeS: () => routeS,
   get walker() { return walkerCfg; }, get persona() { return persona; }, body, renderer, scene, get walkerGroup() { return walker.group; },
@@ -2322,7 +2581,7 @@ Object.assign(game, {
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
   debug: { renderer, scene, camera, marker: mk3d.root, stairs: stairs3d.root, spark: sparkR, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup],
-    rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
+    vision, rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrSpawn: xr.spawn, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); headTurn.yaw = 0; chairVel.v = chairVel.w = 0; Object.assign(body, { x, y, yaw }); },
@@ -2357,11 +2616,27 @@ Object.assign(game, {
   exportForCosmos: (opts?: ExportOpts) => exportForCosmos(ctx, opts), layoutKey: () => layoutKey(objs, layout),
 });
 
+// Inspect glides to each change instead of jumping (under reduced motion it still jumps). Runs in step() while flying.
+type CamPose = { x: number; y: number; z: number; yaw: number; pitch: number };
+let camTween: { from: CamPose; to: CamPose; k: number; dur: number } | null = null;
+function tweenFly(to: CamPose) {
+  const from = { x: fly.x, y: fly.y, z: fly.z, yaw: body.yaw, pitch: body.pitch };
+  if (reducedMotion() || Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z) < 0.05) { camTween = null; Object.assign(fly, { x: to.x, y: to.y, z: to.z }); body.yaw = to.yaw; body.pitch = to.pitch; return; }
+  camTween = { from, to, k: 0, dur: 0.8 + Math.min(0.7, Math.hypot(to.x - from.x, to.y - from.y) * 0.12) };
+}
+function camTweenStep(dt: number) {
+  if (!camTween || mode !== 'fly') { camTween = null; return; }
+  camTween.k = Math.min(1, camTween.k + dt / camTween.dur);
+  const { from, to } = camTween, s = camTween.k * camTween.k * (3 - 2 * camTween.k), L = (a: number, b: number) => a + (b - a) * s;
+  fly.x = L(from.x, to.x); fly.y = L(from.y, to.y); fly.z = L(from.z, to.z); body.pitch = L(from.pitch, to.pitch);
+  body.yaw = from.yaw + Math.atan2(Math.sin(to.yaw - from.yaw), Math.cos(to.yaw - from.yaw)) * s;   // the short way round
+  if (camTween.k >= 1) camTween = null;
+}
 // ---------- frontend shell: existing data/actions, independent of backend and optimizer ownership ----------
 let inspectReturn: { body: typeof body; fly: typeof fly; mode: 'auto' | 'free' | 'fly'; rig: ReturnType<typeof xr.rigState> } | null = null;
 /** What the viewer is doing, for hints.ts: the desktop strip and pills, and the VR strip card. */
 function hintBase(device: 'desktop' | 'vr'): Omit<HintCtx, 'inspect'> {
-  const w = device === 'vr' ? xr.wand() : null, total = mk?.kind === 'stairs' ? 3 : 2;
+  const w = device === 'vr' ? xr.wand() : null, total = mk ? MARK_STEPS[mk.kind].length : 2;
   return { device, persona: personaKey, nav: mode, marking: mk ? { kind: mk.kind, step: Math.min(mk.pts.length + 1, total), total } : null, editingMarks: editing && !mk,
     grabbing: device === 'vr' ? !!w?.grab : !!grabbing, selected: device === 'vr' ? w?.hover != null : selected >= 0,
     locked: document.pointerLockElement === renderer.domElement, mounted: device === 'vr' && !!xr.mount().hand,
@@ -2370,10 +2645,12 @@ function hintBase(device: 'desktop' | 'vr'): Omit<HintCtx, 'inspect'> {
 const frontendAdapter: FrontendAdapter = {
   hintContext: () => ({ ...hintBase('desktop'), thirdPerson: view.third, personaLabel: personas[personaKey]?.label ?? personaKey }),   // the controls strip and status pills (hints.ts)
   snapshot: () => ({ room: RUN, patient: personaKey, route: routes[selRoute].name, current, baseline: baseEvals[selRoute] ?? null,
-    changes: reim.changes(), spots: spotList, options: suggestions, selected, selectedName: objs[selected]?.name, mode, explore: explore.on, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
+    changes: reim.changes(), spots: spotList, options: game.remoteOptions ?? suggestions, selected, selectedName: objs[selected]?.name, mode, explore: explore.on, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
   navigate(m) {
+    if (game.xrUIAction) game.xrInspection = m === 'inspect';
+    if (renderer.xr.isPresenting && !game.xrUIAction || game.remoteSession) { companion?.setMode('companion'); return; }
     endTour(); select(-1);
-    if (m === 'inspect') { inspectReturn ??= { body: { ...body }, fly: { ...fly }, mode, rig: xr.rigState() }; setWalk(renderer.xr.isPresenting ? 'free' : 'fly'); }
+    if (m === 'inspect') { commitProposal(); inspectReturn ??= { body: { ...body }, fly: { ...fly }, mode, rig: xr.rigState() }; setWalk(renderer.xr.isPresenting ? 'free' : 'fly'); }   // inspecting a proposal shows it solid
     else if (m === 'route') { xrFollowRoute = renderer.xr.isPresenting; const at = mode === 'free' && !explore.on ? resumeS() : 0; if (mode !== 'auto') { setWalk('auto'); autoS = at; } routePaused = false; }
     else if (m === 'walk' || (m === 'fly' && renderer.xr.isPresenting)) { xrFollowRoute = false; goWalk(); routePaused = false; }
     else if (m === 'fly') { xrFollowRoute = false; setWalk('fly'); routePaused = false; }
@@ -2381,15 +2658,17 @@ const frontendAdapter: FrontendAdapter = {
   },
   focus(item) {
     const p = vantage(item.at, current?.xy ?? [item.at], 1.2, 1.1);
-    if (renderer.xr.isPresenting) { if (standable(p.x, p.y)) frontendVR?.transition(() => xr.moveHead(p.x, p.y)); }
-    else { setWalk('fly'); Object.assign(fly, p); body.yaw = p.yaw; body.pitch = p.pitch; }
+    if ((renderer.xr.isPresenting && !game.xrUIAction) || game.remoteSession) { companion?.setMode('companion'); companion?.focus(p); }
+    else if (renderer.xr.isPresenting) { if (standable(p.x, p.y)) frontendVR?.transition(() => xr.moveHead(p.x, p.y)); }
+    else { setWalk('fly'); tweenFly(p); }
     reim.selectChange(item.object, item.change?.iv);
   },
-  leaveInspect() { if (inspectReturn) { const back = inspectReturn; Object.assign(body, back.body); Object.assign(fly, back.fly); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.restoreRig(back.rig)); setWalk(back.mode); inspectReturn = null; } },
+  leaveInspect() { if (renderer.xr.isPresenting && !game.xrUIAction || game.remoteSession) return; if (inspectReturn) { const back = inspectReturn; Object.assign(body, back.body); Object.assign(fly, back.fly); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.restoreRig(back.rig)); setWalk(back.mode); inspectReturn = null; } },
   pause() { routePaused = !routePaused; }, restart() { autoS = 0; autoPause = 0; routePaused = false; }, speed(v) { routeSpeed = v; },
   compare(t) { reim.setT(t); }, animate() { reim.play(); },
-  suggest, async apply(index) { await applyOption(index); setWalk('free'); reim.setT(1); },
-  undo: undoReimagined, select,
+  suggest: () => game.remoteSession ? game.suggest() : suggest(), async apply(index) { stairPhase = 'proposed'; await (game.remoteSession ? game.applyPreparedOption(index) : applyOption(index)); setWalk('free'); reim.setT(1); },   // a previewed proposal: x-ray until accepted or inspected
+  commit() { commitProposal(); },
+  undo: c => game.remoteSession ? game.sessionLink.request('undoChange', [c.name, c.iv]) : undoReimagined(c), select,
   path(on) { routeLine.visible = on; },
   async lightPath() { const r = await lightPath(); game.setNight(true); return r; },
   highlights(on) { hazardGroup.visible = on; }, improvements(on) { reim.setParts({ rings: on, ringLabels: on }); },
@@ -2399,9 +2678,78 @@ const homes = [...document.querySelectorAll('#left *, #right *')].map(n => [n, n
 const frontend = mountFrontend(frontendAdapter);
 // demo mode (?demo=1, H toggles; shot.ts records with it): debug rows, ranges and the fps line hidden (style.css .demo)
 document.body.classList.toggle('demo', PARAMS.get('demo') === '1');
-addEventListener('keydown', e => { if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) document.body.classList.toggle('demo'); });
+onWindow('keydown', e => { if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) document.body.classList.toggle('demo'); });
 game.setDemo = (on: boolean) => document.body.classList.toggle('demo', on);
 if (PARAMS.has('classic')) { for (const [n, p, s] of homes) p.insertBefore(n, s); document.body.classList.remove('frontend'); document.getElementById('frontend')!.hidden = true; document.getElementById('left')!.hidden = document.getElementById('right')!.hidden = false; }
 frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
 game.frontend = frontend;
 game.frontendXR = frontendVR;
+// ---------- compare overlay + provenance floor (reimagine.ts, provenance.ts): two more layers, wired like the existing toggles ----------
+function addLayerToggle(id: string, text: string, into: string, title: string, on: (v: boolean) => void) {
+  const label = document.createElement('label'), box = document.createElement('input');
+  box.type = 'checkbox'; box.id = id; label.title = title; label.append(box, ` ${text}`);
+  (document.getElementById(into) ?? document.body).append(label);
+  box.onchange = () => on(box.checked);
+}
+addLayerToggle('compare-overlay', 'Proposed over current (blue)', 'filter-changes', 'the room as it is stays solid; the proposed layout is drawn over it in translucent blue. Visual only: hazard counts and costs are the proposed layout', v => reim.setOverlay(v));
+const provTex = new THREE.DataTexture(new Uint8Array(nx * ny * 4), nx, ny, THREE.RGBAFormat);
+provTex.magFilter = provTex.minFilter = THREE.NearestFilter;
+const provMesh = new THREE.Mesh(new THREE.PlaneGeometry(nx * g.cell_m, ny * g.cell_m), new THREE.MeshBasicMaterial({ map: provTex, transparent: true, depthWrite: false }));
+provMesh.position.set(g.origin_xy[0] + (nx * g.cell_m) / 2, g.origin_xy[1] + (ny * g.cell_m) / 2, 0.021);
+provMesh.renderOrder = 1; provMesh.visible = false;
+scene.add(provMesh);
+addLayerToggle('provenance', 'Measured vs inferred floor', 'filter-findings', 'floor colour = how it is known: teal measured, amber thinly filmed, hatched violet never filmed (inferred)', v => {
+  provMesh.visible = v;
+  if (v) { (provTex.image.data as Uint8Array).set(provenanceTexels(g, base.floor, coverage, sc.grid.coverage_good)); provTex.needsUpdate = true; }
+});
+game.provenance = { share: () => provenanceShare(base.floor, coverage, sc.grid.coverage_good) };
+
+// ---------- layers (layers.ts): presets, the all-layers popover and Hide UI (V) over the existing toggles ----------
+game.layers = mountLayers({ busy: () => !!mk || editing || !!grabbing, perf: () => perfOn, delta: () => reim.delta(), share: () => provenanceShare(base.floor, coverage, sc.grid.coverage_good) });
+// the cost card for the picked object, and the OT's confirm / dismiss / note on flagged hazards (costcard.ts, hazardreview.ts)
+game.costcard = mountCostCard({ changes: () => reim.changes(), resolved: () => reim.resolved(), onPick: cb => { const prev = onSelect; onSelect = k => { prev?.(k); cb(k); }; } });
+const review = mountReview({ scene: RUN, spots: () => allSpots, onChange: () => { if (current) drawSpots(current); } });
+spotFilter = review.filter; onSpots = review.refresh;
+game.review = review;
+if (current) drawSpots(current);
+
+// Room state never crosses scan identities. Annotations already have per-scan storage keys.
+companion = createCompanion({ renderer, scene, head: camera, game, centre: [g.origin_xy[0] + nx * g.cell_m / 2, g.origin_xy[1] + ny * g.cell_m / 2], size: Math.max(nx, ny) * g.cell_m });
+game.companion = companion;
+game.bookmarks = createBookmarks(RUN, () => ({ position: camera.getWorldPosition(new THREE.Vector3()).toArray(), quaternion: camera.getWorldQuaternion(new THREE.Quaternion()).toArray() }), point => {
+  if (renderer.xr.isPresenting) { const d = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion().fromArray(point.quaternion)); if (standable(point.position[0], point.position[1])) frontendVR?.transition(() => xr.place(point.position[0], point.position[1], Math.atan2(d.y, d.x))); }
+  else { const d = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion().fromArray(point.quaternion)); game.setFly(...point.position, Math.atan2(d.y, d.x) * 180 / Math.PI, Math.asin(d.z) * 180 / Math.PI); }
+});
+game.availableFixes = () => interventions.map(iv => iv.id);
+game.headView = () => ({ position: camera.getWorldPosition(new THREE.Vector3()).toArray(), quaternion: camera.getWorldQuaternion(new THREE.Quaternion()).toArray() });
+game.undoChange = (name: string, iv?: string) => { const change = reim.changes().find(c => c.name === name && c.iv === (iv ?? undefined)); if (!change) throw Error('This change is no longer in the working plan'); return undoReimagined(change); };
+game.editLocks = editLocks;
+game.applyPreparedOption = async (index: number) => { frontendVR?.notify('Desktop is applying a proposed layout'); game.sessionBusy = true; try { return await applyOption(index); } finally { game.sessionBusy = false; } };
+game.sharedEdit = (name: string, task: () => unknown) => editLocks.run(String(objs.findIndex(o => o.name === name)), 'desktop', async () => { const result = await task(); frontendVR?.notify('Room updated by desktop'); return result; });
+game.history = { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') };
+game.recenter = () => { const p = routePose(0, 0, Infinity); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.place(p.x, p.y, p.yaw)); else Object.assign(body, p); };
+game.comfort = { seated: false, movement: 'all', cycle() { const choices = ['all', 'teleport', 'physical']; this.movement = choices[(choices.indexOf(this.movement) + 1) % choices.length]; } };
+game.saveSession = () => structuredClone({ layout, applied, body, fly, personaKey, selRoute, mode, autoS, explore, marked, markedDoors, strongSide });
+game.restoreSession = async (saved: any) => {
+  if (!saved || saved.layout?.poses?.length !== objs.length) return;
+  if (personas[saved.personaKey] && personaKey !== saved.personaKey) await setPersona(saved.personaKey);
+  if (Array.isArray(saved.marked)) marked = structuredClone(saved.marked);
+  if (Array.isArray(saved.markedDoors)) markedDoors = structuredClone(saved.markedDoors);
+  strongSide = saved.strongSide ?? null; setupStairs();
+  layout = structuredClone(saved.layout); applied = [...saved.applied]; selRoute = Math.min(saved.selRoute, routes.length - 1);
+  $<HTMLSelectElement>('routesel').value = String(selRoute); syncObjects(); await replan();
+  Object.assign(body, saved.body); Object.assign(fly, saved.fly); Object.assign(explore, saved.explore);
+  autoS = saved.autoS; setWalk(saved.mode); routePaused = true;
+  if (renderer.xr.isPresenting) xr.place(body.x, body.y, body.yaw);
+};
+runtime.scope.own(() => {
+  for (const i of [0, 1]) { renderer.xr.getHand(i).removeFromParent(); renderer.xr.getController(i).removeFromParent(); }
+  frontend.dispose(); live?.dispose(); tc.dispose(); vision.dispose();
+  for (const s of splats) s.dispose();
+  const resources = new Set<any>();
+  scene.traverse((o: any) => { if (o.geometry) resources.add(o.geometry); for (const m of o.material ? Array.isArray(o.material) ? o.material : [o.material] : []) { resources.add(m); for (const v of Object.values(m)) if ((v as any)?.isTexture) resources.add(v); } });
+  for (const resource of resources) resource.dispose();
+  scene.environment?.dispose(); sparkR.dispose(); scene.clear(); css.domElement.remove(); renderer.renderLists.dispose();
+});
+return game;
+}

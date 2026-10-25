@@ -2,7 +2,7 @@
  {
   "check": "fps (autoplay, 1600x900)",
   "pass": true,
-  "detail": "60.0 fps on ANGLE (Intel, Mesa Intel(R) Arc(tm) Graphics (MTL), OpenGL 4.6)"
+  "detail": "60.0 fps on ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)"
  },
  {
   "check": "rug bump flashes the leg with the measured height",
@@ -32,7 +32,7 @@
  {
   "check": "moving the bed updates route and numbers within ~1 s",
   "pass": true,
-  "detail": "replan 97 ms; route 3.89 -> 4.10 m; contacts/month 2.92 -> 2.54"
+  "detail": "replan 33 ms; route 3.89 -> 4.10 m; contacts/month 2.92 -> 2.54"
  },
  {
   "check": "placement into a wall is blocked",
@@ -47,7 +47,7 @@
  {
   "check": "plan fixes ranked; applying the top fix lowers risk",
   "pass": true,
-  "detail": "remove_rug -2.80, add_nightlight -0.39, tape_cable -0.03, offset_hinges -0.02, move_nightstand -0.00, raised_toilet_seat -0.00, bed_risers -0.00, touch_lamp -0.00, remove_door --0.01, move_bed --0.35; applied remove_rug: 2.92 -> 0.12/month"
+  "detail": "remove_rug -2.80, add_nightlight -0.39, tape_cable -0.03, offset_hinges -0.02, move_nightstand -0.00, raised_toilet_seat -0.00, bed_risers -0.00, touch_lamp -0.00, grab_bar_toilet:toilet -0.00, remove_door --0.01, move_bed --0.35; applied remove_rug: 2.92 -> 0.12/month"
  },
  {
   "check": "night mode toggles without errors",
@@ -57,7 +57,7 @@
  {
   "check": "export for Cosmos",
   "pass": true,
-  "detail": "game_synth_20261024T094816: 93 frames, 1 chunks, 93 walker depth PNGs, walker covers 2.1% of frame 0"
+  "detail": "game_synth_20261025T022911: 93 frames, 1 chunks, 93 walker depth PNGs, walker covers 2.1% of frame 0"
  },
  {
   "check": "clip overlay markers align at known frames",
@@ -82,7 +82,7 @@
  {
   "check": "vision pass changes the frame (cataract blurs: smaller JPEG)",
   "pass": true,
-  "detail": "41795 -> 20819 bytes"
+  "detail": "39835 -> 19779 bytes"
  },
  {
   "check": "heatmap: rollouts return per-cell counts when on",
@@ -92,17 +92,17 @@
  {
   "check": "suggest layouts, apply the full option, walkable",
   "pass": true,
-  "detail": "Quick fixes 0.12, Moderate 0.00, Full re-layout 0.08 in 12.3 s; now 0.08 (bed:1.00,3.05,0|door:4.50,1.95,0|nightlight:3.90,0.95,90|rai)"
+  "detail": "Quick fixes 0.12, Moderate 0.00, Full re-layout 0.00 in 7.1 s; now 0.00 (door:4.50,1.95,0|flat:3.60,0.25,3.70,2.75|raise:bed:0.10|rai)"
  },
  {
   "check": "OT report renders the live layout",
   "pass": true,
-  "detail": "4432 chars"
+  "detail": "4426 chars"
  },
  {
   "check": "fix card opens from the QR link with numbered fixes",
   "pass": true,
-  "detail": "6 items, url 787 chars"
+  "detail": "5 items, url 668 chars"
  },
  {
   "check": "third person: mannequin walks the simulated footsteps",
@@ -112,17 +112,17 @@
  {
   "check": "physics pass (Rapier): the walker reaches every goal, snags listed",
   "pass": true,
-  "detail": "{\"done\":true,\"snags\":0,\"li\":3,\"ms\":1499}"
+  "detail": "{\"done\":true,\"snags\":0,\"li\":3,\"ms\":886}"
  },
  {
   "check": "reimagine: morphs into the safest layout, every change costed in the receipt",
   "pass": true,
-  "detail": "{\"n\":6,\"m\":{\"from\":{\"x\":0.9,\"y\":2.925,\"yaw\":0},\"to\":{\"x\":0.9999999999999999,\"y\":3.0700000000000016,\"yaw\":0},\"name\":\"bed\"},\"at0\":{\"x\":0.9,\"y\":2.925,\"yaw\":0,\"visible\":true},\"at1\":{\"x\":0.9999999999999999,\"y\":3.0700000000000016,\"yaw\":0,\"visible\":true},\"costed\":true,\"li\":6,\"total\":\"6 changes · $92 · 129 "
+  "detail": "{\"n\":5,\"m\":{\"from\":{\"x\":4.48,\"y\":1.87,\"yaw\":0},\"to\":{\"x\":4.48,\"y\":1.93,\"yaw\":0},\"name\":\"door\"},\"at0\":{\"x\":4.48,\"y\":1.87,\"yaw\":0,\"visible\":true},\"at1\":{\"x\":4.48,\"y\":1.93,\"yaw\":0,\"visible\":true},\"costed\":true,\"li\":5,\"total\":\"5 changes · $88 · 70 min (placeholder costs)\"}"
  },
  {
   "check": "reimagine: undo takes one change back",
   "pass": true,
-  "detail": "6 -> 5; page errors: none"
+  "detail": "5 -> 4; page errors: none"
  },
  {
   "check": "reimagine: no page errors",
@@ -181,6 +181,76 @@
  },
  {
   "check": "reset: no page errors",
+  "pass": true,
+  "detail": "none"
+ },
+ {
+  "check": "movement: Look around parks the walker where it was and Walk takes it back (Fly looking never turned it)",
+  "pass": true,
+  "detail": "{\"w0\":{\"x\":2.458365450543916,\"y\":2.56138055417254,\"yaw\":-0.7850180537853677},\"parked\":{\"x\":2.458365450543916,\"y\":2.56138055417254,\"yaw\":-0.7850180537853677},\"back\":{\"x\":2.458365450543916,\"y\":2.56138055417254,\"yaw\":-0.7850180537853677},\"pressed\":[\"mode-walk\"]}"
+ },
+ {
+  "check": "movement: keys 4 and 1 switch to Fly and Follow route",
+  "pass": true,
+  "detail": "mode-fly, mode-route"
+ },
+ {
+  "check": "movement: no page errors",
+  "pass": true,
+  "detail": "none"
+ },
+ {
+  "check": "reach: Follow route, Walk and Look around share the route start, the planned path and the reach map",
+  "pass": true,
+  "detail": "{\"route\":{\"start\":[2.25,2.7],\"xy0\":[2.25,2.71],\"n\":111},\"walk\":{\"start\":[2.25,2.7],\"xy0\":[2.25,2.71],\"n\":111},\"explore\":{\"start\":[2.25,2.7],\"xy0\":[2.25,2.71],\"n\":111}}"
+ },
+ {
+  "check": "reach: the 55 cm doorway cuts the bathroom off, named as the marked doorway; the paint is a scene mesh",
+  "pass": true,
+  "detail": "{\"cut\":3.1471999999997187,\"status\":\"cut\",\"pinch\":0.5199999809265137,\"cause\":{\"kind\":\"door\",\"name\":\"bathroom door\",\"clear_m\":0.5499999999999998},\"region\":{\"kind\":\"door\",\"name\":\"bathroom door\",\"clear_m\":0.5499999999999998},\"dots\":342,\"mesh\":\"Mesh\",\"inScene\":true,\"chart\":true}"
+ },
+ {
+  "check": "reach: the cost to get through it is charted per device width (placeholder prices)",
+  "pass": true,
+  "detail": "[{\"width_m\":0.45,\"usd\":1500,\"label\":\"Widen the bathroom door opening\",\"id\":\"door_widen:bathroom door\",\"source\":\"placeholder\"},{\"width_m\":0.46,\"usd\":1500,\"label\":\"Widen the bathroom door opening\",\"id\":\"door_widen:bathroom door\",\"source\":\"placeholder\"},{\"width_m\":0.47,\"usd\":1500,\"label\":\"Widen the bathroom door opening\",\"id\":\"door_widen:bathroom door\",\"source\":\"placeholder\"}]"
+ },
+ {
+  "check": "reach: widening the doorway opens the bathroom",
+  "pass": true,
+  "detail": "3.1 -> 0.0 m² cut off; bathroom ok"
+ },
+ {
+  "check": "reach: undo closes it again",
+  "pass": true,
+  "detail": "{\"cut\":3.1471999999997187,\"status\":\"cut\"}"
+ },
+ {
+  "check": "reach: the width slider repaints without the worker; a narrower device reaches more",
+  "pass": true,
+  "detail": "{\"w5\":{\"ok\":8.479600000000197,\"tight\":3.8119999999996454,\"cut\":0,\"grey\":0},\"w9\":{\"ok\":5.8771999999994184,\"tight\":0,\"cut\":1.7347999999998742,\"grey\":0},\"asks\":0,\"slider\":0.55,\"out\":\"55 cm (what if)\"}"
+ },
+ {
+  "check": "reach: a point picked on the floor and one given by the API are targets checked from the start",
+  "pass": true,
+  "detail": "{\"points\":[\"point 1\",\"bath corner\"],\"ts\":[[\"point 1\",\"ok\"],[\"bath corner\",\"cut\"]],\"marking\":null}"
+ },
+ {
+  "check": "reach: picked points survive a reload, copy as config YAML, and remove one by one",
+  "pass": true,
+  "detail": "[\"point 1\",\"bath corner\"] -> [\"point 1\"]; \"  reach_points:\\n  - {name: \\\"point 1\\\", at: [1.000, 0.600]}\\n  - {name: \\\"bath corner\\\", at: [5.600, 2.400]}\\n\""
+ },
+ {
+  "check": "reach: ghost modes switch coverage and contact ghosts; the wave reveals every coverage ghost from the start",
+  "pass": true,
+  "detail": "{\"a\":[false,true],\"b\":[true,false],\"t0\":0,\"d0\":11,\"t\":1,\"drawn\":395,\"dots\":395}"
+ },
+ {
+  "check": "reach: moving furniture with the reach map on still replans within 1 s",
+  "pass": true,
+  "detail": "51 ms"
+ },
+ {
+  "check": "reach: no page errors",
   "pass": true,
   "detail": "none"
  }

@@ -2,13 +2,15 @@
 import { applyIntervention, stamp, bumpComponents, carvedPolys } from './grid.ts';
 import { evaluate, availableInterventions, type Init, type Eval } from './evaluate.ts';
 import { optimize } from './optimize.ts';
+import { reachField, analyze, type ReachField } from './reach.ts';
 export type { Init, Eval, RouteDef, HazardOut, RouteSummary } from './evaluate.ts';
 
 let S: Init;
+let reach: { key: string; f: ReachField; id: number } | null = null, reachIds = 0;   // the widest-way field, per layout and start
 
 self.onmessage = async (e: MessageEvent) => {
   const m = e.data;
-  if (m.type === 'init') { S = m.init; return; }
+  if (m.type === 'init') { S = m.init; reach = null; return; }
   if (m.type === 'eval') {
     const r = evaluate(S, m.layout, { ghosts: true, sel: m.sel, heat: m.heat });
     if (S.persona.step_model !== 'hand' && !r.error) {   // hand-rule baseline over the same route: ~50 ms, drawn as a second ghost set
@@ -43,6 +45,18 @@ self.onmessage = async (e: MessageEvent) => {
       return { name: rd.name, names, ...pushAlong(S.g, L.bump, comps, e.xy, m.walker, m.cfg) };
     });
     postMessage({ type: 'physics', id: m.id, routes });
+  } else if (m.type === 'reach') {
+    // where this device can go (reach.ts): the field once per layout, the report per width; the field's arrays go to the
+    // main thread only when they changed (the width slider repaints from them there)
+    const key = JSON.stringify([m.layout, m.start]);
+    if (reach?.key !== key) reach = { key, f: reachField(S, m.layout, m.start, S.plan.walker_width_m / 2), id: ++reachIds };
+    const f = reach.f, report = analyze(S, f, m.layout, m.opts, m.targets);
+    const out: Record<string, unknown> = { type: 'reach', id: m.id, report, fieldId: reach.id }, transfer: ArrayBuffer[] = [];
+    if (m.have !== reach.id) {
+      const field = { dist: f.dist.slice(), need: f.need.slice(), len: f.len.slice(), grey: f.grey.slice(), hatch: f.hatch.slice() };
+      out.field = field; transfer.push(...Object.values(field).map(a => a.buffer as ArrayBuffer));
+    }
+    postMessage(out, { transfer });
   } else if (m.type === 'optimize') {
     const res = optimize(S, m.layout, m.cfg ?? {}, msg => postMessage({ type: 'progress', id: m.id, msg }));
     postMessage({ type: 'optimize', id: m.id, ...res });

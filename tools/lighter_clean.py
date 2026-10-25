@@ -11,9 +11,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import read_ply, write_ply, ply_xyz
 import importlib
 export = importlib.import_module("stages.12_export_scene")
+freespace = importlib.import_module("tools.freespace")
 
 import numpy as np
 import yaml
+from scipy.spatial import cKDTree
 
 VOX, MIN_NEIGHBOURS, FLOOR_BAND_M = 0.05, 4, 0.3
 
@@ -39,6 +41,11 @@ def main():
     v = read_ply(Path(cfg["work_dir"]) / "splat_aligned_raw.ply")
     p = ply_xyz(v)
     drop = np.zeros(len(v), bool) if raw else ((neighbours(p) < MIN_NEIGHBOURS) & (p[:, 2] > FLOOR_BAND_M)) | (p[:, 2] > ceiling)
+    if not raw and cfg["clean"].get("lighter_camera_clear_m"):   # fog in the air the phone moved through (freespace.py)
+        drop |= cKDTree(freespace.camera_path(Path(cfg["work_dir"]))).query(p)[0] < cfg["clean"]["lighter_camera_clear_m"]
+    big = cfg["clean"].get("lighter_big_above")   # {z, scale_m}: streaks in air the capture never filmed (an upper floor's ceiling)
+    if not raw and big:
+        drop |= (p[:, 2] > big["z"]) & (np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)).max(1) > big["scale_m"])
     name = f"{run}_{'raw' if raw else 'lighter'}"
     src, dst = Path("viewer/public/scene") / run, Path("viewer/public/scene") / name
     shutil.rmtree(dst, ignore_errors=True)

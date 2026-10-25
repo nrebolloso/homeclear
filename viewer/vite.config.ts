@@ -1,5 +1,7 @@
 // Dev-only API: the game writes Cosmos exports to public/exports/<job>/ and lists clips in public/clips/.
 import { defineConfig } from 'vite';
+import { scanCatalogPlugin } from './scan-plugin.ts';
+import { sessionRelayPlugin } from './session-plugin.ts';
 import { mkdirSync, writeFileSync, readdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { networkInterfaces } from 'node:os';
@@ -7,6 +9,7 @@ import { networkInterfaces } from 'node:os';
 const PUB = join(import.meta.dirname, 'public');
 
 export default defineConfig({
+  cacheDir: '.vite-cache',   // worktrees may share dependencies, but never their optimizer cache
   worker: { format: 'es' },
   server: {
     port: 5179, strictPort: true,   // README, e2e/ and scripts/ all use 5179
@@ -14,7 +17,7 @@ export default defineConfig({
     fs: { allow: ['.', '../physics_ranges.json', '../physics/batch_results.json'] },   // object-physics ranges + offline batch results; nothing else outside viewer/
   },
   build: { rollupOptions: { input: { main: 'index.html', report: 'report.html', fixcard: 'fixcard.html' } } },
-  plugins: [{
+  plugins: [scanCatalogPlugin(PUB), sessionRelayPlugin(), {
     name: 'rehearsal-api',
     configureServer(server) {
       server.middlewares.use('/api/export/', (req, res) => {
