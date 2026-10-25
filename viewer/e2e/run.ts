@@ -404,6 +404,28 @@ try {
     check('fan fork: no page errors', fk.errors.length === 0, fk.errors.join(' | ') || 'none');
     await fk.p.close();
   }
+  // 17. round-trip autoplay (roundtrip.ts, the scripted demo): from the route's goal back to its start, a turn, then out as
+  // planned, with no jump between legs; the fan follows the leg being walked; one way is still the default
+  {
+    const rt = await open('kitchen4_lighter');
+    const F = (f: string) => G(rt.p, f);
+    const one = await F('return game.roundTrip.leg()');
+    const r = await F(`const c = game.current(); await game.roundTrip.set(true); game.fan.set(true);
+      const goal = c.xy.at(-1), start = c.xy[0], cen = b => [b.x + 0.5 * Math.cos(b.yaw), b.y + 0.5 * Math.sin(b.yaw)], d = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+      const b0 = cen(game.body); let prev = { ...game.body, t: performance.now() }, speed = 0, near = 9, legs = [game.roundTrip.leg()], fanIn = 0;
+      for (let i = 0; i < 100; i++) { await new Promise(r => setTimeout(r, 250)); const b = game.body, t = performance.now();
+        speed = Math.max(speed, Math.hypot(b.x - prev.x, b.y - prev.y) / ((t - prev.t) / 1000)); prev = { ...b, t };
+        const leg = game.roundTrip.leg(); if (leg !== legs.at(-1)) legs.push(leg); if (leg === 'in') near = Math.min(near, d(cen(b), start));
+        const s = game.fan.state(); if (leg === 'in' && s.fan?.path === 'route') fanIn++;
+        if (legs.length === 3) break; }
+      return { fromGoal: d(b0, goal), near, legs, speed, fanIn }`);
+    check('round trip: starts at the route goal, reaches its start, turns and walks out as planned', one === 'out' && r.fromGoal < 0.3 && r.near < 0.3 && r.legs.join() === 'in,out,in',
+      `one way by default (${one}); start ${r.fromGoal.toFixed(2)} m from the goal, inbound got within ${r.near.toFixed(2)} m of the start; legs ${r.legs.join(' -> ')}`);
+    check('round trip: no jump between legs (body under 1.2 m/s)', r.speed < 1.2, `max ${r.speed.toFixed(2)} m/s`);
+    check('round trip: the fan follows the inbound leg', r.fanIn >= 5, `${r.fanIn} fans on the reversed route`);
+    check('round trip: no page errors', rt.errors.length === 0, rt.errors.join(' | ') || 'none');
+    await rt.p.close();
+  }
 } finally {
   await browser.close();
   writeFileSync(new URL('results.json', import.meta.url), JSON.stringify(results, null, 1));

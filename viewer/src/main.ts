@@ -48,6 +48,7 @@ import { createPlanFix } from './planfix.ts';
 import { createGaitFit } from './gaitfit.ts';
 import { createWmGhosts } from './wmghosts.ts';
 import { createFuturesFan } from './futuresfan.ts';
+import { createRoundTrip } from './roundtrip.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 // model and scene text (Cosmos Reason notes, hazard details) goes into innerHTML escaped; same as report.ts's, which can't
@@ -285,6 +286,7 @@ const body = { x: 0, y: 0, yaw: 0, pitch: -(+(PARAMS.get('pitch') ?? 28)) * Math
 const explore = { on: false, parked: null as null | { x: number; y: number; yaw: number } };
 function setExplore(on: boolean) { explore.on = on; explore.parked = on ? { x: body.x, y: body.y, yaw: body.yaw } : null; }
 let mode: 'auto' | 'free' | 'fly' = 'auto', autoS = 0, autoPause = 0;
+const trip = createRoundTrip();   // round-trip autoplay (roundtrip.ts): the route backwards, then as planned
 let routePaused = false, routeSpeed = 1, frontendVR: ReturnType<typeof createFrontendXR> | null = null, xrFollowRoute = false;
 
 // ---------- layout state + worker ----------
@@ -309,9 +311,9 @@ const game: any = { ready: false, fps: 0, evals: 0 };
 (window as any).game = game;
 
 function replanRoute(k: number) {
-  selRoute = k; autoS = 0;
+  selRoute = k; autoS = 0; trip.reset();
   showPhysics();
-  return replan().then(ms => { if (!current?.error) Object.assign(body, routePose(0, 0, Infinity)); return ms; });
+  return replan().then(ms => { if (!current?.error) Object.assign(body, trip.leg() === 'in' ? routePose(0, 0, Infinity, trip.inbound(current!.xy)) : routePose(0, 0, Infinity)); return ms; });
 }
 async function replan(): Promise<number> {
   const t = performance.now();
@@ -1377,7 +1379,7 @@ game.livephys = live;
 let fanFor: unknown = null, fanSc: any = null;
 const fanFan = createFuturesFan({ scene, walker: () => walkerCfg, worldModel,
   fanScene: () => (fanFor === persona ? fanSc : (fanFor = persona, fanSc = { g, base, est, objects: objs, persona, risk, rules: sc.hazard_rules, plan: init.plan })),
-  body: () => explore.parked ?? body, route: () => (current && !current.error ? current.xy : null), fold: () => live?.fold() ?? null,
+  body: () => explore.parked ?? body, route: () => (current && !current.error ? (mode === 'auto' ? trip.route(current.xy) : current.xy) : null), fold: () => live?.fold() ?? null,
   layout: () => ((tc as any).dragging && selected >= 0 ? { ...layout, poses: layout.poses.map((p, k) => (k === selected ? poseOf(k) : p)) } : layout),   // live while dragging
   night: () => routes[selRoute].night, fps: () => game.fps });
 $('fanon').onchange = e => fanFan.set((e.target as HTMLInputElement).checked);
@@ -1626,9 +1628,10 @@ async function setPersona(key: string) {
 }
 { // route selector: the panels, autoplay and the Cosmos export follow the selected route; the risk total covers all of them
   const sel = $<HTMLSelectElement>('routesel');
-  sel.innerHTML = routes.map((r, k) => `<option value="${k}">${r.name}${r.night ? ' (night)' : ''}</option>`).join('');
-  sel.onchange = () => replanRoute(+sel.value);
-  sel.disabled = routes.length < 2;
+  sel.innerHTML = routes.map((r, k) => `<option value="${k}">${r.name}${r.night ? ' (night)' : ''}</option>`).join('')
+    + routes.map((r, k) => `<option value="rt${k}">${r.name}, round trip: back to its start and out again</option>`).join('');
+  sel.onchange = () => { trip.set(sel.value.startsWith('rt')); replanRoute(+sel.value.replace('rt', '')); };
+  game.roundTrip = { set: (on: boolean) => { sel.value = `${on ? 'rt' : ''}${selRoute}`; trip.set(on); return replanRoute(selRoute); }, on: trip.on, leg: trip.leg };
 }
 $('imagfill').onchange = () => syncObjects();
 $('imagceil').onchange = () => { if (ceiling) ceiling.visible = $<HTMLInputElement>('imagceil').checked; };
@@ -1739,7 +1742,7 @@ function setWalk(m: 'auto' | 'free' | 'fly') {
   if (m !== 'fly') body.pitch = THREE.MathUtils.clamp(body.pitch, -1.2, 0.6);
   mode = m;
   $('autoplay').classList.toggle('on', m === 'auto'); $('free').classList.toggle('on', m === 'free'); $('fly').classList.toggle('on', m === 'fly');
-  if (m === 'auto') { autoS = 0; autoPause = 0; setExplore(false); }
+  if (m === 'auto') { autoS = 0; autoPause = 0; trip.reset(); setExplore(false); }
 }
 $('autoplay').onclick = () => setWalk('auto');
 $('free').onclick = () => setWalk('free');
@@ -1756,11 +1759,10 @@ function canStand(b: { x: number; y: number; yaw: number }) {
   return walker.probes.every(p => { const k = cellAt(...walkerPoint(b, p)); return S.floor[k] && !S.obst[k]; });
 }
 /** Route point + heading at arc length s (the route is the walker frame's centre). */
-function routeAt(s: number): [number, number, number] {
-  const xy = current!.xy;
+function routeAt(s: number, xy = current!.xy, S = routeS): [number, number, number] {
   let k = 1;
-  while (k < routeS.length - 1 && routeS[k] < s) k++;
-  const f = THREE.MathUtils.clamp((s - routeS[k - 1]) / (routeS[k] - routeS[k - 1] || 1), 0, 1);
+  while (k < S.length - 1 && S[k] < s) k++;
+  const f = THREE.MathUtils.clamp((s - S[k - 1]) / (S[k] - S[k - 1] || 1), 0, 1);
   return [xy[k - 1][0] + f * (xy[k][0] - xy[k - 1][0]), xy[k - 1][1] + f * (xy[k][1] - xy[k - 1][1]), 0];
 }
 const SPEED = 0.45;   // m/s, also the Cosmos export's pace
@@ -1774,8 +1776,14 @@ function worldStep(dt: number): boolean {
   const W = gh.walker, d = [0];
   for (let k = 1; k < W.length; k++) d.push(d[k - 1] + Math.hypot(W[k][0] - W[k - 1][0], W[k][1] - W[k - 1][1]));
   const Ls = d[d.length - 1];
-  if (autoS >= Ls) { autoPause += dt; if (autoPause > 2) { autoS = 0; autoPause = 0; } }
-  else autoS = Math.min(Ls, autoS + SPEED * dt);
+  if (autoS >= Ls) { autoPause += dt; const turned = !trip.on() || turnToNext(dt); if (autoPause > 2 && turned) nextLeg(); return true; }
+  if (autoS < 0) {   // round trip: the route up to where ghost 0 starts (its first steps are the rollout's warm-up, not replayed)
+    autoS = Math.min(0, autoS + SPEED * dt);
+    Object.assign(body, routePose(nearestS(W[0][0], W[0][1]) + autoS, body.yaw, dt));
+    feet.visible = false;
+    return true;
+  }
+  autoS = Math.min(Ls, autoS + SPEED * dt);
   let k = 1;
   while (k < d.length - 1 && d[k] < autoS) k++;
   const f = THREE.MathUtils.clamp((autoS - d[k - 1]) / (d[k] - d[k - 1] || 1), 0, 1), a = W[k - 1], b = W[k];
@@ -1795,17 +1803,36 @@ function worldStep(dt: number): boolean {
 function autoStep(dt: number) {
   dt = routePaused ? 0 : dt * routeSpeed;
   if (!current || current.error || routeS.length < 2) return;
-  if (persona.step_model === 'world' && worldStep(dt)) return;
-  const Ls = routeS[routeS.length - 1];
-  if (autoS >= Ls) { autoPause += dt; if (autoPause > 2) { autoS = 0; autoPause = 0; } }
-  else autoS = Math.min(Ls, autoS + SPEED * dt);
-  const pose = routePose(autoS, body.yaw, dt);
-  Object.assign(body, pose);
+  feet.visible = trip.leg() === 'out';
+  const path = trip.leg() === 'in' ? trip.inbound(current.xy) : undefined;   // round trip, inbound: the route backwards
+  if (!path && persona.step_model === 'world' && worldStep(dt)) return;
+  const Ls = (path?.s ?? routeS).at(-1)!;
+  if (autoS >= Ls) { autoPause += dt; const turned = !trip.on() || turnToNext(dt); if (autoPause > 2 && turned) nextLeg(); return; }
+  autoS = Math.min(Ls, autoS + SPEED * dt);
+  Object.assign(body, routePose(autoS, body.yaw, dt, path));
 }
-/** Body pose that puts the walker frame centre on the route at s; heading eases toward the route ahead. */
-function routePose(s: number, prevYaw: number, dt: number) {
-  const [x, y] = routeAt(s), Ls = routeS[routeS.length - 1];
-  const [ax, ay] = routeAt(Math.min(Ls, s + 0.35)), [bx, by] = routeAt(Math.max(0, s - 0.1));
+function nextLeg() {
+  const gh = current?.ghosts[0]?.walker;
+  autoPause = 0; trip.next();
+  autoS = trip.on() && trip.leg() === 'out' && persona.step_model === 'world' && gh && gh.length > 1 ? -nearestS(gh[0][0], gh[0][1]) : 0;
+}
+/** round trip, pausing at a leg's end: person and walker turn about the point between them (≤ 115°/s) toward the next leg
+ *  while that point moves (≤ 0.3 m/s) onto the next leg's start; true once there. Turning 180° swings the walker to the
+ *  person's other side, and the world model's trip ends a little past the planned goal. */
+function turnToNext(dt: number) {
+  const to = routePose(0, 0, Infinity, trip.leg() === 'out' ? trip.inbound(current!.xy) : undefined), r = centreOffset / 2;
+  const c = walkerPoint(body, [r, 0]), tc = walkerPoint(to, [r, 0]), dy = Math.atan2(Math.sin(to.yaw - body.yaw), Math.cos(to.yaw - body.yaw));
+  const d = Math.hypot(tc[0] - c[0], tc[1] - c[1]), f = d > 1e-6 ? Math.min(1, 0.3 * dt / d) : 1;
+  const yaw = body.yaw + THREE.MathUtils.clamp(dy, -2 * dt, 2 * dt), x = c[0] + (tc[0] - c[0]) * f, y = c[1] + (tc[1] - c[1]) * f;
+  Object.assign(body, { x: x - Math.cos(yaw) * r, y: y - Math.sin(yaw) * r, yaw });
+  return f === 1 && Math.abs(dy) <= 2 * dt;
+}
+/** Body pose that puts the walker frame centre on the route at s (or on `path`: the round trip's inbound leg); heading
+ *  eases toward the route ahead. */
+function routePose(s: number, prevYaw: number, dt: number, path?: { xy: XY[]; s: number[] }) {
+  const at = (v: number) => (path ? routeAt(v, path.xy, path.s) : routeAt(v)), Ls = (path?.s ?? routeS).at(-1)!;
+  const [x, y] = at(s);
+  const [ax, ay] = at(Math.min(Ls, s + 0.35)), [bx, by] = at(Math.max(0, s - 0.1));
   const want = Math.atan2(ay - by, ax - bx);
   const yaw = dt === Infinity ? want : prevYaw + Math.atan2(Math.sin(want - prevYaw), Math.cos(want - prevYaw)) * Math.min(1, dt * 4);
   return { x: x - Math.cos(yaw) * centreOffset, y: y - Math.sin(yaw) * centreOffset, yaw };
@@ -1859,9 +1886,9 @@ function liveChecks(t: number) {
   gapTag.visible = state.red;
   if (state.red) { gapTag.position.set(at[0], at[1], walkerCfg.handle_height_m + 0.1); gapTag.element.textContent = `${Math.max(0, gap * 100).toFixed(0)} cm gap`; }
   // upcoming hazards (next 2.5 m of the route) glow
-  const sNow = mode === 'auto' ? autoS : nearestS(...walkerPoint(wb, [centreOffset, 0]));
+  const inb = mode === 'auto' && trip.leg() === 'in', sNow = mode === 'auto' && !inb ? autoS : nearestS(...walkerPoint(wb, [centreOffset, 0]));
   for (const ring of hazardGroup.children as THREE.Mesh[]) {
-    const ahead = ring.userData.s - sNow, mat = ring.material as THREE.MeshBasicMaterial;
+    const ahead = (ring.userData.s - sNow) * (inb ? -1 : 1), mat = ring.material as THREE.MeshBasicMaterial;
     const glow = ahead > -0.3 && ahead < 2.5;
     if (perfOn && ring.children[0]) ring.children[0].visible = glow;   // performance mode: a label only for the hazards just ahead
     mat.opacity = glow ? 0.55 + 0.45 * Math.sin(t * 8) : 0.35;
@@ -1960,7 +1987,7 @@ function step(dt: number, t: number) {
     camera.lookAt(fly.x + Math.cos(body.yaw) * c, fly.y + Math.sin(body.yaw) * c, fly.z + Math.sin(body.pitch));
   } else placeCamera(camera, body);
   markStep();
-  const showMan = view.third && mode === 'auto' && heroSteps.length > 0;
+  const showMan = view.third && mode === 'auto' && heroSteps.length > 0 && trip.leg() === 'out';   // the inbound leg isn't simulated: no hero steps
   mannequin.group.visible = showMan;
   stepCloudUpdate(showMan);
   if (showMan) {
@@ -2181,7 +2208,7 @@ const frontendAdapter: FrontendAdapter = {
     reim.selectChange(item.object, item.change?.iv);
   },
   leaveInspect() { if (inspectReturn) { const back = inspectReturn; Object.assign(body, back.body); Object.assign(fly, back.fly); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.restoreRig(back.rig)); setWalk(back.mode); inspectReturn = null; } },
-  pause() { routePaused = !routePaused; }, restart() { autoS = 0; autoPause = 0; routePaused = false; }, speed(v) { routeSpeed = v; },
+  pause() { routePaused = !routePaused; }, restart() { autoS = 0; autoPause = 0; trip.reset(); routePaused = false; }, speed(v) { routeSpeed = v; },
   compare(t) { reim.setT(t); }, animate() { reim.play(); },
   suggest, async apply(index) { await applyOption(index); setWalk('free'); reim.setT(1); },
   undo: undoReimagined, select,
