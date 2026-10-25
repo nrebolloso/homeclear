@@ -17,9 +17,15 @@
   "batch_curl_lift_m": [0.01, 0.04],
   "batch_curl_size_m": [0.06, 0.15]
  },
+ "rug_loose": {
+  "_fit": "CALIBRATED (physics/rug_calib.py, MuJoCo cloth rug) to 8 real walker passes over a loose cotton rug, data/recording_notes.csv: the range where the sim disturbs the rug at about the real rate in both directions; read by rug_calib.py only, the scene's mat keeps the mat range",
+  "floor_friction": [0.1, 0.3]
+ },
  "walker": {
   "push_max_n": [25.0, 60.0],
   "glide_friction": [0.15, 0.45],
+  "_glide_rug": "rear glide on rug pile, CALIBRATED with rug_loose.floor_friction (rug_calib.py); glide caps / tennis balls ASSUMED 0.10-0.20 (physics/rug_calib.json glide_caps_mu_assumed)",
+  "glide_rug_friction": [0.35, 0.9],
   "_frame_mass": "Drive Medical 10210-1 spec sheet: 7.5 lb (manufacturer, not weighed)",
   "frame_mass_kg": [3.4, 3.4],
   "hand_load_n": [15.0, 45.0]

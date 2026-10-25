@@ -154,10 +154,20 @@ def grid(per=6, seed=0):
 
 # fitted to the OFF-the-rug takes (7 real, all folded or dragged): the grid cells where P(disturbed | off) >= 0.8
 # (rug_calib_grid.json). Onto (1 real take) is the held-out check, not fitted to.
-FIT = dict(mu_gr=[0.35, 0.9], mu_rf=[0.1, 0.3])
+FIT = dict(mu_gr=R0['walker']['glide_rug_friction'], mu_rf=R0['rug_loose']['floor_friction'])   # the fit (grid mode), kept in physics_ranges.json
 BEFORE = dict(mu_gr=R0['walker']['glide_friction'], mu_rf=R0['mat']['floor_friction'])   # the ranges before this fit
 CAPS_MU = [0.10, 0.20]   # ASSUMED glide cap / tennis ball on rug pile (PTFE-like on fabric); not measured, see BLOCKERS.md
 REAL = dict(off=dict(n=7, folded=6, dragged=1), onto=dict(n=1, folded=0, dragged=1))   # data/recording_notes.csv, flat rug
+
+
+def write(real, arms, trials):
+    """rug_calib.json: the rates the viewer reads (rugcascade.ts) and the fold height of every folded sim pass, any arm
+    (the fitted arm drags rather than folds, so it has too few folds of its own)."""
+    h = [t['fold_h_m'] for t in trials if t['outcome'] == 'folded']
+    json.dump(dict(label='SIMULATED cloth rug (rug_calib.py check), paired arms; real = data/recording_notes.csv flat-rug passes; trials in rug_calib_trials.json',
+                   fit=FIT, before=BEFORE, glide_caps_mu_assumed=CAPS_MU, glide_floor_mu=GLIDE_FLOOR_MU, real=real, arms=arms,
+                   fold_h_m=dict(n=len(h), p10=float(np.percentile(h, 10)), p50=float(np.median(h)), p90=float(np.percentile(h, 90)))),
+              open(HERE / 'rug_calib.json', 'w'), indent=1)
 
 
 def check(n=30, seed=1):
@@ -174,13 +184,14 @@ def check(n=30, seed=1):
     res = pool_map(ps)
     out = {a: {d: rates([r for p, r in res if p['arm'] == a and p['direction'] == d]) for d in ('off', 'onto')} for a in arms}
     real = {d: dict(n=v['n'], folded=v['folded'] / v['n'], dragged=v['dragged'] / v['n'], disturbed=(v['folded'] + v['dragged']) / v['n']) for d, v in REAL.items()}
-    json.dump(dict(label='SIMULATED cloth rug (rug_calib.py check), paired arms; real = data/recording_notes.csv flat-rug passes',
-                   fit=FIT, before=BEFORE, glide_caps_mu_assumed=CAPS_MU, glide_floor_mu=GLIDE_FLOOR_MU, real=real, arms=out,
-                   trials=[dict(p, **r) for p, r in res]), open(HERE / 'rug_calib.json', 'w'), indent=1)
+    trials = [dict(p, **r) for p, r in res]
+    json.dump(trials, open(HERE / 'rug_calib_trials.json', 'w'))
+    write(real, out, trials)
     print(f"{'':12s} {'off: fold drag disturbed':>28s}   {'onto: fold drag disturbed':>28s}")
     for a, v in [('REAL', real)] + list(out.items()):
         print(f"{a:12s} " + '   '.join(f"{v[d]['folded']:8.2f} {v[d]['dragged']:5.2f} {v[d]['disturbed']:9.2f} (n={v[d]['n']})" for d in ('off', 'onto')))
 
 
 if __name__ == '__main__':
-    {'grid': grid, 'check': check}[sys.argv[1]]()
+    {'grid': grid, 'check': check,   # rewrite: rug_calib.json from rug_calib_trials.json without re-running
+     'rewrite': lambda: write(*(lambda j, t: (j['real'], j['arms'], t))(json.load(open(HERE / 'rug_calib.json')), json.load(open(HERE / 'rug_calib_trials.json'))))}[sys.argv[1]]()

@@ -1,0 +1,156 @@
+{
+ "label": "SIMULATED cloth rug (rug_calib.py check), paired arms; real = data/recording_notes.csv flat-rug passes; trials in rug_calib_trials.json",
+ "fit": {
+  "mu_gr": [
+   0.35,
+   0.9
+  ],
+  "mu_rf": [
+   0.1,
+   0.3
+  ]
+ },
+ "before": {
+  "mu_gr": [
+   0.15,
+   0.45
+  ],
+  "mu_rf": [
+   0.15,
+   0.6
+  ]
+ },
+ "glide_caps_mu_assumed": [
+  0.1,
+  0.2
+ ],
+ "glide_floor_mu": 0.25,
+ "real": {
+  "off": {
+   "n": 7,
+   "folded": 0.8571428571428571,
+   "dragged": 0.14285714285714285,
+   "disturbed": 1.0
+  },
+  "onto": {
+   "n": 1,
+   "folded": 0.0,
+   "dragged": 1.0,
+   "disturbed": 1.0
+  }
+ },
+ "arms": {
+  "before": {
+   "off": {
+    "n": 30,
+    "folded": 0.03333333333333333,
+    "dragged": 0.36666666666666664,
+    "disturbed": 0.4,
+    "reached": 0.7333333333333333,
+    "fold_h_m": [
+     0.0402944863356849,
+     0.0402944863356849,
+     0.0402944863356849
+    ]
+   },
+   "onto": {
+    "n": 30,
+    "folded": 0.4,
+    "dragged": 0.23333333333333334,
+    "disturbed": 0.6333333333333333,
+    "reached": 0.9666666666666667,
+    "fold_h_m": [
+     0.02453964251272334,
+     0.03581387322931935,
+     0.043944405372582436
+    ]
+   }
+  },
+  "fitted": {
+   "off": {
+    "n": 30,
+    "folded": 0.0,
+    "dragged": 0.7,
+    "disturbed": 0.7,
+    "reached": 0.6666666666666666,
+    "fold_h_m": null
+   },
+   "onto": {
+    "n": 30,
+    "folded": 0.0,
+    "dragged": 0.8,
+    "disturbed": 0.8,
+    "reached": 0.9666666666666667,
+    "fold_h_m": null
+   }
+  },
+  "glide_caps": {
+   "off": {
+    "n": 30,
+    "folded": 0.2,
+    "dragged": 0.4666666666666667,
+    "disturbed": 0.6666666666666666,
+    "reached": 0.6666666666666666,
+    "fold_h_m": [
+     0.03167414660574128,
+     0.03901194653410321,
+     0.06892068489543454
+    ]
+   },
+   "onto": {
+    "n": 30,
+    "folded": 0.7333333333333333,
+    "dragged": 0.06666666666666667,
+    "disturbed": 0.8,
+    "reached": 0.9666666666666667,
+    "fold_h_m": [
+     0.0382270779264104,
+     0.0438764544954862,
+     0.07797462203785249
+    ]
+   }
+  },
+  "taped": {
+   "off": {
+    "n": 30,
+    "folded": 0.0,
+    "dragged": 0.03333333333333333,
+    "disturbed": 0.03333333333333333,
+    "reached": 0.7333333333333333,
+    "fold_h_m": null
+   },
+   "onto": {
+    "n": 30,
+    "folded": 0.0,
+    "dragged": 0.0,
+    "disturbed": 0.0,
+    "reached": 0.9666666666666667,
+    "fold_h_m": null
+   }
+  },
+  "wheels_only": {
+   "off": {
+    "n": 30,
+    "folded": 0.0,
+    "dragged": 0.0,
+    "disturbed": 0.0,
+    "reached": 0.8333333333333334,
+    "fold_h_m": null
+   },
+   "onto": {
+    "n": 30,
+    "folded": 0.0,
+    "dragged": 0.03333333333333333,
+    "disturbed": 0.03333333333333333,
+    "reached": 0.9666666666666667,
+    "fold_h_m": null
+   }
+  }
+ },
+ "fold_h_m": {
+  "n": 41,
+  "p10": 0.031114139662563357,
+  "p50": 0.04205496790103577,
+  "p90": 0.07634455303646501
+ }
+}
