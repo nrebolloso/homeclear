@@ -325,7 +325,7 @@ try {
   check('VR menu: the story, Vision and "More" on an arc to the left, nothing low; "More" shows the rest, "Back" returns',
     frontSet.length === 5 && frontSet.some((b: { t: string }) => b.t === 'More...') && placed(frontSet) && moreSet.some((b: { t: string }) => b.t === 'Hide this menu') && moreSet.some((b: { t: string }) => b.t === 'Cost & impact') &&
     moreSet.at(-1)?.t === 'Back' && placed(moreSet) && backSet.length === 5,
-    `front: ${frontSet.map((b: { t: string; z: number; a: number }) => `${b.t} ${b.z.toFixed(2)} m ${(b.a * 180 / Math.PI).toFixed(0)} deg`).join(', ')}; more: ${moreSet.map((b: { t: string }) => b.t).join(', ')} (lowest ${Math.min(...moreSet.map((b: { z: number }) => b.z)).toFixed(2)} m)`);
+    `front: ${frontSet.map((b: { t: string; z: number; a: number }) => `${b.t} ${b.z.toFixed(2)} m ${(b.a * 180 / Math.PI).toFixed(0)} deg`).join(', ')}; more: ${moreSet.map((b: { t: string }) => b.t).join(', ')} (lowest ${Math.min(...moreSet.map((b: { z: number }) => b.z)).toFixed(2)} m, angles ${moreSet.map((b: { a: number }) => (b.a * 180 / Math.PI).toFixed(0)).join('/')} deg, placed=${placed(moreSet)}); back: ${backSet.length} cards`);
 
   // 9d. Modes stay visible once on: Vision (a card badge plus the chip), Night; the stats card shows only with a fix applied;
   // the off-hand grip (squeezed with the walker handle) never brings the cards up; none of it takes a ray hit

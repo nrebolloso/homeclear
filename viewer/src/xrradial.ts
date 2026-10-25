@@ -170,11 +170,15 @@ export function radialMenu(scene: THREE.Scene, name: string) {
     } else {
       const items = page(), raw = sliceAt(pad?.axes[2] ?? 0, pad?.axes[3] ?? 0, items.length), i = raw === skip ? -1 : raw;
       if (raw !== skip) skip = -2;
+      // Letting go of the stick click lifts the thumb off the stick, so the axes usually re-centre in the very frame the
+      // click releases. Choose the slice that was lit coming into this frame, not the one the centred stick now reads:
+      // a stick deliberately centred for a frame before the release still leaves lit = -1 here, and so still closes.
+      const lit = hot;
       if (i !== hot) { hot = i; dwell = 0; armed = true; if (i >= 0) pulse(pad, 0.15, 12); }
       const deeper = hot >= 0 && (items[hot] === back || !!items[hot].items);
       if (deeper && armed && (dwell += dt) >= OPEN_DWELL_S) { turn(items[hot] === back ? null : items[hot], pad); ev = 'turn'; }
       else if (down && !wasDown) fresh = true;   // a new click while it stays open: its release chooses
-      else if (!down && wasDown) { held = 0; if (!latched || fresh) ev = choose(items, hot, pad); fresh = false; }
+      else if (!down && wasDown) { held = 0; if (!latched || fresh) ev = choose(items, lit, pad); fresh = false; }
     }
     wasDown = down;
     mesh.visible = open;
