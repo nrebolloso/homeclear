@@ -31,6 +31,9 @@ clean:
   ceiling_m: 6.0      # 2 floors at ~3 m floor-to-floor (ASSUMED) + headroom
   floater_voxel_m: 0.05
   floater_min_neighbours: 8
+  lighter_camera_clear_m: 0.4   # viewer-only: fog along the phone path; 0.6 ate the blinds wall the phone passed close to
+  lighter_crop_m: 0.3   # viewer-only: blobs past the floor grid ringed the room from above
+  lighter_air: {min_opacity: 0.15, max_scale_m: 0.08}   # viewer-only: faint/large haze above the floor band; 0.4 / 4 cm stripped the blinds
 floor:
   ransac_iters: 2000
   inlier_m: 0.02
