@@ -107,7 +107,7 @@ export function createFuturesFan(D: FanDeps) {
         const hit = F!.futures.some(f => F!.routes[f.route] === r && f.p >= P_RED / 2), c = card([`${r.label} · ${r.n}/${F!.futures.length}`], hit ? '#ffd0d0' : '#c8ffd8', 'rgba(14,20,28,0.7)', 0.05);
         c.position.set(r.tip[0], r.tip[1], 0.5); c.renderOrder = 6; root.add(c); return [c];
       }) : [];
-      label = card(lines, F.catches_month >= 0.1 ? '#ffd0d0' : '#c8ffd8', 'rgba(14,20,28,0.78)', 0.07); label.renderOrder = 6; root.add(label);
+      label = card(lines, F.catches_month >= 0.1 ? '#ffd0d0' : '#c8ffd8', 'rgba(14,20,28,0.78)', 0.035); label.renderOrder = 6; root.add(label);
     }
     const s = $('fanstatus'); if (s) s.textContent = `${lines.slice(0, -2).join(' · ')} · ${spotRate(F, held)} (${n} sampled, ${ms.toFixed(0)} ms in the worker${F.path === 'heading' ? ', off the route: straight ahead' : ''}; route odds: ASSUMPTION, from path length)`;
   }
@@ -117,9 +117,9 @@ export function createFuturesFan(D: FanDeps) {
     const fps = D.fps();
     if (!on) { if (fps > 0) offFps = offFps ? 0.95 * offFps + 0.05 * fps : fps; return; }   // smoothed: the page-load dip doesn't set the budget
     const b = D.body();
-    // above the fan, just ahead of the frame: over the body it sits behind the third-person camera's look point and is clipped
-    const w = D.walker(), ahead = w.user_gap_m + w.depth_m / 2 + 0.6;
-    if (label) label.position.set(b.x + ahead * Math.cos(b.yaw), b.y + ahead * Math.sin(b.yaw), 1.6);
+    // ahead of the fan and below eye height: nearer or higher it filled the first-person view and ran off the top
+    const w = D.walker(), ahead = w.user_gap_m + w.depth_m / 2 + 1.6;
+    if (label) label.position.set(b.x + ahead * Math.cos(b.yaw), b.y + ahead * Math.sin(b.yaw), 1.25);
     // adaptive count: drop 5 futures while the frame rate is >10% under the fan-off rate, add back when there's room
     // (the mean over the 2 s window: single 1 s readings jitter by more than 10% and would ratchet the count down)
     fpsT += dt; fpsSum += fps * dt;
