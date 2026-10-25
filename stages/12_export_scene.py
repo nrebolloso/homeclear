@@ -232,6 +232,8 @@ def half_extent(v):
 def joined(xyz, seed, cand, vox=0.03):
     """cand points 26-connected (vox grid) through seed or cand points to a seed point."""
     m = seed | cand
+    if not m.any():   # an object whose detected parts left no Gaussians (kitchen5): nothing joins
+        return np.zeros(len(xyz), bool)
     q = np.floor((xyz[m] - xyz[m].min(0)) / vox).astype(int)
     grid = np.zeros(q.max(0) + 1, int)
     grid[tuple(q.T)] = 1
@@ -331,7 +333,9 @@ def main(cfg):
         (x0, y0), (x1, y1) = np.sort(np.array(o["box_xy"], float), 0)
         inbox = lambda m: (xyz[:, 0] >= x0 - m) & (xyz[:, 0] <= x1 + m) & (xyz[:, 1] >= y0 - m) & (xyz[:, 1] <= y1 + m)
         sel = ~taken & object_parts(o, xyz, g, w, lo, cell, shape, v)
-        assert (sel & solid).sum() > 10, f"object {o['name']}: no Gaussians in its box"
+        if (sel & solid).sum() <= 10:   # detected, then cleaned away (kitchen5 bedside_table): no movable object to export
+            print(f"WARN object {o['name']}: no Gaussians in its box, skipped")
+            continue
         taken |= sel
         pivot = np.array([(x0 + x1) / 2, (y0 + y1) / 2, 0.0])
         ov = v[sel].copy()
