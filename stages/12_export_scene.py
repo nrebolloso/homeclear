@@ -167,15 +167,22 @@ def config_objects(gm, w):
     area = lambda o: sum(abs(np.cross(*np.c_[np.array(q["poly_xy"])[1:3] - np.array(q["poly_xy"])[0], [0, 0]])[2]) for q in o["parts"])
     label = lambda o: o.get("detected_as", o["kind"])
     inside = lambda h, c: any(Path2d(q["poly_xy"]).contains_point(c) for q in h["parts"])
+    def absorb(host, o):
+        host["instances"] = host.get("instances", [host["instance"]]) + o.get("instances", [o["instance"]])
+        host["parts"] = host["parts"] + o["parts"]
+        b = np.array(host["box_xy"] + o["box_xy"], float)
+        host["box_xy"] = [b.min(0).round(3).tolist(), b.max(0).round(3).tolist()]
+        objs.remove(o)
     for o in sorted([o for o in objs if "instance" in o and o["kind"] != "rug"], key=area):
         c = np.mean([np.mean(q["poly_xy"], 0) for q in o["parts"]], 0)
         host = next((h for h in objs if h is not o and label(h) == label(o) and "instance" in h and area(h) >= area(o) and inside(h, c)), None)
         if host:
-            host["instances"] = host.get("instances", [host["instance"]]) + o.get("instances", [o["instance"]])
-            host["parts"] = host["parts"] + o["parts"]
-            b = np.array(host["box_xy"] + o["box_xy"], float)
-            host["box_xy"] = [b.min(0).round(3).tolist(), b.max(0).round(3).tolist()]
-            objs.remove(o)
+            absorb(host, o)
+    # game.merge_into {part: whole}: a piece 6c labelled as something else (aleroom: the bed's headboard as a bedside table)
+    for part, whole in gm.get("merge_into", {}).items():
+        o, host = (next((h for h in objs if h["name"] == n), None) for n in (part, whole))
+        if o and host:
+            absorb(host, o)
     for o in [o for o in objs if "instance" in o and o["kind"] == "rug"]:
         c = np.mean([np.mean(q["poly_xy"], 0) for q in o["parts"]], 0)
         host = next((h for h in objs if h is not o and h["kind"] == "rug" and "instance" in h and inside(h, c)), None)

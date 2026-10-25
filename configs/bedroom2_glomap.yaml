@@ -108,4 +108,5 @@ game:
         height_m: [0, 0.0025, 0.005, 0.0075, 0.01, 0.0125, 0.015, 0.02, 0.03, 0.05]
         p_per_stride: [0, 8.71e-06, 0.000241, 0.000875, 0.00168, 0.00242, 0.00302, 0.00381, 0.00442, 0.00463]
   objects: []   # new scene: stage 6c detections / hand picks fill this after the splat
+  merge_into: {bedside_table2: bed}   # 6c saw the bed's headboard as a bedside table (user, 2026-10-25)
   interventions: []
