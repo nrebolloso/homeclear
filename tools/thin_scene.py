@@ -52,7 +52,7 @@ def main():
     assert dst != src, "--out would overwrite the source scene"
 
     shown = [(sc["splat"], 1.0)] + [(o["splat"], a.object_boost) for o in sc["objects"]]
-    hidden = [o["fill"] for o in sc["objects"] if o.get("fill")] + [sc[k] for k in ("imagined_ceiling", "removed_splat") if sc.get(k)]
+    hidden = [o["fill"] for o in sc["objects"] if o.get("fill")] + [sc[k] for k in ("imagined_ceiling", "imagined_floor", "removed_splat") if sc.get(k)]
     verts = {f: read_ply(src / f) for f, _ in shown}
     scores = {f: importance(verts[f]) * boost for f, boost in shown}
     total = sum(len(v) for v in verts.values())

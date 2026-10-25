@@ -152,6 +152,8 @@ const PARAMS = new URLSearchParams(location.search);
 // Deja View's ceiling fill (tools/dv_ceiling.py): the ceiling was never filmed, so this plane is imagined, tinted pink
 const ceiling = sc.imagined_ceiling ? splat(sc.imagined_ceiling) : null;
 if (ceiling) { ceiling.recolor = new THREE.Color(1, 0.8, 0.95); scene.add(ceiling); }
+// floor the scan never saw (tools/imagined_floor.py, e.g. a plain stair landing): imagined, tinted like the object fills
+if (sc.imagined_floor) { const f = splat(sc.imagined_floor); f.recolor = new THREE.Color(1, 0.9, 1); scene.add(f); }
 if (sc.removed_splat && PARAMS.has('removed')) {   // cleanup before/after: what stage 5b dropped, tinted magenta
   const r = splat(sc.removed_splat);
   r.recolor = new THREE.Color(1, 0.2, 1);

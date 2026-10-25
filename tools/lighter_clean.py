@@ -35,24 +35,46 @@ def neighbours(p):
 
 
 def in_box(p, b):
-    """Points inside box b = {center: [x,y,z], size: [lx,ly,lz], yaw_deg} (floor frame, size along its own yawed axes)."""
-    c, s, a = np.array(b["center"], float), np.array(b["size"], float), np.radians(b.get("yaw_deg", 0))
+    """Points inside box b = {center: [x,y,z], size: [lx,ly,lz], yaw_deg, pitch_deg} (floor frame, size along its own
+    axes: yawed about z, then pitched so +x climbs; pitch fits a box to a stair flight)."""
+    c, s, a, t = (np.array(b["center"], float), np.array(b["size"], float), np.radians(b.get("yaw_deg", 0)),
+                  np.radians(b.get("pitch_deg", 0)))
     d = p - c
-    loc = np.c_[d[:, 0] * np.cos(a) + d[:, 1] * np.sin(a), -d[:, 0] * np.sin(a) + d[:, 1] * np.cos(a), d[:, 2]]
+    x, y = d[:, 0] * np.cos(a) + d[:, 1] * np.sin(a), -d[:, 0] * np.sin(a) + d[:, 1] * np.cos(a)
+    loc = np.c_[x * np.cos(t) + d[:, 2] * np.sin(t), y, -x * np.sin(t) + d[:, 2] * np.cos(t)]
     return (np.abs(loc) <= s / 2).all(1)
 
 
 def crop_air_drop(v, p, clean, grid):
     """Gaussians that show as blobs from above: past the floor grid + lighter_crop_m (background seen through doors), and
-    faint/large haze above the floor band (lighter_air: {min_opacity, max_scale_m})."""
+    faint/large haze above the floor band (lighter_air: {min_opacity, max_scale_m}), and unsupported haze
+    (lighter_support, below)."""
     drop = np.zeros(len(v), bool)
-    crop, air = clean.get("lighter_crop_m"), clean.get("lighter_air")
+    crop, air, sup = clean.get("lighter_crop_m"), clean.get("lighter_air"), clean.get("lighter_support")
     if crop is not None:
         lo = np.array(grid["origin_xy"]); hi = lo + np.array(grid["shape"]) * grid["cell_m"]
         drop |= ((p[:, :2] < lo - crop) | (p[:, :2] > hi + crop)).any(1)
     if air:
         op, big_s = 1 / (1 + np.exp(-v["opacity"])), np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)).max(1)
         drop |= (p[:, 2] > FLOOR_BAND_M) & ((op < air["min_opacity"]) | (big_s > air["max_scale_m"]))
+    if sup:
+        # {radius_m, min_solid, max_scale_m, keep_max_scale_m, keep_boxes}: above the floor band and outside keep_boxes,
+        # drop Gaussians with < min_solid small opaque ones within radius_m, or larger than max_scale_m. Plain faint
+        # surfaces (treads, landings) fail that test, so keep_boxes around them only drop > keep_max_scale_m streaks.
+        op, big_s = 1 / (1 + np.exp(-v["opacity"])), np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)).max(1)
+        solid = p[(op > 0.5) & (big_s < 0.03)]
+        n = cKDTree(solid).query_ball_point(p, sup["radius_m"], return_length=True) if len(solid) else np.zeros(len(p))
+        keep = np.zeros(len(p), bool)
+        for b in sup.get("keep_boxes", []):
+            keep |= in_box(p, b)
+        air_m = (p[:, 2] > FLOOR_BAND_M) & ~keep
+        drop |= np.where(air_m, (n < sup["min_solid"]) | (big_s > sup["max_scale_m"]), big_s > sup["keep_max_scale_m"])
+        # haze_boxes (air around thin rails, inside keep_boxes): unsupported discs drop there, thin lines stay
+        haze = np.zeros(len(p), bool)
+        for b in sup.get("haze_boxes", []):
+            haze |= in_box(p, b)
+        mid = np.sort(np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)), 1)[:, 1]
+        drop |= haze & (n < sup["min_solid"]) & (mid > sup.get("haze_disc_m", 0))
     return drop
 
 
@@ -97,4 +119,5 @@ def main():
 if __name__ == "__main__":
     assert (neighbours(np.array([[0, 0, 0], [0.01, 0, 0], [5, 5, 5.]])) == [2, 2, 1]).all()   # self-check
     assert (in_box(np.array([[0.9, 0.9, 0], [0, 1.4, 0], [1.4, 0, 0.]]), {"center": [0, 0, 0], "size": [3, 0.4, 1], "yaw_deg": 45}) == [1, 0, 0]).all()
+    assert (in_box(np.array([[1, 0, 1.], [1, 0, 0]]), {"center": [0, 0, 0], "size": [4, 1, 0.2], "pitch_deg": 45}) == [1, 0]).all()
     main()
