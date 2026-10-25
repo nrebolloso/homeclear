@@ -54,8 +54,19 @@
    snags/brushes dominate (60.91 = 0.07 toe catches + the rest), so the option "least effort for 20% less risk" cuts the
    objective without saving any toe catches. The demo now leads with toe catches/month everywhere; changing the objective
    means a new B200 search.
-16. **Merge `rug-calibration` into `wm-planner` (yours; its BLOCKERS 17).** Without it the round trip cannot fold the mat (the
-   Rapier flap: 0/8 inbound legs). A trial merge in a scratch worktree (discarded) worked with the recipe there plus the
-   fan hook `fold: () => live?.fold() ?? layout.folds?.[0] ?? null`: tsc clean, and with `?rugfold=1` the mat folded at the
-   end of the inbound leg in 4/4 runs and the outbound fan showed "folded corner". After the merge, re-record
-   `futures_fan.mp4` with `&rugfold=1` so the fold is in the video.
+16. **A real glide-cap / tennis-ball pass (rug-calibration).** Slit two tennis balls (or fit glide caps) onto the rear
+   legs and push off the same loose rug at normal speed, floor camera plus wide, 3 or more passes. The sim's caps value
+   (glide-rug friction 0.10-0.20, `CAPS_MU` in `physics/rug_calib.py`) is ASSUMED, and with it the sim says caps barely
+   help (P(fold or drag) ratio 0.98, against 0.02 for taping the edge). Only friction changes in the sim: a tennis ball's
+   ~6.7 cm diameter, which rides up over the edge, is not modeled, so the real pass may well disagree. Drop the floor clip
+   in `data/walker_rug/floor/`, add a row to `data/recording_notes.csv`, then
+   `MUJOCO_GL=egl python tools/rug_video.py --caps data/walker_rug/floor/<clip>.mp4` fills the empty slot in
+   `proof/demo/real_vs_sim_rug.mp4`. If the caps fold less, model the ball's geometry, not just its friction.
+17. **The rug count is 8, not 9 (rug-calibration).** `data/recording_notes.csv` has 8 passes over a flat loose rug (7 off,
+   1 onto), and all 8 disturbed it (6 folded, 2 dragged). 1000101386 started pre-folded (the wheel rolled over, the fold
+   stayed) and 1000101389 is bare floor (clean). If there is a ninth pass, add its row; `physics/rug_calib.py rewrite`
+   recomputes the real rates.
+18. **No wide view for 1000101380.** IMG_6800 was not uploaded; the pair stays floor-only.
+19. **"Maui's effort model" was not found.** No `effort.ts` (TM2's `moveEffort`) on any branch, so the glide-caps fix uses the
+   planner's existing scale: $8, 5 min, effort 1 (`configs/planner/kitchen4_lighter.json`, `options.walker.caps`). Swap in
+   the real numbers once `effort.ts` lands.

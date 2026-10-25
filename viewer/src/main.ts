@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { stamp, carvedPolys, placementOk, polyCells, edt, worldFootprint, toCell, applyIntervention, placedFixtures, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
+import { stamp, stampFolds, carvedPolys, placementOk, polyCells, edt, worldFootprint, toCell, applyIntervention, placedFixtures, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
 import { buildDevice as deviceMesh, type WalkerCfg } from './walker.ts';
 import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
 import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z, WHEEL_R } from './wheelchair.ts';
@@ -54,6 +54,7 @@ import { createGaitFit } from './gaitfit.ts';
 import { createWmGhosts } from './wmghosts.ts';
 import { createFuturesFan } from './futuresfan.ts';
 import { createRoundTrip } from './roundtrip.ts';
+import { createRugCascade, P_FOLD } from './rugcascade.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 // model and scene text (Cosmos Reason notes, hazard details) goes into innerHTML escaped; same as report.ts's, which can't
@@ -325,6 +326,7 @@ function replanRoute(k: number) {
 async function replan(): Promise<number> {
   const t = performance.now();
   L = stamp(g, base, objs, layout.poses, layout.flattened, carvedPolys(layout));
+  stampFolds(g, L.bump, layout.folds);
   updateHeights();
   const id = seq + 1;
   latestEval = id;
@@ -1399,7 +1401,7 @@ game.livephys = live;
 let fanFor: unknown = null, fanSc: any = null;
 const fanFan = createFuturesFan({ scene, walker: () => walkerCfg, worldModel,
   fanScene: () => (fanFor === persona ? fanSc : (fanFor = persona, fanSc = { g, base, est, objects: objs, persona, risk, rules: sc.hazard_rules, plan: init.plan })),
-  body: () => explore.parked ?? body, route: () => (current && !current.error ? (mode === 'auto' ? trip.route(current.xy) : current.xy) : null), fold: () => live?.fold() ?? null,
+  body: () => explore.parked ?? body, route: () => (current && !current.error ? (mode === 'auto' ? trip.route(current.xy) : current.xy) : null), fold: () => live?.fold() ?? layout.folds?.[0] ?? null,
   layout: () => ((tc as any).dragging && selected >= 0 ? { ...layout, poses: layout.poses.map((p, k) => (k === selected ? poseOf(k) : p)) } : layout),   // live while dragging
   night: () => routes[selRoute].night, fps: () => game.fps });
 $('fanon').onchange = e => fanFan.set((e.target as HTMLInputElement).checked);
@@ -2069,6 +2071,31 @@ function driveFree(dt: number) {
 }
 addEventListener('blur', () => keys.clear());   // a key released in another window must not leave the chair rolling
 
+// ---------- rug fold cascade in autoplay (rugcascade.ts): a corner folded on one pass is a taller bump on the next ----------
+// on with ?rugfold=1 or game.rugFolds.set(true); off by default so the e2e numbers stay fixed
+const rugCascade = createRugCascade(objs.flatMap((o, k) => (o.kind === 'rug' ? [{ index: k, poly: (p: Pose) => worldFootprint(o, p) }] : [])));
+const foldMark = new THREE.Mesh(new THREE.CircleGeometry(1, 32), new THREE.MeshBasicMaterial({ color: 0xff3030, transparent: true, opacity: 0.55, depthWrite: false }));
+foldMark.visible = false; foldMark.renderOrder = 2; scene.add(foldMark);
+let rugOn = PARAMS.has('rugfold'), atEnd = false;
+function rugLap() {   // a pass ends when autoplay's end pause gives way to the restart
+  if (autoPause > 0) { atEnd = true; return; }
+  if (!atEnd || !rugOn || !current || current.error) return;
+  atEnd = false;
+  const next = rugCascade.lap(current.xy, layout);
+  if (!next) return;
+  layout = next;
+  replan().then(() => {
+    const f = layout.folds?.[0];
+    if (f) $('status').textContent += ` · rug corner folded on pass ${rugCascade.passes} (P ${P_FOLD.toFixed(2)} per edge crossing, measured; lift ${(f.lift_m * 100).toFixed(1)} cm, simulated)`;
+  });
+}
+function drawFold() {
+  const f = layout.folds?.[0];
+  foldMark.visible = !!f;
+  if (f) { foldMark.position.set(f.corner[0], f.corner[1], f.lift_m + 0.01); foldMark.scale.setScalar(f.size_m); }
+}
+game.rugFolds = { set(on: boolean) { rugOn = on; }, on: () => rugOn, passes: () => rugCascade.passes, folds: () => layout.folds ?? [],
+  clear() { layout = { ...layout, folds: [] }; rugCascade.reset(); return replan(); } };
 function freeStep(dt: number) {
   if (isChair()) return driveFree(dt);
   const k = (c: string) => keys.has(c);
@@ -2212,7 +2239,8 @@ function frame(now: number) {
 function step(dt: number, t: number) {
   frontendVR?.update();
   if (xr.presenting()) return xrFrame(dt, t);
-  if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
+  if (mode === 'auto') { autoStep(dt); rugLap(); } else if (mode === 'fly') flyStep(dt); else freeStep(dt);
+  drawFold();
   tourStep(dt);
   wmg.update(dt);
   fanFan.update(dt);

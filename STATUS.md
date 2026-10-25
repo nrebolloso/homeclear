@@ -1,5 +1,41 @@
 # Status
 
+## While you were out (rug-calibration)
+- **Done:** rug physics calibrated against 8 real flat-rug passes; fold cascade in autoplay (folds the mat on pass 2 in kitchen4_lighter); glide caps as a planner fix next to "tape the mat edge"; `proof/demo/real_vs_sim_rug.mp4` and `proof/demo/broll/` (16 clips).
+- **In progress:** cluster rug batch, job 47577456 (50 tasks x 40 trials: calibrated, glide caps, tape, wheels only, bare floor, both directions, 200 paired draws each); `python physics/rug_calib.py summarize out/rug_batch` writes `physics/rug_batch.json`. The branch passes `npm test` (166) and `npm run build`; a trial merge with wm-planner passes 172/172 and the build.
+- **Needs me:** BLOCKERS 13-17: a real tennis-ball pass, the 8-vs-9 rug count, IMG_6800, the effort numbers, and the main.ts/planfix.ts merge with wm-planner.
+- **Risks:** the sim drags where the real rug folds (disturbance matches, fold shape doesn't); the caps value is assumed and friction-only, so "caps barely help" is a sim result to test, not a finding.
+- **Overlap with futures fan:** main.ts and planfix.ts conflict (resolution in BLOCKERS 17); grid.ts, planner.ts, engine.py and the kitchen4_lighter config auto-merge. No futures-fan files touched.
+
+## Glide caps friction (for the futures-fan branch)
+Glide caps / tennis balls on the rear legs = glide-rug friction **μ 0.10-0.20, ASSUMED** (PTFE-like on rug pile; not measured, no real caps pass yet). Without caps the calibrated glide-rug range is 0.35-0.9 (rug-floor 0.1-0.3). Source: `physics/rug_calib.py` `CAPS_MU`, `physics/rug_calib.json` `glide_caps_mu_assumed`; the viewer reads the ratio as `CAPS_FACTOR` (`viewer/src/rugcascade.ts`).
+
+## Rug calibration (branch `rug-calibration`, not merged to demo-safe)
+- **Data:** `data/walker_rug/pairs.csv` (floor/wide pairs, synced by audio cross-correlation, visual fallback), `data/recording_notes.csv` (tracked). 1000101382 / IMG_6801 syncs at -1.64 s (sure). The 6798 pair rechecked: audio -1.21 s, bracketed by the walker start/stop (-1.6 / -0.9 s), kept at -1.21 ±0.3 s.
+- **Physics** (`physics/rug_calib.py`, MuJoCo cloth rug, 30 paired trials per direction; ranges in `physics_ranges.json`: glide-rug friction 0.35-0.9, rug-floor 0.1-0.3):
+
+  | | off: fold / drag / disturbed | onto: fold / drag / disturbed |
+  |---|---|---|
+  | REAL | 0.86 / 0.14 / 1.00 (n=7) | 0 / 1.00 / 1.00 (n=1) |
+  | sim, uncalibrated | 0.03 / 0.37 / 0.40 | 0.40 / 0.23 / 0.63 |
+  | sim, fitted | 0 / 0.70 / 0.70 | 0 / 0.80 / 0.80 |
+  | sim, fitted + glide caps (μ 0.10-0.20, ASSUMED) | 0.20 / 0.47 / 0.67 | 0.73 / 0.07 / 0.80 |
+  | sim, fitted + taped edge | 0 / 0.03 / 0.03 | 0 / 0 / 0 |
+  | sim, front wheels only | 0 | 0 / 0.03 / 0.03 |
+
+  Rear glides are what disturb the rug (wheels only: ~0); bare floor is clean in both. The fit was not tuned to the single onto-rug take.
+- **Cascade** (`viewer/src/rugcascade.ts`, `?rugfold` or `game.rugFolds.set(true)`, off by default so e2e numbers hold): each edge crossing folds the nearest corner with P 0.75 (6/8, MEASURED); the fold is a 4.2 cm bump (sim median of folded passes, SIMULATED) reaching 15 cm (ASSUMED). It applies to whichever rug the route crosses, and clears when that rug moves, is removed or taped. In a trial merge with wm-planner, the mat folded on pass 2: toe contacts/month 1.21 → 1.72, and the futures fan logged 270 "folded corner" futures over 41 samples (0 before).
+- **Glide caps vs tape** (planner, kitchen4_lighter as scanned, 400 trips, seed 2; caps scale snags by the sim's 0.978):
+
+  | Layout | Risk/month | Snags | Cost |
+  |---|---|---|---|
+  | As scanned | 216.66 [206.0, 228.4] | 66.57 | |
+  | Tape the mat edge | 175.56 | 25.47 (-41.1) | $10, 10 min, effort 1 |
+  | Glide caps / tennis balls | 215.74 | 65.66 (-0.9) | $8, 5 min, effort 1 |
+
+  Both are in the planner's fix list and the OT report's ranked fixes.
+- **Proof:** `proof/demo/real_vs_sim_rug.mp4` (take 1000101382 floor + wide, the fitted sim pass dragging the edge 14 cm, and an empty slot for a tennis-ball pass; `tools/rug_video.py --caps` fills it). `proof/demo/broll/`: four fold takes' last 5 s, floor and wide, at speed and 0.5x (75 MB).
+
 ## Kitchen planner + gait personalization (branch `wm-planner`, 2026-10-24, not merged to demo-safe)
 - **Planner** (`planner/`, `viewer/src/planner.ts`, `planfix.ts`, `planworker.ts`). A layout is chair x/y on a 5 cm grid with yaw in 90° steps, plus the mat, cord and nightlight states. It is checked for overlaps, chairs within 0.8 m of the table, clear fridge-swing/sink/entrance zones, and a walker-feasible route. Scoring uses world-model rollouts with common seeds, snags from the MuJoCo tables, and contacts + snags + brushes per month with a CI; effort is tracked separately. B200 job 47465023 (Slurm): 65,528 layouts (63,354 valid), 102,528 evaluations, 12.76 M imagined trips, 1,233 s wall time (46.5 s GPU rollout, ~0.35 GPU-h). Risk across the search was 214 (197–233); the chosen option is 60.9 at effort 3.3. Outputs are in `out/planner/kitchen4_lighter/` (replay, Pareto front, job stats).
 - **Critic** (`planner/critic.py`, ONNX, inputs and outputs clamped to the training range). Held-out 20% (n = 12,670): MAE 1.38, RMSE 4.2 events/month, R² 0.987, Spearman 0.80. In the browser it searches thousands of layouts from the judge's layout and confirms the top 5 with real rollouts, so the AI's answer is never worse than the judge's. The OT report's ranked fixes now come from the planner.

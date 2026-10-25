@@ -1,0 +1,757 @@
+{
+ "label": "SIMULATED cloth rug (rug_calib.py grid): P(outcome) per friction cell, other parameters sampled",
+ "cells": [
+  {
+   "mu_gr": 0.1,
+   "mu_rf": 0.1,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.6666666666666666,
+   "disturbed": 0.6666666666666666,
+   "reached": 0.8333333333333334,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.1,
+   "mu_rf": 0.1,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.6666666666666666,
+   "dragged": 0.16666666666666666,
+   "disturbed": 0.8333333333333334,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.03835958634679385,
+    0.05203945052093602,
+    0.07357819932083867
+   ]
+  },
+  {
+   "mu_gr": 0.1,
+   "mu_rf": 0.2,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.16666666666666666,
+   "dragged": 0.5,
+   "disturbed": 0.6666666666666666,
+   "reached": 0.5,
+   "fold_h_m": [
+    0.015348886611638066,
+    0.015348886611638066,
+    0.015348886611638066
+   ]
+  },
+  {
+   "mu_gr": 0.1,
+   "mu_rf": 0.2,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.5,
+   "dragged": 0.16666666666666666,
+   "disturbed": 0.6666666666666666,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.0385350267915969,
+    0.04404686079290712,
+    0.05953552085879513
+   ]
+  },
+  {
+   "mu_gr": 0.1,
+   "mu_rf": 0.3,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.16666666666666666,
+   "dragged": 0.3333333333333333,
+   "disturbed": 0.5,
+   "reached": 0.8333333333333334,
+   "fold_h_m": [
+    0.031694954396007086,
+    0.031694954396007086,
+    0.031694954396007086
+   ]
+  },
+  {
+   "mu_gr": 0.1,
+   "mu_rf": 0.3,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.5,
+   "dragged": 0.3333333333333333,
+   "disturbed": 0.8333333333333334,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.033942107491202606,
+    0.038121015359249916,
+    0.06880159044907885
+   ]
+  },
+  {
+   "mu_gr": 0.1,
+   "mu_rf": 0.45,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.0,
+   "disturbed": 0.0,
+   "reached": 0.8333333333333334,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.1,
+   "mu_rf": 0.45,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.0,
+   "disturbed": 0.0,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.1,
+   "mu_rf": 0.6,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.0,
+   "disturbed": 0.0,
+   "reached": 0.6666666666666666,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.1,
+   "mu_rf": 0.6,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.0,
+   "disturbed": 0.0,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.2,
+   "mu_rf": 0.1,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.3333333333333333,
+   "dragged": 0.3333333333333333,
+   "disturbed": 0.6666666666666666,
+   "reached": 0.8333333333333334,
+   "fold_h_m": [
+    0.04106828903437809,
+    0.04195386320383786,
+    0.04283943737329762
+   ]
+  },
+  {
+   "mu_gr": 0.2,
+   "mu_rf": 0.1,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.3333333333333333,
+   "dragged": 0.16666666666666666,
+   "disturbed": 0.5,
+   "reached": 0.6666666666666666,
+   "fold_h_m": [
+    0.03066642951488751,
+    0.031053632915953117,
+    0.031440836317018724
+   ]
+  },
+  {
+   "mu_gr": 0.2,
+   "mu_rf": 0.2,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.6666666666666666,
+   "disturbed": 0.6666666666666666,
+   "reached": 0.8333333333333334,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.2,
+   "mu_rf": 0.2,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.5,
+   "dragged": 0.16666666666666666,
+   "disturbed": 0.6666666666666666,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.03433340800186879,
+    0.041997270009966337,
+    0.05010929054697334
+   ]
+  },
+  {
+   "mu_gr": 0.2,
+   "mu_rf": 0.3,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.16666666666666666,
+   "dragged": 0.8333333333333334,
+   "disturbed": 1.0,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.03153883182605131,
+    0.03153883182605131,
+    0.03153883182605131
+   ]
+  },
+  {
+   "mu_gr": 0.2,
+   "mu_rf": 0.3,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.5,
+   "dragged": 0.16666666666666666,
+   "disturbed": 0.6666666666666666,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.02172498973514729,
+    0.0314258935243296,
+    0.04090225602020417
+   ]
+  },
+  {
+   "mu_gr": 0.2,
+   "mu_rf": 0.45,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.0,
+   "disturbed": 0.0,
+   "reached": 0.5,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.2,
+   "mu_rf": 0.45,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.3333333333333333,
+   "dragged": 0.0,
+   "disturbed": 0.3333333333333333,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.03199011644657695,
+    0.03219098605698068,
+    0.032391855667384416
+   ]
+  },
+  {
+   "mu_gr": 0.2,
+   "mu_rf": 0.6,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.0,
+   "disturbed": 0.0,
+   "reached": 0.8333333333333334,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.2,
+   "mu_rf": 0.6,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.0,
+   "disturbed": 0.0,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.35,
+   "mu_rf": 0.1,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.3333333333333333,
+   "dragged": 0.5,
+   "disturbed": 0.8333333333333334,
+   "reached": 0.8333333333333334,
+   "fold_h_m": [
+    0.0397275653489205,
+    0.04027860207157708,
+    0.04082963879423366
+   ]
+  },
+  {
+   "mu_gr": 0.35,
+   "mu_rf": 0.1,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.3333333333333333,
+   "dragged": 0.5,
+   "disturbed": 0.8333333333333334,
+   "reached": 0.8333333333333334,
+   "fold_h_m": [
+    0.033993345349029355,
+    0.037778177551872516,
+    0.041563009754715684
+   ]
+  },
+  {
+   "mu_gr": 0.35,
+   "mu_rf": 0.2,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 1.0,
+   "disturbed": 1.0,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.35,
+   "mu_rf": 0.2,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.6666666666666666,
+   "disturbed": 0.6666666666666666,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.35,
+   "mu_rf": 0.3,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.6666666666666666,
+   "disturbed": 0.6666666666666666,
+   "reached": 0.8333333333333334,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.35,
+   "mu_rf": 0.3,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.3333333333333333,
+   "dragged": 0.5,
+   "disturbed": 0.8333333333333334,
+   "reached": 0.8333333333333334,
+   "fold_h_m": [
+    0.05331968034597426,
+    0.08756929242315652,
+    0.12181890450033878
+   ]
+  },
+  {
+   "mu_gr": 0.35,
+   "mu_rf": 0.45,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.3333333333333333,
+   "disturbed": 0.3333333333333333,
+   "reached": 0.8333333333333334,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.35,
+   "mu_rf": 0.45,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.5,
+   "dragged": 0.16666666666666666,
+   "disturbed": 0.6666666666666666,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.02899526351291768,
+    0.03233429982735227,
+    0.03885645258560489
+   ]
+  },
+  {
+   "mu_gr": 0.35,
+   "mu_rf": 0.6,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.0,
+   "disturbed": 0.0,
+   "reached": 0.6666666666666666,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.35,
+   "mu_rf": 0.6,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.16666666666666666,
+   "dragged": 0.0,
+   "disturbed": 0.16666666666666666,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.02943397851402891,
+    0.02943397851402891,
+    0.02943397851402891
+   ]
+  },
+  {
+   "mu_gr": 0.5,
+   "mu_rf": 0.1,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.6666666666666666,
+   "disturbed": 0.6666666666666666,
+   "reached": 0.6666666666666666,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.5,
+   "mu_rf": 0.1,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.16666666666666666,
+   "dragged": 0.8333333333333334,
+   "disturbed": 1.0,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.04211084958146276,
+    0.04211084958146276,
+    0.04211084958146276
+   ]
+  },
+  {
+   "mu_gr": 0.5,
+   "mu_rf": 0.2,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.16666666666666666,
+   "dragged": 0.6666666666666666,
+   "disturbed": 0.8333333333333334,
+   "reached": 0.8333333333333334,
+   "fold_h_m": [
+    0.03750193318654093,
+    0.03750193318654093,
+    0.03750193318654093
+   ]
+  },
+  {
+   "mu_gr": 0.5,
+   "mu_rf": 0.2,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.16666666666666666,
+   "dragged": 0.5,
+   "disturbed": 0.6666666666666666,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.033710187218604346,
+    0.033710187218604346,
+    0.033710187218604346
+   ]
+  },
+  {
+   "mu_gr": 0.5,
+   "mu_rf": 0.3,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.8333333333333334,
+   "disturbed": 0.8333333333333334,
+   "reached": 0.8333333333333334,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.5,
+   "mu_rf": 0.3,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.3333333333333333,
+   "dragged": 0.6666666666666666,
+   "disturbed": 1.0,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.03548495189876114,
+    0.047100652718140346,
+    0.058716353537519556
+   ]
+  },
+  {
+   "mu_gr": 0.5,
+   "mu_rf": 0.45,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.6666666666666666,
+   "disturbed": 0.6666666666666666,
+   "reached": 0.6666666666666666,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.5,
+   "mu_rf": 0.45,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.16666666666666666,
+   "dragged": 0.16666666666666666,
+   "disturbed": 0.3333333333333333,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.03565578685286851,
+    0.03565578685286851,
+    0.03565578685286851
+   ]
+  },
+  {
+   "mu_gr": 0.5,
+   "mu_rf": 0.6,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.16666666666666666,
+   "disturbed": 0.16666666666666666,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.5,
+   "mu_rf": 0.6,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.16666666666666666,
+   "dragged": 0.0,
+   "disturbed": 0.16666666666666666,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.027051794678040073,
+    0.027051794678040073,
+    0.027051794678040073
+   ]
+  },
+  {
+   "mu_gr": 0.7,
+   "mu_rf": 0.1,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.8333333333333334,
+   "disturbed": 0.8333333333333334,
+   "reached": 0.8333333333333334,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.7,
+   "mu_rf": 0.1,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.6666666666666666,
+   "disturbed": 0.6666666666666666,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.7,
+   "mu_rf": 0.2,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 1.0,
+   "disturbed": 1.0,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.7,
+   "mu_rf": 0.2,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.8333333333333334,
+   "disturbed": 0.8333333333333334,
+   "reached": 0.8333333333333334,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.7,
+   "mu_rf": 0.3,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.6666666666666666,
+   "disturbed": 0.6666666666666666,
+   "reached": 0.6666666666666666,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.7,
+   "mu_rf": 0.3,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.16666666666666666,
+   "disturbed": 0.16666666666666666,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.7,
+   "mu_rf": 0.45,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.6666666666666666,
+   "disturbed": 0.6666666666666666,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.7,
+   "mu_rf": 0.45,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.16666666666666666,
+   "dragged": 0.3333333333333333,
+   "disturbed": 0.5,
+   "reached": 1.0,
+   "fold_h_m": [
+    0.031926230176918056,
+    0.031926230176918056,
+    0.031926230176918056
+   ]
+  },
+  {
+   "mu_gr": 0.7,
+   "mu_rf": 0.6,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.0,
+   "disturbed": 0.0,
+   "reached": 0.8333333333333334,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.7,
+   "mu_rf": 0.6,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.0,
+   "disturbed": 0.0,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.9,
+   "mu_rf": 0.1,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.8333333333333334,
+   "disturbed": 0.8333333333333334,
+   "reached": 0.8333333333333334,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.9,
+   "mu_rf": 0.1,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.8333333333333334,
+   "disturbed": 0.8333333333333334,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.9,
+   "mu_rf": 0.2,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 1.0,
+   "disturbed": 1.0,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.9,
+   "mu_rf": 0.2,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 1.0,
+   "disturbed": 1.0,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.9,
+   "mu_rf": 0.3,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 1.0,
+   "disturbed": 1.0,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.9,
+   "mu_rf": 0.3,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.6666666666666666,
+   "disturbed": 0.6666666666666666,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.9,
+   "mu_rf": 0.45,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.3333333333333333,
+   "disturbed": 0.3333333333333333,
+   "reached": 0.6666666666666666,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.9,
+   "mu_rf": 0.45,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.3333333333333333,
+   "disturbed": 0.3333333333333333,
+   "reached": 1.0,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.9,
+   "mu_rf": 0.6,
+   "direction": "off",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.16666666666666666,
+   "disturbed": 0.16666666666666666,
+   "reached": 0.8333333333333334,
+   "fold_h_m": null
+  },
+  {
+   "mu_gr": 0.9,
+   "mu_rf": 0.6,
+   "direction": "onto",
+   "n": 6,
+   "folded": 0.0,
+   "dragged": 0.0,
+   "disturbed": 0.0,
+   "reached": 1.0,
+   "fold_h_m": null
+  }
+ ]
+}
