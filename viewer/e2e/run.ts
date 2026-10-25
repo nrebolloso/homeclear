@@ -413,7 +413,7 @@ try {
     const r = await F(`const c = game.current(); await game.roundTrip.set(true); game.fan.set(true);
       const goal = c.xy.at(-1), start = c.xy[0], cen = b => [b.x + 0.5 * Math.cos(b.yaw), b.y + 0.5 * Math.sin(b.yaw)], d = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
       const b0 = cen(game.body); let prev = { ...game.body, t: performance.now() }, speed = 0, near = 9, legs = [game.roundTrip.leg()], fanIn = 0;
-      for (let i = 0; i < 100; i++) { await new Promise(r => setTimeout(r, 250)); const b = game.body, t = performance.now();
+      for (let i = 0; i < 240; i++) { await new Promise(r => setTimeout(r, 250)); const b = game.body, t = performance.now();   // a full in-out cycle is ~40 s
         speed = Math.max(speed, Math.hypot(b.x - prev.x, b.y - prev.y) / ((t - prev.t) / 1000)); prev = { ...b, t };
         const leg = game.roundTrip.leg(); if (leg !== legs.at(-1)) legs.push(leg); if (leg === 'in') near = Math.min(near, d(cen(b), start));
         const s = game.fan.state(); if (leg === 'in' && s.fan?.path === 'route') fanIn++;
