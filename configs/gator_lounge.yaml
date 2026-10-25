@@ -32,6 +32,8 @@ clean:
   ceiling_m: 4.0
   floater_voxel_m: 0.05
   floater_min_neighbours: 8
+  lighter_crop_m: 0.3   # viewer-only: blobs past the floor grid ringed the lounge from above
+  lighter_air: {min_opacity: 0.1, max_scale_m: 0.1}   # viewer-only: faint/large haze above the floor band; 0.4 / 4 cm made the sofas and walls see-through
   lighter_drop_boxes:   # viewer-only: blue haze discs between sofa2's back and the railing/drop behind it (camera never went
   # there; removing sofa2 left them floating). Strip 5-90 cm out from its back edge; discs only, the railing's thin parts stay
   - {center: [0.576, -3.661, 0.875], size: [3.7, 0.85, 1.45], yaw_deg: 32, min_mid_scale_m: 0.03}

@@ -42,6 +42,20 @@ def in_box(p, b):
     return (np.abs(loc) <= s / 2).all(1)
 
 
+def crop_air_drop(v, p, clean, grid):
+    """Gaussians that show as blobs from above: past the floor grid + lighter_crop_m (background seen through doors), and
+    faint/large haze above the floor band (lighter_air: {min_opacity, max_scale_m})."""
+    drop = np.zeros(len(v), bool)
+    crop, air = clean.get("lighter_crop_m"), clean.get("lighter_air")
+    if crop is not None:
+        lo = np.array(grid["origin_xy"]); hi = lo + np.array(grid["shape"]) * grid["cell_m"]
+        drop |= ((p[:, :2] < lo - crop) | (p[:, :2] > hi + crop)).any(1)
+    if air:
+        op, big_s = 1 / (1 + np.exp(-v["opacity"])), np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)).max(1)
+        drop |= (p[:, 2] > FLOOR_BAND_M) & ((op < air["min_opacity"]) | (big_s > air["max_scale_m"]))
+    return drop
+
+
 def main():
     cfg = yaml.safe_load(open(sys.argv[1]))
     raw = "--raw" in sys.argv
@@ -55,14 +69,8 @@ def main():
     if not raw and big:
         drop |= (p[:, 2] > big["z"]) & (np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)).max(1) > big["scale_m"])
     grid = json.loads((Path(cfg["work_dir"]) / "grid.json").read_text())
-    crop = cfg["clean"].get("lighter_crop_m")   # past the floor grid + margin: background seen through doors, blobs from above
-    if not raw and crop is not None:
-        lo = np.array(grid["origin_xy"]); hi = lo + np.array(grid["shape"]) * grid["cell_m"]
-        drop |= ((p[:, :2] < lo - crop) | (p[:, :2] > hi + crop)).any(1)
-    air = cfg["clean"].get("lighter_air")   # {min_opacity, max_scale_m}: faint/large haze above the floor band, shows from above
-    if not raw and air:
-        op, big_s = 1 / (1 + np.exp(-v["opacity"])), np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)).max(1)
-        drop |= (p[:, 2] > FLOOR_BAND_M) & ((op < air["min_opacity"]) | (big_s > air["max_scale_m"]))
+    if not raw:
+        drop |= crop_air_drop(v, p, cfg["clean"], grid)
     mid = np.sort(np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)), 1)[:, 1]
     for b in [] if raw else cfg["clean"].get("lighter_drop_boxes", []):   # hand-placed boxes of haze no rule catches
         drop |= in_box(p, b) & (mid >= b.get("min_mid_scale_m", 0))   # discs only: keeps thin real parts (rails) in the box
@@ -73,7 +81,8 @@ def main():
     (dst / "removed.ply").unlink(missing_ok=True)
     s = json.loads((dst / "scene.json").read_text())
     taken = np.zeros(len(v), bool)
-    for o, so in zip(export.config_objects(cfg["game"], cfg["work_dir"]), s["objects"]):   # same order as stage 12 wrote them
+    exported = {so["name"]: so for so in s["objects"]}   # stage 12 skips objects it found no Gaussians for
+    for o, so in [(o, exported[o["name"]]) for o in export.config_objects(cfg["game"], cfg["work_dir"]) if o["name"] in exported]:
         sel = ~drop & ~taken & export.object_parts(o, p, cfg["grid"], Path(cfg["work_dir"]), np.array(grid["origin_xy"]), grid["cell_m"], tuple(grid["shape"]), v)
         taken |= sel
         ov = v[sel].copy()
