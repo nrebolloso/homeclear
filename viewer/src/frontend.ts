@@ -274,7 +274,7 @@ export function mountFrontend(api: FrontendAdapter) {
     if (!options.length) { $('proposal-cards').innerHTML = '<div class="empty-state"><span aria-hidden="true">✧</span><h3>Make room for a better route</h3><p>Explore rearrangements and configured fixes. Each proposal is evaluated by the existing model.</p></div>'; return; }
     step = Math.min(step, options.length - 1);
     const { option: o } = options[step], mat = api.keepMat?.(), range = Number.isFinite(o.per_month_lo) ? `<span>${number(o.per_month_lo)}–${number(o.per_month_hi)}<small>Likely range</small></span>` : '';
-    $('proposal-cards').innerHTML = `<article class="proposal-card ${step === 0 ? 'recommended' : ''}"><div class="stepper"><button data-step="-1" aria-label="Previous proposal" ${step === 0 ? 'disabled' : ''}>‹</button><strong>Proposal ${step + 1} of ${options.length}</strong><button data-step="1" aria-label="Next proposal" ${step === options.length - 1 ? 'disabled' : ''}>›</button></div>` +
+    $('proposal-cards').innerHTML = `<article class="proposal-card ${step === 0 ? 'recommended' : ''}"><div class="stepper"><button data-step="-1" aria-label="Previous proposal" ${options.length < 2 ? 'disabled' : ''}>‹</button><strong>Proposal ${step + 1} of ${options.length}</strong><button data-step="1" aria-label="Next proposal" ${options.length < 2 ? 'disabled' : ''}>›</button></div>` +
       `<span class="badge">${step === 0 ? 'Recommended by model' : 'Alternative'}</span><h2>${h(o.name)}</h2><p>${o.actions.length} change${o.actions.length === 1 ? '' : 's'} · ${o.checks_failed} checks flagged</p><ol>${o.actions.map(a => `<li>${h(a.label)}</li>`).join('')}</ol>` +
       `<div class="proposal-metrics"><span>${number(o.per_month)}/month<small>Simulated contacts · all routes</small></span>${range}</div>` +
       (mat === null || mat === undefined ? '' : `<label><input type="checkbox" id="proposal-keepmat" ${mat ? 'checked' : ''}> Keep my mat</label>`) +
@@ -288,7 +288,7 @@ export function mountFrontend(api: FrontendAdapter) {
   }
   /** show proposal `to` in the room (nothing is committed) */
   async function go(options: { option: OptionOut; index: number }[], to: number, focus = '') {
-    if (to < 0 || to >= options.length) return;
+    to = (to + options.length) % options.length;   // the stepper wraps: Next on the last is the first, Previous on the first is the last
     step = to; stepFocus = focus; chosenOption = options[to].index;
     try { const shown = api.preview?.(options[to].index) ?? api.apply(options[to].index); previewedPlan = api.snapshot().planKey; await shown; previewedPlan = api.snapshot().planKey; announce(`Proposal ${to + 1} of ${options.length}: ${options[to].option.name}.`); }
     catch { notify('Proposal could not be loaded. Try generating again.'); }
