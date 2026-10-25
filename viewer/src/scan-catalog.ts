@@ -1,7 +1,7 @@
 // Shared desktop/headset catalog. Versions belong to rooms, not separate homes.
 export interface ScanEntry {
   id: string; room: string; title: string; version: string; sample: boolean;
-  objects: number; routes: boolean; fixes: boolean; scaleNote: string; bytes: number;
+  map?: string; objects: number; routes: boolean; fixes: boolean; scaleNote: string; bytes: number;
 }
 export function describeScan(id: string, sc: any, bytes = 0): ScanEntry {
   const sample = /^(game_synth|sample_|synthetic)/.test(id);
@@ -15,4 +15,4 @@ export function describeScan(id: string, sc: any, bytes = 0): ScanEntry {
 export function groupScans(entries: ScanEntry[]) {
   return [...new Set(entries.map(e => e.room))].map(room => ({ room, scans: entries.filter(e => e.room === room) }));
 }
-export function validScanId(id: string) { return /^[\w-]+$/.test(id); }
+export function validScanId(id: string) { return /^[A-Za-z0-9][\w.-]*$/.test(id) && !id.includes('..'); }

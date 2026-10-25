@@ -21,6 +21,8 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
   async function act(task: () => unknown) { try { await task(); } catch (error) { notice = String(error).slice(0, 90); } fingerprint = ''; }
   const hitTargets: THREE.Mesh[] = []; const disposable: { dispose(): void }[] = [];
   const inspectionRoot = new THREE.Group(); inspectionRoot.name = 'frontend-xr-inspection'; inspectionRoot.visible = false; D.scene.add(inspectionRoot);
+  const toastRoot = new THREE.Group(); toastRoot.name = 'frontend-xr-notice'; toastRoot.visible = false; D.scene.add(toastRoot);
+  const toastResources: { dispose(): void }[] = []; let toastUntil = 0;
   const inspectionResources: { dispose(): void }[] = []; let inspectionKey = '';
   const fade = new THREE.Mesh(new THREE.SphereGeometry(.2, 16, 12), new THREE.MeshBasicMaterial({ color: 0, side: THREE.BackSide, transparent: true, opacity: 0, depthTest: false, depthWrite: false }));
   fade.renderOrder = 100; fade.visible = false; D.scene.add(fade);
@@ -45,7 +47,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
     const geometry = new THREE.PlaneGeometry(width, height), material = new THREE.MeshBasicMaterial({ map: texture, depthTest: false, depthWrite: false, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geometry, material); mesh.position.set(x, y, 0); mesh.renderOrder = 10; mesh.userData.label = text; parent.add(mesh);
-    (parent === root ? disposable : inspectionResources).push(texture, geometry, material);
+    (parent === root ? disposable : parent === toastRoot ? toastResources : inspectionResources).push(texture, geometry, material);
     if (action) { mesh.userData.activate = action; hitTargets.push(mesh); }
   }
   function box(id: string) { return document.getElementById(id) as HTMLInputElement; }
@@ -106,7 +108,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
     } else if (page === 'changes') {
       rows([['Find proposed layouts', async () => { await D.adapter.suggest(); notice = 'Options ready. Choose on desktop or try proposed layout.'; }], ['Try proposed layout / restore room', () => game().debug.xrPress(2)], [s.comparison === 0 ? 'Show proposed' : 'Show original', () => D.adapter.compare(s.comparison === 0 ? 1 : 0)], ['Undo last edit', () => game().history.undo()], ['Redo last edit', () => game().history.redo()], ['Light the path at night', () => D.adapter.lightPath?.()], ['Changes & cost', () => go('costs')]]);
     } else if (page === 'comfort') {
-      rows([['Normal vision', () => game().setVision('normal')], ['Recenter at route start', () => game().recenter()], [`Movement: ${game().comfort?.movement ?? 'all'}`, () => game().comfort.cycle()], ['Toggle larger menu', () => { root.scale.setScalar(root.scale.x > 1 ? 1 : 1.2); }], ['Pause route', () => { if (!s.paused) D.adapter.pause(); }]]);
+      rows([['Normal vision', () => game().setVision('normal')], ['Recenter at route start', () => game().recenter()], [`Movement: ${game().comfort?.movement ?? 'all'}`, () => game().comfort.cycle()], ['Toggle larger menu', () => { root.scale.setScalar(root.scale.x > 1 ? 1 : 1.2); }], ['Pause route', () => { if (!s.paused) D.adapter.pause(); }], [game().comfort.seated ? 'Standing height' : 'Seated viewing height', () => { game().comfort.seated = !game().comfort.seated; }]]);
     } else if (page === 'bookmarks') {
       rows([['Save current viewpoint', () => { game().bookmarks.save(); notice = 'Viewpoint saved'; }], ...(game().bookmarks?.list() ?? []).map((b: any): Row => [b.label, () => { game().bookmarks.restore(b.id); close(); }])]);
     } else {
@@ -127,7 +129,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
   onThree(D.renderer.xr, 'sessionstart', () => { document.body.classList.add('xr-active'); close(); });
   onThree(D.renderer.xr, 'sessionend', () => { document.body.classList.remove('xr-active'); close(); inspectionRoot.visible = false; fade.visible = false; transition = null; consumed.clear(); stickWas = false; });
   return {
-    root, inspectionRoot, open, close, notify(text: string) { notice = text; fingerprint = ''; }, showPage(name: string) { go(name); open(); }, isOpen: () => root.visible,
+    root, inspectionRoot, open, close, notify(text: string) { notice = text; fingerprint = ''; toastRoot.clear(); toastResources.splice(0).forEach(r => r.dispose()); tile(text, 0, 0, .8, .13, undefined, false, toastRoot); toastUntil = performance.now() + 4500; }, showPage(name: string) { go(name); open(); }, isOpen: () => root.visible,
     transition(task: () => void) { transition = { start: performance.now(), task }; fade.visible = true; },
     activate(controller: THREE.XRTargetRaySpace) {
       if (!root.visible) return false;
@@ -136,6 +138,8 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
     release(controller: THREE.XRTargetRaySpace) { return consumed.delete(controller); },
     update() {
       if (!D.renderer.xr.isPresenting) return;
+      toastRoot.visible = performance.now() < toastUntil;
+      if (toastRoot.visible) { D.camera.getWorldPosition(v); D.camera.getWorldDirection(dir); toastRoot.position.copy(v).addScaledVector(dir, 1.3); toastRoot.position.z -= .3; toastRoot.quaternion.copy(D.camera.getWorldQuaternion(new THREE.Quaternion())); }
       if (transition) {
         const elapsed = (performance.now() - transition.start) / 160;
         D.camera.getWorldPosition(fade.position); (fade.material as THREE.MeshBasicMaterial).opacity = Math.min(1, elapsed < 1 ? elapsed : 2 - elapsed);

@@ -8,6 +8,6 @@ test('quality exports group under the same real room and capabilities come from 
   assert.equal(describeScan('game_synth', {}).sample, true);
 });
 test('scene identities cannot escape the scene directory', () => {
-  assert.equal(validScanId('juan_bedroom_bathroom'), true);
+  assert.equal(validScanId('juan_bedroom_bathroom'), true); assert.equal(validScanId('kitchen4_lighter_v1.0.3'), true);
   for (const id of ['../secret', 'room/file', '', 'a?b']) assert.equal(validScanId(id), false);
 });

@@ -55,6 +55,7 @@ export interface XrHost {
   /** A visual comparison is read-only; only the story-card buttons remain interactive. */
   readOnly?(): boolean;
   movement?(): 'all' | 'teleport' | 'physical';
+  eyeHeight?(): number | undefined;
   /** The planning shell (frontend-xr.ts) lays a menu over the wand: it can swallow a trigger press, freeze locomotion while
    *  its menu is open, drive the body along the route, and hears which furniture the wand points at. */
   shell?: XrShell;
@@ -92,7 +93,7 @@ export async function setupXR(host: XrHost) {
   const xrRig = { x: 0, y: 0, yaw: 0 };
   const TILT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2), UP = new THREE.Vector3(0, 0, 1);
   const placeRig = () => {
-    rig.position.set(xrRig.x, xrRig.y, 0);
+    rig.position.set(xrRig.x, xrRig.y, host.eyeHeight?.() == null ? 0 : Math.max(0, host.eyeHeight()! - camera.position.y));
     rig.quaternion.setFromAxisAngle(UP, xrRig.yaw - Math.PI / 2).multiply(TILT);
   };
   const head = new THREE.Vector3(), headDir = new THREE.Vector3();
@@ -127,7 +128,7 @@ export async function setupXR(host: XrHost) {
     ray.visible = false;
     group.add(ray); rig.add(group);
     const c: Ctl = { group, ray, source: [...renderer.xr.getSession()?.inputSources ?? []][i] };
-    own(() => { ray.removeFromParent(); group.removeFromParent(); });
+    own(() => { ray.removeFromParent(); ray.geometry.dispose(); (ray.material as THREE.Material).dispose(); group.removeFromParent(); });
     onThree(group, 'connected', e => { c.source = e.data; });
     onThree(group, 'disconnected', () => { if (isWand(c)) dropWand(); pinching.delete(c); c.source = undefined; });
     onThree(group, 'selectstart', () => { if (host.shell?.activate(group)) return; if (isMount(c)) return; isWand(c) ? wandDown(c) : pinching.add(c); });

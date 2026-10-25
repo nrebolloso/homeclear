@@ -105,7 +105,7 @@ export function createVision(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
       if (profile === 'normal') { renderer.render(scene, camera); return; }
       const target = renderer.getRenderTarget(), enabled = renderer.xr.enabled, autoClear = renderer.autoClear;
       const ui: { node: THREE.Object3D; parent: THREE.Object3D }[] = [];
-      for (const name of ['frontend-xr-menu', 'frontend-xr-inspection', 'xr-story-menu', 'xr-loading']) {
+      for (const name of ['frontend-xr-menu', 'frontend-xr-inspection', 'frontend-xr-notice', 'xr-story-menu', 'xr-loading']) {
         const node = scene.getObjectByName(name); if (node?.visible && node.parent) { ui.push({ node, parent: node.parent }); controls.attach(node); }
       }
       try {

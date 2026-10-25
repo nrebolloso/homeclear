@@ -2273,7 +2273,7 @@ const xr = await setupXR({
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
   commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m,
   lock: k => editLocks.acquire(String(k), 'vr'), unlock: k => editLocks.release(String(k), 'vr'),
-  resetObject, resetAll, editor: markerXR, readOnly: () => game.sessionBusy || comparison.previewing(), movement: () => game.comfort?.movement ?? 'all', hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { lines: hintLines(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
+  resetObject, resetAll, editor: markerXR, readOnly: () => game.sessionBusy || comparison.previewing(), movement: () => game.comfort?.movement ?? 'all', eyeHeight: () => game.comfort?.seated ? persona.eye_height_m : undefined, hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { lines: hintLines(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
   startPose() {   // stay if this floor is seen as well as the route's median spot; else the first such point along the route
     if (!current || current.error) return null;
     const poses: { x: number; y: number; yaw: number }[] = [];
@@ -2467,11 +2467,11 @@ game.bookmarks = createBookmarks(RUN, () => ({ position: camera.getWorldPosition
   else { const d = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion().fromArray(point.quaternion)); game.setFly(...point.position, Math.atan2(d.y, d.x) * 180 / Math.PI, Math.asin(d.z) * 180 / Math.PI); }
 });
 game.editLocks = editLocks;
-game.applyPreparedOption = (index: number) => { frontendVR?.notify('Desktop is applying a proposed layout'); return applyOption(index); };
+game.applyPreparedOption = async (index: number) => { frontendVR?.notify('Desktop is applying a proposed layout'); game.sessionBusy = true; try { return await applyOption(index); } finally { game.sessionBusy = false; } };
 game.sharedEdit = (name: string, task: () => unknown) => editLocks.run(String(objs.findIndex(o => o.name === name)), 'desktop', async () => { const result = await task(); frontendVR?.notify('Room updated by desktop'); return result; });
 game.history = { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') };
 game.recenter = () => { const p = routePose(0, 0, Infinity); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.place(p.x, p.y, p.yaw)); else Object.assign(body, p); };
-game.comfort = { movement: 'all', cycle() { const choices = ['all', 'teleport', 'physical']; this.movement = choices[(choices.indexOf(this.movement) + 1) % choices.length]; } };
+game.comfort = { seated: false, movement: 'all', cycle() { const choices = ['all', 'teleport', 'physical']; this.movement = choices[(choices.indexOf(this.movement) + 1) % choices.length]; } };
 game.saveSession = () => structuredClone({ layout, applied, body, fly, personaKey, selRoute, mode, autoS, explore });
 game.restoreSession = async (saved: any) => {
   if (!saved || saved.layout?.poses?.length !== objs.length) return;
