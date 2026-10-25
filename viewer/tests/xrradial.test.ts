@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sliceAt, ringPages, STICK_DEAD } from '../src/xrradial.ts';
+import { sliceAt, subPage, shortOf, STICK_DEAD, type RingItem } from '../src/xrradial.ts';
 
 test('sliceAt: slice 0 is straight up, the rest clockwise; a centred stick picks nothing', () => {
   assert.equal(sliceAt(0, -1, 4), 0);   // pushed forward (WebXR y is negative forward)
@@ -14,9 +14,18 @@ test('sliceAt: slice 0 is straight up, the rest clockwise; a centred stick picks
   assert.equal(sliceAt(1, 0, 0), -1);
 });
 
-test('ringPages: the story plus "More", then the rest plus "Back"; one page when everything fits', () => {
-  const items = ['a', 'b', 'c', 'd', 'e', 'f'];
-  assert.deepEqual(ringPages(items, 4, 'More', 'Back'), [['a', 'b', 'c', 'd', 'More'], ['e', 'f', 'Back']]);
-  assert.deepEqual(ringPages(items, 6, 'More', 'Back'), [items]);
-  assert.deepEqual(ringPages(items, 99, 'More', 'Back'), [items]);
+test('subPage: a second ring is its items then Back, so Back is the last slice clockwise', () => {
+  assert.deepEqual(subPage(['a', 'b', 'c'], 'Back'), ['a', 'b', 'c', 'Back']);
+  assert.deepEqual(subPage([], 'Back'), ['Back']);
+  // an odd count of items puts Back (the last slice) at the bottom of the ring
+  const ring = subPage(['a', 'b', 'c'], 'Back');
+  assert.equal(sliceAt(0, 1, ring.length), ring.indexOf('Back') - 1);
+});
+
+test('shortOf: short() wins, else the title up to a colon', () => {
+  const btn = (text: string, short?: string): RingItem =>
+    ({ text: () => [text], press: () => {}, ...(short ? { short: () => short } : {}) });
+  assert.equal(shortOf(btn('Vision: Cataract')), 'Vision');
+  assert.equal(shortOf(btn('Average vs Shuffler', 'Walkers')), 'Walkers');
+  assert.equal(shortOf(btn('Fan')), 'Fan');
 });

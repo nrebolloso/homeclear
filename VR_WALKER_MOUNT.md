@@ -85,6 +85,8 @@ The left mount is the default, so any viewer link works (e.g. `http://localhost:
 | Wand: point, drag, twist, hold-to-delete, teleport; card buttons (dangers tour, night walk, safer room, compare) | Built |
 | Hand pinch as a stand-in for the trigger | Built |
 | The planning panel opens on a left-stick click (2026-10-25), on the left hand: about 34 cm across, 22 cm above the mounted controller, facing you; the right hand points at it; another click closes it | Built, `e2e:frontend:xr`. A click made while the stick leans (walking) or held over 0.5 s doesn't count |
+| Google Earth VR style (2026-10-25): the panel is fixed to the mounted controller like a tablet, 28 cm across, 15 cm above it, turned with the controller and leaned back 50 deg; nothing stands in the room by default (the story cards are off, the off-hand grip no longer brings them up); notices, the modes chip and the stats card sit above the left controller too | Built, `e2e:frontend:xr`, `e2e:xr` 9b/9d. A click leaning past 0.75 or held over 0.8 s doesn't count |
+| Fly: a switch at the right end of the panel's tab row. While on, the right stick flies you where the right controller points (up to 6 m up, through walls); the walker's stick rests. Off drops you to the floor | Built, `e2e:frontend:xr` |
 | Wobble (2026-10-25): the controller twisting up to 10 deg on the bar leaves the virtual walker still; past that it catches up in about 0.3 s | Built, `e2e:xr` (6 deg twist: 0 deg). `MOUNT_WOBBLE_RAD` in `xr.ts` if the strap is looser |
 | Dock detection (wand in its holder = walk mode, lifted = edit mode) | Not built |
 | The feel on the real walker | Needs the parts and charged controllers |

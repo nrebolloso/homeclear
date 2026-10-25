@@ -115,7 +115,7 @@ export function mountFrontend(api: FrontendAdapter) {
   }
   move('physpanel', 'advanced-controls');
   // ---------- storyboard panels (planfix.ts, futuresfan.ts, gaitfit.ts, wmghosts.ts): the B200 planner leads Reimagine, the world model sits under Who is moving ----------
-  move('planfixpanel', 'planner-controls'); ['fanpanel', 'wmghostpanel', 'gaitfitpanel'].forEach(id => move(id, 'world-controls'));
+  move('planfixpanel', 'planner-controls'); ['fanpanel', 'gaitpanel', 'wmghostpanel', 'gaitfitpanel'].forEach(id => move(id, 'world-controls'));
   // ---------- reach map (main.ts, reach.ts): the toggles with the filters, the rest under the findings ----------
   move('reach', 'filter-findings', 'Reach map (where the device can go)'); move('coverage', 'filter-navigation', 'Coverage ghosts (widest way to each spot)');
   move('hitghosts', 'filter-navigation', 'Only simulated trips with a contact');

@@ -4,12 +4,15 @@
 import { prepare, fan, routeOptions, horizonS, type FanScene, type Fold, type RouteOption, type Stamped } from './futures.ts';
 import type { Layout, XY } from './grid.ts';
 import type { WorldModel } from './worldmodel.ts';
+import { planGhosts } from './gaitplan.ts';
 
 let S: FanScene, wm: WorldModel | null = null, st: Stamped | null = null, key = '', rkey = '', routes: RouteOption[] = [];
 self.onmessage = ({ data: m }: MessageEvent) => {
   try {
     if (m.type === 'init') { S = m.scene; st = null; key = rkey = ''; return; }
     if (m.type === 'model') { wm = m.wm; return; }
+    // gaitghosts.ts: one whole trip per gait along the planned route (gaitplan.ts)
+    if (m.type === 'ghosts') { const t = performance.now(); const runs = planGhosts(S, m.layout, wm, m.route, m.fold, m.opts); self.postMessage({ type: 'ghosts', id: m.id, runs, ms: performance.now() - t }); return; }
     const t = performance.now(), { layout, fold } = m as { layout: Layout; fold: Fold | null }, k = JSON.stringify([layout, fold]);
     if (k !== key || !st) { st = prepare(S, layout, fold); key = k; }
     const route = m.route as XY[] | null, rk = [k, route?.length, route?.at(-1), Math.round(m.state.x * 4), Math.round(m.state.y * 4)].join('|');

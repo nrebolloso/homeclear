@@ -627,6 +627,23 @@ try {
     check('storyboard: no page errors', sb.errors.length === 0, sb.errors.join(' | ') || 'none');
     await sp.close();
   }
+  // 20. walking gait ghosts (gaitghosts.ts, gaitplan.ts): one translucent walker per gait walks the planned route, each its own way round the mat
+  // (the seed's draw: the average lift over it, the shuffler around it), the old path traces are off while they walk, the rug folds under the
+  // one that crosses, the mannequin is off by default, and each gait can be switched off
+  {
+    const gk = await open('kitchen4_lighter');
+    const GF = (f: string) => G(gk.p, f);
+    await GF("game.setAuto(); game.gaitGhosts.set(true); for (let i = 0; i < 60 && !game.gaitGhosts.state().gaits.length; i++) await new Promise(r => setTimeout(r, 500)); return 1");
+    const st0 = await GF('return game.gaitGhosts.state()');
+    check('gait ghosts: one walk per gait, each with a way over and a way round the mat, odds summing to 1', st0.gaits.length === 2 && st0.gaits.every((x: any) => x.routes.length >= 2 && Math.abs(x.routes.reduce((a: number, r: any) => a + r.odds, 0) - 1) < 1e-9 && x.steps > 6), JSON.stringify(st0.gaits.map((x: any) => [x.gait, x.route, +x.odds.toFixed(2), x.steps])));
+    check('gait ghosts: the draw sends the average lift over the mat and the shuffler around it (seed 13)', st0.seed === 13 && st0.gaits[0].route === 'over the mat' && st0.gaits[1].route === 'around the mat', st0.gaits.map((x: any) => `${x.gait}: ${x.route}`).join(', '));
+    const st1 = await GF('for (let i = 0; i < 200 && !game.gaitGhosts.state().gaits.every(x => x.landed >= x.steps); i++) await game.tick(0.1); return { s: game.gaitGhosts.state(), traces: game.debug.overlays[1].visible, man: game.mannequinVisible() }');
+    check('gait ghosts: both finish their walk, the rug folds under the one that crosses it, the old path traces and the mannequin are off', st1.s.gaits.every((x: any) => x.landed >= x.steps) && st1.s.gaits[0].folded && !st1.s.gaits[1].folded && !st1.traces && !st1.man, JSON.stringify({ landed: st1.s.gaits.map((x: any) => `${x.landed}/${x.steps}`), folded: st1.s.gaits.map((x: any) => x.folded), traces: st1.traces, man: st1.man }));
+    const tg = await GF("const el = (i) => document.getElementById(i); el('gait-shuffler').checked = false; el('gait-shuffler').dispatchEvent(new Event('change')); await game.tick(0.1); return game.gaitGhosts.state().gaits.map(x => x.visible)");
+    check('gait ghosts: a gait can be switched off', tg[0] === true && tg[1] === false, JSON.stringify(tg));
+    check('gait ghosts: no page errors', gk.errors.length === 0, gk.errors.join(' | ') || 'none');
+    await gk.p.close();
+  }
 } finally {
   await browser.close();
   writeFileSync(new URL('results.json', import.meta.url), JSON.stringify(results, null, 1));

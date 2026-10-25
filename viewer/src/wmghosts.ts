@@ -21,7 +21,7 @@ import type { WorldModel } from './worldmodel.ts';
 
 export interface Style { name: string; e: number[]; placement: { step_cm: number; lateral_cm: number; vs_mean_cm: number | null; steps: number }; scanned: { risk: number; brushes: number; contacts: number } }
 export interface WmGhostDeps {
-  scene: THREE.Scene; walker: () => WalkerCfg; view: () => void;   // a camera that sees the whole route (first person sits inside the ghosts)
+  scene: THREE.Scene; walker: () => WalkerCfg; view: () => void; /** show the mannequin on the ghosts (default: yes) */ mannequin?: () => boolean;   // a camera that sees the whole route (first person sits inside the ghosts)
   planfix: { layouts(): { now: PlanLayout; scan: PlanLayout; chosen: PlanLayout } | null; imagine(pl: PlanLayout, wm: WorldModel, n: number, nf?: number, lift?: number): Promise<Imagined>; goto(pl: PlanLayout): Promise<void> };
 }
 const SPEED = 0.45, AHEAD_S = 0.5, FLASH_S = 0.5, TAG = 'imagined (world model)', STAGGER_M = 1.0;
@@ -95,6 +95,7 @@ export function createWmGhosts(D: WmGhostDeps) {
   /** ring = the shuffler's footprints as rings round the average's discs: the two walk the same steps */
   function actor(name: string, im: Imagined, tint: number, lift: number, delay: number, ring: boolean): Actor {
     const trip = im.trips[0], W = trip.map(t => t.walker), d = arc(W), man = buildMannequin(1.65), walker = buildWalker(D.walker()), g = new THREE.Group();
+    man.group.visible = D.mannequin?.() ?? true;
     g.add(man.group, walker.group); root.add(g);
     const look = translucent(g, tint, 0.62), L = d[d.length - 1] / Math.max(1, d.length - 1);
     const geo = ring ? new THREE.RingGeometry(0.055, 0.08, 20) : new THREE.CylinderGeometry(0.042, 0.042, 0.01, 14).rotateX(Math.PI / 2);
