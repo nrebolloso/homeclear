@@ -36,7 +36,7 @@ window.__xr = {
 };`;
 
 const browser = await chromium.launch({ executablePath: CHROME, headless: true,
-  args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
+  args: [`--use-angle=${process.platform === 'win32' ? 'd3d11' : process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 try {
   const p = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors: string[] = [];

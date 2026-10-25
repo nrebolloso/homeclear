@@ -57,6 +57,12 @@ Fill in the names.
 - **Changing the world, not adding assets:** scan edits (`SplatEdit` under the room splat), copied scan points (the
   mirrored rail) and the night shader's step lights are visual only and tinted/labelled "designed, not built". Nothing is
   measured from them: measurements read the stored splat data, and the floor map gets its own edit (`carve`).
+- **Reach map** (`viewer/src/reach.ts`, `reach3d.ts`): `scene.json` `reach_points` (additive; config `game.reach_points` via
+  stage 12) is a list of `{ name, at: [x, y] }`: spots to check from the selected route's start. A marked doorway counts at
+  its marked width on the reach map only (`plan()` still uses the floor map). `window.game.reach` exposes `show(on)`,
+  `refresh()`, `state()`, `preview(width)` (repaint, no worker), `setWidth(width | null)`, `ghosts('off' | 'coverage' |
+  'contacts' | 'both')`, `play(s)`, `pick([x, y]?, name?)`, `points()`, `removePoint(name)`, `clearPoints()`, `copyYaml()`,
+  `costs(target?)`. `game.marker.begin('point')` picks one by pointing (desktop click or the VR wand).
 
 ## Avoiding merge conflicts
 

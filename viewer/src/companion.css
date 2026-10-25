@@ -1,0 +1,16 @@
+.frontend.xr-active.companion-active #frontend { display:block; }
+#companion-controls { position:fixed; top:76px; left:16px; z-index:40; width:260px; padding:14px; background:#10202bee; border:1px solid #496373; border-radius:12px; color:#e8f2f8; font:13px system-ui; }
+#companion-controls label { display:block; margin:8px 0; } #companion-controls select { max-width:100%; }
+#companion-controls button, #companion-controls select { background:#203541; color:#e8f2f8; border:1px solid #496373; border-radius:7px; padding:7px; }
+#companion-controls p { color:#a8bdc9; line-height:1.5; margin-bottom:0; }
+#headset-preview { position:fixed; bottom:95px; left:16px; width:320px; height:180px; border:2px solid #49d4c7; border-radius:12px; z-index:25; background:#10202b; pointer-events:none; }
+.companion-goggles::after { content:''; position:fixed; inset:0; z-index:20; pointer-events:none; border:35px solid #06101be6; border-radius:24%; box-shadow:inset 0 0 45px #000; }
+.companion-headset #planning-panel, .companion-headset #layers, .companion-headset #viewer-toolbar, .companion-demo #planning-panel, .companion-demo #layers { display:none; }
+#companion-controls[hidden], #headset-preview[hidden] { display:none; }
+
+#companion-controls { max-height:calc(100vh - 180px); overflow:auto; } .companion-pose { display:flex; gap:6px; } .companion-pose input { width:65px; color:#e8f2f8; background:#203541; border:1px solid #496373; padding:5px; } #companion-controls details { margin-top:10px; }
+
+#companion-canvas { position:fixed; inset:0; width:100vw; height:100vh; z-index:1; pointer-events:none; transform:scaleY(-1); } #companion-canvas[hidden] { display:none; } #headset-preview { transform:scaleY(-1); }
+.companion-active #status-pills { left:320px; }
+
+.xr-active [data-xr-persistent] { display:none !important; } .companion-demo #viewer-toolbar, .companion-demo #comparison, .companion-headset #comparison { display:none; }

@@ -454,6 +454,8 @@ def main(cfg):
              "stairs": gm.get("stairs", []),
              # doorways (viewer doors.ts): {name, a, b} = the two jambs' inside faces; the viewer offers ways to widen them
              "doors": gm.get("doors", []),
+             # spots to check on the reach map (viewer reach.ts): {name, at: [x, y]}, from the viewer's "Copy points as config YAML"
+             "reach_points": gm.get("reach_points", []),
              "hazards": "hazards.json", "route": "route.json", "routes": "routes.json", "walker": "walker.json", "personas": "personas.json",
              "persona": "persona.json", "interventions": gm["interventions"], "risk": gm["risk"],
              "plan": {k: cfg["plan"][k] for k in ("preferred_clearance_m", "clearance_weight")},

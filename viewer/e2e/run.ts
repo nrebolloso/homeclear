@@ -15,7 +15,7 @@ const shot = (p: Page, name: string) => process.env.SHOTS ? p.screenshot({ path:
 const G = (p: Page, f: string) => p.evaluate(`(async () => { const game = window.game; ${f} })()`) as Promise<any>;
 
 const browser = await chromium.launch({ executablePath: CHROME, headless: true,
-  args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
+  args: [`--use-angle=${process.platform === 'win32' ? 'd3d11' : process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required',
     '--disable-accelerated-video-decode'] });   // headless: HW decode + ANGLE stalls seeks and loses the WebGL context
 async function open(scene: string) {
   const p = await browser.newPage({ viewport: { width: 1600, height: 900 } });
@@ -207,7 +207,7 @@ try {
   await rep.waitForURL(/report\.html/, { timeout: 60000 });   // the tab opens blank while the fixes roll out
   await rep.waitForLoadState('networkidle');
   const repText = await rep.textContent('body');
-  check('OT report renders the live layout', /Expected toe contacts/.test(repText ?? '') && /Changes in this layout/.test(repText ?? '') && (await rep.$$('img')).length >= 2,
+  check('OT report renders the live layout', /Expected toe (contacts|catches)/.test(repText ?? '') && /Changes in this layout/.test(repText ?? '') && (await rep.$$('img')).length >= 2,
     `${(repText ?? '').length} chars`);
   await rep.close();
   const url = await Q('return await game.openFixCard()');
@@ -343,6 +343,182 @@ try {
   check('movement: keys 4 and 1 switch to Fly and Follow route', k4 === 'mode-fly' && k1 === 'mode-route', `${k4}, ${k1}`);
   check('movement: no page errors', mv.errors.length === 0, mv.errors.join(' | ') || 'none');
   await mv.p.close();
+  }
+  // 14. kitchen planner + gait personalization (planfix.ts, gaitfit.ts; skipped where the B200 search isn't published):
+  // the replay ends on options, the AI never loses to the judge, a bad judge layout says why, the gait fit converges
+  if (existsSync(`${ROOT}viewer/public/planner/kitchen4_lighter/search.json`) && existsSync(`${ROOT}viewer/public/scene/kitchen4_lighter/scene.json`)) {
+    const pk = await open('kitchen4_lighter');
+    const P = (f: string) => G(pk.p, f);
+    const pl = await P('await game.planfix.ready; const s = await game.planfix.play(8); return { frame: s.frame, frames: s.frames, opts: document.querySelectorAll("#pfoptions li").length, searched: s.stats.layouts_searched, gpu: s.stats.gpu }');
+    check('planner: replay plays to the end and offers 2-3 Pareto options', pl.frame === pl.frames - 1 && pl.opts >= 2 && pl.opts <= 3, `${pl.frame + 1}/${pl.frames} frames, ${pl.opts} options; job: ${pl.searched} layouts on ${pl.gpu}`);
+    const lv = await P("await game.moveObject('chair8', 1.6, -0.9, 0); const r = await game.planfix.improve(2000); return { j: r.judge.risk, b: r.best.risk, inv: r.invalid, kept: r.kept }");
+    check('planner live: AI layout is never worse than the judge\'s', lv.inv.length === 0 && lv.b <= lv.j + 1e-9, `judge ${lv.j.toFixed(1)} -> AI ${lv.b.toFixed(1)}/month, kept: ${lv.kept.join(', ') || 'none'}`);
+    const bad = await P("await game.moveObject('chair3', -0.4, 1.8, 0); const r = await game.planfix.improve(500); return { inv: r.invalid, msg: document.getElementById('pfresult').textContent }");
+    check('planner live: an invalid judge layout is flagged with the reason', bad.inv.some((s: string) => /fridge swing/.test(s)) && /can't be used/.test(bad.msg), bad.inv.join('; '));
+    const gf = await P("await game.gait.play(32); const s = game.gait.state(); const r = await game.planfix.replanFor(game.gait.worldModel(), 'e2e', 300); return { steps: s.steps, err: s.err_last10, r: !!r && Number.isFinite(r.best_you.risk) && r.best_you.risk <= r.current_you.risk + 1e-9 }");
+    check('gait: fitted embedding predicts the held-out walker\'s head better than the mean; re-plan runs', gf.steps > 100 && gf.err.head.fit < gf.err.head.pop && gf.r,
+      `${gf.steps} steps, head err (last 10) ${gf.err.head.pop.toFixed(1)} -> ${gf.err.head.fit.toFixed(1)} cm, re-plan ok=${gf.r}`);
+    check('planner + gait: no page errors', pk.errors.length === 0, pk.errors.join(' | ') || 'none');
+    await pk.p.close();
+  }
+  // 15. the world model life-size in the kitchen (wmghosts.ts): two gait styles walk differently, the futures fan has 30
+  // labelled futures, a month before fixes has more incidents than after
+  if (existsSync(`${ROOT}viewer/public/gait/styles.json`) && existsSync(`${ROOT}viewer/public/planner/kitchen4_lighter/search.json`)) {
+    const wg = await open('kitchen4_lighter');
+    const W = (f: string) => G(wg.p, f);
+    const two = await W("await game.planfix.ready; await game.wmghosts.twoStyles('P07 (training)'); await new Promise(r => setTimeout(r, 7000)); const s = game.wmghosts.state(); " +
+      "const [a, b] = s.actors; const n = Math.min(a.heels.length, b.heels.length); let d = 0; for (let k = 0; k < n; k++) d += Math.hypot(a.heels[k][0] - b.heels[k][0], a.heels[k][1] - b.heels[k][1]) / n; " +
+      "return { steps: [a.steps, b.steps], d, caught: [a.caught.length, b.caught.length], fan: s.fan, fps: game.fps }");
+    check('world model ghosts: two gait styles place their feet differently and flash on what they catch', two.d > 0.05 && two.caught[0] + two.caught[1] > 0,
+      `steps ${two.steps.join(' vs ')}, mean heel gap ${(two.d * 100).toFixed(1)} cm, caught ${two.caught.join(' / ')}; ${two.fps.toFixed(1)} fps`);
+    check('world model ghosts: futures fan of 30 labelled futures at each heel strike', two.fan.n === 30, JSON.stringify(two.fan));
+    const mo = await W("const run = async w => { await game.wmghosts.month(w); await new Promise(r => setTimeout(r, 22000)); const m = game.wmghosts.state().month; " +
+      "return { n: m.trips, inc: Object.values(m.counts).reduce((a, b) => a + b, 0), risk: m.expected.risk }; }; const b = await run('before'), a = await run('after'); game.wmghosts.stop(); return { b, a }");
+    check('world model ghosts: a month of 60 trips, fewer incidents after the fixes', mo.b.n === 60 && mo.a.n === 60 && mo.a.inc < mo.b.inc,
+      `before ${mo.b.inc} incidents (evaluator ${mo.b.risk.toFixed(1)}/month) -> after ${mo.a.inc} (${mo.a.risk.toFixed(1)})`);
+    check('world model ghosts: no page errors', wg.errors.length === 0, wg.errors.join(' | ') || 'none');
+    await wg.p.close();
+  }
+  // 16. the live futures fan (futuresfan.ts): from the walker's current state during autoplay, red at the mat, green once
+  // it is taped, the hand-rule toggle, and the fps stays within ~10% of the fan-off rate (adaptive count)
+  {
+    const ff = await open('kitchen4_lighter');
+    const F = (f: string) => G(ff.p, f);
+    const watch = 'const seen = []; for (let i = 0; i < 28; i++) { await new Promise(r => setTimeout(r, 500)); const s = game.fan.state(); if (s.fan) seen.push(s); } return seen';
+    await F('await new Promise(r => setTimeout(r, 6000))');
+    const off = await F('return game.fps');
+    await F('game.fan.set(true)');
+    const before: any[] = await F(watch), fps = await F('return game.fps');
+    await F('await game.fan.tapeMat()');
+    const after: any[] = await F(watch);
+    await F("game.fan.setModel('hand'); await new Promise(r => setTimeout(r, 1500))");
+    const h = await F('return game.fan.state()');
+    const mat = (s: any) => (s.fan.crossed.mat ?? 0) > 0;
+    const hit = before.find(s => mat(s) && s.fan.red > 0);
+    check('futures fan: 30 imagined futures from the current state, red at the mat, labelled', !!hit && hit.fan.n === 30 && /^World model: 30 futures · \d+ cross the mat · ≈[\d.]+ toe catches\/month here/.test(hit.label), hit ? `${hit.label}; ${hit.fan.red} likely catches, ${hit.fan.catches_month.toFixed(2)}/month` : `never red at the mat: ${before.map(s => s.label.split('· ')[1]).join(', ')}`);
+    check('futures fan: no future hits the mat once it is taped flat', after.length > 10 && !after.some(mat), `${after.length} fans, mat crossings ${after.filter(mat).length}, max ${Math.max(...after.map(s => s.fan.catches_month)).toFixed(2)} catches/month`);
+    check('futures fan: hand rule toggle', h.model === 'hand' && /^Hand rule:/.test(h.label), h.label);
+    check('futures fan: fps within ~10% of the fan-off rate (adaptive count)', fps >= 0.9 * off, `${off.toFixed(1)} fps off -> ${fps.toFixed(1)} on, ${before.at(-1)?.n} futures sampled`);
+    check('futures fan: no page errors', ff.errors.length === 0, ff.errors.join(' | ') || 'none');
+    await ff.p.close();
+  }
+  // 17. the fan's fork and foot lift (futures.ts routeOptions, LIFTS): at the fridge facing the mat the way ahead forks
+  // (over / around the mat), the low-clearance shuffler catches the mat edge more often than the average lift, a taped mat
+  // catches neither, and the mat's physics steps during autoplay without breaking the route
+  {
+    const fk = await open('kitchen4_lighter');
+    const F = (f: string) => G(fk.p, f);
+    const steps0 = await F('await new Promise(r => setTimeout(r, 3000)); return game.livephys.steps()');
+    await F('await new Promise(r => setTimeout(r, 4000))');
+    const auto = await F('return { steps: game.livephys.steps(), events: game.livephys.events.map(e => e.kind + ":" + e.object), err: game.current().error ?? null }');
+    check('fan fork: the mat physics steps during autoplay, route intact', auto.steps > steps0 + 20 && !auto.err, `${auto.steps - steps0} worker steps in 4 s of autoplay, events [${auto.events.join(', ')}], route error ${auto.err}`);
+    const at = "game.setFree(-0.7, 2.2, -0.91); game.fan.set(true); await new Promise(r => setTimeout(r, 1200));";
+    const mats = (l: string) => `game.fan.setLift('${l}'); const n = []; for (let i = 0; i < 8; i++) { await new Promise(r => setTimeout(r, 600)); const s = game.fan.state(); if (s.fan && s.fan.lift === '${l}') n.push(s.fan.catches_month); } return { n, s: game.fan.state() }`;
+    await F(at);
+    const fork = await F("for (let i = 0; i < 10; i++) { await new Promise(r => setTimeout(r, 400)); const s = game.fan.state(); if (s.fan?.routes.length > 1) return s; } return game.fan.state()");
+    check('fan fork: over vs around the mat at the fridge, counts on the card', fork.fan?.routes.length >= 2 && fork.fan.routes.some((r: any) => r.label === 'around the mat') && / around the mat/.test(fork.lines[1] ?? ''), fork.lines.join(' | '));
+    const avg = await F(mats('average')), sh = await F(mats('shuffler'));
+    const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
+    check('fan lift: the shuffler catches the mat edge more than the average lift', avg.n.length >= 4 && sh.n.length >= 4 && sum(sh.n) / sh.n.length > sum(avg.n) / avg.n.length, `average [${avg.n.map(x => x.toFixed(2))}] vs shuffler [${sh.n.map(x => x.toFixed(2))}] catches/month; ${sh.s.lines.join(' | ')}`);
+    await F('await game.fan.tapeMat()');
+    const tp = await F(mats('shuffler'));
+    check('fan lift: a taped mat catches no shuffler', tp.n.length >= 4 && sum(tp.n) / tp.n.length < 0.2 * sum(sh.n) / sh.n.length && !tp.s.fan.crossed.mat, `shuffler after tape [${tp.n.map(x => x.toFixed(2))}] catches/month (the cord the mat lay over); ${tp.s.lines[0]}`);
+    check('fan fork: no page errors', fk.errors.length === 0, fk.errors.join(' | ') || 'none');
+    await fk.p.close();
+  }
+  // 18. round-trip autoplay (roundtrip.ts, the scripted demo): from the route's goal back to its start, a turn, then out as
+  // planned, with no jump between legs; the fan follows the leg being walked; one way is still the default
+  {
+    const rt = await open('kitchen4_lighter');
+    const F = (f: string) => G(rt.p, f);
+    const one = await F('return game.roundTrip.leg()');
+    const r = await F(`const c = game.current(); await game.roundTrip.set(true); game.fan.set(true);
+      const goal = c.xy.at(-1), start = c.xy[0], cen = b => [b.x + 0.5 * Math.cos(b.yaw), b.y + 0.5 * Math.sin(b.yaw)], d = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+      const b0 = cen(game.body); let prev = { ...game.body, t: performance.now() }, speed = 0, near = 9, legs = [game.roundTrip.leg()], fanIn = 0;
+      for (let i = 0; i < 240; i++) { await new Promise(r => setTimeout(r, 250)); const b = game.body, t = performance.now();   // a full in-out cycle is ~40 s
+        speed = Math.max(speed, Math.hypot(b.x - prev.x, b.y - prev.y) / ((t - prev.t) / 1000)); prev = { ...b, t };
+        const leg = game.roundTrip.leg(); if (leg !== legs.at(-1)) legs.push(leg); if (leg === 'in') near = Math.min(near, d(cen(b), start));
+        const s = game.fan.state(); if (leg === 'in' && s.fan?.path === 'route') fanIn++;
+        if (legs.length === 3) break; }
+      return { fromGoal: d(b0, goal), near, legs, speed, fanIn }`);
+    check('round trip: starts at the route goal, reaches its start, turns and walks out as planned', one === 'out' && r.fromGoal < 0.3 && r.near < 0.3 && r.legs.join() === 'in,out,in',
+      `one way by default (${one}); start ${r.fromGoal.toFixed(2)} m from the goal, inbound got within ${r.near.toFixed(2)} m of the start; legs ${r.legs.join(' -> ')}`);
+    check('round trip: no jump between legs (body under 1.2 m/s)', r.speed < 1.2, `max ${r.speed.toFixed(2)} m/s`);
+    check('round trip: the fan follows the inbound leg', r.fanIn >= 5, `${r.fanIn} fans on the reversed route`);
+    check('round trip: no page errors', rt.errors.length === 0, rt.errors.join(' | ') || 'none');
+    await rt.p.close();
+  }
+  // 19. reach map:
+  // - the floor from the route's start, the same in every mode;
+  // - the 55 cm doorway cuts the bathroom off and is named; widening opens it, undo closes it;
+  // - picked points are targets that survive a reload;
+  // - the width slider repaints without the worker;
+  // - the coverage ghosts leave the start together.
+  {
+  const rm = await open('game_synth_narrow');
+  const RM = (f: string) => G(rm.p, f);
+  await rm.p.waitForTimeout(1500);
+  await RM("localStorage.removeItem('homeclear:reach:game_synth_narrow'); await game.doors.mark([4.05, 1.225], [4.05, 1.775], 'bathroom door'); await game.reach.show(true)");
+  // on the wardrobe route (the bathroom one is blocked here, so it has no planned path to compare)
+  const modes = await RM(`await game.selectRoute(1); const out = {};
+    for (const m of ['route', 'walk', 'explore']) { game.frontend.setNavigation(m); await new Promise(r => setTimeout(r, 300)); await game.reach.refresh();
+      out[m] = { start: game.reach.state().start, xy0: game.current().xy[0], n: game.current().xy.length }; }
+    game.frontend.setNavigation('route'); await game.selectRoute(0); await game.reach.refresh(); return out;`);
+  const near = (a: number[], b: number[], tol: number) => Math.hypot(a[0] - b[0], a[1] - b[1]) <= tol;
+  check('reach: Follow route, Walk and Look around share the route start, the planned path and the reach map',
+    ['walk', 'explore'].every(m => near(modes[m].start, modes.route.start, 1e-6) && near(modes[m].xy0, modes.route.xy0, 1e-6) && modes[m].n === modes.route.n) && near(modes.route.xy0, modes.route.start, 0.6),
+    JSON.stringify(modes));
+  const bath = "s.report.targets.find(t => t.kind === 'goal' && /bathroom/.test(t.name))";
+  const r0 = await RM(`const s = game.reach.state(), t = ${bath}; return { cut: s.report.areas.cut, status: t.status, pinch: t.pinch?.width_m, cause: t.cause, region: s.report.regions[0]?.cause,
+    dots: s.dots, mesh: s.mesh, inScene: s.inScene, costs: game.reach.costs(), chart: !document.getElementById('reachcost').hidden }`);
+  check('reach: the 55 cm doorway cuts the bathroom off, named as the marked doorway; the paint is a scene mesh',
+    r0.cut > 2 && r0.status === 'cut' && r0.pinch <= 0.56 && r0.cause?.name === 'bathroom door' && r0.region?.kind === 'door' && r0.mesh === 'Mesh' && r0.inScene && r0.dots > 0,
+    JSON.stringify({ ...r0, costs: undefined }));
+  check('reach: the cost to get through it is charted per device width (placeholder prices)',
+    r0.chart && r0.costs?.door === 'bathroom door' && r0.costs.steps.length > 40 && r0.costs.steps.some((s: any) => s.usd === 1500 && s.source === 'placeholder'),
+    JSON.stringify(r0.costs?.steps.slice(0, 3)));
+  await shot(rm.p, 'reach_cut_off');
+  await RM("await game.doors.apply('bathroom door', 'widen'); await game.reach.refresh()");
+  const r1 = await RM(`const s = game.reach.state(), t = ${bath}; return { cut: s.report.areas.cut, status: t.status }`);
+  check('reach: widening the doorway opens the bathroom', r1.cut < 0.5 && r1.status !== 'cut', `${r0.cut.toFixed(1)} -> ${r1.cut.toFixed(1)} m² cut off; bathroom ${r1.status}`);
+  await shot(rm.p, 'reach_widened');
+  await RM("await game.reimagine.undo(0); await game.reach.refresh()");
+  const r2 = await RM(`const s = game.reach.state(); return { cut: s.report.areas.cut, status: ${bath}.status }`);
+  check('reach: undo closes it again', r2.cut > 2 && r2.status === 'cut', JSON.stringify(r2));
+  // the slider: repaint only while it moves (no worker round-trip), the report when it settles
+  const wp = await RM(`const a0 = game.reach.state().asks, w5 = game.reach.preview(0.5), w9 = game.reach.preview(0.9);
+    const el = document.getElementById('reachwidth'); el.value = '55'; el.dispatchEvent(new Event('input'));
+    return { w5, w9, asks: game.reach.state().asks - a0, slider: game.reach.state().width_m, out: document.getElementById('reachwidthout').textContent }`);
+  check('reach: the width slider repaints without the worker; a narrower device reaches more',
+    wp.asks === 0 && wp.w5.ok + wp.w5.tight > wp.w9.ok + wp.w9.tight && Math.abs(wp.slider - 0.55) < 1e-9 && /55 cm/.test(wp.out), JSON.stringify(wp));
+  await RM('await game.reach.setWidth(null)');
+  // picking: the marking tool's point kind (click / wand), and the API
+  await RM("game.reach.pick(); await game.marker.place([1.0, 0.6, 0]); await game.reach.pick([5.6, 2.4], 'bath corner')");
+  const pk = await RM("const s = game.reach.state(); return { points: game.reach.points().map(p => p.name), ts: s.report.targets.filter(t => t.kind === 'point').map(t => [t.name, t.status]), marking: game.marker.state().marking }");
+  check('reach: a point picked on the floor and one given by the API are targets checked from the start',
+    pk.points.join() === 'point 1,bath corner' && pk.ts.some((t: string[]) => t[0] === 'point 1' && t[1] !== 'cut') && pk.ts.some((t: string[]) => t[0] === 'bath corner' && t[1] === 'cut') && !pk.marking,
+    JSON.stringify(pk));
+  await rm.p.reload();
+  await rm.p.waitForFunction(() => (window as any).game?.ready, null, { timeout: 60000 });
+  const kept = await RM("await game.reach.show(true); return { points: game.reach.points().map(p => p.name), yaml: await game.reach.copyYaml(), ts: game.reach.state().report.targets.filter(t => t.kind === 'point').length }");
+  await RM("await game.reach.removePoint('bath corner')");
+  const after = await RM('return game.reach.points().map(p => p.name)');
+  check('reach: picked points survive a reload, copy as config YAML, and remove one by one',
+    kept.points.join() === 'point 1,bath corner' && kept.ts === 2 && /reach_points:/.test(kept.yaml) && /"bath corner", at: \[5\.600, 2\.400\]/.test(kept.yaml) && after.join() === 'point 1',
+    `${JSON.stringify(kept.points)} -> ${JSON.stringify(after)}; ${JSON.stringify(kept.yaml)}`);
+  // ghosts: coverage (computed, from the start) vs contacts (simulated); the wave reveals the coverage ones by distance
+  const gm = await RM(`game.reach.ghosts('contacts'); const a = game.reach.state(); game.reach.ghosts('coverage'); const b = game.reach.state();
+    game.manual = true; game.reach.play(1); const t0 = game.reach.state().t, d0 = game.reach.state().drawn;
+    for (let i = 0; i < 30; i++) game.tick(0.05);
+    const c = game.reach.state(); game.manual = false;
+    return { a: [a.coverage, a.contacts], b: [b.coverage, b.contacts], t0, d0, t: c.t, drawn: c.drawn, dots: c.dots }`);
+  check('reach: ghost modes switch coverage and contact ghosts; the wave reveals every coverage ghost from the start',
+    gm.a.join() === 'false,true' && gm.b.join() === 'true,false' && gm.t0 === 0 && gm.d0 < gm.dots && gm.t === 1 && gm.drawn === gm.dots && gm.dots > 0, JSON.stringify(gm));
+  const mo = await RM("return await game.moveObject('nightstand', 3.0, 3.7, 0)");
+  check('reach: moving furniture with the reach map on still replans within 1 s', mo.ok && mo.ms < 1000, `${mo.ms?.toFixed(0)} ms`);
+  await RM("await game.reach.clearPoints(); localStorage.removeItem('homeclear:doors:game_synth_narrow')");
+  check('reach: no page errors', rm.errors.length === 0, rm.errors.join(' | ') || 'none');
+  await rm.p.close();
   }
 } finally {
   await browser.close();

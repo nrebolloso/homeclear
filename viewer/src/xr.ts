@@ -12,7 +12,8 @@
 // still to delete it; point at filmed floor and release to teleport. A pinch and a trigger are the same WebXR "select".
 // Moves go through the host's placement check and re-plan, like a desktop drag.
 import * as THREE from 'three';
-import { SparkXr } from '@sparkjsdev/spark';
+import { bindXR } from './xr-session.ts';
+import { onThree, own } from './lifetime.ts';
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 import type { Pose, XY } from './grid.ts';
 import { floorHit, twistAngle, snapQuarter, holdProgress, DELETE_HOLD_S, DELETE_SHOW_S, DRAG_DEADZONE_M } from './wand.ts';
@@ -43,6 +44,7 @@ export interface XrHost {
   enter(tier: Tier): void; exit(): void;
   /** big buttons on a card that follows you lazily: pressed like furniture is grabbed (point the wand, pinch) */
   buttons?: XrButton[];
+  lock?(k: number): boolean; unlock?(k: number): void;
   resetObject(k: number): unknown; resetAll(): unknown;
   /** what the controls are for right now (hints.ts): a label and one line of keys, drawn as a strip card on the off-hand controller */
   hints?(): { lines: string[]; tone: string };
@@ -52,6 +54,8 @@ export interface XrHost {
   editor?: XrEditor;
   /** A visual comparison is read-only; only the story-card buttons remain interactive. */
   readOnly?(): boolean;
+  movement?(): 'all' | 'teleport' | 'physical';
+  eyeHeight?(): number | undefined;
   /** The planning shell (frontend-xr.ts) lays a menu over the wand: it can swallow a trigger press, freeze locomotion while
    *  its menu is open, drive the body along the route, and hears which furniture the wand points at. */
   shell?: XrShell;
@@ -76,19 +80,20 @@ export async function setupXR(host: XrHost) {
   const { renderer, scene, camera, params, body, items } = host;
   // ?emulate=quest2: IWER replaces navigator.xr with a scripted Quest 2 (head, controllers, hands). Loaded only with the
   // flag, before SparkXr checks support; forceInstall because desktop Chrome has its own (deviceless) navigator.xr.
-  const device = params.has('emulate')
+  const device = (window as any).__xrEmulator ?? (params.has('emulate')
     ? await import('iwer').then(({ XRDevice, metaQuest2 }) => { const d = new XRDevice(metaQuest2); d.installRuntime({ forceInstall: true }); return d; })
-    : null;
+    : null);
+  if (device) (window as any).__xrEmulator = device;
   // Quest Browser renders by itself (performance mode, Quest settings); a desktop browser in VR is streaming over Link
   const tier: Tier = /OculusBrowser|Quest/i.test(navigator.userAgent) || device ? tierAtLoad(location.search, true) : 'link';
   const cfg = xrCfg(location.search, tier);
 
   const rig = new THREE.Group();
   scene.add(rig);
-  const xrRig = { x: 0, y: 0, yaw: 0 };
+  const xrRig = { x: 0, y: 0, yaw: 0 }; let lastSpawn = { ...xrRig }, pendingSpawn: { x: number; y: number; yaw: number } | null = null;
   const TILT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2), UP = new THREE.Vector3(0, 0, 1);
   const placeRig = () => {
-    rig.position.set(xrRig.x, xrRig.y, 0);
+    rig.position.set(xrRig.x, xrRig.y, host.eyeHeight?.() == null ? 0 : Math.max(0, host.eyeHeight()! - camera.position.y));
     rig.quaternion.setFromAxisAngle(UP, xrRig.yaw - Math.PI / 2).multiply(TILT);
   };
   const head = new THREE.Vector3(), headDir = new THREE.Vector3();
@@ -122,16 +127,17 @@ export async function setupXR(host: XrHost) {
     const ray = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x66ccff }));
     ray.visible = false;
     group.add(ray); rig.add(group);
-    const c: Ctl = { group, ray };
-    group.addEventListener('connected', e => { c.source = e.data; });
-    group.addEventListener('disconnected', () => { if (isWand(c)) dropWand(); pinching.delete(c); c.source = undefined; });
-    group.addEventListener('selectstart', () => { if (host.shell?.activate(group)) return; if (isMount(c)) return; isWand(c) ? wandDown(c) : pinching.add(c); });
-    group.addEventListener('selectend', () => { if (host.shell?.release(group)) return; isWand(c) ? wandUp() : pinching.delete(c); });
+    const c: Ctl = { group, ray, source: [...renderer.xr.getSession()?.inputSources ?? []][i] };
+    own(() => { ray.removeFromParent(); ray.geometry.dispose(); (ray.material as THREE.Material).dispose(); group.removeFromParent(); });
+    onThree(group, 'connected', e => { c.source = e.data; });
+    onThree(group, 'disconnected', () => { if (isWand(c)) dropWand(); pinching.delete(c); c.source = undefined; });
+    onThree(group, 'selectstart', () => { if (host.shell?.activate(group)) return; if (isMount(c)) return; isWand(c) ? wandDown(c) : pinching.add(c); });
+    onThree(group, 'selectend', () => { if (host.shell?.release(group)) return; isWand(c) ? wandUp() : pinching.delete(c); });
     return c;
   });
   // tracked hands drawn in the rig like the controllers; models served locally (models/hands/, webxr-input-profiles, MIT)
   const handModels = new XRHandModelFactory().setPath('models/hands/');
-  for (const i of [0, 1]) { const hand = renderer.xr.getHand(i); hand.add(handModels.createHandModel(hand, 'mesh')); rig.add(hand); }
+  for (const i of [0, 1]) { const hand = renderer.xr.getHand(i); if (!hand.children.length) hand.add(handModels.createHandModel(hand, 'mesh')); own(() => hand.removeFromParent()); rig.add(hand); }
 
   function aim(c: Ctl) {   // the controller's pose is rig-local (reference space): refresh its world matrix through the rig
     c.group.updateWorldMatrix(true, false);
@@ -145,18 +151,19 @@ export async function setupXR(host: XrHost) {
     if (host.editor?.down(r, q)) { toolHeld = true; return; }
     if (hover < 0) { aiming = true; return; }
     const f = floorHit(r.origin, r.direction), p = host.poses()[hover], at: XY = f ? [f.x, f.y] : [p.x, p.y];
+    if (host.lock && !host.lock(hover)) return;
     grab = { k: hover, off: [p.x - at[0], p.y - at[1]], start: at, drag: 0, t0: performance.now(), yaw0: p.yaw, q0: c.group.getWorldQuaternion(new THREE.Quaternion()) };
   }
   function wandUp() {
     if (toolHeld) { toolHeld = false; const c = ctls.find(isWand); if (c) host.editor?.up(aim(c)); return; }
     if (host.editor?.active()) return;
     if (btnPressed >= 0) { const i = btnPressed; btnPressed = -1; if (btnHover === i) btns[i].b.press(); return; }
-    if (grab) { const { k, valid } = grab; grab = null; if (valid) host.commit(k, valid); return; }
-    if (aiming && tpRing.visible) { xrRig.x += tpRing.position.x - head.x; xrRig.y += tpRing.position.y - head.y; placeRig(); anchor.set = false; }
+    if (grab) { const { k, valid } = grab; grab = null; if (valid) Promise.resolve(host.commit(k, valid)).finally(() => host.unlock?.(k)); else host.unlock?.(k); return; }
+    if (aiming && tpRing.visible && host.movement?.() !== 'physical') { xrRig.x += tpRing.position.x - head.x; xrRig.y += tpRing.position.y - head.y; placeRig(); anchor.set = false; }
     aiming = false; tpRing.visible = false;
   }
   function dropWand() {   // wand lost mid-gesture (hand out of view): put a dragged object back where the layout has it
-    if (grab) host.resync();
+    if (grab) { host.resync(); host.unlock?.(grab.k); }
     btnPressed = -1; grab = null; aiming = false; tpRing.visible = false;
     toolHeld = false; host.editor?.cancelDrag();
   }
@@ -204,7 +211,7 @@ export async function setupXR(host: XrHost) {
           if (host.canPlace(grab.k, p)) { it.group.position.set(p.x, p.y, 0); it.group.rotation.z = p.yaw; grab.valid = p; }
         }
         prog = holdProgress((performance.now() - grab.t0) / 1000, grab.drag);
-        if (prog >= 1) { const k = grab.k; grab = null; host.remove(k); prog = -1; }
+        if (prog >= 1) { const k = grab.k; grab = null; Promise.resolve(host.remove(k)).finally(() => host.unlock?.(k)); prog = -1; }
       } else {
         const bh = dash.visible ? wandRay.intersectObjects(btns.map(x => x.mesh))[0] : undefined;   // buttons sit in front of the room
         btnHover = bh ? btns.findIndex(x => x.mesh === bh.object) : -1;
@@ -212,7 +219,7 @@ export async function setupXR(host: XrHost) {
         const hit = bh || host.readOnly?.() ? undefined : wandRay.intersectObjects(items.filter((_, k) => !poses[k].removed).map(i => i.proxy))[0];
         hover = hit ? items.findIndex(i => i.proxy === hit.object) : -1;
         if (bh) len = bh.distance; else if (hit) len = hit.distance;
-        if (!host.readOnly?.() && !bh && hover < 0 && aiming && f && host.standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
+        if (!host.readOnly?.() && host.movement?.() !== 'physical' && !bh && hover < 0 && aiming && f && host.standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
       }
       c.ray.scale.z = len;
       if (hover >= 0 && !grab) host.shell?.hover(hover);
@@ -229,7 +236,7 @@ export async function setupXR(host: XrHost) {
   // when you turn past 40 deg or walk off, so it's always one point-and-pinch away. Canvas text on a plane (a mesh, so the
   // wand's ray hits it), drawn over the splats like the other overlays.
   const BW = 0.46, BH = 0.15, GAP = 0.025;   // up to three lines: headline, a plain sentence, a small hint
-  const dash = new THREE.Group();
+  const dash = new THREE.Group(); dash.name = 'xr-story-menu';
   dash.visible = false;
   scene.add(dash);
   const lineUp: XrButton = { text: () => ['Line up the walker', 'stand behind it facing its way, then pinch'], tone: () => 'plain', press: () => { mountOffset = null; } };
@@ -284,11 +291,11 @@ export async function setupXR(host: XrHost) {
     const grip = !!wp?.buttons[1]?.pressed, a = !!wp?.buttons[4]?.pressed, click = !!wp?.buttons[3]?.pressed, both = grip && !!op?.buttons[1]?.pressed;
     const consumed = host.readOnly?.() || (host.editor?.buttons(pads, WAND) ?? false);
     if (consumed) {
-      if (grab) host.resync();
+      if (grab) { host.resync(); host.unlock?.(grab.k); }
       grab = null; aiming = false;
       if (!host.readOnly?.()) btnPressed = -1;   // comparison mode still needs the card's press/release gesture
     } else {
-      if (grip && !gripWas) { const k = grab?.k ?? hover; if (k >= 0) { grab = null; host.resync(); host.resetObject(k); pulse(wp, 0.5, 40); } }
+      if (grip && !gripWas) { const k = grab?.k ?? hover; if (k >= 0) { host.unlock?.(k); grab = null; host.resync(); host.resetObject(k); pulse(wp, 0.5, 40); } }
       if (a && !aWas && !grab && hover >= 0) { host.remove(hover); pulse(wp, 0.5, 40); }
       // wand stick click undoes the last object edit; with the off-hand grip held it redoes (marking has its own undo on B/Y)
       if (click && !clickWas && !grab && host.history) {
@@ -331,18 +338,24 @@ export async function setupXR(host: XrHost) {
 
   // ---------- per frame ----------
   function step(dt: number) {
-    if (host.shell?.open()) return;
+    if (pendingSpawn) {
+      const reference = renderer.xr.getReferenceSpace(), pose = reference && renderer.xr.getFrame()?.getViewerPose(reference);
+      if (!pose) return;
+      const { position: p, orientation: q } = pose.transform; camera.position.set(p.x, p.y, p.z); camera.quaternion.set(q.x, q.y, q.z, q.w);
+      const destination = pendingSpawn; pendingSpawn = null; place(destination.x, destination.y, destination.yaw);
+    }
+    if (host.shell?.open()) { dash.visible = false; return; }
     const yaw = readHead();
     if (host.shell?.follow(dt)) { xrRig.x += body.x - head.x; xrRig.y += body.y - head.y; placeRig(); wandStep(); return; }   // the route drives the body
     const pads: Record<string, Gamepad> = {};
     for (const source of renderer.xr.getSession()?.inputSources ?? []) if (source.gamepad) pads[source.handedness] = source.gamepad;
-    if (pinching.size && !host.readOnly?.()) {   // glide forward in sub-steps of at most half a cell, as in free walk
+    if (pinching.size && !host.readOnly?.() && (host.movement?.() ?? 'all') === 'all') {   // glide forward in sub-steps of at most half a cell, as in free walk
       const v = 0.6 * dt, dx = Math.cos(yaw) * v, dy = Math.sin(yaw) * v, n = Math.max(1, Math.ceil(v / (host.cellM / 2)));
       for (let i = 0; i < n && host.standable(head.x + dx / n, head.y + dy / n); i++) {
         xrRig.x += dx / n; xrRig.y += dy / n; head.x += dx / n; head.y += dy / n;
       }
     }
-    if (!host.readOnly?.()) {   // thumbsticks: left walks (forward/back, sideways, relative to where you look), right snap-turns
+    if (!host.readOnly?.() && (host.movement?.() ?? 'all') === 'all') {   // thumbsticks: left walks (forward/back, sideways, relative to where you look), right snap-turns
       const stick = (g?: Gamepad) => (g ? [g.axes[2] ?? 0, g.axes[3] ?? 0].map(a => (Math.abs(a) < 0.2 ? 0 : a)) : [0, 0]);
       const wy = MOUNT ? walkerYaw(yaw) : null;
       // mounted: one stick, up/down along the walker's heading, left/right snap-turns; held: left walks relative to the view
@@ -373,6 +386,7 @@ export async function setupXR(host: XrHost) {
   }
   /** Put the head at floor-frame (x, y) looking along yaw by moving the rig: scripted viewpoints on a headset nobody wears. */
   function place(x: number, y: number, yaw: number) {
+    lastSpawn = { x, y, yaw }; if (pendingSpawn) pendingSpawn = { x, y, yaw };
     const a = yaw - readHead(), c = Math.cos(a), s = Math.sin(a), rx = xrRig.x - head.x, ry = xrRig.y - head.y;
     Object.assign(xrRig, { x: x + c * rx - s * ry, y: y + s * rx + c * ry, yaw: xrRig.yaw + a });   // turn about the head, then move it
     placeRig();
@@ -384,17 +398,21 @@ export async function setupXR(host: XrHost) {
   const rigState = () => ({ ...xrRig });
   function restoreRig(r: { x: number; y: number; yaw: number }) { Object.assign(xrRig, r); placeRig(); }
 
-  new SparkXr({   // adds the Enter VR button; "VR not supported" where WebXR isn't available
-    renderer, mode: 'vr', referenceSpaceType: 'local-floor', enableHands: true,
-    frameBufferScaleFactor: cfg.scale, fixedFoveation: cfg.foveation,
-    onEnterXr: () => {
+  function enterRoom() {
       { const p = host.startPose(); if (p) Object.assign(body, p); }   // null: stay where the walker user is
       Object.assign(xrRig, { x: body.x, y: body.y, yaw: body.yaw }); placeRig(); rig.add(camera);
+      lastSpawn = { x: body.x, y: body.y, yaw: body.yaw };
+      pendingSpawn = { ...lastSpawn }; camera.position.set(0, 0, 0); camera.quaternion.identity();
       anchor.set = false; dash.visible = btns.length > 0; mountOffset = null;
       host.enter(tier);
       // a lower refresh gives each frame more time (90 Hz = 11.1 ms, 72 Hz = 13.9 ms); the Quest 2 offers 60-120
       if (cfg.hz) renderer.xr.getSession()?.updateTargetFrameRate?.(cfg.hz).catch(() => {});
-    },
+  }
+
+  bindXR({   // adds the Enter VR button; "VR not supported" where WebXR isn't available
+    renderer, mode: 'vr', referenceSpaceType: 'local-floor', enableHands: true,
+    frameBufferScaleFactor: cfg.scale, fixedFoveation: cfg.foveation,
+    onEnterXr: enterRoom,
     onExitXr: () => {
       camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1; btnHover = -1; dash.visible = false;
       ringCard?.removeFromParent(); ringCard?.material.dispose(); ringCard = null; ringN = 0; bothHeld = 0; gripWas = false; aWas = false; clickWas = false;
@@ -406,7 +424,7 @@ export async function setupXR(host: XrHost) {
 
   const w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3));
   return {
-    tier, device, rig, place, step, moveHead, rigState, restoreRig, mount: () => ({ hand: MOUNT, offset: mountOffset }),
+    tier, device, rig, place, step, resume: enterRoom, spawn: () => ({ ...lastSpawn }), moveHead, rigState, restoreRig, mount: () => ({ hand: MOUNT, offset: mountOffset }),
     presenting: () => renderer.xr.isPresenting,
     /** where the XR camera and the user camera in its rig are (floor frame), and what is tracked */
     pose: () => ({ xr: renderer.xr.isPresenting, head: w(renderer.xr.getCamera()), userCam: w(camera), rig: { ...xrRig },

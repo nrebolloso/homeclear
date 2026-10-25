@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { card } from './reimagine.ts';
 import type { P3, Preview, Handle, Tone } from './marker.ts';
+import { reducedMotion } from './designed.ts';
 
 const TONE: Record<Tone, number> = { info: 0x8fe3ff, ok: 0x7dff9a, bad: 0xff6b6b, side: 0xffd84d };
 const TEXT: Record<Tone, string> = { info: '#c9f0ff', ok: '#b6ffc6', bad: '#ffb0b0', side: '#ffe27a' };
@@ -36,7 +37,9 @@ export function createMarker3d(scene: THREE.Scene) {
   pointer.visible = false;
   let hTag: THREE.Sprite | null = null, hText = '', promptTag: THREE.Sprite | null = null, promptText = '';
   const tagSlots: { sp: THREE.Sprite; text: string }[] = [];
-  let pointsKey = '', handlesKey = '';
+  let pointsKey = '', handlesKey = '', hoverId: string | null = null;
+  const hlist: { id: string; grp: THREE.Group; core: THREE.Mesh; ring: THREE.Mesh; label: THREE.Sprite; on: boolean; seed: number }[] = [];
+  const camPos = new THREE.Vector3(), camQuat = new THREE.Quaternion();
 
   function reTag(old: THREE.Sprite | null, text: string, color: string, size = 0.035) {
     old?.removeFromParent(); old?.material.dispose();
@@ -89,20 +92,46 @@ export function createMarker3d(scene: THREE.Scene) {
       for (let k = pv.tags.length; k < tagSlots.length; k++) tagSlots[k].sp.visible = false;
       order();
     },
-    /** drag handles on measured stairs / doors; `owner` names the stair or door; active: the one being dragged */
+    /** drag handles on measured stairs / doors; `owner` names the stair or door; active: the one being dragged. Each is a core, a
+     *  ring that always faces you and pulses, and a tooltip on hover or drag; update() keeps their apparent size constant. */
     setHandles(hs: (Handle & { owner: string })[], active: string | null = null) {
       const key = JSON.stringify([hs, active]);
       if (key === handlesKey) return;
       handlesKey = key;
-      empty(handles);
+      empty(handles); hlist.length = 0;
       for (const h of hs) {
-        const on = active === `${h.owner}:${h.key}`, s = new THREE.Mesh(new THREE.SphereGeometry(on ? 0.045 : 0.035, 16, 12), basic(on ? 0xffd84d : 0x8fe3ff, 0.9));
-        s.position.set(...h.at); s.userData.handle = { owner: h.owner, key: h.key };
-        const halo = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), basic(0x8fe3ff, 0.12));   // a generous target for a laser pointer
-        halo.userData.handle = s.userData.handle; s.add(halo);
-        handles.add(s);
+        const id = `${h.owner}:${h.key}`, grp = new THREE.Group(), userData = { owner: h.owner, key: h.key };
+        grp.position.set(...h.at);
+        const core = new THREE.Mesh(new THREE.SphereGeometry(0.026, 16, 12), basic(0x8fe3ff, 0.95));
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.052, 0.062, 40), basic(0x8fe3ff, 0.85));
+        const halo = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), basic(0x8fe3ff, 0.1));   // a generous target for a laser pointer
+        core.userData.handle = userData; halo.userData.handle = userData;
+        const label = card([h.label, active === id ? 'release to place' : 'drag to move'], '#ffe27a', 'rgba(14,20,28,0.9)', 0.032);
+        label.position.set(0, 0, 0.16); label.visible = false;
+        grp.add(halo, core, ring, label);
+        handles.add(grp);
+        hlist.push({ id, grp, core, ring, label, on: active === id, seed: hlist.length * 1.7 });
       }
       order();
+    },
+    /** the handle under the pointer (`owner:key`), or null: it brightens and shows its tooltip */
+    setHover(id: string | null) { hoverId = id; },
+    /** per frame: a handle keeps the same size on screen (a 3 cm sphere at the far end of a landing was a speck), faces you, pulses */
+    update(camera: THREE.Camera, t: number) {
+      if (!hlist.length) return;
+      camera.getWorldPosition(camPos); camera.getWorldQuaternion(camQuat);
+      const calm = reducedMotion();
+      for (const h of hlist) {
+        const hot = h.on || hoverId === h.id, d = camPos.distanceTo(h.grp.position), s = Math.min(4.5, Math.max(0.8, d / 1.6)) * (hot ? 1.25 : 1);
+        h.grp.scale.setScalar(s);
+        h.ring.quaternion.copy(camQuat);   // the group is unrotated, so the world turn is the ring's own
+        const pulse = calm ? 1 : 1 + 0.16 * Math.sin(t * 3.4 + h.seed);
+        h.ring.scale.setScalar(pulse * (hot ? 1.2 : 1));
+        const c = h.on ? 0xffd84d : hot ? 0xffffff : 0x8fe3ff;
+        (h.core.material as THREE.MeshBasicMaterial).color.setHex(c); (h.ring.material as THREE.MeshBasicMaterial).color.setHex(c);
+        (h.ring.material as THREE.MeshBasicMaterial).opacity = hot ? 0.95 : calm ? 0.8 : 0.55 + 0.3 * (0.5 + 0.5 * Math.sin(t * 3.4 + h.seed));
+        h.label.visible = hot;
+      }
     },
     /** what is really at each side of a stair: click to say rail / no rail (teal = rail, dashed grey = none) */
     setToggles(ts: Toggle[]) {
@@ -126,9 +155,9 @@ export function createMarker3d(scene: THREE.Scene) {
       order();
     },
     /** handle and toggle meshes, for the pointer ray */
-    pickables: () => [...handles.children.flatMap(h => [h, ...h.children]), ...toggles.children.filter(c => c.userData.toggle && !(c instanceof THREE.Sprite))],
+    pickables: () => [...handles.children.flatMap(h => h.children.filter(c => c.userData.handle)), ...toggles.children.filter(c => c.userData.toggle && !(c instanceof THREE.Sprite))],
     clear() {
-      pointsKey = ''; handlesKey = '';
+      pointsKey = ''; handlesKey = ''; hoverId = null; hlist.length = 0;
       pointer.visible = false; empty(placed); empty(handles); empty(toggles);
       this.setPreview({ lines: [], tags: [] });
       this.setPrompt(null, null);

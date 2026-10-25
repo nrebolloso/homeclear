@@ -1,11 +1,11 @@
 """tools/table_loo.py: a table whose splat dimensions are an exact multiple of the tape leaves no error in any fold; one bad
 dimension shows in the folds that use it and in the one that predicts it; units don't matter; the checks from table_scale.py
 round-trip. Run:  .venv/bin/python tests/test_table_loo.py"""
-import sys
+import re, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from table_loo import DIMS, TAPE_M, fit, from_checks, from_table_scale, loo
+from table_loo import DIMS, KITCHENS, TAPE_M, fit, from_checks, from_table_scale, loo
 
 near = lambda a, b, tol=1e-9: abs(a - b) <= tol
 
@@ -33,4 +33,10 @@ js = {"tabletop_splat_units": {"length": 1.2, "width": 0.8, "height": 0.55}, "co
       "check_width_m": {"tape": TAPE_M["width"]}, "check_height_m": {"tape": TAPE_M["height"]}}
 tape, splat = from_table_scale(js)
 assert near(tape["length"], TAPE_M["length"]) and splat["width"] == 0.8
+# KITCHENS copies each config's width/height check from the comment next to scale.manual_factor: fail if one drifts
+for name, (ew, eh, src) in KITCHENS.items():
+    txt = (Path(__file__).resolve().parents[1] / src.split(";")[0]).read_text()
+    line = next(l for l in txt.splitlines() if "manual_factor" in l)
+    w, h = (float(re.search(rf"{d}(?: check)? ([+-]?\d+\.\d)%", line).group(1)) for d in ("width", "height"))
+    assert (w, h) == (ew, eh), (name, (w, h), (ew, eh))
 print("TABLE LOO TEST OK")
