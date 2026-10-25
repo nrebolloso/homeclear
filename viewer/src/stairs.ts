@@ -269,7 +269,7 @@ export function stairChecks(st: Stair, c: StairCtx): CheckOut[] {
   if (lights) add('light', `${st.name}: motion lights on every step`, 'ok', 'they come on before the first step, at either end');
   else if (near(F.o) && near(st.top)) add('light', `${st.name}: light switch at the top and the bottom`, 'ok', 'switch positions placed by hand');
   else add('light', `${st.name}: no light switch marked at ${near(F.o) ? 'the top' : near(st.top) ? 'the bottom' : 'either end'}`, switches ? 'fail' : 'borderline, OT to verify',
-    switches ? 'climbing to reach a switch in the dark is the classic night fall' : 'no switches are marked in this home: check both ends (a stair at night without one is the classic fall)');
+    switches ? 'climbing to reach a switch in the dark is the classic night trip' : 'no switches are marked in this home: check both ends (a stair at night without one is the classic night trip)');
   // 8. the walker can't climb: with only one, the patient is unaided at the top; a second one only helps within reach
   if (c.device === 'walker') {
     const parked = mine.find(f => f.kind === 'walker_parked');

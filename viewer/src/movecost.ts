@@ -1,41 +1,42 @@
 // What a change to the room takes: money, minutes, people, and who might pay. The seam between the reimagined room
 // (reimagine.ts, fix card, OT report) and the move-effort / insurance model: the signatures stay, the numbers come
-// from TM2's effort.ts (moveEffort) once it lands (AGENTS.md). Until then this is a PLACEHOLDER that mirrors the
-// optimizer's effort (optimize.ts DEFAULTS and actions()); tests/reimagine.test.ts checks the two agree.
-import { DEFAULTS, type OptimizerCfg } from './optimize.ts';
+// from TM2's effort.ts (moveEffort), the same call optimize.ts actions() makes; tests/reimagine.test.ts checks the
+// two agree.
+import { interventionEffort, moveEffort } from './effort.ts';
 import type { Intervention, Pose } from './grid.ts';
 
 /** Who might pay. Traditional Medicare Part B covers almost none of the environmental fixes (convenience items). */
 export type Funding = 'self_pay' | 'part_b_dme' | 'ma_ssbci' | 'medicaid_hcbs' | 'va_hisa' | 'unclassified';
-/** source: 'placeholder' until the effort model lands, then the model's name */
+/** source: the model that priced it ('effort.ts v1'; 'placeholder' for configured fixes until products are classified) */
 export interface MoveCost { usd: number; minutes: number; helpers: number; effort: number; funding: Funding; source: string }
 
 /** a removed object is carried out of the room: counted as a move this far */
 const REMOVE_CARRY_M = 3;
-const kindEffort = (kind: string, cfg: OptimizerCfg) => cfg.move_effort[kind] ?? cfg.move_effort.other;
-const helpersFor = (effort: number) => (effort >= 4 ? 2 : 1);
+export const helpersFor = (effort: number) => (effort >= 4 ? 2 : 1);
+const turnDeg = (from: Pose, to: Pose) => Math.round(((((to.yaw - from.yaw) * 180) / Math.PI) % 360 + 360) % 360);
 
-/** Moving (or turning) an object by hand: free, labour only. Same effort and minutes as an optimizer move. */
-export function moveCost(o: { kind: string }, from: Pose, to: Pose, cfgIn: Partial<OptimizerCfg> = {}): MoveCost {
-  const cfg = { ...DEFAULTS, ...cfgIn }, d = Math.hypot(to.x - from.x, to.y - from.y), e = kindEffort(o.kind, cfg);
-  return { usd: 0, minutes: Math.round(10 + 10 * e * (1 + d / 2)), helpers: helpersFor(e), effort: e * (1 + cfg.effort_per_m * d),
-    funding: 'self_pay', source: 'placeholder' };
+/** Moving (or turning) an object by hand: free, labour only. Same effort, minutes and helpers as an optimizer move. */
+export function moveCost(o: { kind: string; name?: string; mass_kg?: number }, from: Pose, to: Pose): MoveCost {
+  const m = moveEffort({ kind: o.kind, name: o.name, mass_kg: o.mass_kg, distance_m: Math.hypot(to.x - from.x, to.y - from.y), turn_deg: turnDeg(from, to) });
+  return { usd: 0, minutes: m.minutes, helpers: m.people, effort: m.effort, funding: 'self_pay', source: 'effort.ts v1' };
 }
 
 /** Taking an object out of the room. */
-export function removeCost(o: { kind: string }, cfgIn: Partial<OptimizerCfg> = {}): MoveCost {
+export function removeCost(o: { kind: string; name?: string; mass_kg?: number }): MoveCost {
   const at: Pose = { x: 0, y: 0, yaw: 0 };
-  return moveCost(o, at, { ...at, x: REMOVE_CARRY_M }, cfgIn);
+  return moveCost(o, at, { ...at, x: REMOVE_CARRY_M });
 }
 
-/** A configured fix (stage 12 interventions): its own dollars, minutes and effort; a product's funding is not classified yet. */
-export function fixCost(iv: Intervention): MoveCost {
-  const effort = iv.effort ?? 1;
+/** A configured fix (stage 12 interventions): its own dollars, minutes and effort; a product's funding is not classified yet.
+ *  Taping or removing a mat or cord is an action, not a carry (effort.ts interventionEffort); kind: the fix's object's. */
+export function fixCost(iv: Intervention, kind?: string): MoveCost {
+  const effort = interventionEffort(iv, kind);
   return { usd: iv.cost_usd ?? 0, minutes: iv.minutes ?? 10, helpers: helpersFor(effort), effort,
     funding: iv.product ? 'unclassified' : 'self_pay', source: 'placeholder' };
 }
 
-/** Totals for a list of changes. */
-export function sumCosts(cs: MoveCost[]): { usd: number; minutes: number; helpers: number } {
-  return { usd: cs.reduce((a, c) => a + c.usd, 0), minutes: cs.reduce((a, c) => a + c.minutes, 0), helpers: Math.max(1, ...cs.map(c => c.helpers)) };
+/** Totals for a list of changes: effort adds up; helpers is the most any one change needs (the same people do them all). */
+export function sumCosts(cs: MoveCost[]): { usd: number; minutes: number; helpers: number; effort: number } {
+  return { usd: cs.reduce((a, c) => a + c.usd, 0), minutes: cs.reduce((a, c) => a + c.minutes, 0), helpers: Math.max(1, ...cs.map(c => c.helpers)),
+    effort: cs.reduce((a, c) => a + c.effort, 0) };
 }

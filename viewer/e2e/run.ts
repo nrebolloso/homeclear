@@ -401,8 +401,8 @@ try {
     await F(`game.fan.setModel('hand'); ${sim(1.5)}`);
     const h = await F('return game.fan.state()');
     const mat = (s: any) => (s.fan.crossed.mat ?? 0) > 0;
-    const hit = before.find(s => mat(s) && s.fan.red > 0 && / cross the mat /.test(s.label)) ?? before.find(s => mat(s) && s.fan.red > 0);   // near the cord the cord leads the label
-    check('futures fan: 30 imagined futures from the current state, red at the mat, labelled', !!hit && hit.fan.n === 30 && /^World model: 30 futures · \d+ cross the mat · ≈[\d.]+ toe catches\/month here/.test(hit.label), hit ? `${hit.label}; ${hit.fan.red} likely catches, ${hit.fan.catches_month.toFixed(2)}/month` : `never red at the mat: ${before.map(s => s.label.split('· ')[1]).join(', ')}`);
+    const hit = before.find(s => mat(s) && s.fan.red > 0 && / cross the mat( |$)/.test(s.label)) ?? before.find(s => mat(s) && s.fan.red > 0);   // near the cord the cord leads the label
+    check('futures fan: 30 imagined futures from the current state, red at the mat, labelled', !!hit && hit.fan.n === 30 && /^World model: 30 futures · \d+ cross the mat( ·|$)/.test(hit.label), hit ? `${hit.label}; ${hit.fan.red} likely catches, ${hit.fan.catches_month.toFixed(2)}/month` : `never red at the mat: ${before.map(s => s.label.split('· ')[1]).join(', ')}`);
     check('futures fan: no future hits the mat once it is taped flat', after.length > 10 && !after.some(mat), `${after.length} fans, mat crossings ${after.filter(mat).length}, max ${Math.max(...after.map(s => s.fan.catches_month)).toFixed(2)} catches/month`);
     check('futures fan: hand rule toggle', h.model === 'hand' && /^Hand rule:/.test(h.label), h.label);
     // a fixed seed keeps all 30 futures (demorun.ts: the numbers match the recordings), so the adaptive count is measured unseeded
@@ -566,7 +566,7 @@ try {
       await sp.keyboard.press('Escape'); return `selected-controls shown, re-planned: ${(await S('return game.current().per_month')).toFixed(2)}/month`;
     });
     await step('Plan fixes replays the B200 search and ends on Easiest / Keep my mat / Safest (Reimagine tab)', async () => {
-      await sp.click('#tab-reimagine'); await sp.click('#pfplay');
+      await sp.click('#tab-reimagine'); await sp.evaluate(() => document.querySelectorAll('#pane-reimagine details').forEach(d => ((d as HTMLDetailsElement).open = true))); await sp.click('#pfplay');
       await sp.waitForFunction(() => document.querySelectorAll('#pfoptions li').length >= 2 && !(window as any).game.planfix.state().playing, null, { timeout: 180000 })
         .catch(async e => { throw Error(`${String(e).split('\n')[0]} ${JSON.stringify(await S("const s = game.planfix.state(); return { playing: s.playing, frame: s.frame, res: document.getElementById('pfresult').textContent.slice(0, 90) }"))}`); });
       const li = await sp.$$eval('#pfoptions > li', ls => ls.map(l => l.textContent!.split(':')[0].trim()));
@@ -615,7 +615,7 @@ try {
     });
     await step('Reset demo (viewer toolbar) puts back the scan: poses, tape, removals, fan and replay; same seed', async () => {
       await S("await game.fan.tapeMat(); await game.moveObject('chair8', 1.6, -0.9, 0); game.fan.set(true)");
-      await sp.click('#tab-reimagine'); await sp.click('#pfplay'); await sp.waitForTimeout(1500);
+      await sp.click('#tab-reimagine'); await sp.evaluate(() => document.querySelectorAll('#pane-reimagine details').forEach(d => ((d as HTMLDetailsElement).open = true))); await sp.click('#pfplay'); await sp.waitForTimeout(1500);
       await sp.click('#resetdemo'); await sp.waitForTimeout(3000);
       const r = await S(`const L = game.layout(), s0 = ${JSON.stringify(scan0)}; return { far: Math.max(...L.poses.map((q, k) => Math.hypot(q.x - s0[k].x, q.y - s0[k].y))),
         taped: L.poses.filter(q => q.taped).length, removed: L.poses.filter(q => q.removed).length, folds: game.rugFolds.folds().length, fan: game.fan.state().on,

@@ -19,13 +19,16 @@ export interface FanScene {
 }
 /** a folded corner (livephys flapInfo while folded): the doubled-over cloth stands up near that corner */
 export interface Fold { corner: XY; lift_m: number; size_m: number }
-/** crossed = the edge (mat, cord, folded corner) a swing rose over, hit or not; route = index into Fan.routes */
-export interface Future { walker: XY[]; heels: XY[]; end: Pose; hazard: string | null; at: XY | null; p: number; crossed: string | null; route: number }
+/** crossed = the edge (mat, cord, folded corner) a swing rose over, hit or not; route = index into Fan.routes;
+ *  steps[k] = the swing that landed heels[k]: its own catch chance, the edge it rose over (null: none), which foot */
+export interface Future { walker: XY[]; heels: XY[]; steps: { p: number; edge: string | null; left: boolean }[]; end: Pose; hazard: string | null; at: XY | null; p: number; crossed: string | null; route: number }
 /** catches_month = the fan's mean p x trips/night x days/month: expected toe catches per month if every trip passed here as these futures do */
 export interface RouteOption { label: string; xy: XY[]; length_m: number; p: number; fork: XY | null }
 export interface Fan {
   futures: Future[]; counts: Record<string, number>; crossed: Record<string, number>; spread_m: number; path: 'route' | 'heading';
   routes: { label: string; p: number; n: number; fork: XY | null; tip: XY | null }[]; ahead_s: number; lift: Lift; catches_month: number;
+  /** this room's worst single step: one swing over its tallest mat/cord at the lift's median clearance (the fan's colour scale top) */
+  step_top: number;
 }
 
 /** Foot lift: the published older-adult minimum toe clearance (MTC) curve, lognormal 14.1 +- 8.3 mm (Frontiers 2014, the
@@ -204,17 +207,20 @@ export function fan(S: FanScene, st: Stamped, wm: WorldModel | null, state: { x:
   let P = paths[0];
   const lights = st.lights, night = opts.night ?? true;
   // the swing check of the main rollouts, plus its name and where
-  const swing = (from: XY, foot: XY, clearance: number, fu: Future) => {
+  const swing = (from: XY, foot: XY, clearance: number, fu: Future): { p: number; edge: string | null } => {
     const ns = Math.max(2, Math.ceil(Math.hypot(foot[0] - from[0], foot[1] - from[1]) / (g.cell_m / 2)));
     let h = 0, hc = -1;
     for (let q = 0; q <= ns; q++) { const [i, j] = toCell(g, [from[0] + (foot[0] - from[0]) * q / ns, from[1] + (foot[1] - from[1]) * q / ns]), c = i * ny + j; if (st.L.bump[c] > h) { h = st.L.bump[c]; hc = c; } }
-    if (h <= 0) return;
+    if (h <= 0) return { p: 0, edge: null };
     const lit = lights.some(l => Math.hypot(foot[0] - l.x, foot[1] - l.y) <= l.r), dark = night && !lit ? risk.dark_contact_multiplier : 1;
-    fu.p = 1 - (1 - fu.p) * (1 - Math.min(1, contactProb(table, h / clearance) * dark));
+    const p = Math.min(1, contactProb(table, h / clearance) * dark);
+    fu.p = 1 - (1 - fu.p) * (1 - p);
     // an edge the swing rises over (stepping along the top of a mat or down off it is not)
     const [fi, fj] = toCell(g, from), rise = h - st.L.bump[fi * ny + fj];
-    if (rise < S.rules.bump_min_m) return;
-    if (!fu.crossed) { fu.crossed = bumpName(S, st, hc, true).replace(/ edge$/, ''); fu.at ??= cellXY(g, hc); }
+    if (rise < S.rules.bump_min_m) return { p, edge: null };
+    const edge = bumpName(S, st, hc, true).replace(/ edge$/, '');
+    if (!fu.crossed) { fu.crossed = edge; fu.at ??= cellXY(g, hc); }
+    return { p, edge };
   };
   const frame = (p: Pose, fu: Future) => { if (fu.hazard) return; const b = brushName(S, st, p); if (b) { fu.hazard = b.name; fu.at = b.at; } };
   const travel = (fu: Future) => { let d = 0; for (let k = 1; k < fu.walker.length; k++) d += Math.hypot(fu.walker[k][0] - fu.walker[k - 1][0], fu.walker[k][1] - fu.walker[k - 1][1]); return d; };
@@ -225,7 +231,7 @@ export function fan(S: FanScene, st: Stamped, wm: WorldModel | null, state: { x:
     for (let u = R.u(); r < routes.length - 1 && (u -= routes[r].p) > 0; r++);
     P = paths[r]; routes[r].n++;
     const clearance = Math.exp(R.n() * pe.toe_clearance_cv) * (pe.clearance_scale ?? 1) * ls;
-    const fu: Future = { walker: [c0], heels: [], end: [c0[0], c0[1], state.yaw], hazard: null, at: null, p: 0, crossed: null, route: r };
+    const fu: Future = { walker: [c0], heels: [], steps: [], end: [c0[0], c0[1], state.yaw], hazard: null, at: null, p: 0, crossed: null, route: r };
     if (wm) {
       // worldRollouts: heels seeded around the person, mid-heels at the body; actions = path points 25/50/100 cm ahead
       const L0 = pe.stride_m, Wd = pe.foot_sep_m, s0 = R.u() < 0.5 ? -1 : 1, ux = Math.cos(state.yaw), uy = Math.sin(state.yaw);
@@ -235,7 +241,7 @@ export function fan(S: FanScene, st: Stamped, wm: WorldModel | null, state: { x:
       for (let k = 0, s = 0; s < 30 && travel(fu) < ahead; s++) {
         k = nearest([(heels[0][0] + heels[1][0]) / 2, (heels[0][1] + heels[1][1]) / 2], k, 120);
         const p = predict(wm, heels, sides, [25, 50, 100].map(o => P[Math.min(k + o, P.length - 1)])), foot = sampleHeel(p, R.u, R.n), side = -sides[0], fi = side > 0 ? 1 : 0;
-        swing(last[fi], foot, clearance, fu); frame(p.walker, fu);
+        fu.steps.push({ ...swing(last[fi], foot, clearance, fu), left: side > 0 }); frame(p.walker, fu);
         last[fi] = foot; heels.unshift(foot); heels.length = 3; sides.unshift(side); sides.length = 3;
         fu.heels.push(foot); fu.walker.push([p.walker[0], p.walker[1]]); fu.end = p.walker;
       }
@@ -248,7 +254,7 @@ export function fan(S: FanScene, st: Stamped, wm: WorldModel | null, state: { x:
         u += step / 0.01; j = Math.min(P.length - 2, Math.round(u));
         const t: XY = [P[j + 1][0] - P[j][0], P[j + 1][1] - P[j][1]], tl = Math.hypot(t[0], t[1]) || 1, nx = -t[1] / tl, nyv = t[0] / tl;
         const lat = off + (side ? 1 : -1) * pe.foot_sep_m / 2 + R.n() * risk.step_jitter_m, foot: XY = [P[j][0] + nx * lat, P[j][1] + nyv * lat];
-        if (last[side]) swing(last[side]!, foot, clearance, fu);
+        fu.steps.push({ ...(last[side] ? swing(last[side]!, foot, clearance, fu) : { p: 0, edge: null }), left: side === 1 });
         last[side] = foot;
         const cj = Math.min(P.length - 2, j + Math.round(off0 / 0.01)), w: Pose = [P[cj][0] + nx * off, P[cj][1] + nyv * off, Math.atan2(P[cj + 1][1] - P[cj][1], P[cj + 1][0] - P[cj][0])];
         frame(w, fu);
@@ -260,7 +266,9 @@ export function fan(S: FanScene, st: Stamped, wm: WorldModel | null, state: { x:
     futures.push(fu);
   }
   const catches_month = futures.reduce((a, f) => a + f.p, 0) / Math.max(1, n) * risk.trips_per_night * risk.days_per_month;
-  return { futures, counts, crossed, spread_m: spread(futures), path: kind, routes, ahead_s, lift, catches_month };
+  const tallest = Math.max(0, ...S.objects.filter(o => o.layer === 'bump').map(o => o.height_m));
+  const step_top = contactProb(table, tallest / ((pe.clearance_scale ?? 1) * ls)) * (night ? risk.dark_contact_multiplier : 1);
+  return { futures, counts, crossed, spread_m: spread(futures), path: kind, routes, ahead_s, lift, catches_month, step_top };
 }
 
 /** sd of the futures' end points across their mean heading (m): how wide the fan opens */
@@ -289,13 +297,17 @@ export function stickyLead(hold_s = 1.5) {
     return held;
   };
 }
-/** the label: "World model: 30 futures · 30 cross the mat · ≈1.0 toe catches/month here", then the brushes ("4 brush the chair") */
+/** the label: "World model: 30 futures · 30 cross the mat", then the brushes ("4 brush the chair"). No rate: the panel
+ *  headline is the one toe-catch number on screen; the fan's own rate is spotRate() */
 export function fanLabel(F: Fan, model: string, lead_hazard = leadHazard(F)): string {
   const n = F.futures.length, edge = lead_hazard && F.crossed[lead_hazard] ? [lead_hazard, F.crossed[lead_hazard]] : null;
   const brush = Object.entries(F.counts).sort((a, b) => b[1] - a[1]).map(([k, c]) => `${c} brush the ${k}`);
-  const lead = edge ? `${edge[1]} cross the ${edge[0]} · ≈${catches(F.catches_month)} toe catches/month here` : brush.length ? '' : 'all clear';
+  const lead = edge ? `${edge[1]} cross the ${edge[0]}` : brush.length ? '' : 'all clear';
   return [`${model}: ${n} futures`, ...(lead ? [lead] : []), ...brush].join(' · ');
 }
+/** the fan's rate, said for what it measures: "≈0.14 toe catches/month at the mat (if every trip passed here like these)" */
+export const spotRate = (F: Fan, lead_hazard = leadHazard(F)) =>
+  `≈${catches(F.catches_month)} toe catches/month ${lead_hazard ? `at the ${lead_hazard}` : 'here'} (if every trip passed here like these)`;
 const catches = (c: number) => (c >= 0.095 ? c.toFixed(1) : c >= 0.001 ? c.toFixed(2) : '0');
 /** "18 over the mat · 12 around the mat" (only when the way ahead forks) */
 export function routeLabel(F: Fan): string {
