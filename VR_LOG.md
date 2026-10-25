@@ -225,6 +225,10 @@ gap everywhere means the floor (fix with `?floor=`), a gap only at one object me
    exit") or moving it into the menu.
 9. Tell Nick: kitchen4 fridge top missing ~12 cm (section 4.5); table is 63 in, not 62 (section 4.4); this walker is
    21 in at its widest, not 24 (section 4.3).
+10. Tell Juan (security review of `viewer/session-plugin.ts`, the companion relay): a device is known only by the
+   `client` name in its URL, and those names are sent to every device, so anyone who can reach the dev server can post
+   as another device (even the headset host). Fine on `127.0.0.1` and over adb; not with `--host` on a shared network.
+   Fix: a random secret per device when it joins, required on every POST, never broadcast.
 
 ## 9. Team decisions to keep
 
