@@ -1,5 +1,5 @@
-// Walking gait ghosts, the planning half (gaitghosts.ts draws it, fanworker.ts runs it): one whole trip per gait along the planned
-// route, from the fan's own machinery (futures.ts fan(): the learned world model, the contact table, the rug fold).
+// Walking gait ghosts, the planning half (gaitghosts.ts draws it, fanworker.ts runs it): whole trips per gait along the planned
+// route and every way round its hazards (one walking ghost per way, the rest of its futures as trails), from the fan's own machinery (futures.ts fan(): the learned world model, the contact table, the rug fold).
 // - Each gait is a foot-lift persona (futures.ts LIFTS). Gait changes how likely a toe is to catch an edge and, through that, which
 //   way round a hazard the ghost walks (ASSUMPTION: ROUTE_RISK_M); it does not change the cloth: the rug folds with the same measured
 //   chance for every gait, the shuffler just meets the folded corner with a lower toe.
@@ -19,6 +19,11 @@ export const GAITS: Gait[] = [
   { id: 'shuffler', label: 'Low-clearance shuffler', lift: 'shuffler', color: 0xffb347, css: '#ffb347' },
 ];
 export interface GhostRoute { label: string; length_m: number; /** mean catch chance of this gait's futures on it */ risk: number; /** this gait's odds of taking it */ odds: number; catches_month: number }
+/** one way this gait could walk (a route option): its typical future, walked by a ghost, and a few more of its futures as trails */
+export interface GhostPath extends GhostRoute {
+  trip: Future; poses: Pose[]; swings: number[]; /** heel k is the left foot */ left: boolean[];
+  trails: { walker: XY[]; p: number }[];
+}
 export interface GhostRun {
   gait: GaitId; lift: Lift; routes: GhostRoute[]; pick: number;
   /** the typical future on the chosen route: its walker poses (frame centre, yaw), heels (heel k lands with poses[k + 1]) and what each swing risked */
@@ -28,8 +33,17 @@ export interface GhostRun {
   /** the way back over the same route when the typical trip folded a corner on the way out (the rug cascade, rugcascade.ts: a fold is a taller
    *  bump for the next pass): catches/month back with that corner folded against flat; null when nothing folded */
   back: { flat_month: number; folded_month: number } | null;
+  /** every route option this gait could take (paths[pick] is the trip above), each with its own walking ghost and trails */
+  paths: GhostPath[];
 }
-export interface GhostOpts { seed: number; n?: number; riskM?: number; foldP?: number | null; night?: boolean; gaits?: Gait[] }
+export interface GhostOpts { seed: number; n?: number; riskM?: number; foldP?: number | null; night?: boolean; gaits?: Gait[]; /** futures drawn as trails per path */ trails?: number }
+
+/** the typical future: closest to the mean catch chance, among the ones that cross something when most do (so the ghost shows the edge it is
+ *  typically walking over), else among all (a clean walk when most are clean) */
+export function typical(fs: Future[], mean: number): Future {
+  const all = fs.filter(f => f.walker.length > 3), crossing = all.filter(f => f.crossed), pool = crossing.length >= all.length / 2 ? crossing : all;
+  return (pool.length ? pool : fs).reduce((b, f) => (Math.abs(f.p - mean) < Math.abs(b.p - mean) ? f : b));
+}
 
 /** the person (body centre, heading) with the walker frame on the route's first point, facing along it */
 export function startState(xy: XY[], off0: number): { x: number; y: number; yaw: number } {
@@ -61,17 +75,19 @@ export function planGhosts(S: FanScene, lay: Layout, wm: WorldModel | null, rout
     const risks = F.map(f => f.futures.reduce((a, x) => a + x.p, 0) / Math.max(1, f.futures.length)), odds = routeOdds(options.map(o => o.length_m), risks, riskM);
     let pick = 0;
     for (let acc = odds[0]; pick < odds.length - 1 && u > acc; acc += odds[++pick]);
-    const all = F[pick].futures.filter(f => f.walker.length > 3), mean = risks[pick], crossing = all.filter(f => f.crossed);
-    // the typical future: closest to this route's mean catch chance, among the ones that cross something when most do (so the ghost
-    // shows the edge it is typically walking over), else among all (a clean walk when most are clean)
-    const pool = crossing.length >= all.length / 2 ? crossing : all, trip = (pool.length ? pool : F[pick].futures).reduce((b, f) => (Math.abs(f.p - mean) < Math.abs(b.p - mean) ? f : b));
-    const per = F.map(f => f.catches_month);
+    const per = F.map(f => f.catches_month), nt = opts.trails ?? 10;
+    const paths: GhostPath[] = options.map((o, i) => {
+      const t = typical(F[i].futures, risks[i]);
+      return { label: o.label, length_m: o.length_m, risk: risks[i], odds: odds[i], catches_month: per[i], trip: t, poses: posesOf(t, first.yaw), swings: t.steps.map(x => x.p),
+        left: t.steps.map(x => x.left), trails: F[i].futures.filter(f => f !== t).slice(0, nt).map(f => ({ walker: f.walker, p: f.p })) };
+    });
+    const trip = paths[pick].trip;
     let back: GhostRun['back'] = null;
     if (trip.fold) {
       const rev = [...options[pick].xy].reverse(), sb = startState(rev, off0), o = { full_route: true, max_steps: 80, lift: gt.lift, night: opts.night };
       back = { flat_month: fan(S, st, wm, sb, rev, n, opts.seed + 500 + gi, o).catches_month, folded_month: fan(S, prepare(S, lay, trip.fold), wm, sb, rev, n, opts.seed + 500 + gi, o).catches_month };
     }
-    return { gait: gt.id, back, lift: gt.lift, pick, n, trip, poses: posesOf(trip, first.yaw), swings: trip.steps.map(x => x.p), catches_month: per[pick],
+    return { gait: gt.id, back, lift: gt.lift, pick, n, trip, poses: paths[pick].poses, swings: paths[pick].swings, catches_month: per[pick], paths,
       expected_month: per.reduce((a, c, i) => a + c * odds[i], 0), folds: F[pick].futures.filter(f => f.fold).length,
       routes: options.map((o, i) => ({ label: o.label, length_m: o.length_m, risk: risks[i], odds: odds[i], catches_month: per[i] })) };
   });

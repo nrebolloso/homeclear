@@ -19,7 +19,7 @@ import type { WorldModel } from './worldmodel.ts';
 
 export interface Style { name: string; e: number[]; placement: { step_cm: number; lateral_cm: number; vs_mean_cm: number | null; steps: number }; scanned: { risk: number; brushes: number; contacts: number } }
 export interface WmGhostDeps {
-  scene: THREE.Scene; walker: () => WalkerCfg; view: () => void; /** show the mannequin on the ghosts (default: yes) */ mannequin?: () => boolean;   // a camera that sees the whole route (first person sits inside the ghosts)
+  scene: THREE.Scene; walker: () => WalkerCfg; view: () => void;   // a camera that sees the whole route (first person sits inside the ghosts)
   planfix: { layouts(): { now: PlanLayout; scan: PlanLayout; chosen: PlanLayout } | null; imagine(pl: PlanLayout, wm: WorldModel, n: number, nf?: number): Promise<Imagined>; goto(pl: PlanLayout): Promise<void> };
 }
 const SPEED = 0.45, AHEAD_S = 0.5, FLASH_S = 0.5, TAG = 'imagined (world model)';
@@ -88,7 +88,6 @@ export function createWmGhosts(D: WmGhostDeps) {
 
   function actor(name: string, trip: ImaginedStep[], tint: number): Actor {
     const W = trip.map(t => t.walker), d = arc(W), man = buildMannequin(1.65), walker = buildWalker(D.walker()), g = new THREE.Group();
-    man.group.visible = D.mannequin?.() ?? true;
     g.add(man.group, walker.group); root.add(g);
     const look = translucent(g, tint, 0.62), L = d[d.length - 1] / Math.max(1, d.length - 1);
     return { name, trip, W, d, steps: trip.map((t, k) => ({ xy: t.heel, side: t.side > 0 ? 1 : 0, hit: !!caught(t), s: d[k] })), stride: 1.6 * L, man, walker, look,

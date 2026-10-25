@@ -22,6 +22,8 @@ export function assumptions(risk?: { dark_contact_multiplier?: number }, speed_m
     { key: 'shuffler', label: 'Shuffler foot lift', value: `${(LIFTS.shuffler.scale * 100).toFixed(0)}% of average`, kind: 'assumed', note: '16th percentile of the published curve, not a measured shuffling group' },
     { key: 'route_tau', label: 'Route choice: length sensitivity', value: `${ROUTE_TAU_M} m per e-fold`, kind: 'assumed', note: 'softmax on path length, not fitted to people\'s choices' },
     { key: 'route_risk', label: 'Route choice: risk aversion', value: `${ROUTE_RISK_M / 100} m of detour per 1% catch chance`, kind: 'assumed', note: 'what makes the shuffler\'s ghost take the way around the mat more often' },
+    { key: 'drawn_lift', label: 'Foot lift as drawn on the ghosts', value: `8 cm average, ${Math.round(8 * LIFTS.shuffler.scale)} cm shuffler`, kind: 'assumed',
+      note: 'about 6x the real clearance so the difference shows at room scale; display only, no number is computed from it' },
     { key: 'speed', label: 'Walking speed', value: `${speed_mps} m/s, all gaits`, kind: 'assumed', note: 'the model predicts where the feet land, not how fast; every ghost walks at one speed' },
     { key: 'caps', label: 'Glide caps on the walker', value: `x${CAPS_FACTOR.toFixed(2)} fold or drag`, kind: 'assumed', note: 'cap friction is an assumed number (rug_calib glide_caps_mu_assumed); only applies when the layout has them' },
     { key: 'tape', label: 'Taped rug edge', value: `x${TAPE_FACTOR.toFixed(2)} fold or drag; edge 1.5 mm`, kind: 'simulated', note: 'a taped rug cannot fold in the ghosts' },

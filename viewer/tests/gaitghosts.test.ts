@@ -9,6 +9,9 @@ import { GAITS, planGhosts, posesOf, startState } from '../src/gaitplan.ts';
 import { assumptions, countAssumed } from '../src/assumptions.ts';
 import { P_FOLD } from '../src/rugcascade.ts';
 import type { XY } from '../src/grid.ts';
+import { feetAt } from '../src/mannequin.ts';
+import { DRAWN_LIFT_M } from '../src/gaitghosts.ts';
+import { LIFTS } from '../src/futures.ts';
 
 const { init, poses, walker } = loadScene('kitchen4_lighter');
 const js = (f: string) => JSON.parse(readFileSync(new URL(`../public/${f}`, import.meta.url), 'utf8'));
@@ -31,6 +34,26 @@ test('gait ghosts: one trip per gait, the planned route plus its way round the m
     assert.ok(r.trip.heels.length > 6, `${r.trip.heels.length} steps`);
   }
   assert.deepEqual(planGhosts(S, lay, wm, xy, null, { seed: 4 }).map(r => r.trip.heels), R.map(r => r.trip.heels));
+});
+
+test('gait ghosts: every way round the mat is walked by its own ghost, with the rest of its futures as trails', () => {
+  for (const r of planGhosts(S, lay, wm, xy, null, { seed: 4 })) {
+    assert.equal(r.paths.length, r.routes.length);
+    assert.equal(r.paths[r.pick].trip, r.trip);
+    for (const p of r.paths) {
+      assert.equal(p.poses.length, p.trip.heels.length + 1);
+      assert.equal(p.left.length, p.trip.heels.length);
+      assert.ok(p.left.slice(1).every((l, k) => l !== p.left[k]), 'feet alternate');
+      assert.ok(p.trails.length > 0 && p.trails.length <= 10 && !p.trails.some(t => t.walker === p.trip.walker));
+    }
+  }
+});
+
+test('gait ghosts: the drawn swing is lower for the shuffler (feetAt lift), and the default lift is unchanged', () => {
+  const steps = [{ xy: [0, 0] as XY, side: 0, hit: false, s: 0 }, { xy: [0.4, 0] as XY, side: 0, hit: false, s: 0.4 }];
+  const peak = (lift?: number) => feetAt(steps, 0.3, 0.4, lift)[0].pos[2];   // mid-swing of the second step
+  assert.ok(Math.abs(peak() - 0.05) < 1e-9);
+  assert.ok(peak(DRAWN_LIFT_M * LIFTS.shuffler.scale) < peak(DRAWN_LIFT_M) && peak(DRAWN_LIFT_M) > 0.05);
 });
 
 test('gait ghosts: the shuffler catches the mat more, and picks the way round it more often (same draw for both)', () => {

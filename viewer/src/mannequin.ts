@@ -7,8 +7,9 @@ const SKIN = 0xd9c2a7, CLOTH = 0x5b6f8a;
 
 export interface Step { xy: XY; side: number; hit: boolean; s: number }
 
-/** Footsteps -> where each foot is at route arc length s: planted on its last step, swinging (with lift) toward the next. */
-export function feetAt(steps: Step[], s: number, stride: number): { pos: [number, number, number]; red: boolean }[] {
+/** Footsteps -> where each foot is at route arc length s: planted on its last step, swinging (with lift) toward the next.
+ *  lift_m = the swing's peak height (gaitghosts.ts draws each gait's own lift, exaggerated so it shows at room scale) */
+export function feetAt(steps: Step[], s: number, stride: number, lift_m = 0.05): { pos: [number, number, number]; red: boolean }[] {
   return [0, 1].map(side => {
     const mine = steps.filter(p => p.side === side);
     if (!mine.length) return { pos: [0, 0, 0] as [number, number, number], red: false };
@@ -18,7 +19,7 @@ export function feetAt(steps: Step[], s: number, stride: number): { pos: [number
     if (k === 0 || prev === next) return { pos: [prev.xy[0], prev.xy[1], 0], red: prev.hit };
     // a foot swings during the half stride before it lands
     const f = THREE.MathUtils.clamp((s - (next.s - stride / 2)) / (stride / 2), 0, 1);
-    const lift = Math.sin(Math.PI * f) * 0.05;
+    const lift = Math.sin(Math.PI * f) * lift_m;
     return { pos: [prev.xy[0] + (next.xy[0] - prev.xy[0]) * f, prev.xy[1] + (next.xy[1] - prev.xy[1]) * f, lift], red: next.hit && f > 0.8 };
   });
 }

@@ -184,9 +184,10 @@
       <label><span style="color:#ffb347">&#9632;</span> <input type="checkbox" id="gait-shuffler" checked> Low-clearance shuffler</label>
       <label title="the rug corner folds with the measured chance per edge crossing, the same for every gait; a folded corner is a taller bump for the toes behind it"><input type="checkbox" id="gaitfold" checked> Rug can fold under a crossing</label>
       <label title="the footstep dots of the first simulated trips (the Ghosts box above), off while the gaits walk"><input type="checkbox" id="gaittraces"> Show the old path traces</label>
-      <label title="the rigged / plain mannequin behind the walker in third person, and on the kitchen ghosts"><input type="checkbox" id="gaitman"> Mannequin</label>
+      <label title="the rigged / plain mannequin behind the walker in third person, and on the kitchen ghosts"><input type="checkbox" id="gaitman"> Mannequin behind the walker (third person)</label>
       <div><input type="range" id="gaitrisk" min="0" max="100" step="5" title="ASSUMPTION: how much detour a walker accepts to avoid a toe catch"> <span id="gaitriskval"></span></div>
       <button id="gaitseed" title="the next draw of which way each gait goes (same draw for both gaits)">Next draw</button>
+      <button id="gaitview" title="a camera over the whole kitchen route (fly mode: the live futures fan then starts where you are, not on the route)">Overview</button>
       <div id="gaitstatus" class="status"></div>
       <details><summary>Assumptions behind these ghosts</summary><ul id="gaitassume"></ul></details>
       <div class="hint">the walkers' route odds and the shuffler's lift are assumptions; the fold chance is measured on a few passes; nothing here feeds the planner or the report</div>

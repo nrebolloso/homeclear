@@ -979,8 +979,8 @@ $('gfreplan').onclick = () => gait.replan();
 game.gait = gait;   // VR: feed game.gait.observe() per heel strike, hang game.gait.panel / show game.gait.ghost (HANDOFF_GAIT.md)
 // ---------- world model in the kitchen (wmghosts.ts): two gait styles life-size, futures fan, predicted self, a month of trips ----------
 // in VR you stay where you stand (setFly would switch the desktop to fly mode and turn the walker under you)
-let manOn = PARAMS.has('mannequin');   // the mannequin is off for now (the gait ghosts, gaitghosts.ts, replace it): ?mannequin[=basic] or the Gait panel's box brings it back
-const wmg = createWmGhosts({ scene, walker: () => walkerCfg, planfix, mannequin: () => manOn, view: () => { if (!renderer.xr.isPresenting) game.setFly(-0.7, -2.3, 2.3, 55, -36); } });
+let manOn = PARAMS.has('mannequin');   // the third-person mannequin is off for now (the ghosts walk translucent ones): ?mannequin[=basic] or the Gait panel's box brings it back
+const wmg = createWmGhosts({ scene, walker: () => walkerCfg, planfix, view: () => { if (!renderer.xr.isPresenting) game.setFly(-0.7, -2.3, 2.3, 55, -36); } });
 $('wgstyles').onclick = () => wmg.twoStyles();
 $('wgstyle').onchange = () => wmg.twoStyles();
 $('wgmonth').onclick = () => wmg.month();
