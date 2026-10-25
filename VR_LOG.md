@@ -1,4 +1,4 @@
-# VR log: everything done on the VR lane (Diego + Claude Code on the Mac), 2026-10-23 to 2026-10-24
+# VR log: everything done on the VR lane (Diego + Claude Code on the Mac), 2026-10-23 to 2026-10-25
 
 Written for the next person or agent picking up VR (e.g. Claude Code on the Windows/Link PC) so nothing is redone.
 Branch `diego/vr` (merged into `main` through `feat/renovations` -> `nicolas/demo`; `diego/vr` has main merged back in).
@@ -37,6 +37,8 @@ unused), and VR in `main.ts` is only a hook block.
 | `mount=left` / `mount=right` | That controller is zip-tied to the walker (section 3) |
 | `wand=left` | Wand in the left hand (default right) |
 | `scale=1.1` | Shows the home 10% bigger (rig scaled by 1/1.1). Look only: measurements stay in scan metres. A comfort/try-out knob, not a fix (section 4.4) |
+| `floor=3` | Lifts the scan's floor 3 cm against the real one (negative lowers it): you stand that much lower in the scan. For a scan whose floor sits off the real floor (section 4.5) |
+| `measure=1` | A card on the wand shows its height above the real floor (in and cm): rest it on a real surface and see if the scan's surface is at the same height |
 | `emulate=quest2` | IWER emulated headset in a desktop browser |
 | `xrscale=`, `foveation=`, `stddev=`, `maxpx=`, `link=1` | Override render scale (Quest 0.5), foveation (Quest 1), splat trim (2.0 / 128 px), force Link tier |
 
@@ -126,6 +128,11 @@ Manufacturer spec sheet: 24 in (0.61 m) wide, 1 in (25.4 mm) aluminium tubes, 5 
 width 0.66, depth 0.5, handle height 0.85, user gap 0.25, leg radius 0.015. Still to tape: glide cap diameter, the
 patient's handle height, where the controller ends up after fitting. 2 deg of controller rock moves the far legs ~1 cm.
 
+**Taped on the real walker (2026-10-25):** front width **19.5 in (0.495 m)**, back width **21 in (0.533 m)** (it widens
+toward the back), overall height **39.5 in (1.00 m)**. The configs' `walker_width_m: 0.61` (24 in, spec sheet) is 3 in
+wider than this walker's widest point, so the sim calls some squeezes tighter than they are. Still to confirm: whether
+those are outside-to-outside, and the front-to-back depth. The configs are Nick's (tell him before changing).
+
 ### 4.4 kitchen4 scale check (on site, 2026-10-24, no tape: laptop + phone lengths)
 
 The scale comes from `configs/kitchen4.yaml` `scale.manual_factor: 1.13099` (table taken as 62 in long). In VR the
@@ -143,6 +150,28 @@ a few percent; don't change `manual_factor`.** The "smaller" feeling is the head
 underestimated 10-20%; also check the Quest 2 IPD slider (positions 1/2/3 = 58/63/68 mm) and that the virtual floor
 meets the real one (touch the floor with a controller). Other scan heights for reference: tall cabinets ("box*"
 objects) top at 2.14-2.28 m (84-90 in), bedside table 0.69 m, chairs 0.73 m, trash can 0.66 m.
+
+**Taped (2026-10-25):** table **63 x 35.5 in (160.0 x 90.2 cm)**, so the scan is 3.8% short and 5.3% long; the
+geometric mean is 120.1 cm real vs 121.0 cm scan (+0.7%). The scale is right (the config's 62 in should read 63 in;
+the factor needn't change).
+
+### 4.5 kitchen4 heights (on site, 2026-10-25, tape)
+
+In VR, Diego felt about 2 in too tall next to the fridge with the Quest floor set correctly.
+
+| | Tape | Scan (kitchen4_lighter, k4_150k, v1.0.3 all the same) | |
+|---|---|---|---|
+| Table top | 29.5 in (74.9 cm) | 77.5 cm | scan 3.5% tall |
+| Fridge top | ~65.5 in (166 cm) | ~153-155 cm (front of the fridge) | scan ~12 cm short |
+| Cabinet above the fridge | ~84 in (213 cm), hard to tape | ~197 cm | scan ~16 cm short |
+| Floor near the fridge | - | -0.5 cm | right |
+| Ceiling | almost 8 ft (2.4 m) | not in the scan (tops out at 2.29 m, the tall cabinets) | |
+
+Table tall and fridge short = not a scale error and not the floor (the floor is at 0 in every copy): the scan lost the
+top of the fridge (white, shiny, high up). Next to a fridge ~12 cm short you feel taller. The fix is in the scan
+(a re-film was under way on 2026-10-25), not in VR. To check a new scan in the headset: `?measure=1`, rest a controller
+on the real floor, the tabletop and the fridge top, and see if the virtual one rests on the scan's surface; a constant
+gap everywhere means the floor (fix with `?floor=`), a gap only at one object means the scan there.
 
 ## 5. The headset (Quest 2) from the Mac
 
@@ -170,6 +199,8 @@ objects) top at 2.14-2.28 m (84-90 in), bedside table 0.69 m, chairs 0.73 m, tra
 ## 7. Test status (merged diego/vr, 2026-10-24 evening, Mac)
 
 - `npm test`: 176 pass, 17 skipped, 0 fail. `npm run build`: OK. `e2e:xr`: 28/28.
+- 2026-10-25 (main with PR #9 merged in, plus `?floor=`, `?measure=1`, `bounded-floor`): `npm test` 222 pass, 17
+  skipped, 0 fail; build OK; `e2e:xr` 29/29.
 - Earlier on diego/vr: `node e2e/run.ts` 37/37.
 - Juan's `e2e:frontend`, `e2e:frontend:xr`, `e2e:renovations` **time out on macOS** (stuck clicking ENTER VR /
   `#mode-explore`), same on his unmodified branch: they launch Chrome with `--use-angle=gl` (software GL on macOS) and
@@ -186,6 +217,14 @@ objects) top at 2.14-2.28 m (84-90 in), bedside table 0.69 m, chairs 0.73 m, tra
    nightlight). (His planning menu now needs a held click, which fixes the accidental-open concern.)
 5. Link on the Windows PC (RTX 4070 laptop): full-quality scene, result pending (`VR_WINDOWS.md`).
 6. Delete `kitchen4_lighter_prev`, `kitchen4_raw` if unused. Dock detection not built.
+7. Room-scale boundary: the session now asks for `bounded-floor` (optional) besides `local-floor`; before that the Quest
+   used the stationary boundary only. Check in the headset that the room boundary is used.
+8. Tell Juan: **B on the wand silently turns on stairs/doors marking** (`main.ts` `markerXR.buttons`): it draws the
+   stair/door handles with their heights, and while it is on the trigger goes to those handles, so furniture can't be
+   edited (A or grip leaves it). Nothing in the headset says it is on. Suggest a card ("Stairs & doors editing · A to
+   exit") or moving it into the menu.
+9. Tell Nick: kitchen4 fridge top missing ~12 cm (section 4.5); table is 63 in, not 62 (section 4.4); this walker is
+   21 in at its widest, not 24 (section 4.3).
 
 ## 9. Team decisions to keep
 

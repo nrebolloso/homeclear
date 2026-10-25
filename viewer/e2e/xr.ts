@@ -319,6 +319,22 @@ try {
   check('mounted: stick sideways snap-turns 30 deg; its trigger does not glide', Math.abs(yawOf(r1 - r0) + Math.PI / 6) < 0.01 && Math.hypot(h1[0] - h0[0], h1[1] - h0[1]) < 0.01 && mErrors.length === 0,
     `turned ${(yawOf(r1 - r0) * 180 / Math.PI).toFixed(0)} deg; trigger moved ${Math.hypot(h1[0] - h0[0], h1[1] - h0[1]).toFixed(3)} m; errors ${mErrors.length}`);
   await m.close();
+
+  // 11. ?floor=5 lifts the scan's floor 5 cm against the real one (you stand 5 cm lower in it); ?measure=1 puts the wand's
+  // height above the real floor on a card on the wand.
+  const fp = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  await fp.goto(`${BASE}/?scene=game_synth&emulate=quest2&floor=5&measure=1`);
+  await fp.waitForFunction(() => (window as any).game?.ready, null, { timeout: 60000 });
+  await fp.evaluate(HELPERS);
+  await fp.getByText('ENTER VR', { exact: true }).click();
+  await fp.waitForFunction(() => (window as any).game.xr, null, { timeout: 10000 });
+  await fp.waitForTimeout(600);
+  const F = (q: string) => G(fp, q);
+  const fl = await F('return { head: game.xrPose().head, real: __xr.dev().position.y, wand: game.debug.wand(), ctl: __xr.ctl("right").position.y }');
+  const shownCm = Number(/([\d.]+) cm/.exec(fl.wand.ruler ?? '')?.[1]);
+  check('?floor=5 stands you 5 cm lower in the scan; ?measure=1 shows the wand height', Math.abs(fl.head[2] - (fl.real - 0.05)) < 0.005 && Math.abs(shownCm - fl.ctl * 100) < 0.15,
+    `head ${fl.head[2].toFixed(3)} m for a real ${fl.real.toFixed(3)} m; card "${fl.wand.ruler}" for a controller at ${(fl.ctl * 100).toFixed(1)} cm`);
+  await fp.close();
 } finally {
   writeFileSync(new URL('xr-results.json', import.meta.url), JSON.stringify(results, null, 1));
   await browser.close();

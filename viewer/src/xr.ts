@@ -11,6 +11,7 @@
 // Wand (right hand or controller; ?wand=left): point at furniture and hold to drag it (twist the wrist to turn it), hold
 // still to delete it; point at filmed floor and release to teleport. A pinch and a trigger are the same WebXR "select".
 // Moves go through the host's placement check and re-plan, like a desktop drag.
+// Lining the scan up with the real room: ?scale= (size), ?floor= (cm up or down) and ?measure=1 (the wand's height).
 import * as THREE from 'three';
 import { bindXR } from './xr-session.ts';
 import { onThree, own } from './lifetime.ts';
@@ -95,10 +96,13 @@ export async function setupXR(host: XrHost) {
   // units, so moving and turning are unchanged. Only the scene's look and your eye height move; its metres don't.
   const worldScale = Number(params.get('scale')) || 1;
   rig.scale.setScalar(1 / worldScale);
+  // ?floor=3 lifts the scan's floor 3 cm against the headset's (negative lowers it), for a scan whose floor sits off the
+  // real one; check with ?measure=1 (a controller resting on the real floor should rest on the scan's)
+  const floorLift = (Number(params.get('floor')) || 0) / 100;
   const xrRig = { x: 0, y: 0, yaw: 0 }; let lastSpawn = { ...xrRig }, pendingSpawn: { x: number; y: number; yaw: number } | null = null;
   const TILT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2), UP = new THREE.Vector3(0, 0, 1);
   const placeRig = () => {
-    rig.position.set(xrRig.x, xrRig.y, host.eyeHeight?.() == null ? 0 : Math.max(0, host.eyeHeight()! - camera.position.y));
+    rig.position.set(xrRig.x, xrRig.y, (host.eyeHeight?.() == null ? 0 : Math.max(0, host.eyeHeight()! - camera.position.y)) - floorLift);
     rig.quaternion.setFromAxisAngle(UP, xrRig.yaw - Math.PI / 2).multiply(TILT);
   };
   const head = new THREE.Vector3(), headDir = new THREE.Vector3();
@@ -187,8 +191,22 @@ export async function setupXR(host: XrHost) {
     if (strip.parent !== other.group) other.group.add(strip);
     strip.visible = true;
   }
+  // ?measure=1: the wand shows its height above the real floor, to rest it on a real surface (floor, table, fridge top)
+  // and see whether the scan's surface sits at the same height
+  let ruler: THREE.Sprite | null = null, rulerKey = '';
+  function rulerStep(c?: Ctl) {
+    if (!params.has('measure') || !c?.source) { if (ruler) ruler.visible = false; return; }
+    const m = c.group.position.y, key = `${(m / 0.0254).toFixed(1)} in · ${(m * 100).toFixed(1)} cm`;   // rig-local y-up: the tracked height
+    if (!ruler || key !== rulerKey) {
+      rulerKey = key; ruler?.removeFromParent(); ruler?.material.dispose();
+      ruler = card([key, 'above your floor'], '#ffd27a', undefined, 0.014); ruler.position.set(0, 0.08, -0.05); ruler.renderOrder = 4;
+    }
+    if (ruler.parent !== c.group) c.group.add(ruler);
+    ruler.visible = true;
+  }
   function wandStep() {
     const c = ctls.find(isWand);
+    rulerStep(c);
     const other = ctls.find(o => o.source && !isWand(o)), hint = host.editor?.hint;
     if (host.hints) { if (hint) hint.visible = false; stripStep(other); }
     else if (hint) {
@@ -416,6 +434,8 @@ export async function setupXR(host: XrHost) {
 
   bindXR({   // adds the Enter VR button; "VR not supported" where WebXR isn't available
     renderer, mode: 'vr', referenceSpaceType: 'local-floor', enableHands: true,
+    // bounded-floor asks for the room-scale boundary: with local-floor alone the Quest may fall back to a stationary one
+    sessionInit: { optionalFeatures: ['bounded-floor'] },
     frameBufferScaleFactor: cfg.scale, fixedFoveation: cfg.foveation,
     onEnterXr: enterRoom,
     onExitXr: () => {
@@ -441,6 +461,6 @@ export async function setupXR(host: XrHost) {
     /** the strip card on the off-hand controller: its words and whether it shows */
     strip: () => ({ key: stripKey, visible: !!strip?.visible }),
     wand: () => ({ hover: hover >= 0 ? host.names[hover] : null, button: btnHover, grab: grab ? host.names[grab.k] : null, aiming, teleport: tpRing.visible,
-      drag: grab?.drag, valid: grab?.valid ?? null }),
+      drag: grab?.drag, valid: grab?.valid ?? null, ruler: ruler?.visible ? rulerKey : null }),
   };
 }
