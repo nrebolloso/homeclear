@@ -29,6 +29,7 @@ GROW_M = 0.10     # ... or this close when it is also inside that object's footp
 ON_TOP_M = 0.3    # unlabelled things in its footprint up to this far above it go with it (a cup on a removed table must not float)
 REACH_M = 0.05    # ... but none whose splat reaches this far past its box (a wall sheet centred inside it)
 STANDS_M = 0.3    # an object labelled from below this stands on the floor: its legs 6c missed go with it down to the floor
+JOIN_M = 0.4      # ... and unlabelled pieces joined to it (3 cm voxels) up to this far across the floor from its labels
 # ... and so does furniture of these labels however high 6c labelled it: it saw a high-top table's top, not its pedestal
 STANDING = {"bed", "nightstand", "bedside table", "table", "chair", "stool", "bench", "sofa", "trash can", "toilet"}
 
@@ -226,6 +227,18 @@ def half_extent(v):
     return 2 * np.sqrt(((R * s[:, None, :]) ** 2).sum(2))
 
 
+def joined(xyz, seed, cand, vox=0.03):
+    """cand points 26-connected (vox grid) through seed or cand points to a seed point."""
+    m = seed | cand
+    q = np.floor((xyz[m] - xyz[m].min(0)) / vox).astype(int)
+    grid = np.zeros(q.max(0) + 1, int)
+    grid[tuple(q.T)] = 1
+    comp = ndimage.label(grid, np.ones((3, 3, 3)))[0][tuple(q.T)]
+    out = np.zeros(len(xyz), bool)
+    out[m] = np.isin(comp, comp[seed[m]]) & cand[m]
+    return out
+
+
 def object_parts(o, xyz, g, w, lo, cell, shape, v):
     """Gaussians that belong to config object o (its height-limited parts, with a cut margin). tools/lighter_clean.py reuses it."""
     in_xy = lambda q, cm: (near_poly(xyz[:, :2], np.array(q["poly_xy"], float), cm) if "poly_xy" in q else
@@ -249,6 +262,15 @@ def object_parts(o, xyz, g, w, lo, cell, shape, v):
         # what is nearest to nobody goes to the one whose labels it stands under, not whichever outline came first: chair7's
         # leg bottoms (labelled from 22 cm) went to chair4 and the table, whose outlines overlap it, and stayed in its fill
         sel = (own & (d <= MEMBER_M)) | (near & own) | (zone & (own | ((inst == -1) & np.isin(col, ids))))
+        # and what 6c never labelled but is joined to it: 200 frames of votes covered only part of most objects (chair3's
+        # back, stool2's top, the sofa's seat edge; the rest got ~30% of its label's votes, under the 50% cut) and the rest
+        # stayed as a dark half-object when it was removed. Unlabelled Gaussians nearest its labels (col: a neighbour's
+        # armrest stays with the neighbour), within JOIN_M of them across the floor, above the floor and under its top
+        from scipy.spatial import cKDTree
+        lab = z["xyz"][np.isin(z["instance"], ids)]
+        cand = ~sel & (inst == -1) & np.isin(col, ids) & (xyz[:, 2] > 0.02) & (xyz[:, 2] < lab[:, 2].max() + 0.05)
+        cand[cand] = cKDTree(lab[:, :2]).query(xyz[cand, :2], distance_upper_bound=JOIN_M)[0] <= JOIN_M
+        sel |= joined(xyz, sel, cand)
         # but never the wall it stands against: the trash can took the white wall behind and above its lid (6c's mask spilt
         # onto it, and the grow and on-top rules took the rest). A wall has the object on one side; a line with 3%+ of its
         # labels on or past it runs through it (a noise line, or a cabinet face it straddles). Up to its top the wall's
