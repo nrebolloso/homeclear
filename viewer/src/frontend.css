@@ -85,6 +85,8 @@
 .chevron { color: var(--muted); margin-left: 15px; }
 .popover { width: min(330px, calc(100vw - 56px)); padding: 20px; max-height: calc(100dvh - 155px); overflow-y: auto; }
 #workspace-menu { position: absolute; top: 98px; left: 20px; z-index: 10; }
+/* the open workspace menu covers the layers rail (layers.css, z 25 over #frontend z 4) instead of hiding under it */
+body:has(#workspace-toggle[aria-expanded="true"]) #layers { z-index: 3; }
 #context-controls > label { display: grid; gap: 6px; margin: 12px 0; }
 #context-controls select, #a11y-settings select { width: 100%; min-width: 0; }
 #advanced-controls { font-size: calc(0.75rem * var(--fs)); }

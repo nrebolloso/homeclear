@@ -601,7 +601,7 @@ try {
     });
     await step('demo mode hides the scan library, wheelchair / stroke and the reach map', async () => {
       await sp.click('#tab-view');
-      const shown = await sp.evaluate(() => ['#scan-library', '.persona-card[data-persona=wheelchair]', '.persona-card[data-persona=stroke]', '#reach', '#coverage']
+      const shown = await sp.evaluate(() => ['#scan-library', '#scan-picker', '.persona-card[data-persona=wheelchair]', '.persona-card[data-persona=stroke]', '#reach', '#coverage']
         .filter(q => [...document.querySelectorAll<HTMLElement>(q)].some(e => e.checkVisibility())));
       const cards = await sp.$$eval('#persona-cards .persona-card', bs => bs.filter(b => (b as HTMLElement).checkVisibility()).map(b => b.textContent));
       if (shown.length || cards.some(c => /Wheelchair|Stroke/.test(c ?? ''))) throw Error(`visible: ${shown.join(', ')}; cards ${cards.join(' | ')}`); return `${cards.length} persona cards: ${cards.join(' | ')}`;
