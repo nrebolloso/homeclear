@@ -44,8 +44,14 @@ export interface XrHost {
   startPose(): { x: number; y: number; yaw: number } | null;
   /** performance mode and in-headset labels: on entering and leaving */
   enter(tier: Tier): void; exit(): void;
-  /** the story actions (dangers tour, night, compare, world model): listed in the planning panel's Tour tab, not in the room */
+  /** big buttons on a card on an arc to the left (point the wand, pinch); also listed in the planning panel's Tour tab */
   buttons?: XrButton[];
+  /** how many of `buttons` the card shows up front (the demo story); the rest go under "More", with "Back" to return */
+  primary?: number;
+  /** modes that are on right now ("Night", "Cataract"): a small chip above the controller strip, empty when all is normal */
+  status?(): string[];
+  /** a two-line glance at the applied fix (toe catches before/after, cost), or null: low in front, never a target */
+  stats?(): string[] | null;
   lock?(k: number): boolean; unlock?(k: number): void;
   resetObject(k: number): unknown; resetAll(): unknown;
   /** what the controls are for right now (hints.ts): a label and at most three key rows, drawn as the strip on the off-hand controller */
@@ -72,7 +78,8 @@ export interface XrShell {
   activate(controller: THREE.XRTargetRaySpace): boolean; release(controller: THREE.XRTargetRaySpace): boolean;
   open(): boolean; follow(dt: number): boolean; hover(k: number): void;
 }
-export interface XrButton { text(): string[]; press(): unknown; tone?(): 'go' | 'busy' | 'plain' }
+/** `on`: a mode that stays on once pressed (drawn filled, with an ON badge) */
+export interface XrButton { text(): string[]; press(): unknown; tone?(): 'go' | 'busy' | 'plain'; on?(): boolean }
 export interface XrEditor {
   active(): boolean;
   down(ray: THREE.Ray, rotation: THREE.Quaternion): boolean;
@@ -163,9 +170,10 @@ export async function setupXR(host: XrHost) {
     return wandRay.setFromXRController(c.group), wandRay.ray;
   }
   function wandDown(c: Ctl) {
-    if (host.readOnly?.()) return;
+    if (host.readOnly?.()) { if (btnHover >= 0) btnPressed = btnHover; return; }
     const r = aim(c), q = c.group.getWorldQuaternion(new THREE.Quaternion());
     if (host.editor?.active() && host.editor.down(r, q)) { toolHeld = true; return; }
+    if (btnHover >= 0) { btnPressed = btnHover; return; }
     if (host.editor?.down(r, q)) { toolHeld = true; return; }
     if (hover < 0) { aiming = true; return; }
     const f = floorHit(r.origin, r.direction), p = host.poses()[hover], at: XY = f ? [f.x, f.y] : [p.x, p.y];
@@ -175,17 +183,18 @@ export async function setupXR(host: XrHost) {
   function wandUp() {
     if (toolHeld) { toolHeld = false; const c = ctls.find(isWand); if (c) host.editor?.up(aim(c)); return; }
     if (host.editor?.active()) return;
+    if (btnPressed >= 0) { const i = btnPressed; btnPressed = -1; if (btnHover === i) btns[i].b.press(); return; }
     if (grab) {
       const { k, valid, blocked } = grab; grab = null;
       if (valid) Promise.resolve(host.commit(k, valid)).finally(() => host.unlock?.(k)); else { if (blocked) host.resync(); host.unlock?.(k); }   // dropped on a collision: back where it was
       return;
     }
-    if (aiming && tpRing.visible && host.movement?.() !== 'physical') { xrRig.x += tpRing.position.x - head.x; xrRig.y += tpRing.position.y - head.y; placeRig(); }
+    if (aiming && tpRing.visible && host.movement?.() !== 'physical') { xrRig.x += tpRing.position.x - head.x; xrRig.y += tpRing.position.y - head.y; placeRig(); anchor.set = false; }
     aiming = false; tpRing.visible = false;
   }
   function dropWand() {   // wand lost mid-gesture (hand out of view): put a dragged object back where the layout has it
     if (grab) { host.resync(); host.unlock?.(grab.k); }
-    grab = null; aiming = false; tpRing.visible = false;
+    btnPressed = -1; grab = null; aiming = false; tpRing.visible = false;
     toolHeld = false; host.editor?.cancelDrag();
   }
   let toolHeld = false;
@@ -232,7 +241,7 @@ export async function setupXR(host: XrHost) {
       const r = aim(c), f = floorHit(r.origin, r.direction);
       const toolDistance = host.editor?.frame(r, c.group.getWorldQuaternion(new THREE.Quaternion()));
       if (toolDistance != null) {
-        hover = -1; aiming = false;
+        hover = -1; btnHover = -1; aiming = false;
         for (const it of items) it.outline.visible = false;
         c.ray.scale.z = toolDistance; return;
       }
@@ -253,15 +262,17 @@ export async function setupXR(host: XrHost) {
         prog = holdProgress((performance.now() - grab.t0) / 1000, grab.drag);
         if (prog >= 1) { const k = grab.k; grab = null; Promise.resolve(host.remove(k)).finally(() => host.unlock?.(k)); prog = -1; }
       } else {
+        const bh = dash.visible ? wandRay.intersectObjects(btns.filter(x => x.mesh.visible).map(x => x.mesh))[0] : undefined;   // cards sit in front of the room
+        btnHover = bh ? btns.findIndex(x => x.mesh === bh.object) : -1;
         const poses = host.poses();
-        const hit = host.readOnly?.() ? undefined : wandRay.intersectObjects(items.filter((_, k) => !poses[k].removed).map(i => i.proxy))[0];
+        const hit = bh || host.readOnly?.() ? undefined : wandRay.intersectObjects(items.filter((_, k) => !poses[k].removed).map(i => i.proxy))[0];
         hover = hit ? items.findIndex(i => i.proxy === hit.object) : -1;
-        if (hit) len = hit.distance;
-        if (!host.readOnly?.() && host.movement?.() !== 'physical' && hover < 0 && aiming && f && host.standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
+        if (bh) len = bh.distance; else if (hit) len = hit.distance;
+        if (!host.readOnly?.() && host.movement?.() !== 'physical' && !bh && hover < 0 && aiming && f && host.standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
       }
       c.ray.scale.z = len;
       if (hover >= 0 && !grab) host.shell?.hover(hover);
-    } else { hover = -1; host.editor?.frame(null, null); }
+    } else { hover = -1; btnHover = -1; host.editor?.frame(null, null); }
     items.forEach((it, k) => {   // blue = pointed at, yellow = held, turning red = about to be deleted
       const held = grab?.k === k, m = it.outline.material as THREE.LineBasicMaterial;
       it.outline.visible = held || (!grab && k === hover);
@@ -270,13 +281,122 @@ export async function setupXR(host: XrHost) {
     });
   }
 
-  // ---------- actions: the story buttons (dangers tour, night, compare, world model, line up the walker). Not drawn here: the
-  // planning panel (frontend-xr.ts) lists them in its Tour tab, so the view stays empty until you open it.
+  // ---------- buttons: cards on an arc 0.7 m around where you stood, to the left of where you faced. Canvas text on a plane (a
+  // mesh, so the wand's ray hits it), drawn over the splats like the other overlays. The demo story is up front
+  // (host.primary of the host's buttons); the rest are behind "More". Tap the off-hand grip to hide or show the lot.
+  const BW = 0.46, BH = 0.15, GAP = 0.025;   // up to three lines: headline, a plain sentence, a small hint
+  const dash = new THREE.Group(); dash.name = 'xr-story-menu';
+  dash.visible = false;
+  scene.add(dash);
   const lineUp: XrButton = { text: () => ['Line up the walker', 'stand behind it facing its way, then pinch'], tone: () => 'plain', press: unmount };
-  const actions: XrButton[] = [...(host.buttons ?? []), ...(MOUNT ? [lineUp] : [])];
+  const actions: XrButton[] = [...(host.buttons ?? []), ...(MOUNT ? [lineUp] : [])];   // the planning panel's Tour tab lists these too
+  const FRONT = Math.min(actions.length, host.primary ?? actions.length);
+  let more = false, menuOn = true;
+  const moreBtn: XrButton = { text: () => ['More...', actions.slice(FRONT).map(b => b.text()[0].split(':')[0].toLowerCase()).slice(0, 3).join(', ')], tone: () => 'plain', press: () => { more = true; } };
+  const hideBtn: XrButton = { text: () => ['Hide this menu', 'tap the off-hand grip to bring it back'], tone: () => 'plain', press: () => { setMenu(false); } };
+  const backBtn: XrButton = { text: () => ['Back'], tone: () => 'plain', press: () => { more = false; } };
+  const extra = FRONT < actions.length ? [moreBtn, hideBtn, backBtn] : [hideBtn];
+  const btns = [...actions, ...extra].map(b => {
+    const cv = document.createElement('canvas');
+    cv.width = 768; cv.height = 250;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(BW, BH), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
+    mesh.renderOrder = 3;
+    mesh.rotation.order = 'ZXY';   // stand it up (x), then turn it to face the middle of the arc (z); placed by placeDash
+    dash.add(mesh);
+    return { b, mesh, cv, tex, key: '' };
+  });
+  /** which cards show now: the front story + More, or the rest + Hide + Back */
+  function shown(n: number) {
+    const b = btns[n].b;
+    if (b === moreBtn) return !more && FRONT < actions.length;
+    if (b === backBtn) return more;
+    if (b === hideBtn) return more || FRONT >= actions.length;
+    return more ? n >= FRONT : n < FRONT;
+  }
+  const TONE = { go: '#2fbf71', busy: '#e0a33a', plain: '#7fa7c9' };
+  function drawButtons(hot: number) {
+    btns.forEach((x, i) => {
+      const lines = x.b.text(), tone = x.b.tone?.() ?? 'plain', on = !!x.b.on?.(), key = `${lines.join('|')}|${tone}|${hot === i}|${on}`;
+      if (key === x.key) return;
+      x.key = key;
+      const c = x.cv.getContext('2d')!, W = x.cv.width, H = x.cv.height;
+      c.clearRect(0, 0, W, H);
+      c.fillStyle = on ? 'rgba(16,64,44,0.94)' : 'rgba(14,20,28,0.88)'; c.strokeStyle = on ? '#4fe08f' : TONE[tone]; c.lineWidth = hot === i ? 14 : 6;
+      c.beginPath(); c.roundRect(8, 8, W - 16, H - 16, 36); c.fill(); c.stroke();
+      if (on) {   // a mode that is on stays visible: a filled badge in the corner
+        c.fillStyle = '#4fe08f'; c.beginPath(); c.roundRect(W - 150, 24, 114, 54, 27); c.fill();
+        c.fillStyle = '#0b2418'; c.font = '700 36px system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('ON', W - 93, 52);
+      }
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      const rows = [[[64], [0.5]], [[56, 40], [0.38, 0.72]], [[50, 38, 32], [0.27, 0.56, 0.81]]][Math.min(3, lines.length) - 1];
+      lines.slice(0, 3).forEach((ln, r) => {
+        c.font = `${r ? 400 : 600} ${rows[0][r]}px system-ui, sans-serif`;
+        c.fillStyle = r === 0 ? '#f2f7fb' : r === 1 ? '#c6d3de' : TONE[tone];
+        c.fillText(ln, W / 2, H * rows[1][r], W - 56 - (on && r === 0 ? 120 : 0));
+      });
+      x.tex.needsUpdate = true;
+    });
+  }
+  const anchor = { x: 0, y: 0, yaw: 0, set: false };
+  // The cards stand on an arc 0.7 m around where you stood, each turned and tilted to face you: two columns 21 and 59 deg
+  // to the left of where you faced (off the line you look along), rows centred 0.35 m below the eyes, never under 0.5 m.
+  // The first card of a row is the one nearer your view.
+  const ARC_D = 0.7, COL_A = [0.37, 1.03], STEP = BH + GAP;
+  function placeCard(mesh: THREE.Mesh, a: number, z: number) {
+    mesh.position.set(Math.cos(a) * ARC_D, Math.sin(a) * ARC_D, z);
+    mesh.rotation.set(Math.PI / 2 - Math.atan2(head.z - z, ARC_D), 0, a - Math.PI / 2);   // face (-cos a, -sin a), tipped up to the eyes
+  }
+  function placeDash(yaw: number) {
+    // turning toward the cards (left) doesn't move them; turning away past 40 deg or walking off brings them along
+    const da = Math.atan2(Math.sin(yaw - anchor.yaw), Math.cos(yaw - anchor.yaw)), turned = da < -0.7 || da > 1.5;
+    if (!anchor.set || turned || Math.hypot(head.x - anchor.x, head.y - anchor.y) > 0.6) Object.assign(anchor, { x: head.x, y: head.y, yaw, set: true });
+    dash.position.set(anchor.x, anchor.y, 0);
+    dash.rotation.set(0, 0, anchor.yaw);
+    const vis = btns.map((_, n) => n).filter(n => btns[n].mesh.visible);
+    const rows = Math.ceil(vis.length / 2), top = Math.max(0.5 + (rows - 1) * STEP, head.z - 0.35 + (rows - 1) * STEP / 2);
+    vis.forEach((n, k) => placeCard(btns[n].mesh, COL_A[k % 2], top - Math.floor(k / 2) * STEP));
+  }
+  let btnHover = -1, btnPressed = -1;
+  function setMenu(on: boolean) {
+    menuOn = on; more = false; btnHover = -1; btnPressed = -1; anchor.set = false;
+    if (!on) toast(['Menu hidden', 'tap the off-hand grip to show it'], '#a9c8ff');
+  }
+
+  // ---------- glance: a chip of the modes that are on (above the strip on the off-hand controller, else low in front) and, while a
+  // fix is applied, two lines of stats low in front. Sprites, never in a ray test: a press, grab or teleport passes through them.
+  let chip: THREE.Sprite | null = null, chipKey = '', statsCard: THREE.Sprite | null = null, statsKey = '', statsSince = 0;
+  const lowAhead = (s: THREE.Sprite, yaw: number, dz: number) => s.position.set(head.x + Math.cos(yaw) * 1.6, head.y + Math.sin(yaw) * 1.6, head.z + dz);   // level, not along the gaze: it stays put as you look down
+  function glanceStep(yaw: number, other?: Ctl) {
+    const modes = host.status?.() ?? [], key = modes.join(' · '), hidden = !!host.editor?.active() || !!grab;
+    if (key !== chipKey) {
+      chipKey = key; chip?.removeFromParent(); chip?.material.dispose(); chip = null;
+      if (key) { chip = card([key], '#9be8b0', 'rgba(8,12,18,0.95)', 0.034); chip.renderOrder = 4; }
+    }
+    if (chip) {
+      const hand = other?.source?.gamepad ? other.group : null;
+      if (hand) { if (chip.parent !== hand) hand.add(chip); chip.position.set(0, 0.31, -0.1); }
+      else { if (chip.parent !== scene) scene.add(chip); lowAhead(chip, yaw, -0.5); }
+      chip.visible = !hidden && !host.shell?.open();
+    }
+    const lines = host.stats?.() ?? null, sk = lines?.join('\n') ?? '';
+    if (sk !== statsKey) {
+      statsKey = sk; statsSince = performance.now(); statsCard?.removeFromParent(); statsCard?.material.dispose(); statsCard = null;
+      if (lines) { statsCard = card(lines, '#9be8b0', 'rgba(8,12,18,0.95)', 0.05); statsCard.renderOrder = 4; scene.add(statsCard); }
+    }
+    if (statsCard) {   // shown for 8 s after it changes, then whenever you look down at it
+      lowAhead(statsCard, yaw, -0.62);
+      statsCard.visible = !hidden && (performance.now() - statsSince < 8000 || headDir.z < -0.3);
+    }
+  }
+  function toast(lines: string[], color: string) {
+    toastCard?.removeFromParent(); toastCard?.material.dispose(); toastCard = card(lines, color); scene.add(toastCard); toastUntil = performance.now() + 1800;
+  }
 
   // Controller shortcuts share the same priority as the wand: annotation gestures consume input before furniture.
   let clickWas = false, toastCard: THREE.Sprite | null = null, toastUntil = 0;
+  let opGripWas = false, opGripT = 0, opGripClean = false;
   let gripWas = false, aWas = false, bothHeld = 0, resetFired = false, ringN = 0, ringCard: THREE.Sprite | null = null;
   function controllerButtons(dt: number, pads: Record<string, Gamepad>) {
     const wp = pads[WAND], op = pads[WAND === 'left' ? 'right' : 'left'];
@@ -285,17 +405,22 @@ export async function setupXR(host: XrHost) {
     if (consumed) {
       if (grab) { host.resync(); host.unlock?.(grab.k); }
       grab = null; aiming = false;
+      if (!host.readOnly?.()) btnPressed = -1;   // comparison mode still needs the card's press/release gesture
     } else {
       if (grip && !gripWas) { const k = grab?.k ?? hover; if (k >= 0) { host.unlock?.(k); grab = null; host.resync(); host.resetObject(k); pulse(wp, 0.5, 40); } }
       if (a && !aWas && !grab && hover >= 0) { host.remove(hover); pulse(wp, 0.5, 40); }
       // wand stick click undoes the last object edit; with the off-hand grip held it redoes (marking has its own undo on B/Y)
       if (click && !clickWas && !grab && host.history) {
         pulse(wp, 0.4, 30);
-        host.history[op?.buttons[1]?.pressed ? 'redo' : 'undo']().then(text => {
-          toastCard?.removeFromParent(); toastCard?.material.dispose(); toastCard = card([text], '#9be8b0'); scene.add(toastCard); toastUntil = performance.now() + 1800;
-        });
+        host.history[op?.buttons[1]?.pressed ? 'redo' : 'undo']().then(text => toast([text], '#9be8b0'));
       }
     }
+    // a quick tap of the off-hand grip alone hides or shows the card menu (the wand grip resets an object, both held reset all)
+    const opGrip = !!op?.buttons[1]?.pressed;
+    if (opGrip && !opGripWas) { opGripT = performance.now(); opGripClean = true; }
+    if (opGrip && (grip || click)) opGripClean = false;
+    if (!opGrip && opGripWas && opGripClean && !consumed && performance.now() - opGripT < 350) setMenu(!menuOn);
+    opGripWas = opGrip;
     gripWas = grip; aWas = a; clickWas = click;
     if (toastCard) {
       if (performance.now() > toastUntil) { toastCard.removeFromParent(); toastCard.material.dispose(); toastCard = null; }
@@ -352,9 +477,9 @@ export async function setupXR(host: XrHost) {
       const { position: p, orientation: q } = pose.transform; camera.position.set(p.x, p.y, p.z); camera.quaternion.set(q.x, q.y, q.z, q.w);
       const destination = pendingSpawn; pendingSpawn = null; place(destination.x, destination.y, destination.yaw);
     }
-    if (host.shell?.open()) return;
+    if (host.shell?.open()) { dash.visible = false; if (chip) chip.visible = false; if (statsCard) statsCard.visible = false; return; }
     const yaw = readHead();
-    if (host.shell?.follow(dt)) { xrRig.x += body.x - head.x; xrRig.y += body.y - head.y; placeRig(); wandStep(); return; }   // the route drives the body
+    if (host.shell?.follow(dt)) { dash.visible = false; xrRig.x += body.x - head.x; xrRig.y += body.y - head.y; placeRig(); wandStep(); return; }   // the route drives the body
     const pads: Record<string, Gamepad> = {};
     for (const source of renderer.xr.getSession()?.inputSources ?? []) if (source.gamepad) pads[source.handedness] = source.gamepad;
     if (pinching.size && !host.readOnly?.() && (host.movement?.() ?? 'all') === 'all') {   // glide forward in sub-steps of at most half a cell, as in free walk
@@ -400,7 +525,13 @@ export async function setupXR(host: XrHost) {
     if (wpNow) Object.assign(body, wpNow);   // the walker is rigid: it stands and points where the real one does
     else { body.x = head.x; body.y = head.y; body.yaw += Math.atan2(Math.sin(yaw - body.yaw), Math.cos(yaw - body.yaw)) * Math.min(1, dt * 4); }
     controllerButtons(dt, pads);
+    dash.visible = btns.length > 0 && menuOn && !host.editor?.active();
     wandStep();
+    if (btns.length) {
+      btns.forEach((x, n) => { x.mesh.visible = shown(n); });
+      placeDash(yaw); drawButtons(btnHover);
+    }
+    glanceStep(yaw, ctls.find(o => o.source && !isWand(o)));
   }
   /** Put the head at floor-frame (x, y) looking along yaw by moving the rig: scripted viewpoints on a headset nobody wears. */
   function place(x: number, y: number, yaw: number) {
@@ -420,7 +551,7 @@ export async function setupXR(host: XrHost) {
       Object.assign(xrRig, { x: body.x, y: body.y, yaw: body.yaw }); placeRig(); rig.add(camera);
       lastSpawn = { x: body.x, y: body.y, yaw: body.yaw };
       pendingSpawn = { ...lastSpawn }; camera.position.set(0, 0, 0); camera.quaternion.identity();
-      unmount();
+      anchor.set = false; more = false; unmount();
       host.enter(tier);
       // a lower refresh gives each frame more time (90 Hz = 11.1 ms, 72 Hz = 13.9 ms); the Quest 2 offers 60-120
       if (cfg.hz) renderer.xr.getSession()?.updateTargetFrameRate?.(cfg.hz).catch(() => {});
@@ -433,7 +564,8 @@ export async function setupXR(host: XrHost) {
     frameBufferScaleFactor: cfg.scale, fixedFoveation: cfg.foveation,
     onEnterXr: enterRoom,
     onExitXr: () => {
-      camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1;
+      camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1; btnHover = -1; dash.visible = false; opGripWas = false;
+      chip?.removeFromParent(); chip?.material.dispose(); chip = null; chipKey = ''; statsCard?.removeFromParent(); statsCard?.material.dispose(); statsCard = null; statsKey = '';
       ringCard?.removeFromParent(); ringCard?.material.dispose(); ringCard = null; ringN = 0; bothHeld = 0; gripWas = false; aWas = false; clickWas = false;
       toastCard?.removeFromParent(); toastCard?.material.dispose(); toastCard = null;
       for (const it of items) { it.outline.visible = false; (it.outline.material as THREE.LineBasicMaterial).color.setHex(0x66ccff); }
@@ -450,13 +582,17 @@ export async function setupXR(host: XrHost) {
       inputs: [...renderer.xr.getSession()?.inputSources ?? []].map(s => `${s.handedness}:${s.hand ? 'hand' : 'controller'}`), pinching: pinching.size }),
     /** the story actions the panel's Tour tab lists (live objects: text() and tone() are read when drawn) */
     actions,
-    /** each action's text, for scripted checks; `at` is null: they sit in the panel now, not in the room */
-    buttons: () => actions.map(b => ({ text: b.text(), at: null as number[] | null })),
-    /** press an action as a point-and-pinch on the panel would (scripted checks on a headset nobody wears) */
-    press: (i: number) => actions[i]?.press(),
+    /** the cards: each one's text, whether it shows now and where its centre is (floor frame), for scripted presses */
+    buttons: () => btns.map(x => ({ text: x.b.text(), on: !!x.b.on?.(), at: dash.visible && x.mesh.visible ? w(x.mesh) : null })),
+    /** press a card as a point-and-pinch on it would (scripted checks on a headset nobody wears) */
+    press: (i: number) => btns[i]?.b.press(),
+    /** the card menu: shown or hidden (the off-hand grip tap), and whether "More" is open; pass a boolean to set it */
+    menu: (on?: boolean) => { if (on != null) setMenu(on); return { on: menuOn, more }; },
+    /** the glance: the mode chip's and the stats card's words, and whether each shows */
+    glance: () => ({ chip: chipKey, chipVisible: !!chip?.visible, stats: statsKey, statsVisible: !!statsCard?.visible }),
     /** the strip card on the off-hand controller: its words and whether it shows */
     strip: () => ({ key: stripKey, visible: !!strip?.visible }),
-    wand: () => ({ hover: hover >= 0 ? host.names[hover] : null, button: -1, grab: grab ? host.names[grab.k] : null, aiming, teleport: tpRing.visible,
+    wand: () => ({ hover: hover >= 0 ? host.names[hover] : null, button: btnHover, grab: grab ? host.names[grab.k] : null, aiming, teleport: tpRing.visible,
       drag: grab?.drag, valid: grab?.valid ?? null, ruler: ruler?.visible ? rulerKey : null }),
   };
 }

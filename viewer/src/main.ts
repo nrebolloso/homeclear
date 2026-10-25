@@ -16,6 +16,7 @@ import { strokePersona } from './stroke.ts';
 import { bathroomFixes, createBathroom3d } from './bathroom.ts';
 import { nightShader } from './night.ts';
 import { createVision, PROFILES, type Profile } from './vision.ts';
+import { summarizeChanges } from './frontend-model.ts';
 import { createHeatOverlay, nights, drawTimeline } from './heat.ts';
 import { buildMannequin, feetAt, type Step } from './mannequin.ts';
 import { loadRigged } from './rig.ts';
@@ -2645,6 +2646,40 @@ const dangersButton = {
     else { dangerVR.k = -1; tourSpot = -1; }
   },
 };
+// ---------- the card menu's modes (same inputs as the desktop boxes, so both stay in step) and the glance (xr.ts status/stats) ----------
+const flip = (id: string) => { const el = $<HTMLInputElement>(id); el.checked = !el.checked; el.dispatchEvent(new Event('change', { bubbles: true })); };
+const visionSel = $<HTMLSelectElement>('vision'), personaSel = $<HTMLSelectElement>('persona');
+const visionName = (v: string) => (PROFILES[v as Profile] ?? v).replace(/ \(.*$/, '').replace(/^After a stroke: left half of the view missing$/, 'Left half missing');
+const cycle = (sel: HTMLSelectElement) => { sel.selectedIndex = (sel.selectedIndex + 1) % sel.options.length; sel.dispatchEvent(new Event('change', { bubbles: true })); };
+const visionButton = {
+  text: () => [`Vision: ${visionName(visionSel.value)}`, visionSel.value === 'normal' ? 'press to see it as they do' : 'press for the next'],
+  tone: () => 'plain' as const, on: () => visionSel.value !== 'normal', press: () => cycle(visionSel),
+};
+const toggleButton = (id: string, title: string, why: string) => ({
+  text: () => [title, $<HTMLInputElement>(id).checked ? 'on: press to turn off' : why],
+  tone: () => 'plain' as const, on: () => $<HTMLInputElement>(id).checked, press: () => flip(id),
+});
+const whoButton = {
+  text: () => [`Who's walking: ${personaSel.selectedOptions[0]?.text ?? ''}`, 'press for the next person'],
+  tone: () => 'plain' as const, press: () => cycle(personaSel),
+};
+const fixApplied = () => { const st = comparison.state(); return st.previewing ? (st.previewT ?? 0) > 0.5 : st.active === 'safer'; };
+/** the applied fix in numbers: toe catches before to after first, then what it takes (cost shown as pending until priced) */
+function fixNumbers() {
+  const c = summarizeChanges(reim.changes()), base = baseEvals[selRoute]?.per_month, now = current?.per_month;
+  const catches = base != null && now != null ? `toe catches ${fmt(base)} → ${fmt(now)} a month` : 'toe catches: recalculating';
+  const cost = !c.count ? 'no changes' : c.unpriced ? `${c.count} changes · cost pending` : `${c.count} change${c.count === 1 ? '' : 's'} · ~$${Math.round(c.knownSubtotal)}`;
+  return { catches, line: c.untimed || !c.count ? cost : `${cost} · ${c.setupMinutes} min setup`, count: c.count };
+}
+const costButton = {
+  text() {
+    if (!fixApplied()) return ['Cost & impact', 'see a safer room first'];
+    const n = fixNumbers();
+    return ['Cost & impact', n.line, n.catches];
+  },
+  tone: () => 'plain' as const, press: () => {},
+};
+const roomMenuButton = { text: () => ['Room menu', 'scans, findings and every control'], tone: () => 'plain' as const, press: () => frontendVR?.open() };
 let xrContactT = 0;   // seconds the device stays red after a refused move (xr.ts contact)
 const xr = await setupXR({
   renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses, contact: () => { xrContactT = 0.35; },
@@ -2668,7 +2703,12 @@ const xr = await setupXR({
     say();
   },
   exit() { comparison.endPreview(); inXR = false; game.xr = false; dangerVR.k = -1; tourSpot = -1; applyPerf(perfBeforeXR, false); if (current) drawPlan(current); say(); },
-  buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton, wmButton],   // the story for a family: what's risky, how night feels, the fix (the panel's Tour tab)
+  // the story up front (dangers, night, the fix, vision); the rest behind "More" (also the panel's Tour tab)
+  buttons: [dangersButton, { ...nightButton, on: nightOn }, comparison.button, visionButton, comparison.previewButton, wmButton,
+    toggleButton('particle-path', 'Walking paths', 'where trips go, as dots'), toggleButton('spot', 'Hazard highlights', 'glow on what is risky'), whoButton, costButton, roomMenuButton],
+  primary: 4,
+  status: () => [...(nightOn() ? ['Night'] : []), ...(visionSel.value !== 'normal' ? [visionName(visionSel.value)] : [])],
+  stats: () => (fixApplied() ? (n => [`Safer room: ${n.catches}`, n.line])(fixNumbers()) : null),
   shell: {   // the planning shell (frontend.ts) over the wand; frontendVR is created after the first frame, so look it up lazily
     activate: c => !!frontendVR?.activate(c), release: c => !!frontendVR?.release(c), open: () => !!frontendVR?.isOpen(),
     follow(dt) { if (!xrFollowRoute || mode !== 'auto') return false; autoStep(dt); return true; },
