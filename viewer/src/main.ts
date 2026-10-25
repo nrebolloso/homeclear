@@ -1657,7 +1657,7 @@ $('fanon').onchange = e => fanFan.set((e.target as HTMLInputElement).checked);
 $('fanmodel').onchange = e => fanFan.setModel((e.target as HTMLSelectElement).value as 'learned' | 'hand');
 $('fanstyle').onchange = e => fanFan.setStyle((e.target as HTMLSelectElement).value);
 $('fanlift').onchange = e => fanFan.setLift((e.target as HTMLSelectElement).value as 'average' | 'shuffler');
-game.fan = { ...fanFan, tapeMat: () => tapeObject('mat') };   // VR: bind a button to game.fan.set(!game.fan.on())
+game.fan = { ...fanFan, tapeMat: () => { const r = tapeObject('mat'); fanFan.refresh(); return r; } };   // VR: bind a button to game.fan.set(!game.fan.on())
 // ---------- deterministic demo autoplay (demorun.ts): lockstep clock while seeded; Reset demo ----------
 const lockstepOn = () => SEED !== null && mode === 'auto' && !xr.presenting();
 const lock = createLockstep(() => (live?.idle() ?? true) && fanFan.idle(TICK_S) && game.pending() === 0, () => lockstepOn() && !game.manual);
@@ -1757,19 +1757,15 @@ async function openReport() {
   w.location.href = `report.html?scene=${encodeURIComponent(RUN)}`;
   return w;
 }
-const LOCAL = /^(localhost|127\.)/;
+// the QR is the OT report PDF on Google Drive, so any phone opens it (not the laptop's LAN address); fill in the share link
+const OT_REPORT_URL = 'https://drive.google.com/file/d/REPLACE_WITH_OT_REPORT_FILE_ID/view?usp=sharing';
 async function openFixCard() {
   const acts = describeChanges();
-  const hash = encodeCard(cardState(RUN, objs, layout, acts));
-  // a phone can't open "localhost": use the laptop's LAN address (vite --host) when there is one
-  const lan: string[] = await fetch('/api/lan').then(r => r.json()).catch(() => []);
-  const host = LOCAL.test(location.hostname) && lan.length ? `${location.protocol}//${lan[0]}:${location.port}` : location.origin;
-  const url = `${host}/fixcard.html#${hash}`;
-  ($('qrimg') as HTMLImageElement).src = await QRCode.toDataURL(url, { margin: 1, width: 260 });
+  const url = `${location.origin}/fixcard.html#${encodeCard(cardState(RUN, objs, layout, acts))}`;
+  ($('qrimg') as HTMLImageElement).src = await QRCode.toDataURL(OT_REPORT_URL, { margin: 1, width: 260 });
   ($('qrlink') as HTMLAnchorElement).href = url;
-  $('qrlink').textContent = `${acts.length} change${acts.length === 1 ? '' : 's'} · open on this computer`;
-  $('qrnote').textContent = LOCAL.test(new URL(host).hostname)
-    ? 'Start the viewer with "npx vite --host" so a phone on the same Wi-Fi can open this.' : `Phone on the same Wi-Fi: ${host}`;
+  $('qrlink').textContent = `${acts.length} change${acts.length === 1 ? '' : 's'} · open the fix card on this computer`;
+  $('qrnote').textContent = 'Scan for the OT report (PDF, Google Drive).';
   $('qr').hidden = false;
   return url;
 }

@@ -145,6 +145,8 @@ export function createFuturesFan(D: FanDeps) {
     ready, set, update, on: () => on,
     /** demorun.ts lockstep: false while a fan this tick would send is still waiting on the last one */
     idle: (dt: number) => !on || !busy || acc + dt < EVERY_S,
+    /** the layout just changed (taping): drop the fan in flight, it was sampled on the old layout and would show up after */
+    refresh() { seq++; F = null; acc = EVERY_S; },
     setModel(m: 'learned' | 'hand') { model = m; sendModel(); text = ''; },
     setStyle(name: string) { style = name; sendModel(); text = ''; },
     setLift(l: Lift) { lift = l; text = ''; acc = EVERY_S; const sel = $('fanlift') as HTMLSelectElement | null; if (sel) sel.value = l; },
