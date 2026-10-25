@@ -50,3 +50,12 @@
 14. **Shuffle recordings for the fan's "shuffler".** The low-clearance foot lift is an ASSUMPTION (16th percentile of the
    Frontiers 2014 MTC curve, ~7 mm). Film a few deliberate shuffling passes over the mat edge (side view, tape in view) so
    the lift distribution comes from our own data.
+15. **Should the planner minimise toe catches alone?** Its objective is toe catches + simulated snags + brushes/month, and the
+   snags/brushes dominate (60.91 = 0.07 toe catches + the rest), so the option "least effort for 20% less risk" cuts the
+   objective without saving any toe catches. The demo now leads with toe catches/month everywhere; changing the objective
+   means a new B200 search.
+16. **Merge `rug-calibration` into `wm-planner` (yours; its BLOCKERS 17).** Without it the round trip cannot fold the mat (the
+   Rapier flap: 0/8 inbound legs). A trial merge in a scratch worktree (discarded) worked with the recipe there plus the
+   fan hook `fold: () => live?.fold() ?? layout.folds?.[0] ?? null`: tsc clean, and with `?rugfold=1` the mat folded at the
+   end of the inbound leg in 4/4 runs and the outbound fan showed "folded corner". After the merge, re-record
+   `futures_fan.mp4` with `&rugfold=1` so the fold is in the video.
