@@ -40,7 +40,7 @@ export function mountFrontend(api: FrontendAdapter) {
   const root = document.createElement('div'); root.id = 'frontend';
   root.innerHTML = `
     <a class="skip-link" id="skip-panel" href="#planning-panel">Skip to planning panel</a><a class="skip-link" id="skip-toolbar" href="#viewer-toolbar">Skip to viewer controls</a>
-    <button id="workspace-toggle" class="floating brand" aria-expanded="false" aria-controls="workspace-menu"><span class="brand-mark" aria-hidden="true">C</span><span>Cleared<small id="room-name"></small></span><span class="chevron" aria-hidden="true">⌄</span></button>
+    <div id="brand-bar" class="floating"><button id="workspace-toggle" class="brand" aria-expanded="false" aria-controls="workspace-menu"><span class="brand-mark" aria-hidden="true">C</span><span>Cleared<small id="room-name"></small></span><span class="chevron" aria-hidden="true">⌄</span></button><span id="scan-slot"></span></div>
     <div id="status-pills" role="group" aria-label="Current view"><span id="pills"></span><div id="active-filters" class="status-pill" role="status" hidden></div></div>
     <section id="workspace-menu" class="floating popover" aria-label="Room and patient settings" hidden>
       <div class="eyebrow">WORKSPACE</div><h2>Room & patient</h2><div id="context-controls"></div>
@@ -71,7 +71,8 @@ export function mountFrontend(api: FrontendAdapter) {
     <div id="controls-strip" class="floating" role="status" aria-label="Controls for the current mode"><span id="strip-mode"></span><span id="strip-chips"></span><button id="strip-keys" type="button" aria-label="Show keyboard shortcuts (F1)">F1 · keys</button></div>
     <div id="view-caption" class="floating status-pill">Original scan · simulation estimates</div>
     <div id="frontend-message" class="floating" role="status" aria-live="polite" hidden></div>`;
-  document.body.prepend(root);   // first in tab order, so the skip links are the first stop
+  document.body.prepend(root);
+  const picker = document.getElementById('scan-picker'); if (picker) $('scan-slot').append(picker);   // the scan library's button lives inside the brand pill (app.ts puts it back before a scene swap)   // first in tab order, so the skip links are the first stop
 
   // Reparent the existing controls so event handlers, IDs, and teammate integrations continue to work.
   function move(id: string, target: string, label?: string) {
