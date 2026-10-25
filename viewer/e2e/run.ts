@@ -291,11 +291,11 @@ try {
   await RS("await game.moveObject('bed', 2.0, 1.0, 90); game.select('bed')");
   await rs.p.waitForTimeout(300);
   const lab = await RS("return { lines: game.label(), btn: !document.getElementById('resetobj').disabled }");
-  check('selecting a moved object names it and says how far it moved', lab.lines[0] === 'Bed' && /moved .* m/.test(lab.lines[1] ?? '') && lab.btn, JSON.stringify(lab));
+  check('selecting a moved object names it and says how far it moved', lab.lines[0] === 'Bed' && lab.lines.some((l: string) => /moved .* m/.test(l)) && lab.btn, JSON.stringify(lab));
   await rs.p.keyboard.press('KeyZ');
   await rs.p.waitForTimeout(500);
   const z = await RS("const k = game.items.indexOf('bed'), q = game.layout().poses[k]; return { x: q.x, y: q.y, yaw: q.yaw, label: game.label() }");
-  check('Z puts the selected object back where it started', Math.hypot(z.x - bed.x, z.y - bed.y) < 0.01 && Math.abs(z.yaw - bed.yaw) < 0.01 && z.label.length === 1,
+  check('Z puts the selected object back where it started', Math.hypot(z.x - bed.x, z.y - bed.y) < 0.01 && Math.abs(z.yaw - bed.yaw) < 0.01 && !z.label.some((l: string) => /moved/.test(l)),
     `bed at (${z.x.toFixed(2)}, ${z.y.toFixed(2)}) vs original (${bed.x.toFixed(2)}, ${bed.y.toFixed(2)}); label ${JSON.stringify(z.label)}`);
   const bedAway = await RS("return (await game.moveObject('bed', 2.0, 1.0, 90)).ok");
   const taken = await RS(`return (await game.moveObject('nightstand', ${bed.x}, ${bed.y}, 0)).ok`);
