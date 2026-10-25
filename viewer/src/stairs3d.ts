@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
-import { stairFrame, pitchAt, parkedPose, grabSide, CODE, STAIRLIFT, type Stair, type Side, type ParkPose } from './stairs.ts';
+import { stairFrame, thinFlight, pitchAt, parkedPose, grabSide, CODE, STAIRLIFT, type Stair, type Side, type ParkPose } from './stairs.ts';
 import { card } from './reimagine.ts';
 import { blob } from './ground.ts';
 import { sampleShapes, type BakeShape, type RGB } from './bake.ts';
@@ -125,13 +125,16 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
       };
 
       // ---- measured: the flight's two edges, each riser as a tinted face, each tread nose as a line, a dimension mark per riser
-      const risers = z.map((v, k) => v - (k ? z[k - 1] : st.bottom_z ?? 0));
+      const risers = z.map((v, k) => v - (k ? z[k - 1] : st.bottom_z ?? 0)), thin = thinFlight(st);
       for (const t of [half, -half]) {
         const prof = z.length ? z.flatMap((h, k) => [P(fronts[k], t, h - risers[k] + 0.005), P(fronts[k], t, h + 0.005)]) : [P(0, t, (st.bottom_z ?? 0) + 0.02), P(F.run, t, pitch(F.run))];
         measured.add(fat(prof, 0x8fe3ff, 0.007, 0.8));
       }
       z.forEach((h, k) => {
-        const over = risers[k] - CODE.riser_max_m, bad = over > 0, col = bad ? 0xff5050 : 0x8fe3ff, lo = h - risers[k];
+        // a thin flight's over-limit step is treads the scan missed, not one tall riser (stairs.ts checks: OT to verify)
+        const over = risers[k] - CODE.riser_max_m, unseen = thin && over > 0, bad = over > 0 && !unseen, col = bad ? 0xff5050 : 0x8fe3ff, lo = h - risers[k];
+        if (unseen) { measured.add(fat([P(fronts[k], half, h + 0.005), P(fronts[k], -half, h + 0.005)], 0x9aa4ad, 0.006, 0.8));
+          mark([`${cm(risers[k])} rise, steps not seen`, 'tape-measure (MEASURING.md)'], '#c3cad1', P(fronts[k], half + 0.12, h + 0.06), 0.035, measured); return; }
         // the riser's face, in the code's colour: red out of code, a faint wash otherwise
         const q = [P(fronts[k], half, lo), P(fronts[k], -half, lo), P(fronts[k], -half, h), P(fronts[k], half, h)];
         const face = new THREE.Mesh(new THREE.BufferGeometry().setFromPoints([q[0], q[1], q[2], q[0], q[2], q[3]]),

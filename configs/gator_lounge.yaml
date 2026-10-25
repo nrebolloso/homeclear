@@ -32,6 +32,11 @@ clean:
   ceiling_m: 4.0
   floater_voxel_m: 0.05
   floater_min_neighbours: 8
+  lighter_crop_m: 0.3   # viewer-only: blobs past the floor grid ringed the lounge from above
+  lighter_air: {min_opacity: 0.1, max_scale_m: 0.1}   # viewer-only: faint/large haze above the floor band; 0.4 / 4 cm made the sofas and walls see-through
+  lighter_drop_boxes:   # viewer-only: blue haze discs between sofa2's back and the railing/drop behind it (camera never went
+  # there; removing sofa2 left them floating). Strip 5-90 cm out from its back edge; discs only, the railing's thin parts stay
+  - {center: [0.576, -3.661, 0.875], size: [3.7, 0.85, 1.45], yaw_deg: 32, min_mid_scale_m: 0.03}
 floor:
   ransac_iters: 2000
   inlier_m: 0.02
@@ -58,6 +63,11 @@ grid:
   min_count: 2
   speck: {max_cells: 6, min_span_m: 0.10, floor_gap_m: 0.15}   # mid-air floaters of ~3 Gaussians each would block the walker
   bump_link_cells: 3
+  fixed:   # furniture 6c never detected: stays in the room splat, never offered to move/drop; only its outline came out solid,
+  # so its inside read as open floor. Hand outlines (ESTIMATED, ~10 cm) from viewer renders + top-down height maps
+  - {name: bench, kind: sofa, poly_xy: [[-1.6, 4.24], [-0.33, 4.91], [-0.69, 5.53], [-1.96, 4.84]]}   # grey bench behind stool2 (its edges at z 0.3-0.5, front face 10 cm out)
+  - {name: conference_table, kind: table, poly_xy: [[1.5, 4.75], [1.9, 4.1], [2.25, 3.65], [2.6, 3.48], [3.0, 3.52], [3.45, 3.78], [3.62, 4.2], [3.5, 4.6], [2.9, 4.82], [2.2, 5.1]]}   # by chair3; top-edge arc
+  - {name: booth, kind: sofa, poly_xy: [[-4.75, -0.68], [-3.0, 0.37], [-4.12, 2.22], [-5.87, 1.17]]}   # booth seats + table near rug2
 plan:
   # start/goal unset: stage 7 picks two far-apart cells of the largest walker-reachable region (no bed or bathroom in this scene)
   walker_width_m: 0.61

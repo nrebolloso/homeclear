@@ -48,6 +48,8 @@ import { createMarker3d } from './marker3d.ts';
 import { MAX_EXTRA_LIGHTS, type PointLight } from './night.ts';
 import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } from './perf.ts';
 import QRCode from 'qrcode';
+import { objectEffort, moveEffort, difficulty } from './effort.ts';
+import { logEvent, parseLog, retrieve, toJSONL, type Entry } from './ledger.ts';
 import { mountFrontend, type FrontendAdapter } from './frontend.ts';
 import { mountLayers } from './layers.ts';
 import './layers.css';
@@ -105,6 +107,19 @@ const coverage = new Uint8Array(await bin(sc.grid.coverage));
 // cables and other thin bumps: classified, height is a typical value from config, never measured
 const est = sc.grid.bump_estimated ? new Uint8Array(await bin(sc.grid.bump_estimated)) : new Uint8Array(nx * ny);
 const objs: any[] = sc.objects;
+// ---------- move effort (effort.ts) and the run's log (ledger.ts) ----------
+// mass from each object's measured box, movable by kind unless the config says; logged, and set before the worker sees them
+const ledger: Entry[] = await fetch(BASE + 'log.jsonl').then(r => (r.ok ? r.text() : '')).then(parseLog).catch(() => []);
+const effortOf = new Map<string, ReturnType<typeof objectEffort>>();
+for (const o of objs) {
+  const e = objectEffort(o);
+  effortOf.set(o.name, e);
+  if (e.from_size) o.mass_kg ??= e.mass_kg;   // a guess stays unset, so moveEffort says "(guess)"
+  o.movable ??= e.movable;
+  logEvent(ledger, 'viewer', 'mass', { name: o.name, kind: o.kind, mass_kg: e.mass_kg, flagged: e.flagged, difficulty: e.difficulty, people: e.people, explain: e.explain },
+    e.from_size ? 'computed' : 'guess', o.name);
+  if (!o.movable) logEvent(ledger, 'viewer', 'not_suggested', { name: o.name, kind: o.kind, reason: e.movable ? 'config' : 'never-move kind' }, 'computed', o.name);
+}
 const interventions: Intervention[] = sc.interventions;
 let pathLightIvs: Intervention[] = [];   // "Light the path" (lights.ts): kept in the fix list like the stair and door fixes
 const risk = sc.risk;
@@ -346,7 +361,7 @@ function evalOf(lay: Layout): Promise<{ r: Eval }> {
 }
 
 const editLocks = createEditLocks();
-const game: any = { ready: false, fps: 0, evals: 0, pending: () => waiting.size };
+const game: any = { ready: false, fps: 0, evals: 0, pending: () => waiting.size, ledger };
 runtime.scope.own(() => { worker.terminate(); renderer.setAnimationLoop(null); });
 (window as any).game = game;
 
@@ -827,7 +842,7 @@ async function suggest() {
     const li = document.createElement('li');
     li.className = 'option';
     li.innerHTML = `<b>${o.name}</b>: <span class="measured">${fmt(o.per_month)}</span>/month (${fmt(o.per_month_lo)}–${fmt(o.per_month_hi)}), ` +
-      `${o.checks_failed} failed checks · $${o.cost_usd} · ${o.minutes} min<ol>${o.actions.map((a: any) => `<li>${a.label}</li>`).join('')}</ol>`;
+      `${o.checks_failed} failed checks · $${o.cost_usd} · ${difficulty(o.effort)} effort<ol>${o.actions.map((a: any) => `<li>${a.label}</li>`).join('')}</ol>`;
     const b = document.createElement('button');
     b.textContent = 'Apply and walk it';
     b.onclick = () => applyOption(n);
@@ -835,6 +850,7 @@ async function suggest() {
     $('options').appendChild(li);
   }
   game.suggestions = suggestions;
+  suggestions.forEach(o => logEvent(ledger, 'optimizer', 'option', { ...o, layout: undefined }, 'simulated', o.name));
   return suggestions;
 }
 function applyOption(n: number) {
@@ -844,6 +860,7 @@ function applyOption(n: number) {
   layout = o.layout;
   applied = o.applied ?? o.actions.map((a: any) => a.id);
   editHist.record('applied proposed layout', was, snap());
+  logEvent(ledger, 'viewer', 'apply_option', { name: o.name, actions: applied }, 'simulated');
   syncObjects();
   return replan().then(ms => { if (!renderer.xr.isPresenting && !current?.error) { Object.assign(body, routePose(0, 0, Infinity)); setWalk('auto'); } reim.play(); return ms; });
 }
@@ -1784,6 +1801,17 @@ async function openReport() {
       cost_usd: iv?.cost_usd, minutes: iv?.minutes, effort: iv?.effort, product: iv?.product };
   }).sort((a: any, b: any) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.clearance_gain_m - a.clearance_gain_m) || ((a.cost_usd ?? 0) - (b.cost_usd ?? 0)));
   const planned = await planfix.rankedFixes();   // kitchen planner scenes: its layout's changes, ranked by real risk removed (planfix.ts)
+  // log what goes on paper, then build the payload from the log (newest entry per thing wins)
+  const changes = reim.changes().map(ch => {
+    const iv = interventions.find(i => i.id === ch.iv), priced = !iv?.product || iv.cost_usd !== undefined;
+    return { label: ch.label, effort: ch.cost.effort, helpers: ch.cost.helpers, cost_usd: priced ? ch.cost.usd : undefined, product: iv?.product };
+  });
+  logEvent(ledger, 'viewer', 'changes', changes, 'simulated', 'report');
+  logEvent(ledger, 'viewer', 'actions', describeChanges(), 'simulated', 'report');
+  logEvent(ledger, 'viewer', 'ranked_fixes', ranked_fixes, 'simulated', 'report');
+  logEvent(ledger, 'viewer', 'reason', hzFile.hazards.filter(h => h.source === 'cosmos_reason'), 'imagined', 'report');
+  const latest = (kind: string) => retrieve(ledger, { kind, latest: true }), one = (kind: string) => latest(kind)[0]?.values;
+  const optNames = new Set(suggestions.map(o => o.name));
   const payload: ReportPayload = {
     scene: RUN, created: new Date().toISOString(), synthetic: (sc.synthetic ?? []).length > 0 || /synth/.test(RUN), scale_note: sc.scale_note,
     route: routes[selRoute].name,
@@ -1791,11 +1819,14 @@ async function openReport() {
     current: { ...c, dist_m: undefined as any, heat: undefined, ghosts: [] }, baseline: baselinePerMonth ?? c.per_month,
     rollouts: risk.rollouts, gait: persona.gait_profile, dark_multiplier: risk.dark_contact_multiplier,
     calibration: 'MTC 14.1 ± 8.3 mm lognormal shape; ~1 in 578 strides contact a 1 cm obstacle (Frontiers 2014)',
-    margins: sc.hazard_rules.margin_m, actions: describeChanges(), suggestions,
-    reason: hzFile.hazards.filter(h => h.source === 'cosmos_reason'),
+    margins: sc.hazard_rules.margin_m, actions: one('actions'), suggestions: latest('option').filter(e => optNames.has(e.key!)).map(e => e.values),
+    reason: one('reason'),
     clips: (game.clips ?? []).filter((k: any) => k.layout_key === layoutKey(objs, layout)).map((k: any) => k.title ?? k.file),
-    topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85), ranked_fixes: planned ?? ranked_fixes, planner_options: planfix.optionsOut() ?? undefined,
+    topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85), ranked_fixes: planned ?? one('ranked_fixes'), planner_options: planfix.optionsOut() ?? undefined,
     ranked_by: planned ? 'kitchen planner (B200 layout search + critic): each change alone on this layout, by toe catches/month saved (the same calculation as above), ties broken by the search objective (toe catches + simulated snags + brushes)' : undefined,
+    changes: one('changes'), masses: latest('mass').map(e => ({ ...e.values, provenance: e.provenance })), not_suggested: latest('not_suggested').map(e => e.values),
+    provenance: Object.entries(ledger.reduce((n: Record<string, number>, e) => (n[e.provenance] = (n[e.provenance] ?? 0) + 1, n), {})).map(([k, v]) => ({ provenance: k, n: v })),
+    log_entries: ledger.length,
   };
   sessionStorage.setItem(`report:${RUN}`, JSON.stringify(payload));
   if (!w) return window.open(`report.html?scene=${encodeURIComponent(RUN)}`, '_blank');
@@ -1816,6 +1847,15 @@ async function openFixCard() {
   return url;
 }
 $('report').onclick = () => openReport();
+/** This session's log as JSON lines, to keep next to the run (out/<run>/log.jsonl). */
+function downloadLog() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([toJSONL(ledger)], { type: 'application/x-ndjson' }));
+  a.download = `${RUN}_log.jsonl`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+$('downloadlog').onclick = () => downloadLog();
 $('fixcard').onclick = () => openFixCard();
 $('closeqr').onclick = () => { $('qr').hidden = true; };
 
@@ -1860,7 +1900,12 @@ function labelStep() {
   if (resetBtn.disabled === canReset) resetBtn.disabled = !canReset;
   if (k < 0 || layout.poses[k].removed) { labelLines = []; return objLabel.set(null, [], false); }
   const name = objs[k].name.replace(/_/g, ' '), moved = movedText(poseOf(k), original[k]);
-  labelLines = [name[0].toUpperCase() + name.slice(1), moved ? `${moved} · ${inHeadset ? 'grip' : 'Z'} resets` : ''].filter(Boolean);
+  // line 2: mass from the measured box, difficulty of a 1 m carry, helpers (effort.ts); line 3: the effort of this actual drag
+  const eff = effortOf.get(objs[k].name), p = poseOf(k), q = original[k];
+  const dragged = moved && eff?.carried ? moveEffort({ kind: objs[k].kind, mass_kg: objs[k].mass_kg, distance_m: Math.hypot(p.x - q.x, p.y - q.y),
+    turn_deg: ((p.yaw - q.yaw) * 180) / Math.PI }).effort : 0;
+  labelLines = [name[0].toUpperCase() + name.slice(1), eff?.tag ?? '',
+    moved ? `${moved}${dragged ? ` · effort ${dragged.toFixed(1)}` : ''} · ${inHeadset ? 'grip' : 'Z'} resets` : ''].filter(Boolean);
   objLabel.set(items[k].proxy, labelLines, !inHeadset || !!wand?.grab);
   objLabel.update(camera);
 }
