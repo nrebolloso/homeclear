@@ -31,8 +31,7 @@ const $ = (id: string) => document.getElementById(id)!;
 const f1 = (x: number) => x.toFixed(1);
 // the headline is expected toe catches/month (score().contacts = sim.ts's calculation, the viewer's and the OT report's
 // number); the search objective (risk = toe catches + simulated snags + brushes, what the B200 job minimised) stays secondary
-const f2 = (x: number) => x.toFixed(2);
-const range = (s: Slim) => `${f2(s.contacts)} toe catches`;
+const range = (s: Slim) => `${f1(s.contacts)} toe catches`;
 const parts = (s: Slim) => `<small>tie-breakers (simulated object events, not toe catches): ${f1(s.snags)} snags + ${f1(s.brushes)} brushes/month</small>`;
 
 export function createPlanFix(D: PlanFixDeps) {
@@ -143,7 +142,7 @@ export function createPlanFix(D: PlanFixDeps) {
     for (frame = 0; frame < fr.length && playing; frame++) {
       const f = fr[frame];
       showFan(f.ghosts); draw();
-      $('pfresult').innerHTML = `step ${f.step} of ${data.stats.steps}: <b>${f2(f.score.contacts)}</b> toe catches/month · effort ${f.cost.effort.toFixed(1)} · $${f.cost.usd}`;
+      $('pfresult').innerHTML = `step ${f.step} of ${data.stats.steps}: <b>${f1(f.score.contacts)}</b> toe catches/month · effort ${f.cost.effort.toFixed(1)} · $${f.cost.usd}`;
       await glide(prev, f.layout, ms * 0.7);
       await new Promise(r => setTimeout(r, ms * 0.3));
       prev = f.layout;
@@ -168,7 +167,7 @@ export function createPlanFix(D: PlanFixDeps) {
     $('pfoptions').innerHTML = '';
     for (const o of opts()) {
       const q = data!.pareto[o.k], li = document.createElement('li'), b = document.createElement('button');
-      li.innerHTML = `${o.why}: <b>${f2(q.confirm.contacts)}</b> toe catches/month · effort ${q.cost.effort.toFixed(1)} · $${q.cost.usd} · ${parts(q.confirm)} `;
+      li.innerHTML = `${o.why}: <b>${f1(q.confirm.contacts)}</b> toe catches/month · effort ${q.cost.effort.toFixed(1)} · $${q.cost.usd} · ${parts(q.confirm)} `;
       b.textContent = o.k === k ? 'Applied' : 'Apply'; b.disabled = o.k === k;
       b.onclick = () => apply(o.k);
       li.appendChild(b); $('pfoptions').appendChild(li);
