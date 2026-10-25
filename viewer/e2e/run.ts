@@ -392,9 +392,8 @@ try {
     const F = (f: string) => G(ff.p, f);
     const watch = 'const seen = []; for (let i = 0; i < 28; i++) { await new Promise(r => setTimeout(r, 500)); const s = game.fan.state(); if (s.fan) seen.push(s); } return seen';
     await F('await new Promise(r => setTimeout(r, 6000))');
-    const off = await F('return game.fps');
     await F('game.fan.set(true)');
-    const before: any[] = await F(watch), fps = await F('return game.fps');
+    const before: any[] = await F(watch);
     await F('await game.fan.tapeMat()');
     const after: any[] = await F(watch);
     await F("game.fan.setModel('hand'); await new Promise(r => setTimeout(r, 1500))");
@@ -404,9 +403,13 @@ try {
     check('futures fan: 30 imagined futures from the current state, red at the mat, labelled', !!hit && hit.fan.n === 30 && /^World model: 30 futures · \d+ cross the mat · ≈[\d.]+ toe catches\/month here/.test(hit.label), hit ? `${hit.label}; ${hit.fan.red} likely catches, ${hit.fan.catches_month.toFixed(2)}/month` : `never red at the mat: ${before.map(s => s.label.split('· ')[1]).join(', ')}`);
     check('futures fan: no future hits the mat once it is taped flat', after.length > 10 && !after.some(mat), `${after.length} fans, mat crossings ${after.filter(mat).length}, max ${Math.max(...after.map(s => s.fan.catches_month)).toFixed(2)} catches/month`);
     check('futures fan: hand rule toggle', h.model === 'hand' && /^Hand rule:/.test(h.label), h.label);
-    check('futures fan: fps within ~10% of the fan-off rate (adaptive count)', fps >= 0.9 * off, `${off.toFixed(1)} fps off -> ${fps.toFixed(1)} on, ${before.at(-1)?.n} futures sampled`);
-    check('futures fan: no page errors', ff.errors.length === 0, ff.errors.join(' | ') || 'none');
-    await ff.p.close();
+    // a fixed seed keeps all 30 futures (demorun.ts: the numbers match the recordings), so the adaptive count is measured unseeded
+    const fr = await open('kitchen4_lighter');
+    const off = await G(fr.p, 'await new Promise(r => setTimeout(r, 6000)); return game.fps');
+    const on = await G(fr.p, 'game.fan.set(true); await new Promise(r => setTimeout(r, 14000)); return { fps: game.fps, n: game.fan.state().fan?.n }');
+    check('futures fan: fps within ~10% of the fan-off rate (adaptive count)', on.fps >= 0.9 * off, `${off.toFixed(1)} fps off -> ${on.fps.toFixed(1)} on, ${on.n} futures sampled (unseeded)`);
+    check('futures fan: no page errors', ff.errors.length + fr.errors.length === 0, [...ff.errors, ...fr.errors].join(' | ') || 'none');
+    await ff.p.close(); await fr.p.close();
   }
   // 17. the fan's fork and foot lift (futures.ts routeOptions, LIFTS): at the fridge facing the mat the way ahead forks
   // (over / around the mat), the low-clearance shuffler catches the mat edge more often than the average lift, a taped mat
