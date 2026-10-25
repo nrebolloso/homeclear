@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { edgeCrossings, foldOnPass, createRugCascade, P_FOLD, FOLD_LIFT_M } from '../src/rugcascade.ts';
-import { stampFolds, type XY, type Layout, type GridMeta } from '../src/grid.ts';
+import { stampFolds, type XY, type Layout, type GridMeta, type Pose } from '../src/grid.ts';
 
 const rug: XY[] = [[0, 0], [0.9, 0], [0.9, 0.6], [0, 0.6]];
 const route: XY[] = [[-0.5, 0.1], [0.5, 0.1], [1.5, 0.1]];
@@ -23,7 +23,7 @@ test('the fold is a taller bump within its size', () => {
   assert.equal(bump.filter(h => h === Math.fround(0.05)).length, cells.length);
 });
 
-test('one fold per rug, cleared when the rug moves', () => {
+test('one fold per rug, cleared when the rug moves or is taped', () => {
   const pose = { x: 0, y: 0, yaw: 0 };
   const C = createRugCascade({ index: 0, poly: p => rug.map(([x, y]) => [x + p.x, y + p.y] as XY) });
   let lay: Layout = { poses: [pose], flattened: [] };
@@ -32,4 +32,7 @@ test('one fold per rug, cleared when the rug moves', () => {
   assert.equal(C.lap(route, lay), null);                       // already folded: stays
   const moved = C.lap(route, { ...lay, poses: [{ x: 2, y: 0, yaw: 0 }] });
   assert.deepEqual(moved?.folds, []);
+  const taped = { poses: [{ ...pose, taped: true } as Pose], flattened: [] } as Layout;
+  assert.deepEqual(C.lap(route, { ...taped, folds: lay.folds })?.folds, []);   // taping clears the fold
+  for (let k = 0; k < 20; k++) assert.equal(C.lap(route, taped), null);       // and a taped rug never folds
 });

@@ -50,17 +50,19 @@ export function foldOnPass(poly: XY[], xy: XY[], n: number, p = P_FOLD): Fold | 
 }
 
 /** Autoplay's lap counter: call lap() each time autoplay wraps to the start. A fold already there stays (one per rug);
- *  moving or removing the rug clears it. Returns the new layout when it changed, else null. */
+ *  moving, removing or taping the rug clears it. Returns the new layout when it changed, else null. */
 export function createRugCascade(rug: { index: number; poly: (p: Pose) => XY[] } | null) {
   let n = 0, at = '';
-  const key = (p: Pose) => `${p.x},${p.y},${p.yaw},${!!p.removed}`;
+  // a taped rug can't fold (Pose.taped comes with the futures-fan branch; read without depending on it)
+  const taped = (p: Pose) => 'taped' in p && !!p.taped;
+  const key = (p: Pose) => `${p.x},${p.y},${p.yaw},${!!p.removed},${taped(p)}`;
   return {
     get passes() { return n; },
     lap(xy: XY[], lay: Layout): Layout | null {
       if (!rug) return null;
       const p = lay.poses[rug.index];
       if (lay.folds?.length && key(p) !== at) return { ...lay, folds: [] };
-      if (p.removed || lay.folds?.length) return null;
+      if (p.removed || taped(p) || lay.folds?.length) return null;
       const f = foldOnPass(rug.poly(p), xy, ++n);
       if (!f) return null;
       at = key(p);
