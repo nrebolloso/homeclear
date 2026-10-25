@@ -960,7 +960,7 @@ function splatPoints(st: Stair): Float32Array {
   const cs = [F.world(-pad, F.width / 2 + pad), F.world(-pad, -F.width / 2 - pad), F.world(F.run + pad, F.width / 2 + pad), F.world(F.run + pad, -F.width / 2 - pad)];
   const [x0, x1, y0, y1] = [Math.min(...cs.map(c => c[0])), Math.max(...cs.map(c => c[0])), Math.min(...cs.map(c => c[1])), Math.max(...cs.map(c => c[1]))];
   mainSplat.forEachSplat((_, c, s, q, op) => {
-    if (op < 0.3 || c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1 || c.z > 3.2) return;
+    if (op < 0.3 || c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1 || c.z > (st.bottom_z ?? 0) + 3.2) return;
     const k = s.x <= s.y && s.x <= s.z ? 0 : s.y <= s.z ? 1 : 2;
     ax.set(+(k === 0), +(k === 1), +(k === 2)).applyQuaternion(q);
     out.push(c.x, c.y, c.z, Math.abs(ax.z));
@@ -2239,6 +2239,7 @@ function freeStep(dt: number) {
   }
 }
 const fly = { x: 0, y: 0, z: 0 };   // noclip camera: ignores floor, walls and coverage; the walker stays where it was
+game.setFly = (x: number, y: number, z: number, yawDeg = 0, pitchDeg = 0) => { setWalk('fly'); Object.assign(fly, { x, y, z }); body.yaw = (yawDeg * Math.PI) / 180; body.pitch = (pitchDeg * Math.PI) / 180; };   // e2e: inspect upper floors
 function flyStep(dt: number) {
   const k = (c: string) => keys.has(c), v = (k('ShiftLeft') || k('ShiftRight') ? 4 : 1) * dt;
   const f = +(k('KeyW') || k('ArrowUp')) - +(k('KeyS') || k('ArrowDown')), r = +(k('KeyD') || k('ArrowRight')) - +(k('KeyA') || k('ArrowLeft'));

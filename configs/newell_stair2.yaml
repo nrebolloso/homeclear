@@ -34,6 +34,8 @@ clean:
   ceiling_m: 9.0      # 2 floors (user) at ~4 m floor-to-floor (ASSUMED) + headroom
   floater_voxel_m: 0.05
   floater_min_neighbours: 8
+  lighter_camera_clear_m: 0.4   # viewer-only: fog in the air the phone moved through (tools/freespace.py); 0.4 m kept the walls
+  lighter_big_above: {z: 4.2, scale_m: 0.1}   # viewer-only: >10 cm Gaussians above the second floor are the unfilmed ceiling's streaks; 8 cm thinned the walls
 floor:
   ransac_iters: 2000
   inlier_m: 0.02
@@ -112,15 +114,27 @@ game:
   # each tread's centre band within 9 cm of an even-riser fit (2.00 m / 11), so +-2 cm per riser. The viewer's own tread finder
   # missed the sparse low treads (a "57 cm riser"). Flight B's points are too sparse to measure
   stairs:
+  # both flights lean 13 deg off the floor frame's y axis (stringers and tread edges agree); fronts measured in a 0.9 m band
+  # down the middle (the stringers' flat tops excluded), 13 deg axis, flat Gaussians (|nz| >= 0.8) at each tread height
   - name: flight_A
-    bottom: [[-1.45, 1.0], [-0.25, 1.0]]
-    top: [-0.85, 4.0]
+    bottom: [[-1.318, 0.898], [0.046, 1.214]]
+    top: [-1.266, 3.784]
     top_z: 2.0
     treads_z: [0.202, 0.383, 0.552, 0.718, 0.909, 1.101, 1.288, 1.471, 1.65, 1.816]
-    tread_fronts_m: [0.0, 0.25, 0.5, 0.8, 1.08, 1.35, 1.63, 1.93, 2.23, 2.48]
+    tread_fronts_m: [0.0, 0.24, 0.6, 0.84, 1.12, 1.44, 1.72, 2.04, 2.28, 2.52]
     tread_depth_m: 0.28
-    width_m: 1.2
+    width_m: 1.4
     rails: {left: seen, right: wall, height_m: {left: 0.961}}   # the viewer's own rail finder on this splat
+    measured: splat
+  # landing -> second floor, back over flight A; thin in the scan: only the treads with >= 20 flat Gaussians in the band
+  - name: flight_B
+    bottom: [[-0.297, 4.172], [1.067, 4.488]]
+    top: [1.078, 1.33]
+    bottom_z: 2.0
+    top_z: 3.85
+    treads_z: [2.19, 3.02, 3.19, 3.37, 3.49]
+    tread_fronts_m: [0.0, 1.56, 1.8, 2.04, 2.16]
+    width_m: 1.4
     measured: splat
   objects: []   # new scene: stage 6c detections / hand picks fill this after the splat
   interventions: []

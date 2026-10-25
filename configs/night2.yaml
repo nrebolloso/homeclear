@@ -1,7 +1,7 @@
-# Garden path beside a brick building at NIGHT (REAL, user 2026-10-24 05:18): ONE continuous 567 s take, Samsung 4K 60 fps HLG
+# Century Tower (UF) garden path at NIGHT (REAL, user 2026-10-24 05:18): ONE continuous 567 s take, Samsung 4K 60 fps HLG
 # (data/night2.mp4). Doors, steps, plaques, low path lights. ~2.2 frames/s -> 1250 frames, exhaustive (the walk loops).
 # Risks: wind-moved palms/shrubs, dark sky. Scale ASSUMED until a known size is picked.
-run_name: night2
+run_name: century_tower
 video: data/night2.mp4
 work_dir: out/night2
 frames:

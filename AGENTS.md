@@ -42,7 +42,7 @@ Fill in the names.
   VR tracking/input stays in `xr.ts`; marking connects through its `XrEditor` contract. `xrcompare.ts` separates real
   layout restore/recalculation from visual preview. See `MERGE_VR_REVIEW.md` for the merged controls and decisions.
 - **Stairs** (`viewer/src/stairs.ts`): `scene.json` `stairs` (additive; from config `game.stairs` via stage 12) is a list of
-  `{ name, bottom: [[x,y],[x,y]], top: [x,y], top_z?, treads_z?, tread_fronts_m?, tread_depth_m?, width_m?, rails?: {left, right}, measured: 'tape' | 'splat' }`.
+  `{ name, bottom: [[x,y],[x,y]], top: [x,y], top_z?, bottom_z?, treads_z?, tread_fronts_m?, tread_depth_m?, width_m?, rails?: {left, right}, measured: 'tape' | 'splat' }`.
   An entry with only `bottom`/`top` is measured from the splat in the viewer; "Copy as config YAML" in the Stairs panel
   writes this shape. The persona's optional `strong_side: left | right` drives the rail check. Finding stairs
   automatically (6c) is the detection lane's; it should emit this shape. `window.game.stairs` exposes `mark(a, b, top)`,

@@ -125,9 +125,9 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
       };
 
       // ---- measured: the flight's two edges, each riser as a tinted face, each tread nose as a line, a dimension mark per riser
-      const risers = z.map((v, k) => v - (k ? z[k - 1] : 0));
+      const risers = z.map((v, k) => v - (k ? z[k - 1] : st.bottom_z ?? 0));
       for (const t of [half, -half]) {
-        const prof = z.length ? z.flatMap((h, k) => [P(fronts[k], t, h - risers[k] + 0.005), P(fronts[k], t, h + 0.005)]) : [P(0, t, 0.02), P(F.run, t, pitch(F.run))];
+        const prof = z.length ? z.flatMap((h, k) => [P(fronts[k], t, h - risers[k] + 0.005), P(fronts[k], t, h + 0.005)]) : [P(0, t, (st.bottom_z ?? 0) + 0.02), P(F.run, t, pitch(F.run))];
         measured.add(fat(prof, 0x8fe3ff, 0.007, 0.8));
       }
       z.forEach((h, k) => {
