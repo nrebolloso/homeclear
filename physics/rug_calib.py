@@ -63,7 +63,7 @@ def model(p):
 
 def trial(p, keep=None):
     """One pass. p: direction ('onto' | 'off'), mu_gr, mu_rf, E, mpa, v, push, load, stride, dy (rug offset sideways).
-    keep: a list to append (t, walker qpos, flex vertices, feet) frames to, every 1/30 s, for rendering."""
+    keep: a list to append (M, D) state to as (t, qpos, mocap_pos) every 1/30 s, for rendering (tools/rug_video.py)."""
     M = mujoco.MjModel.from_xml_string(model(p)); D = mujoco.MjData(M)
     jid = lambda j: mujoco.mj_name2id(M, mujoco.mjtObj.mjOBJ_JOINT, j)
     qa = [M.jnt_qposadr[jid(j)] for j in ('wx', 'wy', 'wz')]; da = [M.jnt_dofadr[jid(j)] for j in ('wx', 'wy', 'wz')]
@@ -102,7 +102,7 @@ def trial(p, keep=None):
         place(t, D.qpos[qa[0]]); mujoco.mj_step(M, D)
         if i % 33 == 0:
             peak = max(peak, float(D.flexvert_xpos[:, 2].max()))
-            if keep is not None: keep.append((t, D.qpos[qa].copy(), D.flexvert_xpos.copy(), D.mocap_pos.copy()))
+            if keep is not None: keep.append((t, D.qpos.copy(), D.mocap_pos.copy()))
     P = D.flexvert_xpos; disp = np.hypot(*(P[:, :2] - v0[:, :2]).T)
     hi = P[:, 2] > FOLD_Z
     out = dict(drag_m=float(np.percentile(disp, 90)), fold_h_m=float(P[:, 2].max() + 0.002), n_lifted=int(hi.sum()),
