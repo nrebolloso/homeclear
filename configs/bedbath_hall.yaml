@@ -31,6 +31,9 @@ clean:
   ceiling_m: 2.9
   floater_voxel_m: 0.05
   floater_min_neighbours: 8
+  lighter_camera_clear_m: 0.6   # viewer-only: near-lens fog along the phone path; 25% of the splat sat within 20 cm of it (0.45 left haze at eye height)
+  lighter_crop_m: 0.3   # viewer-only: blobs past the floor grid ringed the room from above
+  lighter_air: {min_opacity: 0.4, max_scale_m: 0.04}   # viewer-only: faint/large haze above the floor band, white discs from above
 floor:
   ransac_iters: 2000
   inlier_m: 0.02
