@@ -37,10 +37,10 @@ floor:
   min_opacity: 0.1
   near_cameras_m: 2.0
 grid:
-  cell_m: 0.02
+  cell_m: 0.05   # outdoor plaza ~85 x 65 m: at 2 cm the 13.6M-cell grid x 1200 cameras stalls stage 12 coverage for hours (2026-10-25)
   min_opacity: 0.1
   floor_band_m: 0.015
-  floor_close_cells: 10   # textureless vinyl floor, seen sparsely (fills gaps up to 40 cm in observed floor)
+  floor_close_cells: 4   # textureless floor, seen sparsely (fills gaps up to 40 cm at 5 cm cells)
   obstacle_z:
   - 0.05
   - 1.8
@@ -53,8 +53,8 @@ grid:
     min_length_m: 0.3
     typical_height_m: 0.006
   min_count: 2
-  speck: {max_cells: 6, min_span_m: 0.10, floor_gap_m: 0.15}   # mid-air floaters of ~3 Gaussians each would block the walker
-  bump_link_cells: 3
+  speck: {max_cells: 1, min_span_m: 0.10, floor_gap_m: 0.15}   # mid-air floaters of ~3 Gaussians each would block the walker
+  bump_link_cells: 1
 plan:
   # start/goal unset: stage 7 picks two far-apart cells of the largest walker-reachable region (no bed or bathroom in this scene)
   walker_width_m: 0.61
