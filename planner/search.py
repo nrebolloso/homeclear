@@ -90,7 +90,10 @@ def main():
     ap.add_argument("--workers", type=int, default=min(32, os.cpu_count()))
     ap.add_argument("--confirm-trips", type=int, default=2000)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--reselect", action="store_true", help="re-run only the fronts and options on a finished search (out dir's search.json + evals.jsonl)")
     a = ap.parse_args()
+    if a.reselect:
+        return reselect(a)
     t_start = time.time()
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     S = E.Scene(a.scene, device=dev)
@@ -143,30 +146,14 @@ def main():
                   f"gpu={gpu_s:.0f}s wall={time.time() - t_start:.0f}s", flush=True)
     pool.close()
 
-    # Pareto front on risk vs effort, then re-scored on fresh trips (seed 2) so the front isn't the search's lucky draws
     valid = [i for i, e in enumerate(layouts) if not e["score"].get("error")]
-    front = [valid[i] for i in pareto([(layouts[i]["score"]["risk"], layouts[i]["cost"]["effort"]) for i in valid])]
-    conf = E.score(S, [layouts[i]["layout"] for i in front], trips=a.confirm_trips, seed=2)
-    pf = [{"i": i, "layout": layouts[i]["layout"], "cost": layouts[i]["cost"], "search": _slim(layouts[i]["score"]), "confirm": _slim(c)} for i, c in zip(front, conf)]
-    # the chosen layout: the knee of the confirmed front (furthest below the line from the scanned room to the lowest
-    # risk), plus the cheapest real improvement and the lowest risk as the other options
+    pf, nf, conf0, options, options_keep_mat = fronts(S, layouts, valid, seen[key(scan)], a.confirm_trips)
     base = layouts[seen[key(scan)]]
-    r0, rmin = pf[0]["confirm"]["risk"], min(p["confirm"]["risk"] for p in pf)
-    emax = max(p["cost"]["effort"] for p in pf) or 1
-    knee = max(range(len(pf)), key=lambda k: (r0 - pf[k]["confirm"]["risk"]) / max(1e-9, r0 - rmin) - pf[k]["cost"]["effort"] / emax)
-    low = min(range(len(pf)), key=lambda k: pf[k]["confirm"]["risk"])
-    c0 = pf[0]["confirm"]["contacts"]   # pf[0] is the scanned room (effort 0)
-    saves = lambda k: pf[k]["confirm"]["contacts"] < c0
-    cheap = next((k for k in range(len(pf)) if pf[k]["confirm"]["risk"] < 0.8 * r0 and k != knee and saves(k)), None)
-    # shortcut: free fixes are looked for on the front only (a free layout off it costs more effort than some paid one)
-    free = None if cheap is not None else next((k for k in range(len(pf)) if pf[k]["cost"]["usd"] == 0 and k != knee and saves(k)), None)
-    options = [{"why": w, "k": k} for w, k in (("chosen: most toe catches removed per unit of effort", knee), ("fewest toe catches found", low),
-                                                ("least effort for 20% fewer toe catches", cheap), ("free fixes only", free)) if k is not None and saves(k)]
-    options = [o for j, o in enumerate(options) if o["k"] not in [p["k"] for p in options[:j]]]
+    knee = options[0]["k"] if options and options[0]["k"] < nf else 0   # Easiest (the main front's knee) picks the featured chain
 
     # the featured chain: the chosen layout's effort weight, the chain whose final layout scores best; its accepted moves
     # are the replay, each with 12 imagined trips (heels + walker) for the fan of futures
-    lam = min(sc["effort_weight"], key=lambda l: abs(l - _lam_of(pf, knee, sc["effort_weight"])))
+    lam = min(sc["effort_weight"], key=lambda l: abs(l - _lam_of(pf[:nf], knee, sc["effort_weight"])))
     cs = [c for c in range(C) if lams[c] == lam]
     fc = min(cs, key=lambda c: J(layouts[trace[c][-1][1]], lam))
     frames = trace[fc]
@@ -178,19 +165,80 @@ def main():
                "ghosts": [{"pts": _r(g["pts"]), "hit": g["hit"], "walker": _r(g["walker"])} for g in f["ghosts"]]} for (st, i), f in zip(frames, fan)]
     dots = [[round(layouts[i]["score"]["risk"], 2), round(layouts[i]["cost"]["effort"], 2), round(layouts[i]["cost"]["usd"], 2), layouts[i]["step"]] for i in valid]   # risk, effort, $, step first seen
     stats = {"layouts_searched": len(layouts), "valid_layouts": len(valid), "evaluations": n_evals, "chains": C, "steps": steps,
-             "trips_per_layout": S.risk["rollouts"], "trips_imagined": len(valid) * S.risk["rollouts"] + len(front) * a.confirm_trips,
-             "footsteps_imagined": sum(layouts[i]["score"]["footsteps"] for i in valid) + sum(c.get("footsteps", 0) for c in conf),
+             "trips_per_layout": S.risk["rollouts"], "trips_imagined": len(valid) * S.risk["rollouts"] + len(pf) * a.confirm_trips,
+             "footsteps_imagined": sum(layouts[i]["score"]["footsteps"] for i in valid) + sum(p["confirm"].get("footsteps", 0) for p in pf),
              "runtime_s": round(time.time() - t_start, 1), "gpu_rollout_s": round(gpu_s, 1),
              "gpu": torch.cuda.get_device_name(0) if dev == "cuda" else "cpu", "cpu_workers": a.workers,
              "slurm_job": os.environ.get("SLURM_JOB_ID"), "host": os.uname().nodename, "seed": 1, "confirm_seed": 2,
              "effort_weights": sc["effort_weight"], "featured_chain": {"chain": fc, "effort_weight": lam}}
-    json.dump({"scene": a.scene, "cfg": S.cfg, "stats": stats, "scanned": {"layout": scan, "score": _slim(base["score"]), "confirm": _slim(conf[0]) if front[0] == seen[key(scan)] else None},
-               "replay": replay, "dots": dots, "pareto": pf, "options": options}, open(out / "search.json", "w"))
+    json.dump({"scene": a.scene, "cfg": S.cfg, "stats": stats, "scanned": {"layout": scan, "score": _slim(base["score"]), "confirm": conf0},
+               "replay": replay, "dots": dots, "pareto": pf, "n_front": nf, "options": options, "options_keep_mat": options_keep_mat}, open(out / "search.json", "w"))
     with open(out / "evals.jsonl", "w") as f:
         for e in layouts:
             f.write(json.dumps({"layout": e["layout"], "cost": e["cost"], "score": _slim(e["score"])}) + "\n")
     print(json.dumps(stats))
     print("options:", [(o["why"], pf[o["k"]]["confirm"]["risk"], pf[o["k"]]["cost"]["effort"]) for o in options])
+
+
+EASIEST, SAFEST = "most toe catches removed per unit of effort", "fewest toe catches found"
+
+
+def pick(pf, c0):
+    """(easiest, safest) on a confirmed front: the knee (furthest below the line from its first point to its lowest risk)
+    and the lowest risk, each None unless it has fewer toe catches than c0 (the scanned room)"""
+    r0, rmin = pf[0]["confirm"]["risk"], min(p["confirm"]["risk"] for p in pf)
+    emax = max(p["cost"]["effort"] for p in pf) or 1
+    knee = max(range(len(pf)), key=lambda k: (r0 - pf[k]["confirm"]["risk"]) / max(1e-9, r0 - rmin) - pf[k]["cost"]["effort"] / emax)
+    low = min(range(len(pf)), key=lambda k: pf[k]["confirm"]["risk"])
+    return [k if pf[k]["confirm"]["contacts"] < c0 else None for k in (knee, low)]
+
+
+def fronts(S, layouts, valid, scan_i, trips):
+    """The Pareto front on risk vs effort, and the front of the layouts that keep the mat (present, taped or moved),
+    both re-scored on fresh trips (seed 2) so they aren't the search's lucky draws. Returns pareto (main front, then the
+    keep-mat front), the main front's length, the scanned room's confirm, the options (Easiest / Keep my mat / Safest) and
+    the options with the mat kept (Easiest / Safest, the viewer's "Keep my mat" toggle). Both fronts start at the
+    scanned room (effort 0, mat present)."""
+    pts = lambda ix: [(layouts[i]["score"]["risk"], layouts[i]["cost"]["effort"]) for i in ix]
+    front = [valid[i] for i in pareto(pts(valid))]
+    keep = [i for i in valid if layouts[i]["layout"]["mat"] != "removed"]
+    kfront = [keep[i] for i in pareto(pts(keep))]
+    conf = E.score(S, [layouts[i]["layout"] for i in front + kfront], trips=trips, seed=2)
+    pf = [{"i": i, "layout": layouts[i]["layout"], "cost": layouts[i]["cost"], "search": _slim(layouts[i]["score"]), "confirm": _slim(c)}
+          for i, c in zip(front + kfront, conf)]
+    nf, c0 = len(front), pf[0]["confirm"]["contacts"]   # pf[0] is the scanned room (effort 0)
+    easy, safe = pick(pf[:nf], c0)
+    keasy, ksafe = [None if k is None else nf + k for k in pick(pf[nf:], c0)]
+
+    def dedupe(opts):   # the same layout can sit on both fronts: keep its first label
+        out, seen = [], set()
+        for w, k in opts:
+            if k is not None and key(pf[k]["layout"]) not in seen:
+                out.append({"why": w, "k": k}); seen.add(key(pf[k]["layout"]))
+        return out
+    options = dedupe([(f"Easiest: {EASIEST}", easy), (f"Keep my mat: {EASIEST} without removing it", keasy), (f"Safest: {SAFEST}", safe)])
+    options_keep_mat = dedupe([(f"Easiest, mat kept: {EASIEST}", keasy), (f"Safest, mat kept: {SAFEST}", ksafe)])
+    return pf, nf, _slim(conf[0]) if front[0] == scan_i else None, options, options_keep_mat
+
+
+def reselect(a):
+    """fronts() again on a finished search's evals.jsonl, here (CPU confirm unless a GPU is visible); the replay, dots and
+    the job's stats stay the search's, stats.reselect says what was re-run"""
+    out = Path(a.out or E.ROOT / "out/planner" / a.scene)
+    d = json.load(open(out / "search.json"))
+    layouts = [json.loads(l) for l in open(out / "evals.jsonl")]
+    dev = "cuda" if torch.cuda.is_available() else "cpu"
+    S = E.Scene(a.scene, device=dev)
+    valid = [i for i, e in enumerate(layouts) if not e["score"].get("error")]
+    scan_i = next(i for i, e in enumerate(layouts) if key(e["layout"]) == key(d["scanned"]["layout"]))
+    t = time.time()
+    pf, nf, conf0, options, options_keep_mat = fronts(S, layouts, valid, scan_i, a.confirm_trips)
+    d.update(pareto=pf, n_front=nf, options=options, options_keep_mat=options_keep_mat)
+    d["scanned"]["confirm"] = conf0
+    d["stats"]["reselect"] = {"device": dev, "confirm_trips": a.confirm_trips, "front": nf, "keep_mat_front": len(pf) - nf, "runtime_s": round(time.time() - t, 1)}
+    json.dump(d, open(out / "search.json", "w"))
+    print(json.dumps(d["stats"]["reselect"]))
+    print("options:", [(o["why"], round(pf[o["k"]]["confirm"]["contacts"], 3), pf[o["k"]]["cost"]["effort"]) for o in options + options_keep_mat])
 
 
 def _lam_of(pf, k, lams):

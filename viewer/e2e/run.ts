@@ -336,6 +336,11 @@ try {
     const gf = await P("await game.gait.play(32); const s = game.gait.state(); const r = await game.planfix.replanFor(game.gait.worldModel(), 'e2e', 300); return { steps: s.steps, err: s.err_last10, r: !!r && Number.isFinite(r.best_you.risk) && r.best_you.risk <= r.current_you.risk + 1e-9 }");
     check('gait: fitted embedding predicts the held-out walker\'s head better than the mean; re-plan runs', gf.steps > 100 && gf.err.head.fit < gf.err.head.pop && gf.r,
       `${gf.steps} steps, head err (last 10) ${gf.err.head.pop.toFixed(1)} -> ${gf.err.head.fit.toFixed(1)} cm, re-plan ok=${gf.r}`);
+    const km = await P(`const t = document.getElementById('pfkeepmat'); t.checked = true; t.dispatchEvent(new Event('change')); await new Promise(r => setTimeout(r, 2500));
+      const s = game.planfix.state(), li = [...document.querySelectorAll('#pfoptions li')].map(l => l.textContent); t.checked = false;
+      return { mats: s.options.map(o => o.layout.mat), li, now: game.planfix.layouts().now.mat }`);
+    check('planner: "Keep my mat" shows only layouts that keep the mat and applies one', km.mats.length >= 1 && km.mats.every((m: string) => m !== 'removed') && km.now !== 'removed' && /^Easiest, mat kept/.test(km.li[0] ?? ''),
+      `${km.li.map((l: string) => l.split(':')[0]).join(' / ')}; mats ${km.mats.join(', ')}; room now: mat ${km.now}`);
     check('planner + gait: no page errors', pk.errors.length === 0, pk.errors.join(' | ') || 'none');
     await pk.p.close();
   }

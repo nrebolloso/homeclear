@@ -17,7 +17,9 @@ interface Search {
   replay: { step: number; layout: PlanLayout; cost: { effort: number; usd: number }; score: Slim; ghosts: { pts: number[][]; hit: boolean[] }[] }[];
   dots: [number, number, number, number][];   // risk, effort, $, step first seen
   pareto: { layout: PlanLayout; cost: { effort: number; usd: number; minutes: number }; search: Slim; confirm: Slim }[];
-  options: { why: string; k: number }[];
+  n_front?: number;   // pareto = the main front, then (search.py fronts()) the front of the layouts that keep the mat
+  options: { why: string; k: number }[];   // Easiest / Keep my mat / Safest
+  options_keep_mat?: { why: string; k: number }[];   // Easiest / Safest with the mat kept: the "Keep my mat" toggle
 }
 export interface PlanFixDeps {
   run: string; scene: THREE.Scene; init: () => Init; base: Pose[]; walker: () => { width_m: number; depth_m: number; leg_radius_m: number };
@@ -52,6 +54,10 @@ export function createPlanFix(D: PlanFixDeps) {
     return new Promise<any>(res => { const id = ++seq; waiting.set(id, res); workers[who].postMessage({ ...msg, id }); });
   }
   const S = () => D.init(), cfg = () => data!.cfg;
+  const keepMat = () => ($('pfkeepmat') as HTMLInputElement).checked && !!data?.options_keep_mat?.length;
+  /** the options on show: the "Keep my mat" toggle swaps in the ones that keep it */
+  const opts = () => (keepMat() ? data!.options_keep_mat! : data!.options);
+  $('pfkeepmat').addEventListener('change', () => { if (data && !playing && $('pfoptions').children.length) apply(opts()[0].k); else draw(); });
   /** the configured fixes a planner layout uses, for the receipt (reimagine.ts labels them) */
   const fixesOf = (pl: PlanLayout) => [cfg().options.mat[pl.mat], cfg().options.cord[pl.cord], cfg().options.nightlight[pl.nightlight]]
     .flatMap(o => (o && 'from_fix' in o ? [o.from_fix] : []));
@@ -81,10 +87,11 @@ export function createPlanFix(D: PlanFixDeps) {
     const ring = (e: number, r: number, col: string, rad = 5) => { c.strokeStyle = col; c.lineWidth = 2; c.beginPath(); c.arc(X(e), Y(r), rad, 0, 7); c.stroke(); c.lineWidth = 1; };
     if (frame >= 0 && playing) { const f = data.replay[frame]; ring(f.cost.effort, f.score.risk, '#ffe14d'); }
     if (step === Infinity) {
+      const n = data.n_front ?? data.pareto.length;
       c.strokeStyle = '#6fd08c'; c.beginPath();
-      data.pareto.forEach((p, k) => (k ? c.lineTo : c.moveTo).call(c, X(p.cost.effort), Y(p.confirm.risk)));
+      (keepMat() ? data.pareto.slice(n) : data.pareto.slice(0, n)).forEach((p, k) => (k ? c.lineTo : c.moveTo).call(c, X(p.cost.effort), Y(p.confirm.risk)));
       c.stroke();
-      data.options.forEach(o => ring(data!.pareto[o.k].cost.effort, data!.pareto[o.k].confirm.risk, '#6fd08c', 6));
+      opts().forEach(o => ring(data!.pareto[o.k].cost.effort, data!.pareto[o.k].confirm.risk, '#6fd08c', 6));
     }
     if (live && !live.invalid.length) ring(0, live.judge.s.risk, '#e070ff', 6);   // live mode: effort is counted from the judge's layout
     if (live) ring(live.best.effort, live.best.s.risk, '#ffffff', 4);
@@ -139,7 +146,7 @@ export function createPlanFix(D: PlanFixDeps) {
     frame = fr.length - 1;
     playing = false;
     showFan([]);
-    const chosen = data.options[0];
+    const chosen = opts()[0];
     await apply(chosen.k);
     draw();
     return state();
@@ -153,7 +160,7 @@ export function createPlanFix(D: PlanFixDeps) {
       `<br><small>both re-run on fresh trips (seed ${data!.stats.confirm_seed}), not the search's own draws</small>` +
       `<ol>${items.map(i => `<li>${i.label} <small class="cost">${i.usd ? `$${i.usd} · ` : ''}${i.minutes} min${i.assumption ? ` · ${i.assumption}` : ''}</small></li>`).join('')}</ol>`;
     $('pfoptions').innerHTML = '';
-    for (const o of data!.options) {
+    for (const o of opts()) {
       const q = data!.pareto[o.k], li = document.createElement('li'), b = document.createElement('button');
       li.innerHTML = `${o.why}: <b>${f2(q.confirm.contacts)}</b> toe catches/month · effort ${q.cost.effort.toFixed(1)} · $${q.cost.usd} · ${parts(q.confirm)} `;
       b.textContent = o.k === k ? 'Applied' : 'Apply'; b.disabled = o.k === k;
@@ -212,14 +219,14 @@ export function createPlanFix(D: PlanFixDeps) {
     return { current_population: pop, current_you: r.judge.s, best_you: r.best.s, changed: diff, layout: r.best.pl, searched: r.searched };
   }
 
-  const state = () => ({ loaded: !!data, playing, frame, frames: data?.replay.length ?? 0, stats: data?.stats, options: data?.options.map(o => ({ ...o, ...data!.pareto[o.k] })) });
+  const state = () => ({ loaded: !!data, playing, frame, frames: data?.replay.length ?? 0, stats: data?.stats, options: data ? opts().map(o => ({ ...o, ...data!.pareto[o.k] })) : undefined });
   /** OT report: the planner's layout (the live search's if one ran, else the chosen option), one change at a time on the
    *  room as it is now, each scored for real and ranked by toe catches removed (the search objective breaks ties). null =
    *  no planner search for this scene. */
   async function rankedFixes() {
     await ready;
     if (!data) return null;
-    const cur = fromLayout(S(), cfg(), D.base, D.layout()), goal: PlanLayout = live?.best.pl ?? data.pareto[data.options[0].k].layout;
+    const cur = fromLayout(S(), cfg(), D.base, D.layout()), goal: PlanLayout = live?.best.pl ?? data.pareto[opts()[0].k].layout;
     const one = (k: string) => {
       const q = structuredClone(cur);
       if (k in q.chairs) q.chairs[k] = goal.chairs[k];
@@ -229,7 +236,8 @@ export function createPlanFix(D: PlanFixDeps) {
       return q;
     };
     const keys = changed(cfg(), cur, goal), { scores } = await ask({ type: 'score', pls: [cur, ...keys.map(one)] }), before = scores[0].contacts;
-    return keys.map((k, n) => {
+    return keys.map((k, n) => ({ k, n })).filter(({ k, n }) => k !== 'nightlight' || scores[n + 1].check.length || before - scores[n + 1].contacts > 0)   // a nightlight change that saves nothing isn't a fix
+      .map(({ k, n }) => {
       const it = cost(S(), cfg(), cur, one(k)).items[0], sc = scores[n + 1], cut = before - sc.contacts;
       return { label: it?.label ?? k, error: sc.check.length ? sc.check.join('; ') : sc.error, reduction: Math.max(0, cut), share: before > 0 ? cut / before : 0,
         objective_cut: scores[0].risk - sc.risk, clearance_gain_m: 0, cost_usd: it?.usd, minutes: it?.minutes, effort: it?.effort };
@@ -237,7 +245,7 @@ export function createPlanFix(D: PlanFixDeps) {
   }
   /** wmghosts.ts: the room as it is now / the scan / the chosen option, the evaluator's trips with one world model, and a
    *  glide + commit to a planner layout (before / after) */
-  const layouts = () => (data ? { now: fromLayout(S(), cfg(), D.base, D.layout()), scan: data.scanned.layout, chosen: data.pareto[data.options[0].k].layout } : null);
+  const layouts = () => (data ? { now: fromLayout(S(), cfg(), D.base, D.layout()), scan: data.scanned.layout, chosen: data.pareto[opts()[0].k].layout } : null);
   const imagine = (pl: PlanLayout, wm: WorldModel, n: number, nf = 0) => ready.then(() => ask({ type: 'imagine', pl, wm, n, nf }));
   async function goto(pl: PlanLayout) { await glide(fromLayout(S(), cfg(), D.base, D.layout()), pl, 900); await D.commit(toLayout(S(), cfg(), D.base, pl), fixesOf(pl)); }
   return { ready, play, apply, improve, replanFor, rankedFixes, stop: () => { playing = false; }, state, score: (pls: PlanLayout[]) => ask({ type: 'score', pls }).then(r => r.scores),
