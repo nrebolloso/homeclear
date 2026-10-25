@@ -272,6 +272,27 @@ try {
   const rest = await G(p, "return { gone: game.inventory(), bed: game.layout().poses[game.items.indexOf('bed')] }");
   check('both grips held reset everything', rest.gone.length === 0 && Math.hypot(rest.bed.x - bed0.x, rest.bed.y - bed0.y) < 0.01, `removed: [${rest.gone.join(', ')}], bed (${rest.bed.x.toFixed(2)}, ${rest.bed.y.toFixed(2)})`);
 
+  // 9b. Results panel: the desktop's numbers in the headset. "Results" swaps the story buttons for a header (press: next
+  // page), four rows and Close; on Fixes, "Work out the fixes" rolls them out and pointing at one applies it.
+  await G(p, "game.debug.xrPress(game.debug.xrButtons().findIndex(b => b.text[0] === 'Results'))");
+  await p.waitForTimeout(300);
+  const rp0 = await G(p, 'const b = game.debug.xrButtons(); return { shown: b.filter(x => x.at).map(x => x.text[0]), panel: game.debug.xrPanel() }');
+  const hdr = await G(p, "return game.debug.xrButtons().findIndex(b => b.text[0] === 'Safety on this route')");
+  for (let i = 0; i < 6 && (await G(p, `return game.debug.xrButtons()[${hdr}].text[0]`)) !== 'Fixes'; i++) { await G(p, `game.debug.xrPress(${hdr})`); await p.waitForTimeout(150); }
+  await G(p, `game.debug.xrPress(${hdr + 1})`);   // "Work out the fixes"
+  await p.waitForFunction(() => Array.isArray((window as any).game.fixes), null, { timeout: 30000 });
+  await p.waitForTimeout(300);
+  const fixRows = await G(p, `return game.debug.xrButtons().slice(${hdr + 1}, ${hdr + 5}).map(b => b.text)`);
+  const k = fixRows.findIndex((t: string[]) => t[2] === 'point here to apply');
+  const ch0 = await G(p, 'return game.reimagine.changes().length');
+  if (k >= 0) { await G(p, `game.debug.xrPress(${hdr + 1 + k})`); await p.waitForFunction(n => (window as any).game.reimagine.changes().length > n, ch0, { timeout: 30000 }); }
+  const ch1 = await G(p, 'return game.reimagine.changes().length');
+  await G(p, `game.debug.xrPress(${hdr + 5})`); await p.waitForTimeout(300);   // Close
+  const rp1 = await G(p, 'return { shown: game.debug.xrButtons().filter(x => x.at).map(x => x.text[0]), panel: game.debug.xrPanel() }');
+  check('results panel: pages of the desktop numbers; a fix applied from it; Close brings the story buttons back',
+    rp0.panel && rp0.shown[0] === 'Safety on this route' && /toe catches a month/.test(rp0.shown[1]) && k >= 0 && ch1 > ch0 && !rp1.panel && rp1.shown.includes('Results'),
+    `open: ${rp0.shown.slice(0, 3).join(' | ')}; fixes: ${fixRows.map((t: string[]) => t[0]).join(', ')}; applied "${fixRows[k]?.[0]}", changes ${ch0} -> ${ch1}; closed: ${rp1.shown.length} story buttons`);
+
   // 9. leaving VR puts the monitor back: DOM labels, performance mode as it was before entering
   await G(p, 'await game.debug.renderer.xr.getSession().end()');
   await p.waitForFunction(() => !(window as any).game.xr, null, { timeout: 5000 }).catch(() => {});
@@ -318,7 +339,100 @@ try {
   const h1 = await M('return game.xrPose().head');
   check('mounted: stick sideways snap-turns 30 deg; its trigger does not glide', Math.abs(yawOf(r1 - r0) + Math.PI / 6) < 0.01 && Math.hypot(h1[0] - h0[0], h1[1] - h0[1]) < 0.01 && mErrors.length === 0,
     `turned ${(yawOf(r1 - r0) * 180 / Math.PI).toFixed(0)} deg; trigger moved ${Math.hypot(h1[0] - h0[0], h1[1] - h0[1]).toFixed(3)} m; errors ${mErrors.length}`);
+  // the real walker is tracked, not just its heading: push it 0.5 m ahead (your head stays) and the virtual one goes with it
+  const ahead0 = await M('return { body: { ...game.body }, head: game.xrPose().head }');
+  await M(`const c = __xr.ctl('left'), rig = game.debug.rig, V = rig.position.constructor; rig.updateWorldMatrix(true, false);
+    const w = rig.localToWorld(new V(c.position.x, c.position.y, c.position.z)).add(new V(Math.cos(game.body.yaw) * 0.5, Math.sin(game.body.yaw) * 0.5, 0));
+    const l = rig.worldToLocal(w); c.position.set(l.x, l.y, l.z)`);
+  await m.waitForTimeout(400);
+  const ahead1 = await M('return { body: { ...game.body }, head: game.xrPose().head }');
+  const pushed = Math.hypot(ahead1.body.x - ahead0.body.x, ahead1.body.y - ahead0.body.y), along2 = yawOf(Math.atan2(ahead1.body.y - ahead0.body.y, ahead1.body.x - ahead0.body.x) - ahead0.body.yaw);
+  check('mounted: pushing the real walker ahead moves the virtual one, not you', Math.abs(pushed - 0.5) < 0.02 && Math.abs(along2) < 0.05 && Math.hypot(ahead1.head[0] - ahead0.head[0], ahead1.head[1] - ahead0.head[1]) < 0.01,
+    `walker moved ${pushed.toFixed(3)} m, ${(along2 * 180 / Math.PI).toFixed(1)} deg off its heading; head moved ${Math.hypot(ahead1.head[0] - ahead0.head[0], ahead1.head[1] - ahead0.head[1]).toFixed(3)} m`);
+  // a snap-turn spins the walker about its own centre (like turning a real walker in place): solve for the fixed point
+  const sp0 = await M('return { ...game.body }');
+  await M("__xr.ctl('left').updateAxes('thumbstick', -1, 0)"); await m.waitForTimeout(400); await M("__xr.ctl('left').updateAxes('thumbstick', 0, 0)"); await m.waitForTimeout(300);
+  const sp1 = await M('return { ...game.body }');
+  const dc = [Math.cos(sp0.yaw) - Math.cos(sp1.yaw), Math.sin(sp0.yaw) - Math.sin(sp1.yaw)], cx = ((sp1.x - sp0.x) * dc[0] + (sp1.y - sp0.y) * dc[1]) / (dc[0] ** 2 + dc[1] ** 2);
+  const resid = Math.hypot(sp0.x + Math.cos(sp0.yaw) * cx - sp1.x - Math.cos(sp1.yaw) * cx, sp0.y + Math.sin(sp0.yaw) * cx - sp1.y - Math.sin(sp1.yaw) * cx);
+  check('mounted: a snap-turn spins the walker about its own centre', Math.abs(yawOf(sp1.yaw - sp0.yaw) - Math.PI / 6) < 0.02 && resid < 0.01 && cx > 0.3 && cx < 0.8 && mErrors.length === 0,
+    `turned ${(yawOf(sp1.yaw - sp0.yaw) * 180 / Math.PI).toFixed(0)} deg about a point ${cx.toFixed(2)} m ahead of the body (moved ${resid.toFixed(3)} m)`);
   await m.close();
+
+  // 10b. In a cup holder the controller stands handle down, its ray pointing up: the heading comes from its most level axis
+  const h = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  await h.goto(`${BASE}/?scene=game_synth&emulate=quest2&mount=left`);
+  await h.waitForFunction(() => (window as any).game?.ready, null, { timeout: 60000 });
+  await h.evaluate(HELPERS);
+  const H = (q: string) => G(h, q);
+  const tilt = (yawDeg: number) => `{ const a = ${80 * Math.PI / 180}, b = ${yawDeg * Math.PI / 180}, Q = game.debug.rig.quaternion.constructor, V = game.debug.rig.position.constructor;
+    const q = new Q().setFromAxisAngle(new V(0, 1, 0), b).multiply(new Q().setFromAxisAngle(new V(1, 0, 0), a)); __xr.ctl('left').quaternion.set(q.x, q.y, q.z, q.w); }`;
+  await H(tilt(0));
+  await h.getByText('ENTER VR', { exact: true }).click();
+  await h.waitForFunction(() => (window as any).game.xr, null, { timeout: 10000 });
+  await h.waitForTimeout(600);
+  const c0 = await H('return { yaw: game.body.yaw, mount: game.debug.xrMount() }');
+  await H(tilt(45)); await h.waitForTimeout(400);
+  const c1 = await H('return { yaw: game.body.yaw }');
+  check('cup holder: a controller standing handle-down still turns the walker', Math.abs(yawOf(c1.yaw - c0.yaw) - Math.PI / 4) < 0.05,
+    `axis ${JSON.stringify(c0.mount.axis)}, walker turned ${(yawOf(c1.yaw - c0.yaw) * 180 / Math.PI).toFixed(1)} deg for 45`);
+  await h.close();
+
+  // 11. ?floor=5 lifts the scan's floor 5 cm against the real one (you stand 5 cm lower in it); ?measure=1 puts the wand's
+  // height above the real floor on a card on the wand.
+  const fp = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  await fp.goto(`${BASE}/?scene=game_synth&emulate=quest2&floor=5&measure=1`);
+  await fp.waitForFunction(() => (window as any).game?.ready, null, { timeout: 60000 });
+  await fp.evaluate(HELPERS);
+  await fp.getByText('ENTER VR', { exact: true }).click();
+  await fp.waitForFunction(() => (window as any).game.xr, null, { timeout: 10000 });
+  await fp.waitForTimeout(600);
+  const F = (q: string) => G(fp, q);
+  const fl = await F('return { head: game.xrPose().head, real: __xr.dev().position.y, wand: game.debug.wand(), ctl: __xr.ctl("right").position.y }');
+  const shownCm = Number(/([\d.]+) cm/.exec(fl.wand.ruler ?? '')?.[1]);
+  check('?floor=5 stands you 5 cm lower in the scan; ?measure=1 shows the wand height', Math.abs(fl.head[2] - (fl.real - 0.05)) < 0.005 && Math.abs(shownCm - fl.ctl * 100) < 0.15,
+    `head ${fl.head[2].toFixed(3)} m for a real ${fl.real.toFixed(3)} m; card "${fl.wand.ruler}" for a controller at ${(fl.ctl * 100).toFixed(1)} cm`);
+  await fp.close();
+
+  // 12. The world model in the headset (BLOCKERS 12): one card button steps through two walking styles, a month of trips,
+  // the futures fan and off. The ghosts must move while you are in VR, and starting them must not move you or switch the
+  // desktop to fly mode. Needs the kitchen's headset copy (k4_150k, thinned from kitchen4_lighter, whose planner search
+  // ships in public/planner/); skipped without it.
+  if ((await fetch(`${BASE}/scene/k4_150k/scene.json`).catch(() => null))?.ok) {
+    const w = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const wErrors: string[] = [];
+    w.on('pageerror', e => wErrors.push(String(e)));
+    await w.goto(`${BASE}/?scene=k4_150k&emulate=quest2`);
+    await w.waitForFunction(() => (window as any).game?.ready, null, { timeout: 90000 });
+    await w.evaluate(HELPERS);
+    await w.getByText('ENTER VR', { exact: true }).click();
+    await w.waitForFunction(() => (window as any).game.xr, null, { timeout: 10000 });
+    await w.waitForTimeout(800);
+    const W = (q: string) => G(w, q);
+    const idx: number = await W("return game.debug.xrButtons().findIndex(b => b.text[0].startsWith('World model'))");
+    const before = await W('return { rig: game.xrPose().rig, yaw: game.body.yaw }');
+    await W(`game.debug.xrPress(${idx})`);
+    await w.waitForFunction(() => (window as any).game.wmghosts.state().mode === 'styles', null, { timeout: 90000 });
+    const s0 = await W('return game.wmghosts.state().s');
+    await w.waitForTimeout(1500);
+    const st = await W('return { s: game.wmghosts.state().s, actors: game.wmghosts.state().actors.map(a => a.name), rig: game.xrPose().rig, yaw: game.body.yaw, button: game.debug.xrButtons()[' + idx + '].text }');
+    const still = Math.hypot(st.rig.x - before.rig.x, st.rig.y - before.rig.y) < 0.01 && Math.abs(st.yaw - before.yaw) < 0.01;
+    check('world model button: two walking styles move in VR, you stay where you stand', st.s > s0 && st.actors.length === 2 && still,
+      `ghosts ${st.actors.join(' + ')} at ${s0.toFixed(2)} -> ${st.s.toFixed(2)} m along the route; rig moved ${Math.hypot(st.rig.x - before.rig.x, st.rig.y - before.rig.y).toFixed(3)} m, yaw ${(st.yaw - before.yaw).toFixed(3)}; card "${st.button.join(' / ')}"`);
+    await W(`game.debug.xrPress(${idx})`);
+    await w.waitForFunction(() => (window as any).game.wmghosts.state().month, null, { timeout: 120000 });
+    await w.waitForTimeout(1500);
+    const mo = await W('return game.wmghosts.state().month');
+    await W(`game.debug.xrPress(${idx})`);
+    await w.waitForTimeout(500);
+    const fanOn = await W('return game.fan.on()');
+    await W(`game.debug.xrPress(${idx})`);
+    await w.waitForTimeout(500);
+    const off = await W('return { fan: game.fan.on(), mode: game.wmghosts.state().mode, month: game.wmghosts.state().month, button: game.debug.xrButtons()[' + idx + '].text }');
+    check('world model button: a month of trips, then the futures fan, then off', mo?.trips === 60 && fanOn && !off.fan && off.mode === 'off' && !off.month && wErrors.length === 0,
+      `month: ${mo?.trips} trips (${mo?.which}); fan on=${fanOn}; after off: fan=${off.fan}, ghosts=${off.mode}, card "${off.button.join(' / ')}"; errors ${wErrors.slice(0, 2).join(' | ') || 0}`);
+    await w.close();
+  } else check('world model button (skipped: no k4_150k scene here)', true, 'skipped');
 } finally {
   writeFileSync(new URL('xr-results.json', import.meta.url), JSON.stringify(results, null, 1));
   await browser.close();
