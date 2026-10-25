@@ -32,6 +32,7 @@ import { twistAngle, snapQuarter } from './wand.ts';
 import { createObjLabel } from './objlabel.ts';
 import { measureStair, stairFixes, stairFrame, stairYaml, mirrorRail, inRailBand, stepLights, withRails, pitchAt, parkedPose, walkerPlacement, SPLAT_STRIDE, type Stair, type Side } from './stairs.ts';
 import { createStairs3d } from './stairs3d.ts';
+import { railSplats, toneOf, fitRail, NEUTRAL_RAIL, type RGB } from './railsplat.ts';
 import { doorFixes, doorYaml, needWidth, hingeSide, growOf, type Door } from './doors.ts';
 import { createDoors3d } from './doors3d.ts';
 import { startMarking, place, undo as undoMark, isComplete, prompt as markPrompt, placeError, preview, buildLevels, snapZ, checkAll,
@@ -628,7 +629,16 @@ const costOf = (id: string) => {   // what a fix takes: money, time, product (co
 $('planfixes').onclick = async () => {
   // an Apply re-runs this: keep the old list up until the new one is ready (a one-line placeholder shrinks the pane and snaps its scroll to the top)
   if (!$('fixes').childElementCount) $('fixes').innerHTML = '<li>rolling out each fix…</li>';
-  const { before, fixes } = await ask({ type: 'fixes', layout, sel: selRoute });
+  const note = (text: string) => { const li = document.createElement('li'); li.textContent = text; $('fixes').replaceChildren(li); };   // textContent: door names are user input
+  let res: { before: number; fixes: any[] };
+  try { res = await ask({ type: 'fixes', layout, sel: selRoute }); }
+  catch (e) { note(`Could not evaluate the fixes: ${String((e as Error)?.message ?? e)}`); return; }   // say so instead of leaving the list blank
+  const { before, fixes } = res;
+  if (!fixes.length) {   // nothing to roll out: say why (a door no planned route uses has no fixes, and a scene may configure none)
+    const offRoute = current?.checks.filter(c => c.kind === 'door' && c.on_route === false).map(c => c.id.slice('door:'.length)) ?? [];
+    note(`No fixes to evaluate on this route${offRoute.length ? `: ${offRoute.join(', ')} ${offRoute.length === 1 ? 'is' : 'are'} not on a planned route, so ${offRoute.length === 1 ? 'its' : 'their'} fixes are left out` : ' (this scene configures none, or all are applied)'}.`);
+    game.fixes = fixes; return;
+  }
   const items: HTMLLIElement[] = [];
   for (const f of fixes) {
     const li = document.createElement('li');
@@ -847,8 +857,22 @@ game.reimagine = { run: reimagineRoom, setT: reim.setT, t: reim.t, play: reim.pl
 // From config game.stairs (stage 12) and/or marked here with three clicks and measured from the splat (kept per scene in
 // this browser; "Copy as config YAML" makes it permanent). Their fixes are interventions like any other.
 const mainSplat = splats[0];
-// the second rail: the scanned rail on the other side, mirrored (stairs.ts mirrorRail), as its own tinted splat; cached
-const railCopies = new Map<string, SplatMesh | null>();
+// the second rail: the scanned rail on the other side, mirrored (stairs.ts mirrorRail), then redrawn as a dense bar of splats
+// in the real rail's own colour (railsplat.ts), with level returns and wall brackets; cached. No tint: the card says "designed".
+const railCopies = new Map<string, SplatMesh | null>(), railBars = new Map<string, SplatMesh>(), railTones = new Map<string, RGB>();
+/** a SplatMesh of designed splat records in the room's light (night shader), cached by key; kept across stairs3d rebuilds */
+function splatBars(key: string, recs: () => Float32Array): SplatMesh {
+  let mesh = railBars.get(key);
+  if (mesh) return mesh;
+  const m = recs(), c = new THREE.Vector3(), sc3 = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color();
+  mesh = new SplatMesh({ worldModifier: night.modifier, constructSplats: ps => {
+    for (let i = 0; i < m.length; i += SPLAT_STRIDE)
+      ps.pushSplat(c.set(m[i], m[i + 1], m[i + 2]), sc3.set(m[i + 3], m[i + 4], m[i + 5]), q.set(m[i + 6], m[i + 7], m[i + 8], m[i + 9]), m[i + 10], col.setRGB(m[i + 11], m[i + 12], m[i + 13]));
+  } });
+  mesh.userData.shared = true; mesh.userData.count = m.length / SPLAT_STRIDE;
+  splats.push(mesh); railBars.set(key, mesh);
+  return mesh;
+}
 function scanRail(st: Stair, side: Side): SplatMesh | null {
   const from: Side = side === 'left' ? 'right' : 'left', key = `${JSON.stringify([st.bottom, st.top, st.treads_z, st.rails])}:${side}`;
   if (st.rails?.[from] !== 'seen') return null;
@@ -856,21 +880,27 @@ function scanRail(st: Stair, side: Side): SplatMesh | null {
   const band = inRailBand(st, from), src: number[] = [];
   mainSplat.forEachSplat((_, c, s, q, op, col) => { if (op >= 0.2 && band(c.x, c.y, c.z)) src.push(c.x, c.y, c.z, s.x, s.y, s.z, q.x, q.y, q.z, q.w, op, col.r, col.g, col.b); });
   let mesh: SplatMesh | null = null;
-  if (src.length >= 30 * SPLAT_STRIDE) {   // too few points is a gap in the scan, not a rail: draw the tube instead
-    const m = mirrorRail(new Float32Array(src), st, from), c = new THREE.Vector3(), sc3 = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color();
-    mesh = new SplatMesh({ worldModifier: night.modifier, constructSplats: ps => {
-      for (let i = 0; i < m.length; i += SPLAT_STRIDE)
-        ps.pushSplat(c.set(m[i], m[i + 1], m[i + 2]), sc3.set(m[i + 3], m[i + 4], m[i + 5]), q.set(m[i + 6], m[i + 7], m[i + 8], m[i + 9]), m[i + 10], col.setRGB(m[i + 11], m[i + 12], m[i + 13]));
-    } });
-    mesh.recolor = new THREE.Color(0.82, 1, 0.97);   // designed, not built: a light tint, like the imagined fills
-    mesh.userData.count = m.length / SPLAT_STRIDE;
-    splats.push(mesh);
+  if (src.length >= 30 * SPLAT_STRIDE) {   // too few points is a gap in the scan, not a rail: the neutral designed rail stands in
+    const m = mirrorRail(new Float32Array(src), st, from), tone = toneOf(new Float32Array(src)), fit = fitRail(m, st);
+    railTones.set(JSON.stringify([st.bottom, st.top]), tone);
+    mesh = splatBars(`copy:${key}`, () => railSplats(st, { t: fit.t, z: fit.z, tone }));
   }
   railCopies.set(key, mesh);
   return mesh;
 }
+/** the scanned rail's colour on this stair, once seen (else a neutral metal): for every designed bar */
+function railTone(st: Stair): RGB {
+  const known = railTones.get(JSON.stringify([st.bottom, st.top]));
+  if (known) return known;
+  for (const side of ['left', 'right'] as Side[]) if (st.rails?.[side] === 'seen') {   // sample the real rail even if no copy was asked for
+    const band = inRailBand(st, side), src: number[] = [];
+    mainSplat.forEachSplat((_, c, s, q, op, col) => { if (op >= 0.2 && band(c.x, c.y, c.z)) src.push(c.x, c.y, c.z, s.x, s.y, s.z, q.x, q.y, q.z, q.w, op, col.r, col.g, col.b); });
+    if (src.length >= 30 * SPLAT_STRIDE) { const t = toneOf(new Float32Array(src)); railTones.set(JSON.stringify([st.bottom, st.top]), t); return t; }
+  }
+  return NEUTRAL_RAIL;
+}
 const parkedWalkerCfg = { ...personas.patient.walker, device: 'walker' as const };
-const stairs3d = createStairs3d(scene, () => buildDevice(parkedWalkerCfg).group, scanRail, () => buildDevice(WHEELCHAIR).group);
+const stairs3d = createStairs3d(scene, () => buildDevice(parkedWalkerCfg).group, scanRail, () => buildDevice(WHEELCHAIR).group, { bars: splatBars, tone: railTone });
 const lights3d = createLights3d(scene), bath3d = createBathroom3d(scene);
 let pathLightKey = '';
 const doors3d = createDoors3d(scene, mainSplat);

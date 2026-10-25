@@ -4,8 +4,11 @@
 import * as THREE from 'three';
 import { stairFrame, pitchAt, parkedPose, grabSide, CODE, STAIRLIFT, type Stair, type Side, type ParkPose } from './stairs.ts';
 import { card } from './reimagine.ts';
+import { railSplats, barSplats, overNosing, type RGB } from './railsplat.ts';
 
-const DESIGNED = 0x2fd6c8;
+const DESIGNED = 0x2fd6c8;   // legacy flat tubes, only where no splat kit is given
+// natural finishes for the stairlift and the parked aids: the card says "designed, not built", the colour stays the product's
+const METAL = 0xc4c8cf, DARK = 0x33363d, VINYL = 0x23252b;
 const cm = (m: number) => `${(m * 100).toFixed(0)} cm`;
 
 function dispose(grp: THREE.Object3D) {
@@ -21,11 +24,15 @@ function dispose(grp: THREE.Object3D) {
 }
 const lineMat = (color: number, opacity = 0.9) => new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthTest: false });
 
+/** Designed bars as splats (main.ts builds the SplatMesh and caches it by key; `recs` runs only on a miss): `bars` draws them in the
+ *  scan's light, `tone` is the colour of the scanned rail on this stair (neutral metal if none). Without it, flat tubes stand in. */
+export interface SplatKit { bars(key: string, recs: () => Float32Array): THREE.Object3D; tone(st: Stair): RGB }
+
 /** `device()` builds the patient's walking aid (walker.ts buildDevice) for the one parked at the top. `scanRail(st, side)`
  *  gives the rail for that side copied from the scanned one (stairs.ts mirrorRail), or null where nothing was scanned to
  *  copy: then a drawn tube stands in. The step lights are thin fixtures here; the light itself is the night shader's. */
 export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, scanRail: (st: Stair, side: Side) => THREE.Object3D | null = () => null,
-  chair: () => THREE.Group = device) {
+  chair: () => THREE.Group = device, kit?: SplatKit) {
   const root = new THREE.Group(), measured = new THREE.Group(), fixes = new THREE.Group();
   root.add(measured, fixes);
   scene.add(root);
@@ -39,6 +46,7 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
     for (const st of stairs) {
       const F = stairFrame(st), pitch = pitchAt(st), half = F.width / 2, z = st.treads_z ?? [];
       const P = (s: number, t: number, h: number) => { const [x, y] = F.world(s, t); return new THREE.Vector3(x, y, h); };
+      const dense = (kind: string, recs: () => Float32Array) => kit?.bars(`${kind}:${JSON.stringify([st.bottom, st.top, st.treads_z, st.tread_fronts_m, st.width_m, st.rails])}`, recs) ?? null;
       const fronts = st.tread_fronts_m?.length === z.length ? st.tread_fronts_m : z.map((_, k) => k * (st.tread_depth_m ?? 0.27));
       // the flight's two edges along the tread noses (nothing on the floor under the steps), and a line on each nose
       const risers = z.map((v, k) => v - (k ? z[k - 1] : 0));
@@ -73,21 +81,17 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
         if (copy) {   // the scanned rail, mirrored: real material in the room's own light
           copy.userData.shared = true;
           fixes.add(copy);
-          const from: Side = side === 'left' ? 'right' : 'left', h = st.rails?.height_m?.[from] ?? st.rails?.peak_m?.[from] ?? 0.9;
-          const thin = (copy.userData.count ?? 0) / Math.max(0.3, F.run) < 300;   // a sparse scan copies a dotted rail
-          if (thin) {   // so it still reads: a slim outline on the copy's own line and height
-            const tc = (side === 'left' ? 1 : -1) * (half - 0.09), line = new THREE.CurvePath<THREE.Vector3>();
-            line.add(new THREE.LineCurve3(P(0, tc, pitch(0) + h), P(F.run, tc, pitch(F.run) + h)));
-            fixes.add(new THREE.Mesh(new THREE.TubeGeometry(line, 24, 0.012, 8, false), new THREE.MeshBasicMaterial({ color: DESIGNED, transparent: true, opacity: 0.7 })));
-          }
-          const tag = card(['designed, not built', `handrail (${side}), copied from the scanned one${thin ? ', outlined' : ''}`], '#7ff5e8', 'rgba(14,20,28,0.75)', 0.04);
+          const tag = card(['designed, not built', `handrail (${side}), copied from the scanned one`], '#7ff5e8', 'rgba(14,20,28,0.75)', 0.04);
           tag.position.copy(P(F.run * 0.3, t, pitch(F.run * 0.3) + 1.1));
           fixes.add(tag);
-          // The copied scan only covers the flight; the designed addition also promises level returns at both ends.
-          for (const [s0, s1, h0] of [[-0.3, 0, pitch(0) + h], [F.run, F.run + 0.3, pitch(F.run) + h]]) {
-            const path = new THREE.LineCurve3(P(s0, t, h0), P(s1, t, h0));
-            fixes.add(new THREE.Mesh(new THREE.TubeGeometry(path, 4, 0.018, 8, false), new THREE.MeshBasicMaterial({ color: DESIGNED })));
-          }
+          continue;
+        }
+        const bar = dense(`rail:${side}`, () => railSplats(st, { t: (side === 'left' ? 1 : -1) * (half - 0.09), z: overNosing(st, 0.9), tone: kit!.tone(st) }));
+        if (bar) {   // splats in the neutral/scanned rail colour, with returns and wall brackets
+          fixes.add(bar);
+          const tag = card(['designed, not built', `handrail (${side})`], '#7ff5e8', 'rgba(14,20,28,0.75)', 0.04);
+          tag.position.copy(P(F.run * 0.3, t, pitch(F.run * 0.3) + 1.1));
+          fixes.add(tag);
           continue;
         }
         const path = new THREE.CurvePath<THREE.Vector3>();
@@ -117,14 +121,17 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
       for (const side of ['left', 'right'] as Side[]) {   // a scanned rail at the wrong height, refitted at 90 cm
         if (!added.includes(`stair_rail_up:${st.name}:${side}`)) continue;
         const t = (side === 'left' ? 1 : -1) * (half - 0.06), path = new THREE.LineCurve3(P(0, t, pitch(0) + 0.9), P(F.run, t, pitch(F.run) + 0.9));
-        fixes.add(new THREE.Mesh(new THREE.TubeGeometry(path, 24, 0.02, 10, false), new THREE.MeshBasicMaterial({ color: DESIGNED })));
+        const bar = dense(`rail_up:${side}`, () => railSplats(st, { t: (side === 'left' ? 1 : -1) * (half - 0.09), z: overNosing(st, 0.9), tone: kit!.tone(st), returns: false }));
+        fixes.add(bar ?? new THREE.Mesh(new THREE.TubeGeometry(path, 24, 0.02, 10, false), new THREE.MeshBasicMaterial({ color: DESIGNED })));
         const tag = card(['designed, not built', `${side} rail refitted at 90 cm`], '#7ff5e8', 'rgba(14,20,28,0.75)', 0.04);
         tag.position.copy(P(F.run * 0.5, t, pitch(F.run * 0.5) + 1.15));
         fixes.add(tag);
       }
       if (added.includes(`stair_rail_ext:${st.name}`)) {   // level returns past the bottom and the top step
         const t = tg - Math.sign(tg) * 0.06, hb = pitch(0) + 0.9, ht = pitch(F.run) + 0.9;
-        for (const [s0, s1, h] of [[-0.3, 0, hb], [F.run, F.run + 0.3, ht]] as const) {
+        const ext = dense('rail_ext', () => railSplats(st, { t: Math.sign(tg) * (half - 0.09), z: overNosing(st, 0.9), tone: kit!.tone(st), flight: false }));
+        if (ext) fixes.add(ext);
+        else for (const [s0, s1, h] of [[-0.3, 0, hb], [F.run, F.run + 0.3, ht]] as const) {
           const p = new THREE.CurvePath<THREE.Vector3>();
           p.add(new THREE.LineCurve3(P(s0, t, h), P(s1, t, h)));
           fixes.add(new THREE.Mesh(new THREE.TubeGeometry(p, 6, 0.022, 10, false), new THREE.MeshBasicMaterial({ color: DESIGNED })));
@@ -134,10 +141,14 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
         fixes.add(tag);
       }
       if (added.includes(`stair_grab:${st.name}`)) {   // a vertical bar on the landing wall, where the rail ends
-        const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.45, 10), new THREE.MeshBasicMaterial({ color: DESIGNED }));
-        bar.position.copy(P(F.run + 0.2, tg + Math.sign(tg) * 0.03, top + 0.95));
-        bar.rotation.x = Math.PI / 2;   // the cylinder's axis (y) to up (z)
-        fixes.add(bar);
+        const gb = dense('grab', () => { const [x, y] = F.world(F.run + 0.2, tg - Math.sign(tg) * 0.04); return barSplats([[x, y, top + 0.73], [x, y, top + 1.18]], 0.018, kit!.tone(st)); });
+        if (gb) fixes.add(gb);
+        else {
+          const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.45, 10), new THREE.MeshBasicMaterial({ color: DESIGNED }));
+          bar.position.copy(P(F.run + 0.2, tg + Math.sign(tg) * 0.03, top + 0.95));
+          bar.rotation.x = Math.PI / 2;   // the cylinder's axis (y) to up (z)
+          fixes.add(bar);
+        }
         const tag = card(['designed, not built', 'grab bar at the top'], '#7ff5e8', 'rgba(14,20,28,0.75)', 0.04);
         tag.position.copy(P(F.run + 0.2, tg, top + 1.35));
         fixes.add(tag);
@@ -150,9 +161,16 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
       });
       if (added.includes(`stair_lift:${st.name}`)) {   // rail on the treads by the wall, a seat that rides it, a chair waiting upstairs
         const side: Side = st.rails?.left === 'seen' && st.rails?.right !== 'seen' ? 'right' : 'left', sg = side === 'left' ? 1 : -1, tw = sg * (half - 0.06);
-        const mat = new THREE.MeshStandardMaterial({ color: DESIGNED, roughness: 0.5 }), seatMat = new THREE.MeshStandardMaterial({ color: 0x1d6b66, roughness: 0.9 });
+        // a stairlift is a product: brushed-steel track and posts, a dark carriage, a vinyl seat (lit like the room, not teal)
+        const mat = new THREE.MeshStandardMaterial({ color: DARK, roughness: 0.45, metalness: 0.3 }), seatMat = new THREE.MeshStandardMaterial({ color: VINYL, roughness: 0.85 });
+        const steel = new THREE.MeshStandardMaterial({ color: METAL, roughness: 0.3, metalness: 0.8 });
         const path = new THREE.LineCurve3(P(-0.25, tw, pitch(0) + 0.12), P(F.run + 0.15, tw, top + 0.12));
-        fixes.add(new THREE.Mesh(new THREE.TubeGeometry(path, 8, 0.035, 8, false), mat));
+        fixes.add(new THREE.Mesh(new THREE.TubeGeometry(path, 8, 0.035, 12, false), steel));
+        for (let ps = 0.1; ps < F.run + 0.1; ps += 0.7) {   // posts holding the track off the treads
+          const post = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.12, 8), steel);
+          post.position.copy(P(ps, tw, pitch(ps) + 0.06)); post.rotation.x = Math.PI / 2;
+          fixes.add(post);
+        }
         const grp = new THREE.Group(), box = (w: number, d: number, h: number, x: number, y: number, z: number, m = mat) => {
           const b = new THREE.Mesh(new THREE.BoxGeometry(w, d, h), m); b.position.set(x, y, z); grp.add(b); return b;
         };
@@ -172,7 +190,6 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
         const up = chair(), cp = F.world(F.run + 0.55, tw - sg * 0.35);
         up.position.set(cp[0], cp[1], top);
         up.rotation.z = Math.atan2(-F.u[1], -F.u[0]);   // facing back toward the lift, to roll up to its seat
-        up.traverse(m => { const mm = (m as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined; if (mm?.color && !m.userData.shadow) { m.userData.mat = mm.clone(); (m as THREE.Mesh).material = m.userData.mat; m.userData.mat.color.setHex(DESIGNED); } });
         fixes.add(up);
         const tag = card(['designed, not built', `stairlift (typical size, folds to ${cm(depth)})`, 'second wheelchair waits upstairs'], '#7ff5e8', 'rgba(14,20,28,0.75)', 0.04);
         tag.position.copy(P(F.run * 0.5, tw - sg * 0.3, pitch(F.run * 0.5) + 1.3));
@@ -183,9 +200,8 @@ export function createStairs3d(scene: THREE.Scene, device: () => THREE.Group, sc
         const w = device(), p = placed[wid] ?? parkedPose(st);   // the device's origin is the user's body: frame ahead, on the landing
         w.position.set(p.x, p.y, top);
         w.rotation.z = p.yaw;   // facing on, where the patient steps into it off the last step
-        w.traverse(m => { const mat = (m as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined; if (mat?.color && !m.userData.shadow) { m.userData.mat = mat.clone(); (m as THREE.Mesh).material = m.userData.mat; m.userData.mat.color.setHex(DESIGNED); } });
         if (st.top_device === 'rollator') {   // a seat between the side rails (and the wheels are implied: same frame)
-          const seat = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.4, 0.03), new THREE.MeshBasicMaterial({ color: 0x1d6b66 }));
+          const seat = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.4, 0.03), new THREE.MeshStandardMaterial({ color: VINYL, roughness: 0.85 }));
           seat.position.set(0.42, 0, 0.55);
           w.add(seat);
         }

@@ -1,13 +1,13 @@
 // Doorways in the scene: the measured clear width across each marked opening, and, once a widening fix is applied, the
 // scan itself changed to match (Spark SplatEdit on the room splat): the wall strip each jamb moves into is hidden, the
-// jamb band is shifted out by half the gain and tinted "designed". No new geometry; nothing is measured from it (the
+// jamb band is shifted out by half the gain, in its own colour. No new geometry; nothing is measured from it (the
 // floor map gets its own carve, doors.ts). Lines and cards are scene objects, so they show in the headset.
 import * as THREE from 'three';
 import { SplatEdit, SplatEditSdf, SplatEditSdfType, SplatEditRgbaBlendMode, type SplatMesh } from '@sparkjsdev/spark';
 import { doorFrame, doorEditBoxes, openingSpan, type Door, type EditBox, type Grow } from './doors.ts';
 import { card } from './reimagine.ts';
 
-const DESIGNED = new THREE.Color(0.78, 1, 0.96);
+const DESIGNED = new THREE.Color(1, 1, 1);   // the moved jamb is real scan: no tint (multiply by white); the card and the outline say "designed"
 const cm = (m: number) => `${(m * 100).toFixed(0)} cm`;
 
 function sdfBox(b: EditBox, o: { opacity: number; color: THREE.Color; displace?: [number, number] }) {
@@ -48,7 +48,7 @@ export function createDoors3d(scene: THREE.Scene, room: SplatMesh) {
       marks.add(tag);
       if (g > 0) {   // the new opening's outline, in the designed tint
         const pts = [P(s0, 0), P(s0, h), P(s1, h), P(s1, 0)];
-        marks.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x2fd6c8, depthTest: false, transparent: true })));
+        marks.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x2fd6c8, depthTest: false, transparent: true, opacity: 0.4 })));   // a thin hint, the scan itself shows the opening
       }
     }
     marks.traverse(o => { o.renderOrder = 3; });   // after the splats: they don't write depth

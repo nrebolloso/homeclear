@@ -374,7 +374,7 @@ export function mirrorRail(src: Float32Array, st: Stair, from: Side): Float32Arr
   }
   return new Float32Array(out);
 }
-function matToQuat(m: number[][]): [number, number, number, number] {
+export function matToQuat(m: number[][]): [number, number, number, number] {
   const tr = m[0][0] + m[1][1] + m[2][2];
   if (tr > 0) { const s = 0.5 / Math.sqrt(tr + 1); return [(m[2][1] - m[1][2]) * s, (m[0][2] - m[2][0]) * s, (m[1][0] - m[0][1]) * s, 0.25 / s]; }
   if (m[0][0] > m[1][1] && m[0][0] > m[2][2]) { const s = 2 * Math.sqrt(1 + m[0][0] - m[1][1] - m[2][2]); return [0.25 * s, (m[0][1] + m[1][0]) / s, (m[0][2] + m[2][0]) / s, (m[2][1] - m[1][2]) / s]; }
