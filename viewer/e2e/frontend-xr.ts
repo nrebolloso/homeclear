@@ -26,10 +26,10 @@ try {
   await stick(); assert.equal(await G('return game.frontendXR.isOpen()'), true);
   assert.equal(await page.locator('#frontend').isVisible(), true); console.log('PASS controller opens spatial menu while desktop companion remains available');
   const before = await G('return JSON.stringify(game.layout())');
-  await select('View filters'); await select('Off · Night view'); assert.equal(await page.isChecked('#night'), true);
+  await select('Vision'); await select('Off · Night view'); assert.equal(await page.isChecked('#night'), true);
   await select('On · Particle path'); assert.equal(await G('return game.debug.overlays[0].visible'), false);
   assert.equal(await G('return JSON.stringify(game.layout())'), before); console.log('PASS VR ray selects shared filters without editing scene objects');
-  await select('Back'); await select('Changes & cost');
+  await select('More'); await select('Changes & cost');
   assert.equal(await G("return game.frontendXR.root.children.some(c => c.userData.label?.includes('Cost estimate pending'))"), true); console.log('PASS VR cost view preserves pending estimates');
   await select('Back'); await select('Inspect items'); await wait();
   assert.equal(await G('return game.frontendXR.inspectionRoot.visible'), true); console.log('PASS Inspect uses an in-scene detail card');

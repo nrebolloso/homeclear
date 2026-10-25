@@ -21,6 +21,7 @@ export interface HintCtx {
 export interface Chip { keys: string[]; text: string }
 export interface Hints { mode: HintMode; label: string; tone: Tone; chips: Chip[] }
 export const MAX_CHIPS = 5;
+export const VR_CHIPS = 3;   // the strip on the controller shows one row per chip: more than three stops reading at a glance
 
 const c = (text: string, ...keys: string[]): Chip => ({ keys, text });
 const TONE: Record<HintMode, Tone> = { marking: 'mark', editing: 'mark', grabbing: 'edit', selected: 'edit', inspect: 'view', route: 'move', fly: 'spectate', free: 'move', explore: 'view' };
@@ -51,7 +52,7 @@ export function controlHints(x: HintCtx): Hints {
       break;
     case 'selected':
       label = vr ? 'Pointing at an object' : 'Object selected';
-      chips = vr ? [c('move', 'Trigger'), c('remove', 'A'), c('put back', 'Grip'), c('undo', 'Stick click')]
+      chips = vr ? [c('move', 'Trigger'), c('delete', 'A'), c('reset', 'Grip')]   // the three a headset needs on an object; undo stays on the stick click
         : [c('grab', 'G'), c('remove', 'X'), c('put back', 'Z'), c('undo', 'Ctrl', 'Z'), c('move / turn', 'T', 'R')];
       break;
     case 'inspect':
@@ -73,14 +74,19 @@ export function controlHints(x: HintCtx): Hints {
       break;
     default:   // free walk
       label = chair ? 'Driving' : 'Walking';
-      chips = vr ? (x.mounted ? [c('walk', 'Stick ↑↓'), c('turn', 'Stick ←→'), c('doorway', 'X'), c('stairs', 'Y'), c('menu', 'Hold stick click')]
-          : [c('walk', 'Left stick'), c('turn', 'Right stick'), c('teleport', 'Trigger'), c('doorway', 'X'), c('stairs', 'Y')])
+      chips = vr ? (x.mounted ? [c('walk', 'Stick ↑↓'), c('turn', 'Stick ←→'), c('menu', 'Hold stick click')]
+          : [c('walk', 'Left stick'), c('turn', 'Right stick'), c('menu', 'Hold stick click')])   // three rows read from the controller; X / Y still mark
         : x.locked ? [c('look', 'Mouse'), ...wasd, c('act at dot', 'Click'), c('unlock', 'Esc')].slice(0, MAX_CHIPS)
         : chair ? [...wasd, c('look', 'Mouse'), c('mark', 'M', '1/2')]
         : x.mismatch ? [c('walker ≠ view', 'C'), ...wasd, c('look', 'Mouse'), c('mark', 'M', '1/2')]   // the amber arrow is on: C turns the walker to face the view
         : [...wasd, c('look', 'Mouse'), c('recenter', 'C'), c('mark', 'M', '1/2')];
   }
-  return { mode, label, tone: TONE[mode], chips: chips.slice(0, MAX_CHIPS) };
+  return { mode, label, tone: TONE[mode], chips: chips.slice(0, vr ? VR_CHIPS : MAX_CHIPS) };
+}
+
+/** The strip card on the controller: the label, then one row per chip (key, action) so each reads at arm's length. */
+export function hintRows(h: Hints): { label: string; rows: { key: string; text: string }[] } {
+  return { label: h.label, rows: h.chips.map(k => ({ key: k.keys.join('+'), text: k.text })) };
 }
 
 /** The same hint as plain lines, for the VR strip card: the label, then the chips on one line. */
