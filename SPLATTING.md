@@ -25,9 +25,9 @@ job reuses the GPU job's `colmap/database.db`.
 
 The CUDA pycolmap 4.2.1 in `$HPG_ROOT/envs/colmap_gpu` does expose GPU options: `IncrementalPipelineOptions.ba_use_gpu`
 (bundle adjustment only, default off) and `GlobalPositionerOptions.use_gpu` (GLOMAP, default on, used from 50 images).
-Our GLOMAP runs so far ran in CPU jobs, so they never used them. **Open test (2026-10-25):** GLOMAP + its bundle adjustment
-on kitchen1's matches in a GPU job (jobs 47597816, 47597817 -> `out/k1gpu_glomap/{glomap,glomap_ba}.json`), to compare
-with the CPU times above (989 s map, 150 s BA). Not yet known whether the wheel's Ceres solver actually runs on CUDA.
+They do nothing in this wheel: GLOMAP in a B200 job (kitchen1, job 47597816) logged "Requested to use GPU for bundle
+adjustment, but Ceres was compiled without CUDA support ... without cuDSS support. Falling back to CPU". Placing and bundle
+adjustment are CPU-only until COLMAP + Ceres are built from source with CUDA and cuDSS (not done).
 
 ## GLOMAP vs incremental: same quality, only with bundle adjustment
 
