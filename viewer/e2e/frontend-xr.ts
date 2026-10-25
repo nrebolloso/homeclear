@@ -1,7 +1,7 @@
 import { chromium } from 'playwright-core';
 import { CHROME } from './env.ts';
 import assert from 'node:assert/strict';
-const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: [`--use-angle=${process.platform === 'win32' ? 'd3d11' : process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const errors: string[] = []; page.on('pageerror', e => errors.push(String(e)));
 const G = (code: string) => page.evaluate(`(async () => { const game = window.game; ${code} })()`);
@@ -24,7 +24,7 @@ try {
   const select = async (label: string) => { await G(`__aimUI(${JSON.stringify(label)})`); await wait(); await G("game.debug.xrDevice.controllers.right.updateButtonValue('trigger', 1)"); await wait(); await G("game.debug.xrDevice.controllers.right.updateButtonValue('trigger', 0)"); await wait(); };
   assert.equal(await G('return game.frontendXR.isOpen()'), false); await stick(150); assert.equal(await G('return game.frontendXR.isOpen()'), false); console.log('PASS a stick tap does not open the menu');
   await stick(); assert.equal(await G('return game.frontendXR.isOpen()'), true);
-  assert.equal(await page.locator('#frontend').isVisible(), false); console.log('PASS controller opens spatial menu; desktop DOM is hidden');
+  assert.equal(await page.locator('#frontend').isVisible(), true); console.log('PASS controller opens spatial menu while desktop companion remains available');
   const before = await G('return JSON.stringify(game.layout())');
   await select('View filters'); await select('Off · Night view'); assert.equal(await page.isChecked('#night'), true);
   await select('On · Particle path'); assert.equal(await G('return game.debug.overlays[0].visible'), false);

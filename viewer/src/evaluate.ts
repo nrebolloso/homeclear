@@ -47,6 +47,8 @@ export interface Init {
   walker?: WalkerDims;
   /** doorways (doors.ts): marked in the viewer or config game.doors */
   doors?: Door[];
+  /** cameras that saw each cell (stage 12 coverage.u8) and how many make it trustworthy: the reach map's holes (reach.ts) */
+  coverage?: Uint8Array; coverage_good?: number;
 }
 export interface HazardOut extends RouteHazard { name: string; per_month: number; ot_check: boolean; estimated: boolean }
 export interface RouteSummary {

@@ -1,3 +1,4 @@
+import { onDocument, every, later } from './lifetime.ts';
 import './frontend.css';
 import { createAnnouncer, mountDisplaySettings, nameUnlabeled, watchDialog } from './a11y.ts';
 import { navOf } from './navmode.ts';
@@ -22,6 +23,8 @@ export interface FrontendAdapter {
   pause(): void; restart(): void; speed(value: number): void;
   compare(t: number): void; animate(): void; suggest(): Promise<OptionOut[]>; apply(index: number): Promise<unknown>;
   undo(change: Change): Promise<unknown>; select(k: number): void;
+  /** the previewed proposal is accepted ("Use this layout"): its additions stop being an x-ray and become part of the scan */
+  commit?(): void;
   path(on: boolean): void; highlights(on: boolean): void; improvements(on: boolean): void;
   /** "Light the path": nightlights where the route is dark (lights.ts); resolves to how many were added and the note to show */
   lightPath?(): Promise<{ added: number; note: string }>;
@@ -110,6 +113,11 @@ export function mountFrontend(api: FrontendAdapter) {
     $('advanced-controls').append(group);
   }
   move('physpanel', 'advanced-controls');
+  // ---------- reach map (main.ts, reach.ts): the toggles with the filters, the rest under the findings ----------
+  move('reach', 'filter-findings', 'Reach map (where the device can go)'); move('coverage', 'filter-navigation', 'Coverage ghosts (widest way to each spot)');
+  move('hitghosts', 'filter-navigation', 'Only simulated trips with a contact');
+  heading('Where the device can go', 'assessment-findings', ['reachwidth', 'reachplay', 'markpoint', 'clearpoints', 'copypoints', 'reachstatus', 'reachfindings', 'reachtargets', 'reachcost', 'reachcostinfo']);
+  $('reachcost').setAttribute('role', 'img');
   $('left').hidden = true; $('right').hidden = true;
   // Hidden legacy overlays stay addressable, with a quiet default rather than duplicate receipts/arrows.
   for (const id of ['reimarrows', 'reimreceipt']) { const box = $<HTMLInputElement>(id); box.checked = false; box.dispatchEvent(new Event('change')); }
@@ -130,7 +138,7 @@ export function mountFrontend(api: FrontendAdapter) {
   const defaults = new Map<HTMLInputElement | HTMLSelectElement, string | boolean>();
   $('filter-menu').querySelectorAll<HTMLInputElement | HTMLSelectElement>('input,select').forEach(el => defaults.set(el, el instanceof HTMLInputElement ? el.checked : el.value));
   let messageTimer = 0;
-  function notify(message: string) { window.clearTimeout(messageTimer); $('frontend-message').textContent = message; $('frontend-message').hidden = false; messageTimer = window.setTimeout(() => { $('frontend-message').hidden = true; }, Math.max(5500, 4000 + message.length * 80)); }   // longer messages stay long enough to read
+  function notify(message: string) { window.clearTimeout(messageTimer); $('frontend-message').textContent = message; $('frontend-message').hidden = false; messageTimer = later(() => { $('frontend-message').hidden = true; }, Math.max(5500, 4000 + message.length * 80)); }   // longer messages stay long enough to read
   function setTab(next: string) {
     tab = next;
     for (const name of TABS) { $(`pane-${name}`).hidden = name !== tab; $(`tab-${name}`).setAttribute('aria-selected', String(name === tab)); $(`tab-${name}`).tabIndex = name === tab ? 0 : -1; }
@@ -171,23 +179,23 @@ export function mountFrontend(api: FrontendAdapter) {
   handle.addEventListener('dblclick', () => { pinned = false; setWidth(null); });
   $('panel-pin').onclick = () => { pinned = !pinned; $('panel-pin').setAttribute('aria-pressed', String(pinned)); announce(pinned ? 'Panel pinned wide.' : 'Panel will narrow when you move.'); };
   // moving, looking, scrolling the scene or pressing Esc puts it back (pinned: stays)
-  document.addEventListener('keydown', e => { if ((/^(Key[WASDQE]|Arrow(Up|Down|Left|Right))$/.test(e.code) && !panelEl.contains(e.target as Node) && !(e.target as HTMLElement).closest('input,select,textarea')) || e.code === 'Escape') resetPanel(); });
-  document.addEventListener('pointerdown', e => { if (!(e.target as HTMLElement).closest('#frontend, #keyhelp')) resetPanel(); }, true);
-  document.addEventListener('wheel', e => { if (!(e.target as HTMLElement).closest('#frontend')) resetPanel(); }, { passive: true });
-  document.addEventListener('pointerlockchange', resetPanel);
+  onDocument('keydown', e => { if ((/^(Key[WASDQE]|Arrow(Up|Down|Left|Right))$/.test(e.code) && !panelEl.contains(e.target as Node) && !(e.target as HTMLElement).closest('input,select,textarea')) || e.code === 'Escape') resetPanel(); });
+  onDocument('pointerdown', e => { if (!(e.target as HTMLElement).closest('#frontend, #keyhelp')) resetPanel(); }, true);
+  onDocument('wheel', e => { if (!(e.target as HTMLElement).closest('#frontend')) resetPanel(); }, { passive: true });
+  onDocument('pointerlockchange', resetPanel);
   for (const [button, menu] of [['workspace-toggle', 'workspace-menu']]) $(button).onclick = () => {
     const open = $(menu).hidden;
     for (const [b, m] of [['workspace-toggle', 'workspace-menu']]) { $(m).hidden = true; $(b).setAttribute('aria-expanded', 'false'); }
     $(menu).hidden = !open; $(button).setAttribute('aria-expanded', String(open));
   };
-  document.addEventListener('pointerdown', e => { for (const [b, m] of [['workspace-toggle', 'workspace-menu']]) if (!$(m).hidden && !$(m).contains(e.target as Node) && !$(b).contains(e.target as Node)) { $(m).hidden = true; $(b).setAttribute('aria-expanded', 'false'); } });
+  onDocument('pointerdown', e => { for (const [b, m] of [['workspace-toggle', 'workspace-menu']]) if (!$(m).hidden && !$(m).contains(e.target as Node) && !$(b).contains(e.target as Node)) { $(m).hidden = true; $(b).setAttribute('aria-expanded', 'false'); } });
   function dismiss() { for (const [b, m] of [['workspace-toggle', 'workspace-menu']]) if (!$(m).hidden) { $(m).hidden = true; $(b).setAttribute('aria-expanded', 'false'); $(b).focus(); } $('frontend-message').hidden = true; }
   root.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !$('workspace-menu').hidden) { dismiss(); e.preventDefault(); e.stopPropagation(); return; }
     if (e.defaultPrevented || (e.target as HTMLElement).closest('input,select,textarea,[contenteditable]')) e.stopPropagation();
   });
   root.addEventListener('keyup', e => { if ((e.target as HTMLElement).closest('input,select,textarea,[contenteditable]')) e.stopPropagation(); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') dismiss(); });
+  onDocument('keydown', e => { if (e.key === 'Escape') dismiss(); });
   function setNavigation(next: NavigationMode) {
     if (nav === 'inspect' && next !== 'inspect') api.leaveInspect();
     const was = nav; nav = next; api.navigate(next); calmMotion();
@@ -257,7 +265,7 @@ export function mountFrontend(api: FrontendAdapter) {
     const card = ({ option: o, index }: typeof options[number], recommended: boolean) => `<article class="proposal-card ${recommended ? 'recommended' : ''}"><span class="badge">${recommended ? 'Recommended by model' : 'Alternative'}</span><h2>${h(o.name)}</h2><p>${o.actions.length} change${o.actions.length === 1 ? '' : 's'} · ${o.checks_failed} checks flagged</p><ol>${o.actions.map(a => `<li>${h(a.label)}</li>`).join('')}</ol><div class="proposal-metrics"><span>${number(o.per_month)}/month<small>Simulated contacts · all routes</small></span><span>${number(o.per_month_lo)}–${number(o.per_month_hi)}<small>Likely range</small></span></div><p class="muted">Cost & installation estimates are reviewed in Changes after applying.</p><button class="${recommended ? 'primary' : ''} full" data-preview="${index}">Preview proposal</button><button class="full" data-use="${index}" ${chosenOption === index ? '' : 'disabled'}>Use this layout</button></article>`;
     $('proposal-cards').innerHTML = options.length ? card(options[0], true) + (options.length > 1 ? `<details><summary>Other options · ${options.length - 1}</summary>${options.slice(1).map(o => card(o, false)).join('')}</details>` : '<p class="muted">One distinct outcome found.</p>') : '<div class="empty-state"><span aria-hidden="true">✧</span><h3>Make room for a better route</h3><p>Explore rearrangements and configured fixes. Each proposal is evaluated by the existing model.</p></div>';
     $('proposal-cards').querySelectorAll<HTMLButtonElement>('[data-preview]').forEach(b => b.onclick = async () => { if (busy) return; busy = true; b.disabled = true; try { await api.apply(Number(b.dataset.preview)); chosenOption = Number(b.dataset.preview); previewedPlan = api.snapshot().planKey; api.navigate('explore'); nav = 'explore'; notify('Proposal loaded in the viewer. This is a simulation; the room has not physically changed.'); refresh(); } catch { notify('Proposal could not be loaded. Try generating again.'); } finally { busy = false; b.disabled = false; } });
-    $('proposal-cards').querySelectorAll<HTMLButtonElement>('[data-use]').forEach(b => b.onclick = () => { setTab('changes'); notify('This proposal is your current working plan. Review individual changes and estimates here.'); });
+    $('proposal-cards').querySelectorAll<HTMLButtonElement>('[data-use]').forEach(b => b.onclick = () => { api.commit?.(); setTab('changes'); notify('This proposal is your current working plan. Review individual changes and estimates here.'); });
   }
   $('light-path').hidden = !api.lightPath;
   $('light-path').onclick = async () => {
@@ -328,7 +336,7 @@ export function mountFrontend(api: FrontendAdapter) {
   function refresh() { const s = api.snapshot(); renderAssessment(s); renderChanges(s); renderProposals(s); showInspection(); updateChrome(); }
   // Small scalar signature keeps the viewer frame loop free of DOM work; changes are polled only four times/sec.
   let lastSelected = -1;
-  const timer = window.setInterval(() => {
+  const timer = every(() => {
     const s = api.snapshot(); const next = JSON.stringify([s.current?.ms, s.current?.per_month, s.patient, s.route, s.changes.map(c => [c.name, c.kind, c.at, c.turn_deg]), s.options.map(o => o.layout), s.selected]);
     if (s.selected !== lastSelected) { if (s.selected >= 0) { setTab('changes'); announce(`${s.selectedName ?? 'Object'} selected. Arrow keys move it 5 cm; Delete removes it; Escape deselects.`); } else if (lastSelected >= 0) announce('Selection cleared.'); } lastSelected = s.selected;
     if (next !== signature) { signature = next; refresh(); } else updateChrome();

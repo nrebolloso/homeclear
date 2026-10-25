@@ -42,7 +42,7 @@ Fill in the names.
   VR tracking/input stays in `xr.ts`; marking connects through its `XrEditor` contract. `xrcompare.ts` separates real
   layout restore/recalculation from visual preview. See `MERGE_VR_REVIEW.md` for the merged controls and decisions.
 - **Stairs** (`viewer/src/stairs.ts`): `scene.json` `stairs` (additive; from config `game.stairs` via stage 12) is a list of
-  `{ name, bottom: [[x,y],[x,y]], top: [x,y], top_z?, treads_z?, tread_fronts_m?, tread_depth_m?, width_m?, rails?: {left, right}, measured: 'tape' | 'splat' }`.
+  `{ name, bottom: [[x,y],[x,y]], top: [x,y], top_z?, bottom_z?, treads_z?, tread_fronts_m?, tread_depth_m?, width_m?, rails?: {left, right}, measured: 'tape' | 'splat' }`.
   An entry with only `bottom`/`top` is measured from the splat in the viewer; "Copy as config YAML" in the Stairs panel
   writes this shape. The persona's optional `strong_side: left | right` drives the rail check. Finding stairs
   automatically (6c) is the detection lane's; it should emit this shape. `window.game.stairs` exposes `mark(a, b, top)`,
@@ -57,6 +57,12 @@ Fill in the names.
 - **Changing the world, not adding assets:** scan edits (`SplatEdit` under the room splat), copied scan points (the
   mirrored rail) and the night shader's step lights are visual only and tinted/labelled "designed, not built". Nothing is
   measured from them: measurements read the stored splat data, and the floor map gets its own edit (`carve`).
+- **Reach map** (`viewer/src/reach.ts`, `reach3d.ts`): `scene.json` `reach_points` (additive; config `game.reach_points` via
+  stage 12) is a list of `{ name, at: [x, y] }`: spots to check from the selected route's start. A marked doorway counts at
+  its marked width on the reach map only (`plan()` still uses the floor map). `window.game.reach` exposes `show(on)`,
+  `refresh()`, `state()`, `preview(width)` (repaint, no worker), `setWidth(width | null)`, `ghosts('off' | 'coverage' |
+  'contacts' | 'both')`, `play(s)`, `pick([x, y]?, name?)`, `points()`, `removePoint(name)`, `clearPoints()`, `copyYaml()`,
+  `costs(target?)`. `game.marker.begin('point')` picks one by pointing (desktop click or the VR wand).
 
 ## Avoiding merge conflicts
 

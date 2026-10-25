@@ -1,7 +1,7 @@
-# Outdoor plaza at NIGHT (REAL, user 2026-10-24 05:08): ONE continuous 543 s take, Samsung 4K 60 fps HLG (data/night1.mp4).
+# Turlington Plaza (UF) at NIGHT (REAL, user 2026-10-24 05:08): ONE continuous 543 s take, Samsung 4K 60 fps HLG (data/night1.mp4).
 # Brick planters, pavers, a railed stair, benches, street lights. ~2.2 frames/s as kitchen4/lounge -> 1200 frames, exhaustive
 # (the walk loops). Risks: near-identical planters, wind-moved plants, dark sky. Scale ASSUMED until a known size is picked.
-run_name: night1
+run_name: turlington
 video: data/night1.mp4
 work_dir: out/night1
 frames:

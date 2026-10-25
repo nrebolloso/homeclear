@@ -1,11 +1,10 @@
 # Status
 
-## While you were out (rug-calibration)
-- **Done:** rug physics calibrated against 8 real flat-rug passes; fold cascade in autoplay (folds the mat on pass 2 in kitchen4_lighter); glide caps as a planner fix next to "tape the mat edge"; `proof/demo/real_vs_sim_rug.mp4` and `proof/demo/broll/` (16 clips).
-- **Cluster rug batch (job 47577456, done):** 2,000 paired trials, `physics/rug_batch.json`; rates in the rug section. The branch passes `npm test` (166) and `npm run build`; a trial merge with wm-planner passes 172/172 and the build.
-- **Needs me:** BLOCKERS 13-17: a real tennis-ball pass, the 8-vs-9 rug count, IMG_6800, the effort numbers, and the main.ts/planfix.ts merge with wm-planner.
-- **Risks:** the sim drags where the real rug folds (disturbance matches, fold shape doesn't); the caps value is assumed and friction-only, so "caps barely help" is a sim result to test, not a finding.
-- **Overlap with futures fan:** main.ts and planfix.ts conflict (resolution in BLOCKERS 17); grid.ts, planner.ts, engine.py and the kitchen4_lighter config auto-merge. No futures-fan files touched.
+## Main: wm-planner + rug-calibration + PR #9 (VR / wheelchair / scan library) merged
+- **Merged:** wm-planner (toe-catch objective, B200 job 47577852, critic 47577853), rug-calibration (calibrated rug, fold cascade, cluster batch 47577456) and origin/main's PR #9. main.ts keeps both sides' hooks; the fan's fold is `live?.fold() ?? layout.folds?.[0] ?? null`; planfix.ts ranks "tape the mat edge" next to the search's picks; glide caps stay hidden in the viewer (friction ASSUMED).
+- **Proof:** `proof/demo/futures_fan.mp4` (49 s round trip, the mat folds on the way out and the fan turns red at the fold on the return; taping flattens it) and `proof/demo/backup_v6.mp4`.
+- **Needs you:** BLOCKERS 16-20 (a real tennis-ball pass, the rug count, IMG_6800, the effort numbers, lounge leftovers).
+- **Risks:** the sim drags where the real rug folds; caps are friction-only and assumed. In the backup the live mat slides and the view switches to "Proposed".
 
 ## Glide caps friction (for the futures-fan branch)
 Glide caps / tennis balls on the rear legs = glide-rug friction **μ 0.10-0.20, ASSUMED** (PTFE-like on rug pile; not measured, no real caps pass yet). Without caps the calibrated glide-rug range is 0.35-0.9 (rug-floor 0.1-0.3). Source: `physics/rug_calib.py` `CAPS_MU`, `physics/rug_calib.json` `glide_caps_mu_assumed`; the viewer reads the ratio as `CAPS_FACTOR` (`viewer/src/rugcascade.ts`).
@@ -91,7 +90,7 @@ Each result counts once it is reproduced here, with proof in `proof/`.
 | Kitchen splat + scale + accuracy (Must) | SfM, GLOMAP + stray-camera drop, gsplat MCMC, table scale, stage 6b margins | re-measure the table width (BLOCKERS #1); leave-one-out is in ([proof/accuracy](proof/accuracy/table_loo.md): width folds 15-18 % short in 3 of 4 kitchens, kitchen2_nofar within 3 %) |
 | Maps + hazards (Must) | stages 5–8: floor, floater cleanup, occupancy, local-floor bumps, verdicts | – (coverage, occupancy and bump maps export as PNG + JSON under `maps/`; `hazards.json` carries the SPEC §5 fields beside stage 8's own, validated at export) |
 | Baseline world model + rollouts (Must) | hand rule, `worldmodel/` rollout engine, contact table calibrated to published toe clearance (`tools/contact_table.py`) | 200 trips on the demo kitchen route |
-| Viewer core (Must) | autoplay, free walk, live hazard checks, ghosts, fog, night mode, drag objects, tinted fills, several routes with a risk range, personas, vision filters, heatmap, transfer/reach/EMS checks ([proof](proof/viewer_features/README.md)) | demo route on the demo kitchen; fps check |
+| Viewer core (Must) | autoplay, free walk, live hazard checks, ghosts, fog, night mode, drag objects, tinted fills, several routes with a risk range, personas, vision filters, heatmap, transfer/reach/EMS checks, reach map (where the device can go, causes, dead ends, cost to get through) ([proof](proof/viewer_features/README.md)) | demo route on the demo kitchen; fps check |
 | Learned world model (Should) | MDN on PhysioNet, closed-loop / coverage / counterfactual / sanity tests | held-out corner trials stop at 20 steps, so 20+ steps is shown on straights only (6 trials); learned sideways spread is calibrated to slightly wide at corners, the hand rule's is over-confident ([proof](proof/world_model/WORLD_MODEL.md)); our own walker videos |
 | Mannequin + world-model visuals (Should) | third-person mannequin on the simulated footsteps (world-model heels with `?step=world`); skinned, rigged figure (CesiumMan, CC BY 4.0) posed by two-bone IK: ankles on the footsteps to <1 cm, no skating, hands on the grips (`?mannequin=basic` keeps the plain one); its short legs and arms leave its hands about 5 cm short of the wheelchair rims | next-step cloud |
 | Editable scene + ranked fixes (Should) | dragging, re-planning, ranked fixes, suggested layouts, fix card (QR) | |
