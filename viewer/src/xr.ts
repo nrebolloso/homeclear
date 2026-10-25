@@ -79,6 +79,11 @@ export async function setupXR(host: XrHost) {
 
   const rig = new THREE.Group();
   scene.add(rig);
+  // ?scale=1.1 shows the home 10% bigger, to try a scale against the real rooms before re-exporting with it (stage 4's
+  // scale.manual_factor). Shrinking the rig shrinks you, your steps and the controllers in it; everything works in world
+  // units, so moving and turning are unchanged. Only the scene's look and your eye height move; its metres don't.
+  const worldScale = Number(params.get('scale')) || 1;
+  rig.scale.setScalar(1 / worldScale);
   const xrRig = { x: 0, y: 0, yaw: 0 };
   const TILT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2), UP = new THREE.Vector3(0, 0, 1);
   const placeRig = () => {
