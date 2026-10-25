@@ -382,6 +382,7 @@ def main(cfg):
         # obstacle layer: a phantom box that traps anything placed inside its old spot. The object itself is stamped
         # back at its live pose, so clear one cell around its footprint (walls are further than that from a box)
         obstacles &= ~cv2.dilate(m, np.ones((3, 3), np.uint8)).astype(bool)
+    occ.stamp_fixed(g, lo, shape, obstacles)   # after the clearing above: a movable object's old spot may border one
     cov = coverage(w, lo, shape, cell, layers(xyz[solid], g, lo, shape)[1])
     if gm.get("fence_min_views"):   # walk (and replan) only where enough capture views saw the floor: no blur, no holes
         floor &= cov >= gm["fence_min_views"]
@@ -449,7 +450,9 @@ def main(cfg):
              "hazard_rules": {"clearance_margin_m": margin, "bump_min_m": g["bump_z"][0], "bump_link_cells": g.get("bump_link_cells", 1), "bump_limit_m": cfg["hazards"]["bump_limit_m"],
                               # stage 6b's measured map error: within it of a limit = borderline, OT to verify
                               "margin_m": {k: v or 0.0 for k, v in (json.loads((w / "accuracy.json").read_text())["margin_m"]
-                                                                    if (w / "accuracy.json").exists() else {"width": 0, "height": 0}).items()}}}
+                                                                    if (w / "accuracy.json").exists() else {"width": 0, "height": 0}).items()}},
+             # furniture left in the room splat (grid.fixed): solid in the obstacle layer, never offered to move or remove
+             "fixed": [{"name": f["name"], "kind": f.get("kind", "other"), "footprint": f["poly_xy"], "movable": False} for f in g.get("fixed") or []]}
     (out / "scene.json").write_text(json.dumps(scene, indent=1))
     m = {"out": str(out.relative_to(ROOT)), "objects": {o["name"]: o["height_m"] for o in objects},
          "main_gaussians": int((~taken).sum()), "coverage_good_pct": round(100 * float((cov[floor] >= COVERAGE_GOOD).mean()), 1)}

@@ -61,6 +61,11 @@ grid:
   min_count: 2
   speck: {max_cells: 6, min_span_m: 0.10, floor_gap_m: 0.15}   # mid-air floaters of ~3 Gaussians each would block the walker
   bump_link_cells: 3
+  fixed:   # furniture 6c never detected: stays in the room splat, never offered to move/drop; only its outline came out solid,
+  # so its inside read as open floor. Hand outlines (ESTIMATED, ~10 cm) from viewer renders + top-down height maps
+  - {name: bench, kind: sofa, poly_xy: [[-1.65, 4.33], [-0.75, 4.86], [-1.06, 5.37], [-1.96, 4.84]]}   # grey bench behind stool2
+  - {name: conference_table, kind: table, poly_xy: [[1.5, 4.75], [1.9, 4.1], [2.25, 3.65], [2.6, 3.48], [3.0, 3.52], [3.45, 3.78], [3.62, 4.2], [3.5, 4.6], [2.9, 4.82], [2.2, 5.1]]}   # by chair3; top-edge arc
+  - {name: booth, kind: sofa, poly_xy: [[-4.75, -0.68], [-3.0, 0.37], [-4.12, 2.22], [-5.87, 1.17]]}   # booth seats + table near rug2
 plan:
   # start/goal unset: stage 7 picks two far-apart cells of the largest walker-reachable region (no bed or bathroom in this scene)
   walker_width_m: 0.61

@@ -133,6 +133,15 @@ def stamp_synthetic(g, lo, shape, floor, obstacles, bumps, bump_h):
             obstacles[i0:i1, j0:j1] = True
 
 
+def stamp_fixed(g, lo, shape, obstacles):
+    """grid.fixed: real furniture the scan saw but 6c never detected, outlined by hand ({name, kind, poly_xy}). Its splat
+    stays in the room (not movable), but only its outline came out solid, so its inside read as open floor: stamp it whole."""
+    for f in g.get("fixed") or []:
+        m = np.zeros(shape, np.uint8)
+        cv2.fillPoly(m, [np.round((np.array(f["poly_xy"], float) - lo) / g["cell_m"])[:, ::-1].astype(np.int32)], 1)   # (j, i) for cv2
+        obstacles |= m.astype(bool)
+
+
 def floor_evidence(w, g, lo, shape):
     """Floor seen other than as solid Gaussians in the band (layers() pf, walked); both opt-in per config. Stage 12 rebuilds
     the grid with the same evidence, else its export walls the walker in again."""
@@ -167,6 +176,7 @@ def main(cfg):
     pf, walked = floor_evidence(w, g, lo, shape)
     floor, obstacles, bumps, bump_h, filled = layers(p, g, lo, shape, pf, walked)
     stamp_synthetic(g, lo, shape, floor, obstacles, bumps, bump_h)
+    stamp_fixed(g, lo, shape, obstacles)
     est = classify_thin(g, bumps, bump_h)
 
     for name, a in [("floor", floor), ("obstacles", obstacles), ("bumps", bumps), ("bump_height_m", bump_h), ("bump_estimated", est)]:
