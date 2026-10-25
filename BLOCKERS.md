@@ -86,3 +86,7 @@
    pieces (sofa4/5/6), and it doesn't fix the leftovers above. It is in `out/gator_lounge_lift` on HPG if you want it.
    The new stage 12 rules apply to every `objects: auto` scene. Only the lounge has been re-exported: kitchen4_lighter
    and the others keep their old export until rebuilt. Pushing commits d012fb8..71649ea to main waits for your OK.
+21. **Put the scene bundle in the Drive folder and share it (Nicolas).** The Drive connector can't upload a 375 MB file, so
+    the folder "Homeclear scene bundles" (https://drive.google.com/drive/folders/1sMKaR_2YbwhMRrhvPaULsURbEhZY0rlH) is
+    empty. Drag in `kitchen4_lighter_v1.zip` (`~/Downloads/kitchen4_lighter_v1.zip` on the laptop, or /blue/dream_team/nrebolloso/scene_bundles/) and share
+    the folder with the team. Teammates without HiPerGator access can then run `tools/get_scene.sh kitchen4_lighter <zip>`.
