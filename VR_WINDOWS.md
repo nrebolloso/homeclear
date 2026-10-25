@@ -1,9 +1,12 @@
-# VR from a Windows PC (Quest Link / Air Link)
+# VR from a Windows PC (SteamVR, or Quest Link / Air Link)
+
+**The team is using SteamVR (Steam Link)** because Quest Link didn't work for us (2026-10-25): see section 2B. The Link
+steps are kept below in case it works on another PC.
 
 The Quest 2 can't render the full kitchen on its own: it runs at 7 fps in VR with all 981K splats, and only a thinned
 120–150K copy reaches 72 fps (`tools/thin_scene.py`). With Link, a Windows PC renders the full scene on its own
-graphics card and streams it to the headset. The viewer needs no code changes: Chrome on Windows sends WebXR to the
-headset through Link.
+graphics card and streams it to the headset. The viewer needs no code changes: Chrome on Windows sends WebXR to whichever **OpenXR runtime** is active
+(SteamVR or Link), and that runtime streams to the headset.
 
 macOS can't do this: Quest Link, Air Link, SteamVR, Virtual Desktop and ALVR have no macOS version for the PC side.
 
@@ -53,7 +56,31 @@ Optional synthetic test scene: `python tests/make_game_scene.py` (needs the Pyth
 5. **Devices → your Quest 2 → Graphics preferences:** start with **72 Hz** and the default render resolution. Raise
    either once it runs smoothly.
 
-## 3. Connect
+## 2B. SteamVR with Steam Link (instead of section 2)
+
+1. On the PC: install **Steam**, then **SteamVR** (in the Steam library, under Tools).
+2. In the headset: install **Steam Link** from the Meta Horizon Store. It's wireless: PC and Quest on the **same network,
+   5 GHz**. eduroam and guest Wi-Fi usually block it (phone hotspot or travel router, or the PC on Ethernet to the router).
+3. Open Steam Link in the headset, pick the PC and accept the pairing code on the PC. SteamVR starts by itself.
+4. **Make SteamVR the OpenXR runtime:** SteamVR window → **Settings → OpenXR** (older versions: **Developer**) →
+   **Set SteamVR as OpenXR Runtime**. If the Meta Quest Link app is installed it may still hold the runtime; this takes
+   it back. Without it, Chrome says "VR not supported" or tries Link. Restart Chrome after changing it.
+5. **Gaming laptops:** besides Chrome, set SteamVR's `vrserver.exe` and `vrcompositor.exe`
+   (`...\Steam\steamapps\common\SteamVR\bin\win64\`) to **High performance** (section "Gaming laptops", step 2).
+6. Refresh rate and resolution come from **Steam Link's settings** (in the headset) and **SteamVR → Settings → Video**.
+   Start at **72 Hz** and the default resolution; `?hz=` is ignored on a PC.
+7. **Check the floor once:** SteamVR keeps its own floor height. Open the viewer with `&measure=1` and rest a controller
+   on the real floor: the card should read about 0 in. If the virtual floor is off from the real one, use `&floor=`
+   (cm, e.g. `&floor=-3`); see `VR_LOG.md` section 4.5. The room boundary is the Quest's own (the viewer asks for
+   `bounded-floor`).
+8. Use **controllers** (hand tracking through SteamVR into Chrome is not tested). The buttons follow WebXR's standard
+   mapping, the same as on the Quest browser, but nobody has pressed them through SteamVR yet: check trigger, grip,
+   A/B, X/Y and both sticks the first time.
+
+Then skip section 3 (it is Link's) and go to section 4. Other wireless options that also act as the OpenXR runtime:
+Virtual Desktop (paid, usually the smoothest) and ALVR (free).
+
+## 3. Connect (Link only)
 
 - **Cable:** plug in, put the headset on, accept **Enable Link**.
 - **Air Link:** in the headset open **Quick Settings → Quest Link**, turn on **Use Air Link** and pick the PC.
@@ -102,7 +129,9 @@ whether it felt smooth.
 
 | Symptom | Fix |
 |---|---|
-| ENTER VR says "VR not supported" | Step 2.2 (OpenXR runtime), then restart Chrome |
+| ENTER VR says "VR not supported" | Step 2.2 (OpenXR runtime), or 2B.4 for SteamVR, then restart Chrome |
+| SteamVR: Chrome opens VR in Link / nothing happens in the headset | Another runtime is active: 2B.4, restart Chrome |
+| SteamVR: everything is a bit too high or low | SteamVR's floor height: 2B.7 (`&measure=1`, then `&floor=`) |
 | Page won't load | `npm run dev` must be running; the URL is `localhost:5179` on the PC itself |
 | Air Link can't find the PC | Network blocks devices (eduroam/guest Wi-Fi): use a hotspot, or a cable |
 | Stutter over Air Link | 5 GHz, router near you; or lower Link's bitrate / use a cable |

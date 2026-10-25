@@ -215,7 +215,8 @@ gap everywhere means the floor (fix with `?floor=`), a gap only at one object me
 4. Tell Juan: his e2e suites time out on macOS; the renovation-animation check fails; the route-follow in his shell
    moves the camera for you (motion-sickness risk: add a vignette or fade); kitchen4 night mode is nearly black (no
    nightlight). (His planning menu now needs a held click, which fixes the accidental-open concern.)
-5. Link on the Windows PC (RTX 4070 laptop): full-quality scene, result pending (`VR_WINDOWS.md`).
+5. Windows PC (RTX 4070 laptop): Quest Link didn't work, so the team uses **SteamVR (Steam Link)** (2026-10-25,
+   `VR_WINDOWS.md` section 2B). Full-quality scene result pending; check the floor with `&measure=1` and the buttons once.
 6. Delete `kitchen4_lighter_prev`, `kitchen4_raw` if unused. Dock detection not built.
 7. Room-scale boundary: the session now asks for `bounded-floor` (optional) besides `local-floor`; before that the Quest
    used the stationary boundary only. Check in the headset that the room boundary is used.
