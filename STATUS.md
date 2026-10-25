@@ -1,5 +1,12 @@
 # Status
 
+## Deterministic demo (seed 7), main + demo-safe at 782f15d
+- **Seed:** `configs/demo.json` kitchen4_lighter seed 7 (`?demo=1`, picked with `e2e/seed_search.ts`, shuffler + fan + round trip + `&rugfold=1`): the mat corner folds at 11.75 s (4.2 cm), the next fan is 30/30 over the mat at ~1.6 toe catches/month, no furniture pushed. Autoplay steps in fixed 1/60 s ticks that wait on the physics and fan workers (`viewer/src/demorun.ts`), so a slow machine plays the same walk slower. "Reset demo" (viewer toolbar) restores poses, tape, removals, folds, the fan and the replay. Free walk, VR and hand edits stay on the wall clock.
+- **Fixes on the way:** taping the mat drops a fan still in its worker (it was sampled untaped and showed up after, 0.98/month); game_synth checks run with `&nophys`.
+- **e2e on 782f15d, 3 runs:** all functional checks pass every run (88/89, 88/89, 89/89); the misses are perf checks under load (autoplay 25.6 fps right after another worktree's suite; fan-on vs fan-off 12.2 -> 8.8 fps).
+- **Proof:** `proof/demo/planner.mp4` (39 s, 1.14 -> 0.07/month, Easiest / Keep my mat / Safest) and `proof/demo/backup_v9.mp4` (30 s seed-7 round trip: fold at ~12 s, then 30 futures over the mat ≈1.6/month), both recorded on 782f15d.
+- **Risks:** the fold needs `&rugfold=1` (off by default so e2e numbers stay fixed); fps checks are load-sensitive; mat-displacement is not in 782f15d (hackathons-e0 is merging it as 5d1075a), so the videos may drift from a later demo-safe.
+
 ## Demo walker: 0.61 m Drive Medical (kitchen4_lighter_v1)
 - **Walker:** stage 12 re-export with config `game.walker` (0.61 x 0.445 m, 12.7 mm legs); only `walker.json`, `personas.json` and `personas_scan.json` were installed, so grids, fills and footprints are unchanged. Probe (0.66 -> 0.61): findings 17 -> 13, hazards 5 -> 3 (tight spot 4 cm / 0.70 m, mat 1.1/month, cable 0.1/month), route and hazards.json identical. The 0.66 export is kept as `viewer/public/scene/kitchen4_lighter_066` (local, not in git).
 - **One width:** viewer, VR, physics batch scene, planner (`engine.py` reads walker.json), futures fan, OT report and stairs all read `walker.json` / `personas.json`. Own values left alone: `wheelchair.ts` 0.66 (the wheelchair), `world_model_check.json` 0.66 (TS/Python parity fixture), a comment in `worldmodel/test_worldmodel.py`, `VR_LOG.md` (VR team's doc); worldmodel/ and cosmos/ read config `game.walker` (the same 0.61).
