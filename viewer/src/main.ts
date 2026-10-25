@@ -29,7 +29,7 @@ import { spots, vantage, heightTexels, type Spot } from './spotlight.ts';
 import { summarize, drawPushChart, poseAt, pushColor, sampleText } from './physdebug.ts';
 import { cardState, encodeCard, type ActionOut, type ReportPayload } from './share.ts';
 import { createReimagine, undoChange, costText, card, poseAt as layoutPoseAt, type Change } from './reimagine.ts';
-import { moveCost, removeCost, sumCosts } from './movecost.ts';
+import { moveCost, removeCost, sumCosts, fixCost } from './movecost.ts';
 import { isMoved, movedText, resetPose } from './resets.ts';
 import { twistAngle, snapQuarter } from './wand.ts';
 import { createObjLabel } from './objlabel.ts';
@@ -48,7 +48,7 @@ import { createMarker3d } from './marker3d.ts';
 import { MAX_EXTRA_LIGHTS, type PointLight } from './night.ts';
 import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } from './perf.ts';
 import QRCode from 'qrcode';
-import { objectEffort, moveEffort, difficulty } from './effort.ts';
+import { objectEffort, moveEffort, difficulty, effortKind } from './effort.ts';
 import { logEvent, parseLog, retrieve, toJSONL, type Entry } from './ledger.ts';
 import { mountFrontend, type FrontendAdapter } from './frontend.ts';
 import { mountLayers } from './layers.ts';
@@ -1796,9 +1796,10 @@ async function openReport() {
   const p = personas[personaKey], c = current!;
   const { before, fixes } = await ask({ type: 'fixes', layout, sel: selRoute });   // the fixes not yet applied, each rolled out from this layout
   const ranked_fixes = fixes.filter((f: any) => !applied.includes(f.id)).map((f: any) => {
-    const iv = interventions.find(i => i.id === f.id);
+    const iv = interventions.find(i => i.id === f.id), on = objs.find(o => o.name === iv?.object);
+    const fc = iv && fixCost(iv, on && effortKind(on));   // priced as the optimizer and the Changes panel price it (effort.ts interventionEffort)
     return { label: f.label, error: f.error, reduction: Math.max(0, f.reduction), share: before > 0 ? f.reduction / before : 0, clearance_gain_m: f.clearance_gain_m,
-      cost_usd: iv?.cost_usd, minutes: iv?.minutes, effort: iv?.effort, product: iv?.product };
+      cost_usd: iv?.cost_usd, effort: fc?.effort, helpers: fc?.helpers, product: iv?.product };
   }).sort((a: any, b: any) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.clearance_gain_m - a.clearance_gain_m) || ((a.cost_usd ?? 0) - (b.cost_usd ?? 0)));
   const planned = await planfix.rankedFixes();   // kitchen planner scenes: its layout's changes, ranked by real risk removed (planfix.ts)
   // log what goes on paper, then build the payload from the log (newest entry per thing wins)

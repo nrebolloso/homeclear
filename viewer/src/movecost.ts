@@ -12,7 +12,7 @@ export interface MoveCost { usd: number; minutes: number; helpers: number; effor
 
 /** a removed object is carried out of the room: counted as a move this far */
 const REMOVE_CARRY_M = 3;
-const helpersFor = (effort: number) => (effort >= 4 ? 2 : 1);
+export const helpersFor = (effort: number) => (effort >= 4 ? 2 : 1);
 const turnDeg = (from: Pose, to: Pose) => Math.round(((((to.yaw - from.yaw) * 180) / Math.PI) % 360 + 360) % 360);
 
 /** Moving (or turning) an object by hand: free, labour only. Same effort, minutes and helpers as an optimizer move. */
