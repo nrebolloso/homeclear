@@ -8,8 +8,10 @@ speed; outcome per trial: folded (the edge ends lifted or doubled), dragged (rug
 SIMULATED: the rug's bending stiffness, mass and both frictions are sampled ranges, not measured.
   python physics/rug_calib.py grid      -> physics/rug_calib_grid.json  (P(outcome) per glide-rug x rug-floor friction cell)
   python physics/rug_calib.py check     -> physics/rug_calib.json       (fitted ranges vs the real rates, fixes, controls)
+  python physics/rug_calib.py batch K N OUT   -> OUT/shard_K.json (cluster array task K: N paired draws per direction, BATCH_ARMS)
+  python physics/rug_calib.py summarize OUT   -> physics/rug_batch.json (rates with 95% intervals over every shard)
 """
-import json, math, re, sys
+import json, math, os, re, sys
 from multiprocessing import Pool
 from pathlib import Path
 
@@ -52,7 +54,7 @@ def model(p):
     wv = dict(glide_friction=p['mu_gr'], frame_mass_kg=WK.get('frame_mass_kg', 3.4))
     return f'''<mujoco><option timestep="0.001"/><worldbody>
 <geom type="plane" size="5 5 .1" friction="0.5 0.005 0.0001" contype="1" conaffinity="62"/>
-<flexcomp name="rug" type="grid" count="{nx} {ny} 1" spacing="{DX} {DX} {DX}" pos="{RUG_L / 2} {p['dy']} 0.002" radius="0.002" dim="2" mass="{p['mpa'] * RUG_L * RUG_W}">
+<flexcomp name="rug" type="grid" count="{nx} {ny} 1" spacing="{DX} {DX} {DX}" pos="{RUG_L / 2} {p['dy'] + (3 if p.get('bare') else 0)} 0.002" radius="0.002" dim="2" mass="{p['mpa'] * RUG_L * RUG_W}">
  <contact condim="3" friction="{p['mu_rf']} 0.005 0.0001" priority="1" contype="8" conaffinity="19" selfcollide="none"/>
  <edge equality="false" damping="0.002"/>
  <elasticity young="{p['E']}" poisson="0.2" thickness="0.004" damping="0.0005" elastic2d="both"/>{pins}
@@ -134,7 +136,7 @@ def rates(rs):
 
 
 def pool_map(ps):
-    with Pool() as pool: return pool.map(_run, ps)
+    with Pool(len(os.sched_getaffinity(0))) as pool: return pool.map(_run, ps)   # the CPUs this job was given, not the node's
 
 
 def grid(per=6, seed=0):
@@ -170,17 +172,23 @@ def write(real, arms, trials):
               open(HERE / 'rug_calib.json', 'w'), indent=1)
 
 
-def check(n=30, seed=1):
-    arms = dict(before=BEFORE, fitted=FIT, glide_caps=dict(FIT, mu_gr=CAPS_MU), taped=dict(FIT, taped=True), wheels_only=dict(FIT, wheels_only=True))
+def paired(arms, ids, seed=1):
+    """Every arm on the same draws of everything else, per draw id and direction."""
     ps = []
     for d in ('off', 'onto'):
-        for i in range(n):   # the same draw of the other parameters in every arm (paired)
+        for i in ids:
             base = sample(np.random.default_rng([seed, i, d == 'off']), direction=d, **FIT)
             for a, kw in arms.items():
                 p = dict(base, arm=a, **{k: v for k, v in kw.items() if not isinstance(v, list)})
                 for k, v in kw.items():
                     if isinstance(v, list): p[k] = float(np.random.default_rng([seed, i, len(k)]).uniform(*v))
                 ps.append(p)
+    return ps
+
+
+def check(n=30, seed=1):
+    arms = dict(before=BEFORE, fitted=FIT, glide_caps=dict(FIT, mu_gr=CAPS_MU), taped=dict(FIT, taped=True), wheels_only=dict(FIT, wheels_only=True))
+    ps = paired(arms, range(n), seed)
     res = pool_map(ps)
     out = {a: {d: rates([r for p, r in res if p['arm'] == a and p['direction'] == d]) for d in ('off', 'onto')} for a in arms}
     real = {d: dict(n=v['n'], folded=v['folded'] / v['n'], dragged=v['dragged'] / v['n'], disturbed=(v['folded'] + v['dragged']) / v['n']) for d, v in REAL.items()}
@@ -192,6 +200,34 @@ def check(n=30, seed=1):
         print(f"{a:12s} " + '   '.join(f"{v[d]['folded']:8.2f} {v[d]['dragged']:5.2f} {v[d]['disturbed']:9.2f} (n={v[d]['n']})" for d in ('off', 'onto')))
 
 
+# the calibrated ranges, the glide-caps fix (CAPS_MU, ASSUMED) and the controls: tape, front wheels only, bare floor (the rug 3 m off the route)
+BATCH_ARMS = dict(fitted=FIT, glide_caps=dict(FIT, mu_gr=CAPS_MU), taped=dict(FIT, taped=True), wheels_only=dict(FIT, wheels_only=True),
+                  bare=dict(FIT, bare=True))
+
+
+def batch(k, n, out):
+    k, n = int(k), int(n); Path(out).mkdir(parents=True, exist_ok=True)
+    res = pool_map(paired(BATCH_ARMS, range(k * n, (k + 1) * n), seed=2))   # seed 2: draws apart from check's
+    json.dump([dict(p, **r) for p, r in res], open(Path(out) / f'shard_{k}.json', 'w'))
+
+
+def wilson(x, n, z=1.96):
+    c, h = (x + z * z / 2) / (n + z * z), z * math.sqrt(x * (n - x) / n + z * z / 4) / (n + z * z)
+    return [round(c - h, 3), round(c + h, 3)]
+
+
+def summarize(out):
+    trials = [t for f in sorted(Path(out).glob('shard_*.json')) for t in json.load(open(f))]
+    arms = {a: {d: dict(rates(rs := [t for t in trials if t['arm'] == a and t['direction'] == d]),
+                        disturbed_ci95=wilson(sum(t['outcome'] != 'clean' for t in rs), len(rs)),
+                        folded_ci95=wilson(sum(t['outcome'] == 'folded' for t in rs), len(rs))) for d in ('off', 'onto')} for a in BATCH_ARMS}
+    json.dump(dict(label='SIMULATED cloth rug (rug_calib.py batch, cluster), paired arms; glide_caps friction ASSUMED',
+                   fit=FIT, glide_caps_mu_assumed=CAPS_MU, real=REAL, arms=arms), open(HERE / 'rug_batch.json', 'w'), indent=1)
+    for a, v in arms.items():
+        print(f"{a:12s} " + '   '.join(f"{d}: fold {v[d]['folded']:.2f} disturbed {v[d]['disturbed']:.2f} {v[d]['disturbed_ci95']} (n={v[d]['n']})" for d in ('off', 'onto')))
+
+
 if __name__ == '__main__':
+    if sys.argv[1] in ('batch', 'summarize'): sys.exit({'batch': batch, 'summarize': summarize}[sys.argv[1]](*sys.argv[2:]))
     {'grid': grid, 'check': check,   # rewrite: rug_calib.json from rug_calib_trials.json without re-running
      'rewrite': lambda: write(*(lambda j, t: (j['real'], j['arms'], t))(json.load(open(HERE / 'rug_calib.json')), json.load(open(HERE / 'rug_calib_trials.json'))))}[sys.argv[1]]()
