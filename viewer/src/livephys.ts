@@ -23,6 +23,8 @@ export interface LivePhysDeps {
   /** an object came to rest somewhere new after a push: the layout follows it */
   settled: (moves: { k: number; pose: Pose; moved_m: number; tipped: boolean }[]) => void;
   log: HTMLElement; sampledEl: HTMLElement;
+  /** fixed physics seed (demo autoplay, demorun.ts); else a random one per run */
+  seed?: number | null;
 }
 
 const TEXT: Record<PhysEvent['kind'], string> = { bumped: 'bumped', moved: 'pushed', tipped: 'TIPPED', slid: 'slid', corner_caught: 'corner caught', corner_folded: 'corner FOLDED' };
@@ -30,7 +32,7 @@ const TEXT: Record<PhysEvent['kind'], string> = { bumped: 'bumped', moved: 'push
 export function createLivePhys(D: LivePhysDeps) {
   const worker = new Worker(new URL('./physworker.ts', import.meta.url), { type: 'module' });
   let fold: { corner: XY; lift_m: number; size_m: number } | null = null;
-  let busy = true, acc = 0, ready = false, steps = 0, seed = Math.floor(Math.random() * 1e9);
+  let busy = true, acc = 0, ready = false, steps = 0, inits = 1, seed = D.seed ?? Math.floor(Math.random() * 1e9);
   const xf = new Map<number, number[]>();   // object -> latest [k, x, y, z, qx, qy, qz, qw]
   let walkerPose: { x: number; y: number; yaw: number } | null = null, target = { x: 0, y: 0, yaw: 0 };
   const events: PhysEvent[] = [];
@@ -89,6 +91,7 @@ export function createLivePhys(D: LivePhysDeps) {
     busy = false;
     if (m.type === 'error') { console.error('[livephys]', m.msg); D.sampledEl.textContent = `physics failed: ${m.msg.split('\n')[0]}`; return; }
     if (m.type === 'ready') {
+      if (--inits) return;   // a newer init is on its way (same seed and layout): only the last build is stepped
       ready = true; xf.clear(); walkerPose = null;
       const rows = Object.entries(m.sampled as Record<string, Record<string, number>>).map(([n, s]) =>
         `<tr><td>${n.replace(/_/g, ' ')}</td><td>${Object.entries(s).map(([k, v]) => `${k.replace(/_/g, ' ')} ${+v.toFixed(3)}`).join(', ')}</td></tr>`).join('');
@@ -117,7 +120,7 @@ export function createLivePhys(D: LivePhysDeps) {
 
   const q = new THREE.Quaternion();
   return {
-    events, ready: () => ready, /** worker steps answered (e2e: physics runs in autoplay too) */ steps: () => steps,
+    events, ready: () => ready, /** ready and no step in the worker (demorun.ts lockstep) */ idle: () => ready && !busy, /** worker steps answered (e2e: physics runs in autoplay too) */ steps: () => steps,
     /** the mat's curled corner while folded over (futures.ts treats it as a bump), else null */
     fold: () => fold,
     /** The layout changed (drag, remove, fix, reset): bodies jump to it. */
@@ -127,7 +130,7 @@ export function createLivePhys(D: LivePhysDeps) {
       worker.postMessage({ type: 'poses', poses: lay.poses });
       for (const [k] of xf) { const p = lay.poses[k], v = xf.get(k)!; if (Math.hypot(v[1] - p.x, v[2] - p.y) > 0.01) xf.delete(k); }
     },
-    resample() { ready = false; busy = true; seed = Math.floor(Math.random() * 1e9); worker.postMessage({ type: 'init', init: init() }); },
+    resample() { ready = false; busy = true; inits++; taped = tapedKey(D.layout()); seed = D.seed ?? Math.floor(Math.random() * 1e9); worker.postMessage({ type: 'init', init: init() }); },
     /** Per frame. `body` = where the person wants the walker (their body centre + heading). In free walking the walker is
      *  where physics has it, and the person can't get more than 15 cm ahead of it (a heavy chair holds them back).
      *  `run` (default: free) steps the mat without that: autoplay's walker stays on its route and passes furniture as
@@ -137,7 +140,7 @@ export function createLivePhys(D: LivePhysDeps) {
       acc += dt;
       // a jump (setFree, a new route, autoplay's loop back to the start) teleports the walker in the worker
       if (!run) acc = 0;
-      else if (ready && !busy) { busy = true; worker.postMessage({ type: 'step', dt: Math.min(acc, 0.1), target, floorOnly: !free }); acc = 0; }
+      else if (ready && !busy && acc > 0) { busy = true; worker.postMessage({ type: 'step', dt: Math.min(acc, 0.1), target, floorOnly: !free }); acc = 0; }
       for (const [k, s] of flashing) {
         if (s - dt > 0) { flashing.set(k, s - dt); continue; }
         flashing.delete(k); D.items[k].mesh.recolor = plain.get(k)!;

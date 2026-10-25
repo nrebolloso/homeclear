@@ -103,7 +103,7 @@ export function mountFrontend(api: FrontendAdapter) {
   heading('Walker physics', 'assessment-details', ['physics', 'snags', 'physinfo', 'pushchart', 'replay', 'replaycap']);
   move('status', 'assessment-details'); move('verifyinfo', 'assessment-details');
   move('planfixes', 'individual-fixes'); $('planfixes').textContent = 'Evaluate individual fixes'; move('fixes', 'individual-fixes');
-  ['remove', 'resetobj'].forEach(id => move(id, 'object-actions')); move('reset', 'reset-controls'); move('inventory', 'removed-controls');
+  ['remove', 'resetobj'].forEach(id => move(id, 'object-actions')); move('reset', 'reset-controls'); move('resetdemo', 'viewer-toolbar'); move('inventory', 'removed-controls');
   ['report', 'fixcard'].forEach(id => move(id, 'share-controls'));
   const help = document.querySelector('#left > p.hint'); if (help) $('help-controls').append(help);
   move('fly', 'help-controls'); move('autoplay', 'help-controls'); move('free', 'help-controls'); move('tour', 'help-controls');

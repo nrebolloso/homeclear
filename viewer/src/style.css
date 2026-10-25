@@ -59,3 +59,5 @@ select { max-width: 100%; background: #1b1f24; color: var(--fg); border: 1px sol
 .demo h2:has(+ label #reach), .demo label:has(#reach), .demo label:has(#coverage), .demo label:has(#reachwidth), .demo #reachplay,
 .demo #markpoint, .demo #clearpoints, .demo #copypoints, .demo #reachstatus, .demo #reachfindings, .demo #reachtargets,
 .demo #reachcost, .demo #reachcostinfo { display: none !important; }
+/* Reset demo (demorun.ts) only in demo mode: outside it the wall clock and a random physics seed run anyway */
+body:not(.demo) #resetdemo { display: none !important; }

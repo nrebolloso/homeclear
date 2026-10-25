@@ -148,9 +148,10 @@ export function createPlanFix(D: PlanFixDeps) {
       await new Promise(r => setTimeout(r, ms * 0.3));
       prev = f.layout;
     }
+    showFan([]);
+    if (!playing) { frame = -1; draw(); return state(); }   // stopped (Reset demo): nothing is applied
     frame = fr.length - 1;
     playing = false;
-    showFan([]);
     const chosen = opts()[0];
     await apply(chosen.k);
     draw();

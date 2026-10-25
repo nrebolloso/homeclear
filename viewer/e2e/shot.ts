@@ -24,7 +24,7 @@ await p.evaluate(`(async () => { const game = window.game; game.manual = true; $
 await p.waitForTimeout(1500);   // replans / splat sorts started by the setup settle before frame 0
 const n = Math.round(+secs * fps), cam = opt('cam', '');
 for (let k = 0; k < n; k++) {
-  await p.evaluate(`(() => { const game = window.game, t = ${k / fps}; ${cam}; game.tick(${1 / fps}); })()`);
+  await p.evaluate(`(async () => { const game = window.game, t = ${k / fps}; ${cam}; await game.tick(${1 / fps}); })()`);   // demo mode: the ticks wait on the physics / fan workers
   await p.waitForTimeout(40);   // let the splat sort catch up with the camera
   await p.screenshot({ path: `${dir}/${String(k).padStart(5, '0')}.png` });
 }
