@@ -15,12 +15,12 @@ export function createCompanion(D: { renderer: THREE.WebGLRenderer; scene: THREE
   let steady = true, held: { at: THREE.Vector3; fwd: THREE.Vector3; t: number } | null = null;
   const UP = new THREE.Vector3(0, 0, 1), ORIGIN = new THREE.Vector3(), level = new THREE.Matrix4();
   const panel = document.createElement('section'); panel.id = 'companion-controls'; panel.hidden = true; panel.setAttribute('aria-label', 'VR desktop companion');
-  panel.innerHTML = `<label>Desktop view <select id="companion-mode"><option value="companion">Companion workspace</option><option value="headset">Headset perspective</option><option value="split">Workspace + headset preview</option><option value="goggles">Goggles presentation</option></select></label>
+  panel.innerHTML = `<label>Desktop view <select id="companion-mode"><option value="companion">Companion workspace</option><option value="headset">Headset perspective</option><option value="split">Workspace + headset preview</option></select></label>
     <label><input id="companion-steady" type="checkbox" checked> Steady headset view (smoothed, level)</label>
     <label><input id="companion-link" type="checkbox" checked> Match headset vision</label>
     <label>Desktop vision <select id="companion-vision"></select></label>
     <label><input id="companion-overlays" type="checkbox" checked> Desktop overlays</label>
-    <button id="companion-save">Save viewpoint</button><button id="companion-demo">Demo / operator</button><button id="companion-full">Fullscreen</button><button id="companion-clean">Clean view (Esc to undo)</button><button id="companion-exit">Exit VR</button>
+    <button id="companion-save">Save viewpoint</button><button id="companion-demo">Demo / operator</button><button id="companion-full">Fullscreen</button><button id="companion-clean">Clean view (Esc to undo)</button><button id="companion-reset">Reset VR</button><button id="companion-exit">Exit VR</button>
     <details><summary>Edit shared room</summary><label>Object <select id="companion-object"></select></label>
     <div class="companion-pose"><label>X (m)<input id="companion-x" type="number" step="0.05"></label><label>Y (m)<input id="companion-y" type="number" step="0.05"></label><label>Turn (°)<input id="companion-yaw" type="number" step="90"></label></div>
     <button id="companion-move">Apply move</button><button id="companion-remove">Remove</button><button id="companion-undo">Undo</button><button id="companion-redo">Redo</button>
@@ -37,6 +37,8 @@ export function createCompanion(D: { renderer: THREE.WebGLRenderer; scene: THREE
   q<HTMLInputElement>('companion-overlays').onchange = e => localOverlays = (e.target as HTMLInputElement).checked;
   q('companion-save').onclick = () => { game.bookmarks.save('Desktop viewpoint', { position: camera.position.toArray(), quaternion: camera.quaternion.toArray() }); q('companion-state').textContent = 'Viewpoint saved for this scan.'; };
   q('companion-demo').onclick = () => document.body.classList.toggle('companion-demo');
+  // Stray presses in the headset (vision, night, who is walking, the safer room, Fly...) undone in one click from the laptop.
+  q('companion-reset').onclick = () => void Promise.resolve(game.resetVR?.()).then(() => q('companion-action').textContent = 'Headset reset to how VR started.', error => q('companion-action').textContent = String(error));
   q('companion-exit').onclick = () => void renderer.xr.getSession()?.end();
   // Recording or a projector: only the picture, no desktop controls; Esc brings them back.
   q('companion-clean').onclick = () => document.body.classList.add('companion-clean');
@@ -83,9 +85,9 @@ export function createCompanion(D: { renderer: THREE.WebGLRenderer; scene: THREE
     if (hit) { const k = game.debug.items.findIndex((i: any) => i.proxy === hit.object); objects.value = game.items[k]; readObject(); }
   });
   function setMode(value: string) {
-    mode = value; controls.enabled = presenting && (mode === 'companion' || mode === 'split');
-    document.body.classList.toggle('companion-goggles', mode === 'goggles');
-    document.body.classList.toggle('companion-headset', mode === 'headset' || mode === 'goggles');
+    mode = value === 'goggles' ? 'headset' : value;   // a saved preference from before Goggles was dropped
+    controls.enabled = presenting && (mode === 'companion' || mode === 'split');
+    document.body.classList.toggle('companion-headset', mode === 'headset');
     q<HTMLSelectElement>('companion-mode').value = mode; last = -Infinity; held = null;
   }
   const annotationDefaults = new Map<string, { disabled: boolean; title: string }>(); let wasRemote = false;
@@ -112,7 +114,7 @@ export function createCompanion(D: { renderer: THREE.WebGLRenderer; scene: THREE
     vision.set(applyVision);
     if (cam === camera) vision.renderTo(output); else { renderer.setRenderTarget(output); renderer.render(scene, cam); }
   }
-  own(() => { controls.dispose(); vision.dispose(); output.dispose(); desktop.remove(); panel.remove(); inset.remove(); marker.removeFromParent(); marker.geometry.dispose(); (marker.material as THREE.Material).dispose(); document.body.classList.remove('companion-active', 'companion-goggles', 'companion-headset', 'companion-demo', 'companion-clean'); });
+  own(() => { controls.dispose(); vision.dispose(); output.dispose(); desktop.remove(); panel.remove(); inset.remove(); marker.removeFromParent(); marker.geometry.dispose(); (marker.material as THREE.Material).dispose(); document.body.classList.remove('companion-active', 'companion-headset', 'companion-demo', 'companion-clean'); });
   return {
     focus(p: { x: number; y: number; z: number; yaw: number; pitch: number }) { camera.position.set(p.x, p.y, p.z); controls.target.copy(camera.position).add(new THREE.Vector3(Math.cos(p.yaw) * Math.cos(p.pitch), Math.sin(p.yaw) * Math.cos(p.pitch), Math.sin(p.pitch))); controls.update(); },
     camera, controls, mode: () => mode, setMode,
@@ -137,7 +139,7 @@ export function createCompanion(D: { renderer: THREE.WebGLRenderer; scene: THREE
       }
       try {
         renderer.xr.enabled = false; renderer.setRenderTarget(null); renderer.setViewport(0, 0, innerWidth, innerHeight); renderer.setScissorTest(false);
-        if (mode === 'headset' || mode === 'goggles' || mode === 'split') {
+        if (mode === 'headset' || mode === 'split') {
           // A mono perspective at the tracked head pose, with the same illustrative vision profile.
           const previous = this.capture(); camera.position.copy(head); camera.quaternion.copy(rotation); camera.updateMatrixWorld(true);
           renderCamera(camera, linked ? selected : localVision);

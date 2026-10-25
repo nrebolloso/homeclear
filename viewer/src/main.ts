@@ -2701,6 +2701,8 @@ const costButton = {
   tone: () => 'plain' as const, press: () => {},
 };
 const roomMenuButton = { text: () => ['Room menu', 'scans, findings and every control'], tone: () => 'plain' as const, press: () => frontendVR?.open() };
+// what Reset VR (the laptop's Desktop view panel) goes back to: the states as they were when VR started
+let vrStart: { vision: string; night: boolean; persona: string; toggles: [string, boolean][]; safer: boolean } | null = null;
 let xrContactT = 0;   // seconds the device stays red after a refused move (xr.ts contact)
 const xr = await setupXR({
   renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses, contact: () => { xrContactT = 0.35; },
@@ -2721,6 +2723,7 @@ const xr = await setupXR({
   },
   enter(t) {   // a standalone headset turns performance mode on; hazard labels become scene cards
     select(-1); inXR = true; game.xr = true; perfBeforeXR = perfOn;
+    vrStart = { vision: visionSel.value, night: nightOn(), persona: personaSel.value, toggles: ['particle-path', 'spot'].map(id => [id, $<HTMLInputElement>(id).checked]), safer: comparison.state().active === 'safer' };
     if (t === 'quest' && PARAMS.get('perf') !== '0') applyPerf(true, false);
     if (current) drawPlan(current);
     say();
@@ -2967,6 +2970,18 @@ game.editLocks = editLocks;
 game.applyPreparedOption = async (index: number) => { frontendVR?.notify('Desktop is applying a proposed layout'); game.sessionBusy = true; try { return await applyOption(index); } finally { game.sessionBusy = false; } };
 game.sharedEdit = (name: string, task: () => unknown) => editLocks.run(String(objs.findIndex(o => o.name === name)), 'desktop', async () => { const result = await task(); frontendVR?.notify('Room updated by desktop'); return result; });
 game.history = { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') };
+// Reset VR: everything a stray press in the headset can change goes back to how it was at VR start, and you stand at the
+// route's start. Moved furniture stays (that has undo); the safer room goes back to your room only if VR started without it.
+game.resetVR = async () => {
+  const s = vrStart; frontendVR?.close(); xr.fly(false); comparison.endPreview();
+  dangerVR.k = -1; dangerVR.none = false; tourSpot = -1; wmg.stop(); fanFan.set(false); gaitGhosts.set(false); wmStep = 0;
+  game.setNight(s?.night ?? false);
+  for (const [id, on] of s?.toggles ?? []) if ($<HTMLInputElement>(id).checked !== on) flip(id);
+  if (comparison.state().active === 'safer' && !s?.safer) await comparison.button.press();
+  if (s && personaSel.value !== s.persona) { personaSel.value = s.persona; personaSel.dispatchEvent(new Event('change', { bubbles: true })); }
+  game.setVision(s?.vision ?? 'normal');   // after the person: choosing one sets their vision
+  game.recenter();
+};
 game.recenter = () => { const p = routePose(0, 0, Infinity); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.place(p.x, p.y, p.yaw)); else Object.assign(body, p); };
 game.comfort = { seated: false, movement: 'all', cycle() { const choices = ['all', 'teleport', 'physical']; this.movement = choices[(choices.indexOf(this.movement) + 1) % choices.length]; } };
 game.saveSession = () => structuredClone({ layout, applied, body, fly, personaKey, selRoute, mode, autoS, explore, marked, markedDoors, strongSide });
