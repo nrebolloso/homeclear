@@ -61,7 +61,7 @@ plan:
   # one full circle round the tower: start == goal, via = the walked loop every 45 deg (camera positions with most clearance)
   name: loop round the tower
   start: [9.37, 1.31]
-  via: [[8.14, 4.46], [-0.56, 8.89], [-5.51, 6.1], [-7.48, -1.19], [-4.5, -6.25], [0.34, -8.27], [6.8, -8.71]]
+  via: [[6.8, -8.71], [0.34, -8.27], [-4.5, -6.25], [-7.48, -1.19], [-5.51, 6.1], [-0.56, 8.89], [8.14, 4.46]]   # walked the other way round (user pick)
   goal: [9.37, 1.31]
   walker_width_m: 0.61
   preferred_clearance_m: 0.3
