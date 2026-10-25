@@ -268,9 +268,11 @@ def object_parts(o, xyz, g, w, lo, cell, shape, v):
         # back, stool2's top, the sofa's seat edge; the rest got ~30% of its label's votes, under the 50% cut) and the rest
         # stayed as a dark half-object when it was removed. Unlabelled Gaussians nearest its labels (col: a neighbour's
         # armrest stays with the neighbour), within JOIN_M of them across the floor, above the floor and under its top
+        # Only for one that stands: what joins a box or basket is the counter or cabinet under it (kitchen4's basket took the
+        # sink counter, its boxes the cabinet tops)
         from scipy.spatial import cKDTree
         lab = z["xyz"][np.isin(z["instance"], ids)]
-        cand = ~sel & (inst == -1) & np.isin(col, ids) & (xyz[:, 2] > 0.02) & (xyz[:, 2] < lab[:, 2].max() + 0.05)
+        cand = ~sel & (inst == -1) & np.isin(col, ids) & (xyz[:, 2] > 0.02) & (xyz[:, 2] < lab[:, 2].max() + 0.05) & (z0 < 0)
         cand[cand] = cKDTree(lab[:, :2]).query(xyz[cand, :2], distance_upper_bound=JOIN_M)[0] <= JOIN_M
         sel |= joined(xyz, sel, cand)
         # but never the wall it stands against: the trash can took the white wall behind and above its lid (6c's mask spilt
