@@ -1,4 +1,5 @@
 import { onWindow } from './lifetime.ts';
+import { pulse } from './controls.ts';
 // Live object physics, main-thread side: owns physworker.ts, moves each object's splat with its rigid body, and makes
 // every walker contact felt: haptic pulse (headset), a sound, a red flash on the object, a line in the events log.
 // Masses/frictions are sampled per run from physics_ranges.json and shown as "sampled from an assumed range".
@@ -48,7 +49,11 @@ export function createLivePhys(D: LivePhysDeps) {
 
   // ---------- feedback ----------
   let audio: AudioContext | null = null;
-  onWindow('pointerdown', () => { audio ??= new AudioContext(); void audio.resume(); }, { once: false });
+  const unlock = () => { audio ??= new AudioContext(); void audio.resume(); };
+  onWindow('pointerdown', unlock, { once: false });
+  // a headset has no pointer events: entering VR (a click) and any controller select also unlock the sound
+  D.renderer.xr.addEventListener('sessionstart', unlock);
+  for (const i of [0, 1]) D.renderer.xr.getController(i).addEventListener('selectstart', unlock);
   function sound(kind: PhysEvent['kind']) {
     if (!audio || audio.state !== 'running') return;
     const t = audio.currentTime, [f, dur, noise] = ({ bumped: [140, 0.12, 0.4], moved: [110, 0.25, 0.7], tipped: [70, 0.6, 0.6], slid: [600, 0.35, 1], corner_caught: [900, 0.06, 0.2], corner_folded: [300, 0.2, 0.5] } as const)[kind];
@@ -66,7 +71,7 @@ export function createLivePhys(D: LivePhysDeps) {
     gain.connect(audio.destination); osc.start(t); osc.stop(t + dur);
   }
   function haptic(strength: number, ms: number) {
-    for (const s of D.renderer.xr.getSession()?.inputSources ?? []) (s.gamepad as any)?.hapticActuators?.[0]?.pulse?.(strength, ms);
+    for (const s of D.renderer.xr.getSession()?.inputSources ?? []) pulse(s.gamepad, strength, ms);   // same buzz as the wand's (hapticActuators or vibrationActuator)
   }
   const flashing = new Map<number, number>();   // object -> seconds of red left
   const RED = new THREE.Color(1, 0.25, 0.25), plain = new Map<number, THREE.Color>();

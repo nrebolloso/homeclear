@@ -2686,7 +2686,14 @@ function xrFrame(dt: number, t: number) {
   const wb = explore.parked ?? body;
   walker.group.position.set(wb.x, wb.y, 0);
   walker.group.rotation.z = wb.yaw;
-  if (!comparison.previewing()) live?.frame(dt, wb, false, walker.group);
+  // Same physics as the monitor's free walk: furniture is solid to the walker (chairs shove, tip and slide) and the walker
+  // drawn is where physics has it. Only a scripted route ride (autoplay in the headset) passes furniture, as on the monitor.
+  if (!comparison.previewing()) {
+    const free = !explore.on && !(xrFollowRoute && mode === 'auto'), at = { x: wb.x, y: wb.y };
+    live?.frame(dt, wb, free, walker.group, !explore.on);
+    // held back by a heavy object: the rig follows the clamped body (a physical step into it can't be refused, a stick can)
+    if (free && !xr.mount().hand && (wb.x !== at.x || wb.y !== at.y)) xr.moveHead(wb.x, wb.y);
+  }
   pulseSpots(t);
   reim.update(dt);
   fanFan.update(dt);
