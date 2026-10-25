@@ -57,9 +57,12 @@ grid:
     min_length_m: 0.3
     typical_height_m: 0.006
   min_count: 2
-  speck: {max_cells: 6, min_span_m: 0.10, floor_gap_m: 0.15}   # mid-air floaters of ~3 Gaussians each would block the walker
+  speck: {max_cells: 6, min_span_m: 0.10, floor_gap_m: 0.15, min_points: 6}   # mid-air floaters of ~3 Gaussians each would block the walker; min_points: 94 of the 132 specks left on the floor were 2-5 Gaussians
   bump_link_cells: 3
+  floor_walked_m: 0.25   # the capture walked bathroom (x -2.8) to the far side (x 2.2) but never filmed the floor it stood on
 plan:
+  start: [1.6, 0.45]    # far side of the room, right of the bed (the corner by basket3 at [2.1, 0.2] is a 0.46 m strip between dresser and wall) ...
+  goal: [-2.5, -0.5]    # ... to the bathroom (laundry basket, toilet)
   # start/goal unset: stage 7 picks two far-apart cells of the largest walker-reachable region (set bed -> toilet once the splat exists)
   walker_width_m: 0.61
   preferred_clearance_m: 0.3
@@ -109,4 +112,7 @@ game:
         p_per_stride: [0, 8.71e-06, 0.000241, 0.000875, 0.00168, 0.00242, 0.00302, 0.00381, 0.00442, 0.00463]
   objects: []   # new scene: stage 6c detections / hand picks fill this after the splat
   merge_into: {bedside_table2: bed}   # 6c saw the bed's headboard as a bedside table (user, 2026-10-25)
+  outline_trim_pct: 1   # 6c outlines from all labels took mask spill: the bed's reached the red bucket 30 cm past its side
+  raised_needs_support: true   # the bed (legs, underside never filmed) counted as "on top of something": no floor under it
+  rename: {table: {name: dresser}, bedside_table3: {name: desk, kind: other}, chair: {name: shoe_rack, kind: other}}   # seen in the frames (2026-10-25)
   interventions: []

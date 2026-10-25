@@ -161,6 +161,8 @@ def config_objects(gm, w):
         return gm["objects"]
     import yaml
     objs = [o for o in yaml.safe_load((Path(w) / "objects_proposed.yaml").read_text())["objects"] if o["kind"] != "door"]
+    if gm.get("outline_trim_pct"):
+        tighten_outlines(objs, w, gm["outline_trim_pct"])
     # a detection centred inside a bigger one with the same label is a piece of it: a chair's runner 6c split off as its own
     # chair, a round table's top and pedestal (gator_lounge: removing either left the other standing), one table seen twice.
     # Not rugs: a rug is cut by the bump patch in its own box (rug_outline), and a merged box finds some other patch
@@ -189,7 +191,33 @@ def config_objects(gm, w):
         if host:
             host["instances"] = host.get("instances", [host["instance"]]) + [o["instance"]]
             objs.remove(o)
+    # game.rename {name: {name, kind}}: 6c can only pick words from its vocabulary (aleroom: the dresser came out "table",
+    # the desk "bedside_table3", the shoe rack "chair"). detected_as stays, so the standing / merge rules are unchanged
+    for o in objs:
+        o.update(gm.get("rename", {}).get(o["name"], {}))
     return objs
+
+
+def trimmed_rect(p, pct):
+    """Rotated rectangle around 2-D points p: their pct..100-pct extent along their minAreaRect's axes (corners, 4 x 2)."""
+    (cx, cy), _, a = cv2.minAreaRect(p.astype(np.float32))
+    t = np.deg2rad(a)
+    R = np.array([[np.cos(t), -np.sin(t)], [np.sin(t), np.cos(t)]])   # columns: the rectangle's axes
+    lo, hi = np.percentile((p - [cx, cy]) @ R, [pct, 100 - pct], 0)
+    return np.array([[lo[0], lo[1]], [hi[0], lo[1]], [hi[0], hi[1]], [lo[0], hi[1]]]) @ R.T + [cx, cy]
+
+
+def tighten_outlines(objs, w, pct):
+    """Each 6c outline = its labelled points' trimmed_rect. 6c's minAreaRect takes every label, mask spill too: aleroom's
+    bed came out 1.98 x 1.81 m (1.85 x 1.33 at 1%) and the zone rule then gave it the red bucket 30 cm past its side."""
+    z = np.load(Path(w) / "objects_points.npz")
+    for o in objs:
+        p = z["xyz"][z["instance"] == o.get("instance", -1), :2]
+        if len(p) < 50 or len(o["parts"]) != 1:
+            continue
+        poly = trimmed_rect(p, pct)
+        o["poly_xy"] = o["parts"][0]["poly_xy"] = poly.round(3).tolist()
+        o["box_xy"] = [poly.min(0).round(3).tolist(), poly.max(0).round(3).tolist()]
 
 
 _nearest = {}
@@ -348,8 +376,11 @@ def main(cfg):
         ov = v[sel].copy()
         ov["x"], ov["y"] = ov["x"] - pivot[0], ov["y"] - pivot[1]
         write_ply(out / "objects" / f"{o['name']}.ply", ov)
-        (cx, cy), (bw, bh), ang = cv2.minAreaRect((xyz[sel & solid, :2] - pivot[:2]).astype(np.float32))
-        foot = cv2.boxPoints(((cx, cy), (bw, bh), ang))
+        if gm.get("outline_trim_pct"):   # the collision footprint too: a few stray Gaussians made aleroom's bed 1.90 x 2.64 m
+            foot = trimmed_rect(xyz[sel & solid, :2] - pivot[:2], gm["outline_trim_pct"])
+        else:
+            (cx, cy), (bw, bh), ang = cv2.minAreaRect((xyz[sel & solid, :2] - pivot[:2]).astype(np.float32))
+            foot = cv2.boxPoints(((cx, cy), (bw, bh), ang))
         height = float(np.percentile(xyz[sel & solid, 2], 99))
         if np.percentile(xyz[sel & solid, 2], 2) > g["obstacle_z"][0]:
             raised.add(o["name"])
@@ -389,11 +420,13 @@ def main(cfg):
     occ.stamp_synthetic(g, lo, shape, floor, obstacles, bumps, bump_h)
     est = occ.classify_thin(g, bumps, bump_h)
     for o in objects:   # nobody filmed the floor under the furniture: assume the fitted plane (z=0) continues
-        if o["name"] in raised:   # a box on a cabinet: the cabinet under it stays an obstacle
-            continue
         poly = ((np.array(o["footprint"]) + o["pivot"][:2] - lo) / cell)[:, ::-1].astype(np.int32)  # (j, i) for cv2
         m = np.zeros(shape, np.uint8)
         cv2.fillPoly(m, [poly], 1)
+        # a bed's underside is never filmed, so its lowest Gaussians are high too: raised only if something is left under it
+        unsupported = gm.get("raised_needs_support") and obstacles[cv2.erode(m, np.ones((3, 3), np.uint8)) > 0].mean() < 0.05
+        if o["name"] in raised and not unsupported:   # a box on a cabinet: the cabinet under it stays an obstacle
+            continue
         floor |= m.astype(bool)
         # the cut leaves the object's outermost Gaussians (centres just outside its box) as a 1-cell outline in the
         # obstacle layer: a phantom box that traps anything placed inside its old spot. The object itself is stamped
