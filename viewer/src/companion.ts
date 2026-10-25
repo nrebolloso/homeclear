@@ -11,12 +11,16 @@ export function createCompanion(D: { renderer: THREE.WebGLRenderer; scene: THREE
   const controls = new OrbitControls(camera, renderer.domElement); controls.target.set(...D.centre, .8); controls.enableDamping = true; controls.enabled = false; controls.update();
   const vision = createVision(renderer, scene, camera);
   let mode = 'companion', last = -Infinity, linked = true, localVision: Profile = 'normal', localOverlays = true, presenting = false;
+  // Steady headset view: the raw head pose shakes and rolls, which onlookers find hard to watch; ease it and keep the horizon level.
+  let steady = true, held: { at: THREE.Vector3; fwd: THREE.Vector3; t: number } | null = null;
+  const UP = new THREE.Vector3(0, 0, 1), ORIGIN = new THREE.Vector3(), level = new THREE.Matrix4();
   const panel = document.createElement('section'); panel.id = 'companion-controls'; panel.hidden = true; panel.setAttribute('aria-label', 'VR desktop companion');
   panel.innerHTML = `<label>Desktop view <select id="companion-mode"><option value="companion">Companion workspace</option><option value="headset">Headset perspective</option><option value="split">Workspace + headset preview</option><option value="goggles">Goggles presentation</option></select></label>
+    <label><input id="companion-steady" type="checkbox" checked> Steady headset view (smoothed, level)</label>
     <label><input id="companion-link" type="checkbox" checked> Match headset vision</label>
     <label>Desktop vision <select id="companion-vision"></select></label>
     <label><input id="companion-overlays" type="checkbox" checked> Desktop overlays</label>
-    <button id="companion-save">Save viewpoint</button><button id="companion-demo">Demo / operator</button><button id="companion-full">Fullscreen</button><button id="companion-exit">Exit VR</button>
+    <button id="companion-save">Save viewpoint</button><button id="companion-demo">Demo / operator</button><button id="companion-full">Fullscreen</button><button id="companion-clean">Clean view (Esc to undo)</button><button id="companion-exit">Exit VR</button>
     <details><summary>Edit shared room</summary><label>Object <select id="companion-object"></select></label>
     <div class="companion-pose"><label>X (m)<input id="companion-x" type="number" step="0.05"></label><label>Y (m)<input id="companion-y" type="number" step="0.05"></label><label>Turn (°)<input id="companion-yaw" type="number" step="90"></label></div>
     <button id="companion-move">Apply move</button><button id="companion-remove">Remove</button><button id="companion-undo">Undo</button><button id="companion-redo">Redo</button>
@@ -34,6 +38,10 @@ export function createCompanion(D: { renderer: THREE.WebGLRenderer; scene: THREE
   q('companion-save').onclick = () => { game.bookmarks.save('Desktop viewpoint', { position: camera.position.toArray(), quaternion: camera.quaternion.toArray() }); q('companion-state').textContent = 'Viewpoint saved for this scan.'; };
   q('companion-demo').onclick = () => document.body.classList.toggle('companion-demo');
   q('companion-exit').onclick = () => void renderer.xr.getSession()?.end();
+  // Recording or a projector: only the picture, no desktop controls; Esc brings them back.
+  q('companion-clean').onclick = () => document.body.classList.add('companion-clean');
+  onDocument('keydown', e => { if (e.code === 'Escape') document.body.classList.remove('companion-clean'); });
+  q<HTMLInputElement>('companion-steady').onchange = e => { steady = (e.target as HTMLInputElement).checked; held = null; };
   q('companion-full').onclick = () => { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen().catch(() => {}); };
   const objects = q<HTMLSelectElement>('companion-object');
   game.items.forEach((name: string) => objects.add(new Option(name.replaceAll('_', ' '), name)));
@@ -78,7 +86,7 @@ export function createCompanion(D: { renderer: THREE.WebGLRenderer; scene: THREE
     mode = value; controls.enabled = presenting && (mode === 'companion' || mode === 'split');
     document.body.classList.toggle('companion-goggles', mode === 'goggles');
     document.body.classList.toggle('companion-headset', mode === 'headset' || mode === 'goggles');
-    q<HTMLSelectElement>('companion-mode').value = mode; last = -Infinity;
+    q<HTMLSelectElement>('companion-mode').value = mode; last = -Infinity; held = null;
   }
   const annotationDefaults = new Map<string, { disabled: boolean; title: string }>(); let wasRemote = false;
   every(() => {
@@ -104,7 +112,7 @@ export function createCompanion(D: { renderer: THREE.WebGLRenderer; scene: THREE
     vision.set(applyVision);
     if (cam === camera) vision.renderTo(output); else { renderer.setRenderTarget(output); renderer.render(scene, cam); }
   }
-  own(() => { controls.dispose(); vision.dispose(); output.dispose(); desktop.remove(); panel.remove(); inset.remove(); marker.removeFromParent(); marker.geometry.dispose(); (marker.material as THREE.Material).dispose(); document.body.classList.remove('companion-active', 'companion-goggles', 'companion-headset', 'companion-demo'); });
+  own(() => { controls.dispose(); vision.dispose(); output.dispose(); desktop.remove(); panel.remove(); inset.remove(); marker.removeFromParent(); marker.geometry.dispose(); (marker.material as THREE.Material).dispose(); document.body.classList.remove('companion-active', 'companion-goggles', 'companion-headset', 'companion-demo', 'companion-clean'); });
   return {
     focus(p: { x: number; y: number; z: number; yaw: number; pitch: number }) { camera.position.set(p.x, p.y, p.z); controls.target.copy(camera.position).add(new THREE.Vector3(Math.cos(p.yaw) * Math.cos(p.pitch), Math.sin(p.yaw) * Math.cos(p.pitch), Math.sin(p.pitch))); controls.update(); },
     camera, controls, mode: () => mode, setMode,
@@ -121,6 +129,12 @@ export function createCompanion(D: { renderer: THREE.WebGLRenderer; scene: THREE
       const hide = (o?: THREE.Object3D) => { if (o) { saved.push([o, o.visible]); o.visible = false; } };
       const head = game.remoteHead?.position ? new THREE.Vector3().fromArray(game.remoteHead.position) : D.head.getWorldPosition(new THREE.Vector3()), rotation = game.remoteHead?.quaternion ? new THREE.Quaternion().fromArray(game.remoteHead.quaternion) : D.head.getWorldQuaternion(new THREE.Quaternion());
       const selected = (document.getElementById('vision') as HTMLSelectElement)?.value as Profile ?? 'normal';
+      if (steady && mode !== 'companion') {
+        const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(rotation);
+        if (!held || held.at.distanceTo(head) > 1.5) held = { at: head.clone(), fwd, t: now };   // a teleport or a Fly jump cuts, it doesn't glide
+        else { const dt = Math.min(.5, (now - held.t) / 1000); held.t = now; held.at.lerp(head, 1 - Math.exp(-dt / .12)); held.fwd.lerp(fwd, 1 - Math.exp(-dt / .3)).normalize(); }
+        head.copy(held.at); rotation.setFromRotationMatrix(level.lookAt(ORIGIN, held.fwd, UP));
+      }
       try {
         renderer.xr.enabled = false; renderer.setRenderTarget(null); renderer.setViewport(0, 0, innerWidth, innerHeight); renderer.setScissorTest(false);
         if (mode === 'headset' || mode === 'goggles' || mode === 'split') {

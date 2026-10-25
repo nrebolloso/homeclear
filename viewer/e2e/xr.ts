@@ -487,8 +487,13 @@ try {
   // 12. The world model in the headset (BLOCKERS 12): one card button steps through two walking styles, a month of trips,
   // the futures fan and off. The ghosts must move while you are in VR, and starting them must not move you or switch the
   // desktop to fly mode. Needs the kitchen's headset copy (k4_150k, thinned from kitchen4_lighter, whose planner search
-  // ships in public/planner/); skipped without it.
-  if ((await fetch(`${BASE}/scene/k4_150k/scene.json`).catch(() => null))?.ok) {
+  // ships in public/planner/); skipped without it. The dev server answers an unknown path with index.html at 200, so
+  // res.ok alone is not "the scene is there" -- it has to parse as the scene's JSON, or this section runs against a
+  // scene that does not exist and hangs until the 90 s wait below crashes the whole suite.
+  const sceneThere = await fetch(`${BASE}/scene/k4_150k/scene.json`)
+    .then(r => (r.ok ? r.json() : null)).then(j => !!j && typeof j === 'object').catch(() => false);
+  if (!sceneThere) console.log('SKIP  world model in the headset: no scene/k4_150k (thin kitchen4_lighter to make it)');
+  if (sceneThere) {
     const w = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     const wErrors: string[] = [];
     w.on('pageerror', e => wErrors.push(String(e)));

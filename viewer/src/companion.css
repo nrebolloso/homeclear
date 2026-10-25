@@ -13,4 +13,5 @@
 #companion-canvas { position:fixed; inset:0; width:100vw; height:100vh; z-index:1; pointer-events:none; transform:scaleY(-1); } #companion-canvas[hidden] { display:none; } #headset-preview { transform:scaleY(-1); }
 .companion-active #status-pills { left:320px; }
 
+body.companion-clean > :not(#companion-canvas, #headset-preview) { visibility:hidden !important; } body.companion-clean { cursor:none; }
 .xr-active [data-xr-persistent] { display:none !important; } .companion-demo #viewer-toolbar, .companion-demo #comparison, .companion-headset #comparison { display:none; }
