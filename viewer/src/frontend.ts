@@ -2,8 +2,6 @@ import { onDocument, every, later } from './lifetime.ts';
 import './frontend.css';
 import { createAnnouncer, mountDisplaySettings, nameUnlabeled, watchDialog } from './a11y.ts';
 import { navOf } from './navmode.ts';
-import { difficulty } from './effort.ts';
-import { mountBudget, type BudgetAdapter } from './budget.ts';
 import { distinctOptions, escapeHTML as h, LIGHTING_IDEAS, summarizeChanges } from './frontend-model.ts';
 import type { Change } from './reimagine.ts';
 import type { Eval } from './evaluate.ts';
@@ -11,6 +9,8 @@ import type { Spot } from './spotlight.ts';
 import type { OptionOut } from './optimize.ts';
 import { controlHints, statusPills, type HintCtx } from './hints.ts';
 import { clampPanel, snapPanel, stepPanel, panelSnaps } from './panel-size.ts';
+import { difficulty } from './effort.ts';
+import { mountBudget, type BudgetAdapter } from './budget.ts';
 
 export type NavigationMode = 'explore' | 'route' | 'walk' | 'fly' | 'inspect';
 export interface FrontendSnapshot {
