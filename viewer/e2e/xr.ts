@@ -335,6 +335,46 @@ try {
   check('?floor=5 stands you 5 cm lower in the scan; ?measure=1 shows the wand height', Math.abs(fl.head[2] - (fl.real - 0.05)) < 0.005 && Math.abs(shownCm - fl.ctl * 100) < 0.15,
     `head ${fl.head[2].toFixed(3)} m for a real ${fl.real.toFixed(3)} m; card "${fl.wand.ruler}" for a controller at ${(fl.ctl * 100).toFixed(1)} cm`);
   await fp.close();
+
+  // 12. The world model in the headset (BLOCKERS 12): one card button steps through two walking styles, a month of trips,
+  // the futures fan and off. The ghosts must move while you are in VR, and starting them must not move you or switch the
+  // desktop to fly mode. Needs the kitchen's headset copy (k4_150k, thinned from kitchen4_lighter, whose planner search
+  // ships in public/planner/); skipped without it.
+  if ((await fetch(`${BASE}/scene/k4_150k/scene.json`).catch(() => null))?.ok) {
+    const w = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+    const wErrors: string[] = [];
+    w.on('pageerror', e => wErrors.push(String(e)));
+    await w.goto(`${BASE}/?scene=k4_150k&emulate=quest2`);
+    await w.waitForFunction(() => (window as any).game?.ready, null, { timeout: 90000 });
+    await w.evaluate(HELPERS);
+    await w.getByText('ENTER VR', { exact: true }).click();
+    await w.waitForFunction(() => (window as any).game.xr, null, { timeout: 10000 });
+    await w.waitForTimeout(800);
+    const W = (q: string) => G(w, q);
+    const idx: number = await W("return game.debug.xrButtons().findIndex(b => b.text[0].startsWith('World model'))");
+    const before = await W('return { rig: game.xrPose().rig, yaw: game.body.yaw }');
+    await W(`game.debug.xrPress(${idx})`);
+    await w.waitForFunction(() => (window as any).game.wmghosts.state().mode === 'styles', null, { timeout: 90000 });
+    const s0 = await W('return game.wmghosts.state().s');
+    await w.waitForTimeout(1500);
+    const st = await W('return { s: game.wmghosts.state().s, actors: game.wmghosts.state().actors.map(a => a.name), rig: game.xrPose().rig, yaw: game.body.yaw, button: game.debug.xrButtons()[' + idx + '].text }');
+    const still = Math.hypot(st.rig.x - before.rig.x, st.rig.y - before.rig.y) < 0.01 && Math.abs(st.yaw - before.yaw) < 0.01;
+    check('world model button: two walking styles move in VR, you stay where you stand', st.s > s0 && st.actors.length === 2 && still,
+      `ghosts ${st.actors.join(' + ')} at ${s0.toFixed(2)} -> ${st.s.toFixed(2)} m along the route; rig moved ${Math.hypot(st.rig.x - before.rig.x, st.rig.y - before.rig.y).toFixed(3)} m, yaw ${(st.yaw - before.yaw).toFixed(3)}; card "${st.button.join(' / ')}"`);
+    await W(`game.debug.xrPress(${idx})`);
+    await w.waitForFunction(() => (window as any).game.wmghosts.state().month, null, { timeout: 120000 });
+    await w.waitForTimeout(1500);
+    const mo = await W('return game.wmghosts.state().month');
+    await W(`game.debug.xrPress(${idx})`);
+    await w.waitForTimeout(500);
+    const fanOn = await W('return game.fan.on()');
+    await W(`game.debug.xrPress(${idx})`);
+    await w.waitForTimeout(500);
+    const off = await W('return { fan: game.fan.on(), mode: game.wmghosts.state().mode, month: game.wmghosts.state().month, button: game.debug.xrButtons()[' + idx + '].text }');
+    check('world model button: a month of trips, then the futures fan, then off', mo?.trips === 60 && fanOn && !off.fan && off.mode === 'off' && !off.month && wErrors.length === 0,
+      `month: ${mo?.trips} trips (${mo?.which}); fan on=${fanOn}; after off: fan=${off.fan}, ghosts=${off.mode}, card "${off.button.join(' / ')}"; errors ${wErrors.slice(0, 2).join(' | ') || 0}`);
+    await w.close();
+  } else check('world model button (skipped: no k4_150k scene here)', true, 'skipped');
 } finally {
   writeFileSync(new URL('xr-results.json', import.meta.url), JSON.stringify(results, null, 1));
   await browser.close();

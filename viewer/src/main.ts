@@ -899,7 +899,8 @@ game.reimagine = { run: reimagineRoom, setT: reim.setT, overlay: reim.overlay, p
   pose: (name: string) => { const gr = items[objs.findIndex(o => o.name === name)].group; return { x: gr.position.x, y: gr.position.y, yaw: gr.rotation.z, visible: gr.visible }; } };
 
 // ---------- kitchen planner (planfix.ts, planworker.ts): the B200 layout search replayed; live critic search from the judge's layout ----------
-const planfix = createPlanFix({ run: RUN, scene, init: () => init, base: original, walker: () => walkerCfg, layout: () => layout,
+// a headset copy (tools/thin_scene.py) keeps its source scene's planner search
+const planfix = createPlanFix({ run: sc.thinned?.source ?? RUN, scene, init: () => init, base: original, walker: () => walkerCfg, layout: () => layout,
   show: lay => { layout = lay; syncObjects(); },   // gliding: no re-plan per frame
   commit: (lay, ids) => { layout = lay; applied = ids; syncObjects(); return replan(); } });
 $('pfplay').onclick = () => planfix.play();
@@ -911,7 +912,8 @@ $('gfplay').onclick = () => gait.play(+($('gfspeed') as HTMLSelectElement).value
 $('gfreplan').onclick = () => gait.replan();
 game.gait = gait;   // VR: feed game.gait.observe() per heel strike, hang game.gait.panel / show game.gait.ghost (HANDOFF_GAIT.md)
 // ---------- world model in the kitchen (wmghosts.ts): two gait styles life-size, futures fan, predicted self, a month of trips ----------
-const wmg = createWmGhosts({ scene, walker: () => walkerCfg, planfix, view: () => game.setFly(-0.7, -2.3, 2.3, 55, -36) });
+// in VR you stay where you stand (setFly would switch the desktop to fly mode and turn the walker under you)
+const wmg = createWmGhosts({ scene, walker: () => walkerCfg, planfix, view: () => { if (!renderer.xr.isPresenting) game.setFly(-0.7, -2.3, 2.3, 55, -36); } });
 $('wgstyles').onclick = () => wmg.twoStyles();
 $('wgstyle').onchange = () => wmg.twoStyles();
 $('wgmonth').onclick = () => wmg.month();
@@ -2589,6 +2591,26 @@ function dangerGo(k: number) {
   dangerVR.k = k; tourSpot = k;
   xr.place(at.x, at.y, at.yaw);
 }
+// ---------- world model in the headset (BLOCKERS 12): one card button steps through the ghosts and the futures fan ----------
+let wmStep = 0, wmBusy = false, wmNone = false;
+const WM_NEXT = [['World model: two walking styles', 'imagined, life-size, from the fridge'], ['World model: a month of trips', 'now: two walking styles'],
+  ['World model: imagined futures', 'now: a month of trips'], ['Hide the world model', 'now: imagined futures as you walk']];
+const wmButton = {
+  text: () => (wmBusy ? ['Imagining...', 'world model'] : wmNone ? ['World model', 'no planner data for this scene'] : WM_NEXT[wmStep]),
+  tone: () => (wmBusy ? 'busy' as const : 'plain' as const),
+  async press() {
+    if (wmBusy || wmNone) return;
+    wmBusy = true;
+    try {
+      const next = (wmStep + 1) % 4;
+      wmg.stop(); fanFan.set(false);
+      let ok: unknown = true;   // the ghosts give null without the gait model or a planner search for this scene
+      if (next === 1) ok = await wmg.twoStyles(); else if (next === 2) ok = await wmg.month(); else if (next === 3) fanFan.set(true);
+      if (!ok) { wmNone = true; wmg.stop(); return; }
+      wmStep = next;
+    } finally { wmBusy = false; }
+  },
+};
 const dangersButton = {
   text() {
     const n = spotList.length;
@@ -2626,7 +2648,7 @@ const xr = await setupXR({
     say();
   },
   exit() { comparison.endPreview(); inXR = false; game.xr = false; dangerVR.k = -1; tourSpot = -1; applyPerf(perfBeforeXR, false); if (current) drawPlan(current); say(); },
-  buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton, { text: () => ['Room menu', 'Scans, experience, findings and controls'], press: () => frontendVR?.open() }],   // the story for a family: what's risky, how night feels, the fix
+  buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton, wmButton, { text: () => ['Room menu', 'Scans, experience, findings and controls'], press: () => frontendVR?.open() }],   // the story for a family: what's risky, how night feels, the fix
   shell: {   // the planning shell (frontend.ts) over the wand; frontendVR is created after the first frame, so look it up lazily
     activate: c => !!frontendVR?.activate(c), release: c => !!frontendVR?.release(c), open: () => !!frontendVR?.isOpen(),
     follow(dt) { if (!xrFollowRoute || mode !== 'auto') return false; autoStep(dt); return true; },
@@ -2645,6 +2667,7 @@ function xrFrame(dt: number, t: number) {
   pulseSpots(t);
   reim.update(dt);
   fanFan.update(dt);
+  wmg.update(dt);
   comparison.step(dt);
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
   if (!comparison.previewing()) labelStep();

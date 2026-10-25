@@ -226,6 +226,15 @@ gap everywhere means the floor (fix with `?floor=`), a gap only at one object me
    exit") or moving it into the menu.
 9. Tell Nick: kitchen4 fridge top missing ~12 cm (section 4.5); table is 63 in, not 62 (section 4.4); this walker is
    21 in at its widest, not 24 (section 4.3).
+11. **World model in the headset (BLOCKERS 12), built 2026-10-25:** a "World model" card button steps through two
+   walking styles, a month of trips, the imagined-futures fan and off. Fixed on the way: the ghosts never moved in VR
+   (`wmg.update` only ran in the desktop loop), starting them in VR switched the desktop to fly mode and turned the walker
+   55 deg (`setFly`), and a thinned headset copy (`k4_150k`) found no planner search (now uses `scene.thinned.source`).
+   `e2e:xr` checks 12a/12b, emulated only. **The ghosts need Nick's staged demo kitchen** (`tools/stage_demo_hazards.py`
+   adds the mat, cord, nightlight and pulled-out chair; the planner fails with "no object mat" without it). The Mac's
+   `kitchen4_lighter` is not staged (on purpose for now: the staged hazards aren't in the real kitchen); the test used a
+   staged copy in a scratch worktree. In the headset: the month label is big and sits overhead in the middle of the route,
+   and it lists raw object names (`trash_can`, `chair8 moved`). Still to check on the Quest: fps with 60 ghosts.
 10. Tell Juan (security review of `viewer/session-plugin.ts`, the companion relay): a device is known only by the
    `client` name in its URL, and those names are sent to every device, so anyone who can reach the dev server can post
    as another device (even the headset host). Fine on `127.0.0.1` and over adb; not with `--host` on a shared network.
