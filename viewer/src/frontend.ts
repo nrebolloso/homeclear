@@ -41,7 +41,7 @@ export function mountFrontend(api: FrontendAdapter) {
   const root = document.createElement('div'); root.id = 'frontend';
   root.innerHTML = `
     <a class="skip-link" id="skip-panel" href="#planning-panel">Skip to planning panel</a><a class="skip-link" id="skip-toolbar" href="#viewer-toolbar">Skip to viewer controls</a>
-    <div id="brand-bar" class="floating"><button id="workspace-toggle" class="brand" aria-expanded="false" aria-controls="workspace-menu"><span class="brand-mark" aria-hidden="true">C</span><span>Cleared<small id="room-name"></small></span><span class="chevron" aria-hidden="true">⌄</span></button><span id="scan-slot"></span></div>
+    <div id="brand-bar" class="floating"><button id="workspace-toggle" class="brand" aria-expanded="false" aria-controls="workspace-menu"><span class="brand-mark" aria-hidden="true">H</span><span>Homeclear<small id="room-name"></small></span><span class="chevron" aria-hidden="true">⌄</span></button><span id="scan-slot"></span></div>
     <div id="status-pills" role="group" aria-label="Current view"><span id="pills"></span><div id="active-filters" class="status-pill" role="status" hidden></div></div>
     <section id="workspace-menu" class="floating popover" aria-label="Room and patient settings" hidden>
       <div class="eyebrow">WORKSPACE</div><h2>Room & patient</h2><div id="context-controls"></div>
