@@ -274,6 +274,8 @@ def object_parts(o, xyz, g, w, lo, cell, shape, v):
         lab = z["xyz"][np.isin(z["instance"], ids)]
         cand = ~sel & (inst == -1) & np.isin(col, ids) & (xyz[:, 2] > 0.02) & (xyz[:, 2] < lab[:, 2].max() + 0.05) & (z0 < 0)
         cand[cand] = cKDTree(lab[:, :2]).query(xyz[cand, :2], distance_upper_bound=JOIN_M)[0] <= JOIN_M
+        for fx in g.get("fixed") or []:   # nor furniture 6c never labelled (lounge stool2 took the bench it stands against)
+            cand[cand] = ~near_poly(xyz[cand, :2], np.array(fx["poly_xy"], float), 0.03)
         sel |= joined(xyz, sel, cand)
         # but never the wall it stands against: the trash can took the white wall behind and above its lid (6c's mask spilt
         # onto it, and the grow and on-top rules took the rest). A wall has the object on one side; a line with 3%+ of its

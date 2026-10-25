@@ -63,7 +63,7 @@ grid:
   bump_link_cells: 3
   fixed:   # furniture 6c never detected: stays in the room splat, never offered to move/drop; only its outline came out solid,
   # so its inside read as open floor. Hand outlines (ESTIMATED, ~10 cm) from viewer renders + top-down height maps
-  - {name: bench, kind: sofa, poly_xy: [[-1.65, 4.33], [-0.75, 4.86], [-1.06, 5.37], [-1.96, 4.84]]}   # grey bench behind stool2
+  - {name: bench, kind: sofa, poly_xy: [[-1.6, 4.24], [-0.33, 4.91], [-0.69, 5.53], [-1.96, 4.84]]}   # grey bench behind stool2 (its edges at z 0.3-0.5, front face 10 cm out)
   - {name: conference_table, kind: table, poly_xy: [[1.5, 4.75], [1.9, 4.1], [2.25, 3.65], [2.6, 3.48], [3.0, 3.52], [3.45, 3.78], [3.62, 4.2], [3.5, 4.6], [2.9, 4.82], [2.2, 5.1]]}   # by chair3; top-edge arc
   - {name: booth, kind: sofa, poly_xy: [[-4.75, -0.68], [-3.0, 0.37], [-4.12, 2.22], [-5.87, 1.17]]}   # booth seats + table near rug2
 plan:

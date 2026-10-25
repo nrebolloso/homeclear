@@ -91,6 +91,9 @@
    blur past the railing is the drop the camera never filmed, not sofa2: keep demo camera paths off it. The bench, the
    table by chair3 and the booth are now `grid.fixed` (solid in the floor map, never offered to move or drop). Render
    lift stays on HPG. merge-juan is pushed to its own branch; main and demo-safe are untouched.
+   **stool2 (2026-10-25):** removing it took the grey bench's front face (the "attached to the couch" report). Stage 12's
+   join now never takes pieces inside a `grid.fixed` outline, and the bench outline was redrawn from its edges in the
+   splat (it was ~40 cm short). Free floor 94.01 -> 93.85 m²; only stool2 (and chair3, +5 Gaussians) changed.
 21. **kitchen4 demo vs a rebuild (2026-10-25): nothing changed, two things need a call.** Rebuilding kitchen4_lighter
    from demo-safe code reproduces the demo exactly (objects, splat, floor/obstacle/bump maps, route, hazards). With the
    merge-juan code (after fix b7c2484) the movable boxes and basket are identical; standing chairs, the trash can and
