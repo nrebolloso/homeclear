@@ -36,7 +36,8 @@ export function fixCost(iv: Intervention): MoveCost {
     funding: iv.product ? 'unclassified' : 'self_pay', source: 'placeholder' };
 }
 
-/** Totals for a list of changes. */
-export function sumCosts(cs: MoveCost[]): { usd: number; minutes: number; helpers: number } {
-  return { usd: cs.reduce((a, c) => a + c.usd, 0), minutes: cs.reduce((a, c) => a + c.minutes, 0), helpers: Math.max(1, ...cs.map(c => c.helpers)) };
+/** Totals for a list of changes: effort adds up; helpers is the most any one change needs (the same people do them all). */
+export function sumCosts(cs: MoveCost[]): { usd: number; minutes: number; helpers: number; effort: number } {
+  return { usd: cs.reduce((a, c) => a + c.usd, 0), minutes: cs.reduce((a, c) => a + c.minutes, 0), helpers: Math.max(1, ...cs.map(c => c.helpers)),
+    effort: cs.reduce((a, c) => a + c.effort, 0) };
 }
