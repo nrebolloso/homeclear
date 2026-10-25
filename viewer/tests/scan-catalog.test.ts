@@ -11,3 +11,8 @@ test('scene identities cannot escape the scene directory', () => {
   assert.equal(validScanId('juan_bedroom_bathroom'), true); assert.equal(validScanId('kitchen4_lighter_v1.0.3'), true);
   for (const id of ['../secret', 'room/file', '', 'a?b']) assert.equal(validScanId(id), false);
 });
+test('renamed rooms: both Ale Room captures group together, versions keep their capture number', () => {
+  const r = ['nicoroom1_lighter', 'aleroom_lighter', 'aleroom2_lighter', 'newell_lounge1_lighter', 'newell_stair_lighter', 'century_tower_lighter', 'turlington'].map(id => describeScan(id, {}));
+  assert.deepEqual(r.map(e => e.room), ['Nico Room', 'Ale Room', 'Ale Room', 'Newell Lounge', 'Newell Stairs', 'Century Tower', 'Turlington']);
+  assert.equal(r[2].version, 'lighter'); assert.equal(groupScans(r).length, 6);
+});

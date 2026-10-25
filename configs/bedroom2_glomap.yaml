@@ -3,7 +3,7 @@
 # Bedroom + bathroom (REAL), NOT the `bedroom` scene's room (user, 2026-10-24): ONE continuous 529.5 s take,
 # iPhone 14 1080p 30 fps HEVC 10-bit HLG (+ Dolby Vision layer, ignored). ~2.2 frames/s as kitchen4 -> 1165 frames, exhaustive.
 # Scale from the printed ArUco markers on the floor; size from the sheet's printed ruler (fit-to-page, see marker_size_m).
-run_name: bedroom2_glomap
+run_name: aleroom   # viewer scene aleroom_lighter (was bedroom2_glomap)
 video: data/bedroom2.mov
 work_dir: out/bedroom2_glomap
 frames:

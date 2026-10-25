@@ -1,7 +1,7 @@
 # Lounge with the gator-head desk (REAL): ONE continuous 589 s take, Samsung 4K 60 fps HLG, same phone/format as kitchen4
 # (data/gator_lounge.mp4). ~2.2 frames/s as kitchen4 -> 1300 frames, exhaustive as kitchen4. Polished (reflective) concrete.
 # Scale: gator desk height ~18 in (user, rounded) + its outline from data/gator_desk_marker_ref.jpg (photo ESTIMATE).
-run_name: gator_lounge
+run_name: newell_lounge1   # viewer scene newell_lounge1_lighter (was gator_lounge)
 video: data/gator_lounge.mp4
 work_dir: out/gator_lounge
 frames:
