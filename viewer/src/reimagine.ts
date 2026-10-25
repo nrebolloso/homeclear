@@ -104,6 +104,14 @@ export function hazardDiff<H extends Hz>(before: H[], after: H[], tol = 0.4) {
     added: after.filter(h => !before.some(x => near(h, x))) };
 }
 
+export interface Delta { changes: number; resolved: number; remaining: number; added: number; before_pm: number; after_pm: number }
+/** What the proposed layout does to the hazards of the room as it is (null until there are changes and both scores). */
+export function deltaOf(before: { per_month: number; hazards: Hz[] } | null, after: { per_month: number; hazards: Hz[] } | null, changes: number): Delta | null {
+  if (!before || !after || !changes) return null;
+  const d = hazardDiff(before.hazards, after.hazards);
+  return { changes, resolved: d.resolved.length, remaining: d.remaining.length, added: d.added.length, before_pm: before.per_month, after_pm: after.per_month };
+}
+
 /** Short words for a cost tag. */
 export function costText(c: MoveCost): string {
   return [c.usd ? `$${c.usd}` : 'free', `${c.minutes} min`, c.helpers > 1 ? `${c.helpers} people` : ''].filter(Boolean).join(' · ');
@@ -171,8 +179,9 @@ export const ALL_PARTS: Parts = { ghosts: true, arrows: true, tags: 'selected', 
 type Eh = Hz & { height_m?: number; min_side_clearance_m?: number };
 
 export function createReimagine(D: ReimagineDeps) {
-  const root = new THREE.Group(), ghosts = new THREE.Group(), arrows = new THREE.Group(), tags = new THREE.Group(), receipt = new THREE.Group(), marks = new THREE.Group();
-  root.add(ghosts, arrows, tags, receipt, marks);
+  const root = new THREE.Group(), ghosts = new THREE.Group(), arrows = new THREE.Group(), tags = new THREE.Group(), receipt = new THREE.Group(), marks = new THREE.Group(), proposed = new THREE.Group();
+  root.add(ghosts, arrows, tags, receipt, marks, proposed);
+  let overlay = false;   // Compare: the room as it is stays solid, the proposed layout is drawn over it in translucent blue
   const ringGeo = new THREE.RingGeometry(0.2, 0.27, 40);
   const ringMat = { fixed: new THREE.MeshBasicMaterial({ color: 0x2fbf5f, transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide }),
     new: new THREE.MeshBasicMaterial({ color: 0xff3b3b, transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide }) };
@@ -188,7 +197,7 @@ export function createReimagine(D: ReimagineDeps) {
     : `squeeze ${h.min_side_clearance_m !== undefined ? `${(h.min_side_clearance_m * 100).toFixed(0)} cm/side` : ''}`;
 
   function build(before: { per_month: number; hazards: Eh[] } | null, after: { per_month: number; hazards: Eh[] } | null) {
-    dispose(ghosts); dispose(arrows); dispose(tags); dispose(receipt); dispose(marks);
+    dispose(ghosts); dispose(arrows); dispose(tags); dispose(receipt); dispose(marks); dispose(proposed);
     for (const c of changes) {
       const it = c.k >= 0 ? D.items[c.k] : null, o = c.k >= 0 ? D.objs[c.k] : null;
       if (it && c.from) {   // dashed outline where it stands now
@@ -202,6 +211,20 @@ export function createReimagine(D: ReimagineDeps) {
         gh.add(line);
         gh.userData.change = c;
         ghosts.add(gh);
+      }
+      if (it && c.kind === 'move' && c.to) {   // the proposed spot: a translucent blue copy of the object's box, solid blue edges
+        const gh = new THREE.Group();
+        gh.position.set(c.to.x, c.to.y, 0); gh.rotation.z = c.to.yaw;
+        const geo = it.proxy.geometry.clone();
+        const body = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x3b8bff, transparent: true, opacity: 0.38, depthWrite: false }));
+        const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0x7db4ff, transparent: true, depthTest: false }));
+        for (const m of [body, edge]) { m.position.copy(it.proxy.position); m.rotation.copy(it.proxy.rotation); m.renderOrder = 3; }
+        gh.add(body, edge);
+        proposed.add(gh);
+      } else if (!it && c.kind === 'fix') {   // a fix with no object (tape, rail, widened door): a blue ring where it goes
+        const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0x3b8bff, transparent: true, opacity: 0.7, depthTest: false, side: THREE.DoubleSide }));
+        ring.position.set(c.at[0], c.at[1], 0.05); ring.renderOrder = 3;
+        proposed.add(ring);
       }
       if (c.kind === 'move' && c.from && c.to && c.dist_m > 0.05) {   // floor arrow, old spot -> new spot
         const dir = new THREE.Vector3(c.to.x - c.from.x, c.to.y - c.from.y, 0);
@@ -245,7 +268,8 @@ export function createReimagine(D: ReimagineDeps) {
   }
 
   function applyParts() {
-    ghosts.visible = parts.ghosts; arrows.visible = parts.arrows; receipt.visible = parts.receipt; marks.visible = parts.rings;
+    proposed.visible = overlay; ghosts.visible = parts.ghosts && !overlay;   // over the room as it is, the old-spot outline would sit under the object itself
+    arrows.visible = parts.arrows; receipt.visible = parts.receipt; marks.visible = parts.rings;
     tags.visible = parts.tags !== 'off';
     for (const s of tags.children) s.visible = parts.tags === 'all' || (picked >= 0 && s.userData.k === picked) || (!!pickedFix && s.userData.iv === pickedFix);
   }
@@ -285,10 +309,17 @@ export function createReimagine(D: ReimagineDeps) {
       changes = diffLayouts(D.objs, from, lay, D.interventions, applied);
       lastBA = [before, after];
       build(before, after);
-      if (!anim) setT(1);
+      if (!anim) setT(overlay ? 0 : 1);
       return changes;
     },
     changes: () => changes,
+    /** hazards cleared / remaining / new, and toe contacts per month before -> after, for the Compare strip */
+    delta: () => deltaOf(lastBA?.[0] ?? null, lastBA?.[1] ?? null, changes.length),
+    /** Compare: leave the room as it is solid and draw the proposed layout over it in blue (visual only, like the morph) */
+    setOverlay(on: boolean) { overlay = on; anim = null; applyParts(); setT(on ? 0 : 1); },
+    overlay: () => overlay,
+    /** blue shapes drawn for the proposed layout (Compare), for tests */
+    proposedShapes: () => proposed.children.length,
     resolved: () => resolved,
     setT(v: number) { anim = null; setT(v); return t; },
     t: () => t,

@@ -31,6 +31,29 @@ try {
   await page.click('[data-preset="evidence"]');
   assert.equal(await on('imagfill'), true); assert.equal(await on('heights'), true); check('Evidence shows imagined floor and estimated heights');
 
+  // Evidence: the legend names every kind of evidence and the floor split comes from the scan's coverage grid
+  const legend = await page.locator('#lay-info [data-kind="legend"]').innerText();
+  for (const w of ['Measured', 'Thinly filmed', 'Inferred', 'Estimated', 'Proposed', 'Designed, not built', 'Simulated']) assert.ok(legend.includes(w), w);
+  assert.match(legend, /% of the floor/); assert.equal(await on('provenance'), true); check('Evidence shows the legend with the measured / inferred floor split');
+  mkdirSync('e2e/artifacts', { recursive: true }); await page.screenshot({ path: 'e2e/artifacts/layers-evidence.png' });
+
+  // Compare: with no change the strip says so; after a fix the room as it is stays solid and the strip counts hazards
+  await page.click('[data-preset="compare"]');
+  assert.equal(await on('compare-overlay'), true); assert.match(await page.locator('#lay-info [data-kind="compare"]').innerText(), /no changes yet/); check('Compare with no changes says so');
+  await page.evaluate(`(async () => { await window.game.applyFix('remove_rug'); })()`);
+  await page.waitForFunction(() => /cleared/.test(document.querySelector('#lay-info [data-kind="compare"]')?.textContent ?? ''), null, { timeout: 60000 });
+  assert.match(await page.locator('#lay-info [data-kind="compare"]').innerText(), /\d+ changes?.*hazards? cleared.*remain.*new.*toe contacts\/month [\d.]+ → [\d.]+/);
+  assert.equal(await page.evaluate(() => (window as any).game.reimagine.t()), 0); await page.screenshot({ path: 'e2e/artifacts/layers-compare.png' }); check('Compare strip: changes, hazards cleared / remaining / new, toe contacts before → after');
+  const moved = await page.evaluate(`(async () => { const cs = await window.game.reimagine.run(); return cs.filter(c => c.kind === 'move').length; })()`) as number;
+  if (moved) {   // a suggested move: the object stays at the old spot, a blue copy stands at the new one
+    await page.click('[data-preset="compare"]'); await page.waitForFunction(() => (window as any).game.reimagine.overlay());
+    assert.ok(await page.evaluate(() => (window as any).game.reimagine.proposedShapes()) >= moved); check('Compare draws a blue shape at each proposed spot');
+    await page.screenshot({ path: 'e2e/artifacts/layers-compare-move.png' });
+  } else console.log('SKIP no suggested move on this scene');
+  await page.click('[data-preset="clean"]'); assert.equal(await page.evaluate(() => (window as any).game.reimagine.t()), 1); check('turning Compare off puts the proposed layout back');
+  await page.evaluate(`(async () => { await window.game.resetAll?.(); })()`);
+  await page.click('[data-preset="evidence"]');
+
   // a toggle changed in the View tab updates the dock; one changed in the popover updates the View tab
   await page.click('#tab-view'); await page.uncheck('#spot');
   assert.equal(await page.locator('#lay-custom').isVisible(), true); check('changing a layer by hand reads as Custom');

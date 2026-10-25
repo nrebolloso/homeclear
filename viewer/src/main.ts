@@ -43,6 +43,7 @@ import QRCode from 'qrcode';
 import { mountFrontend, type FrontendAdapter } from './frontend.ts';
 import { mountLayers } from './layers.ts';
 import './layers.css';
+import { provenanceTexels, provenanceShare } from './provenance.ts';
 import { headingMismatch, nearestStandable, routeResume } from './navmode.ts';
 import { createFrontendXR } from './frontend-xr.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
@@ -406,18 +407,18 @@ function renderPanels() {
 }
 
 // ---------- hazard spotlights (spotlight.ts): the object behind each measured hazard glows, proposals get pins ----------
-// Measured hazards pulse orange on the object that makes them; Cosmos Reason proposals are pins in their own colours and
+// Measured hazards pulse red on the object that makes them; Cosmos Reason proposals are pins in their own colours and
 // always say "proposed": teal when the measured grids agree, violet when only an OT can check.
 const spotGroup = new THREE.Group();
 spotGroup.renderOrder = 2;
 scene.add(spotGroup);
 const glow = items.map(it => {
-  const m = new THREE.Mesh(it.proxy.geometry, new THREE.MeshBasicMaterial({ color: 0xff8a1f, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+  const m = new THREE.Mesh(it.proxy.geometry, new THREE.MeshBasicMaterial({ color: 0xff2d2d, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
   m.position.copy(it.proxy.position); m.rotation.copy(it.proxy.rotation); m.visible = false; m.renderOrder = 2;
   it.group.add(m);
   return m;
 });
-const SPOT_RGB = { measured: 0xff8a1f, 'reason-confirmed': 0x2fd6a8, 'reason-ot': 0xb48cff };
+const SPOT_RGB = { measured: 0xff2d2d, 'reason-confirmed': 0x2fd6a8, 'reason-ot': 0xb48cff };
 let spotList: Spot[] = [], tourSpot = -1;
 function clearGroup(grp: THREE.Group) { for (const c of [...grp.children]) { grp.remove(c); c.traverse(x => { if (x instanceof CSS2DObject) x.element.remove(); }); } }
 function drawSpots(r: Eval) {
@@ -447,7 +448,7 @@ function pulseSpots(t: number) {
   glow.forEach((m, k) => {
     if (!m.visible) return;
     const sev = m.userData.sev as number, here = tourSpot >= 0 && spotList[tourSpot]?.object === k;
-    (m.material as THREE.MeshBasicMaterial).opacity = (0.08 + 0.16 * sev + (here ? 0.12 : 0)) * (0.65 + 0.35 * Math.sin(t * 3.2));
+    (m.material as THREE.MeshBasicMaterial).opacity = (0.14 + 0.2 * sev + (here ? 0.12 : 0)) * (0.7 + 0.3 * Math.sin(t * 3.2));
   });
 }
 
@@ -841,7 +842,7 @@ const reimParts = () => reim.setParts({ ghosts: $<HTMLInputElement>('reimghosts'
 for (const id of ['reimghosts', 'reimarrows', 'reimtags', 'reimreceipt']) $(id).onchange = reimParts;
 onSelect = k => reim.selectChange(k);
 // for e2e and the VR team: bind a controller to setT / play (AGENTS.md)
-game.reimagine = { run: reimagineRoom, setT: reim.setT, t: reim.t, play: reim.play, playing: reim.playing, refresh: refreshReimagine,
+game.reimagine = { run: reimagineRoom, setT: reim.setT, overlay: reim.overlay, proposedShapes: reim.proposedShapes, delta: reim.delta, t: reim.t, play: reim.play, playing: reim.playing, refresh: refreshReimagine,
   changes: reim.changes, resolved: reim.resolved, undo: (n: number) => undoReimagined(reim.changes()[n]),
   pose: (name: string) => { const gr = items[objs.findIndex(o => o.name === name)].group; return { x: gr.position.x, y: gr.position.y, yaw: gr.rotation.z, visible: gr.visible }; } };
 
@@ -2407,5 +2408,25 @@ if (PARAMS.has('classic')) { for (const [n, p, s] of homes) p.insertBefore(n, s)
 frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
 game.frontend = frontend;
 game.frontendXR = frontendVR;
+// ---------- compare overlay + provenance floor (reimagine.ts, provenance.ts): two more layers, wired like the existing toggles ----------
+function addLayerToggle(id: string, text: string, into: string, title: string, on: (v: boolean) => void) {
+  const label = document.createElement('label'), box = document.createElement('input');
+  box.type = 'checkbox'; box.id = id; label.title = title; label.append(box, ` ${text}`);
+  (document.getElementById(into) ?? document.body).append(label);
+  box.onchange = () => on(box.checked);
+}
+addLayerToggle('compare-overlay', 'Proposed over current (blue)', 'filter-changes', 'the room as it is stays solid; the proposed layout is drawn over it in translucent blue. Visual only: hazard counts and costs are the proposed layout', v => reim.setOverlay(v));
+const provTex = new THREE.DataTexture(new Uint8Array(nx * ny * 4), nx, ny, THREE.RGBAFormat);
+provTex.magFilter = provTex.minFilter = THREE.NearestFilter;
+const provMesh = new THREE.Mesh(new THREE.PlaneGeometry(nx * g.cell_m, ny * g.cell_m), new THREE.MeshBasicMaterial({ map: provTex, transparent: true, depthWrite: false }));
+provMesh.position.set(g.origin_xy[0] + (nx * g.cell_m) / 2, g.origin_xy[1] + (ny * g.cell_m) / 2, 0.021);
+provMesh.renderOrder = 1; provMesh.visible = false;
+scene.add(provMesh);
+addLayerToggle('provenance', 'Measured vs inferred floor', 'filter-findings', 'floor colour = how it is known: teal measured, amber thinly filmed, hatched violet never filmed (inferred)', v => {
+  provMesh.visible = v;
+  if (v) { (provTex.image.data as Uint8Array).set(provenanceTexels(g, base.floor, coverage, sc.grid.coverage_good)); provTex.needsUpdate = true; }
+});
+game.provenance = { share: () => provenanceShare(base.floor, coverage, sc.grid.coverage_good) };
+
 // ---------- layers (layers.ts): presets, the all-layers popover and Hide UI (V) over the existing toggles ----------
-game.layers = mountLayers({ busy: () => !!mk || editing || !!grabbing, perf: () => perfOn });
+game.layers = mountLayers({ busy: () => !!mk || editing || !!grabbing, perf: () => perfOn, delta: () => reim.delta(), share: () => provenanceShare(base.floor, coverage, sc.grid.coverage_good) });
