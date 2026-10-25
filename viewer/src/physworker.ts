@@ -26,7 +26,7 @@ self.onmessage = async (e: MessageEvent) => {
     if (!W) return self.postMessage({ type: 'step', none: true });
     if (m.type === 'poses') { W.setPoses(m.poses); return; }
     if (m.type === 'place') { W.placeWalker(m.body); return; }
-    if (m.type === 'step') return self.postMessage({ type: 'step', ...W.step(m.dt, m.target), flapInfo: W.flapInfo() });
+    if (m.type === 'step') return self.postMessage({ type: 'step', ...W.step(m.dt, m.target, m.floorOnly), flapInfo: W.flapInfo() });
   } catch (err) {
     self.postMessage({ type: 'error', msg: String((err as Error)?.stack ?? err) });
   }
