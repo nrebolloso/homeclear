@@ -344,6 +344,39 @@ try {
   const shownAgain = await G(p, 'return { menu: game.debug.xrMenu(), cards: game.debug.xrButtons().filter(x => x.at).length }');
   check('a tap of the off-hand grip hides the cards and a second tap brings them back', !hid.menu.on && hid.cards === 0 && shownAgain.menu.on && shownAgain.cards === 5, `hidden: ${hid.cards} cards; again: ${shownAgain.cards}`);
 
+  // 9e. The ring menu: hold the wand stick click and the story opens as a ring on the right hand (the arc cards step aside);
+  // tilting doesn't turn you; letting go on a slice presses it; letting go centred closes without pressing
+  const ringYaw0 = (await G(p, 'return game.xrPose()')).rig.yaw;
+  await G(p, "__xr.ctl('right').updateButtonValue('thumbstick', 1)"); await wait(700);
+  const ringOpen = await G(p, `const r = game.debug.xrRing(), c = game.debug.renderer.xr.getController(1).getWorldPosition(new (game.debug.rig.position.constructor)());
+    return { ...r, d: r.at ? Math.hypot(r.at[0] - c.x, r.at[1] - c.y, r.at[2] - c.z) : -1, cards: game.debug.xrButtons().filter(x => x.at).length }`);
+  const ni = ringOpen.labels.findIndex((t: string) => t.startsWith('Night')), n = ringOpen.labels.length, ang = ni * 2 * Math.PI / n;
+  await G(p, `__xr.ctl('right').updateAxes('thumbstick', ${Math.sin(ang).toFixed(3)}, ${(-Math.cos(ang)).toFixed(3)})`); await wait(300);
+  const lit = await G(p, 'return { ring: game.debug.xrRing(), yaw: game.xrPose().rig.yaw }');
+  const night0 = await G(p, "return document.getElementById('night').checked");
+  await G(p, "__xr.ctl('right').updateButtonValue('thumbstick', 0); __xr.ctl('right').updateAxes('thumbstick', 0, 0)"); await wait(300);
+  const night1 = await G(p, "return { on: document.getElementById('night').checked, ring: game.debug.xrRing(), cards: game.debug.xrButtons().filter(x => x.at).length }");
+  await G(p, "__xr.ctl('right').updateButtonValue('thumbstick', 1)"); await wait(700);
+  await G(p, "__xr.ctl('right').updateButtonValue('thumbstick', 0)"); await wait(300);
+  const night2 = await G(p, "return { on: document.getElementById('night').checked, ring: game.debug.xrRing() }");
+  if (night1.on !== night0) { await G(p, "document.getElementById('night').click()"); await wait(200); }
+  check('a held wand-stick click opens the ring on the right hand; tilt picks a slice without turning; letting go presses it, centred just closes',
+    ringOpen.open && ringOpen.d > 0 && ringOpen.d < 0.25 && ringOpen.cards === 0 && ni >= 0 && lit.ring.hot === ni && Math.abs(lit.yaw - ringYaw0) < 1e-6 &&
+    night1.on !== night0 && !night1.ring.open && night1.cards === 5 && night2.on === night1.on && !night2.ring.open,
+    `ring ${ringOpen.labels.join(' / ')} ${ringOpen.d.toFixed(2)} m from the hand (${ringOpen.cards} cards), lit ${lit.ring.hot}, yaw ${(lit.yaw - ringYaw0).toFixed(3)}, night ${night0} -> ${night1.on} -> ${night2.on}`);
+  // "Fan out" is on the ring's first page (the arc keeps it behind More): picking it runs the world model's futures fan, again hides it
+  const ringPick = async (label: string) => {
+    await G(p, "__xr.ctl('right').updateButtonValue('thumbstick', 1)"); await wait(700);
+    const r = await G(p, 'return game.debug.xrRing()'), i = r.labels.indexOf(label), a = i * 2 * Math.PI / r.labels.length;
+    if (i >= 0) { await G(p, `__xr.ctl('right').updateAxes('thumbstick', ${Math.sin(a).toFixed(3)}, ${(-Math.cos(a)).toFixed(3)})`); await wait(300); }
+    await G(p, "__xr.ctl('right').updateButtonValue('thumbstick', 0); __xr.ctl('right').updateAxes('thumbstick', 0, 0)"); await wait(300);
+    return i;
+  };
+  const fi = await ringPick('Fan out'), fanUp = await G(p, 'return game.fan.on()');
+  await ringPick('Fan out'); const fanDown = await G(p, 'return game.fan.on()');
+  check('the ring\'s first page has "Fan out": picking it runs the futures fan, picking it again hides it',
+    fi >= 0 && fanUp === true && fanDown === false, `slice ${fi}, fan on ${fanUp}, then ${fanDown}`);
+
   // 9. leaving VR puts the monitor back: DOM labels, performance mode as it was before entering
   await G(p, 'await game.debug.renderer.xr.getSession().end()');
   await p.waitForFunction(() => !(window as any).game.xr, null, { timeout: 5000 }).catch(() => {});

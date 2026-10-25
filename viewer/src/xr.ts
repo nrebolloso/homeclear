@@ -7,7 +7,8 @@
 // Moving: walk for real (1:1). Holding a pinch or trigger on the non-wand hand glides forward where you look, only where
 // free walk could stand (walls, furniture and unfilmed floor stop it). Left stick walks (same checks), right stick snap-turns
 // 30 deg about the head; a held left-stick click is the planning shell's menu (frontend-xr.ts), not movement. A wand-stick
-// click undoes the last object edit (with the off-hand grip held: redoes).
+// click undoes the last object edit (with the off-hand grip held: redoes); held, it opens the ring menu on the wand hand
+// (xrradial.ts), and the stick then chooses a slice instead of turning.
 // Wand (right hand or controller; ?wand=left): point at furniture and hold to drag it (twist the wrist to turn it; the wand
 // stick pushes and pulls it along the ray; a dashed ghost and an arrow (xrdrag.ts) show where it came from), hold still to
 // delete it (or hold A), grip puts it back; point at filmed floor and release to teleport. A pinch and a trigger are the same WebXR "select".
@@ -25,6 +26,7 @@ import { card } from './reimagine.ts';
 import { pulse } from './controls.ts';
 import { stripSprite } from './xrstrip.ts';
 import { dragFeedback } from './xrdrag.ts';
+import { radialMenu } from './xrradial.ts';
 
 export interface XrItem { proxy: THREE.Object3D; group: THREE.Object3D; outline: THREE.LineSegments }
 export interface XrHost {
@@ -83,7 +85,8 @@ export interface XrShell {
   open(): boolean; follow(dt: number): boolean; hover(k: number): void;
 }
 /** `on`: a mode that stays on once pressed (drawn filled, with an ON badge) */
-export interface XrButton { text(): string[]; press(): unknown; tone?(): 'go' | 'busy' | 'plain'; on?(): boolean }
+/** ring: also on the first page of the wand ring (xrradial.ts), though the card arc keeps it behind "More" */
+export interface XrButton { text(): string[]; press(): unknown; tone?(): 'go' | 'busy' | 'plain'; on?(): boolean; ring?: boolean }
 export interface XrEditor {
   active(): boolean;
   down(ray: THREE.Ray, rotation: THREE.Quaternion): boolean;
@@ -312,6 +315,9 @@ export async function setupXR(host: XrHost) {
   const lineUp: XrButton = { text: () => ['Line up the walker', 'stand behind it facing its way, then pinch'], tone: () => 'plain', press: unmount };
   const actions: XrButton[] = [...(host.buttons ?? []), ...(MOUNT ? [lineUp] : [])];   // the planning panel's Tour tab lists these too
   const FRONT = Math.min(actions.length, host.primary ?? actions.length);
+  const pinned = actions.slice(FRONT).filter(b => b.ring);   // the same actions as a ring on the wand hand (held wand-stick click)
+  const ring = radialMenu(scene, [...actions.slice(0, FRONT), ...pinned, ...actions.slice(FRONT).filter(b => !b.ring)], FRONT + pinned.length);
+  own(() => ring.dispose());
   let more = false, menuOn = true;
   const moreBtn: XrButton = { text: () => ['More...', actions.slice(FRONT).map(b => b.text()[0].split(':')[0].toLowerCase()).slice(0, 3).join(', ')], tone: () => 'plain', press: () => { more = true; } };
   const hideBtn: XrButton = { text: () => ['Hide this menu', 'tap the off-hand grip to bring it back'], tone: () => 'plain', press: () => { setMenu(false); } };
@@ -416,7 +422,7 @@ export async function setupXR(host: XrHost) {
   }
 
   // Controller shortcuts share the same priority as the wand: annotation gestures consume input before furniture.
-  let clickWas = false, toastCard: THREE.Sprite | null = null, toastUntil = 0;
+  let clickWas = false, clickRedo = false, toastCard: THREE.Sprite | null = null, toastUntil = 0;
   let aHeld = 0, aTarget = -1, aFired = false;   // A held on an object: it goes once held CONFIRM_S
   let opGripWas = false, opGripT = 0, opGripClean = false;
   let gripWas = false, aWas = false, bothHeld = 0, resetFired = false, ringN = 0, ringCard: THREE.Sprite | null = null;
@@ -431,6 +437,10 @@ export async function setupXR(host: XrHost) {
     const wp = pads[WAND], op = pads[WAND === 'left' ? 'right' : 'left'];
     const grip = !!wp?.buttons[1]?.pressed, a = !!wp?.buttons[4]?.pressed, click = !!wp?.buttons[3]?.pressed, both = grip && !!op?.buttons[1]?.pressed;
     const consumed = host.readOnly?.() || (host.editor?.buttons(pads, WAND) ?? false);
+    // the wand stick click: a short click undoes (on release, so a held one can open the ring instead); redo if the
+    // off-hand grip was held when it went down
+    if (click && !clickWas) clickRedo = !!op?.buttons[1]?.pressed;
+    const ringEv = ring.step(dt, wp, ctls.find(isWand)?.group, head, !!consumed || !!grab);
     if (consumed) {
       if (grab) { host.resync(); host.unlock?.(grab.k); }
       grab = null; aiming = false; aHeld = 0; aFired = true;
@@ -454,9 +464,9 @@ export async function setupXR(host: XrHost) {
         if (confirmProgress(aHeld) >= 1) { aFired = true; removeWithToast(aTarget); pulse(wp, 0.5, 40); }
       } else if (!aFired) aHeld = 0;
       // wand stick click undoes the last object edit; with the off-hand grip held it redoes (marking has its own undo on B/Y)
-      if (click && !clickWas && !grab && host.history) {
+      if (ringEv === 'tap' && !grab && host.history) {
         pulse(wp, 0.4, 30);
-        host.history[op?.buttons[1]?.pressed ? 'redo' : 'undo']().then(text => toast([text]));
+        host.history[clickRedo ? 'redo' : 'undo']().then(text => toast([text]));
       }
     }
     // a quick tap of the off-hand grip alone hides or shows the card menu (the wand grip resets an object, both held reset all)
@@ -522,7 +532,7 @@ export async function setupXR(host: XrHost) {
       const { position: p, orientation: q } = pose.transform; camera.position.set(p.x, p.y, p.z); camera.quaternion.set(q.x, q.y, q.z, q.w);
       const destination = pendingSpawn; pendingSpawn = null; place(destination.x, destination.y, destination.yaw);
     }
-    if (host.shell?.open()) { dash.visible = false; if (chip) chip.visible = false; if (statsCard) statsCard.visible = false; return; }
+    if (host.shell?.open()) { dash.visible = false; ring.close(); if (chip) chip.visible = false; if (statsCard) statsCard.visible = false; return; }
     const yaw = readHead();
     if (host.shell?.follow(dt)) { dash.visible = false; xrRig.x += body.x - head.x; xrRig.y += body.y - head.y; placeRig(); wandStep(); return; }   // the route drives the body
     const pads: Record<string, Gamepad> = {};
@@ -539,9 +549,10 @@ export async function setupXR(host: XrHost) {
     if (!host.readOnly?.() && (host.movement?.() ?? 'all') === 'all') {   // thumbsticks: left walks (forward/back, sideways, relative to where you look), right snap-turns
       const stick = (g?: Gamepad) => (g ? [g.axes[2] ?? 0, g.axes[3] ?? 0].map(a => (Math.abs(a) < 0.2 ? 0 : a)) : [0, 0]);
       const wp = MOUNT ? walkerPose(yaw) : null, wy = wp?.yaw ?? null;
+      const choosing = !!pads[WAND]?.buttons[3]?.pressed || ring.isOpen();   // the wand stick is picking a ring slice, not moving you
       // mounted: one stick, up/down along the walker's heading, left/right snap-turns; held: left walks relative to the view
       const [mx, my] = MOUNT ? stick(pads[MOUNT]) : [0, 0];
-      const [sx, sy] = MOUNT ? [0, my] : grab && WAND === 'left' ? [0, 0] : stick(pads.left), [tx] = MOUNT ? [mx] : stick(pads.right), dir = wy ?? yaw;
+      const [sx, sy] = MOUNT ? [0, my] : (grab || choosing) && WAND === 'left' ? [0, 0] : stick(pads.left), [tx] = MOUNT ? [mx] : choosing && WAND === 'right' ? [0] : stick(pads.right), dir = wy ?? yaw;
       if (sx || sy) {   // sub-steps of at most half a cell, as in free walk
         const v = 0.6 * dt, dx = (-sy * Math.cos(dir) + sx * Math.sin(dir)) * v, dy = (-sy * Math.sin(dir) - sx * Math.cos(dir)) * v;
         const n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / (host.cellM / 2)));
@@ -571,7 +582,7 @@ export async function setupXR(host: XrHost) {
     if (wpNow) Object.assign(body, wpNow);   // the walker is rigid: it stands and points where the real one does
     else { body.x = head.x; body.y = head.y; body.yaw += Math.atan2(Math.sin(yaw - body.yaw), Math.cos(yaw - body.yaw)) * Math.min(1, dt * 4); }
     controllerButtons(dt, pads);
-    dash.visible = btns.length > 0 && menuOn && !host.editor?.active();
+    dash.visible = btns.length > 0 && menuOn && !host.editor?.active() && !ring.isOpen();
     wandStep(dt);
     if (btns.length) {
       btns.forEach((x, n) => { x.mesh.visible = shown(n); });
@@ -610,7 +621,7 @@ export async function setupXR(host: XrHost) {
     frameBufferScaleFactor: cfg.scale, fixedFoveation: cfg.foveation,
     onEnterXr: enterRoom,
     onExitXr: () => {
-      camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1; btnHover = -1; dash.visible = false; opGripWas = false; fb.clear(); aHeld = 0; aTarget = -1; aFired = false;
+      camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1; btnHover = -1; dash.visible = false; ring.close(); opGripWas = false; fb.clear(); aHeld = 0; aTarget = -1; aFired = false;
       chip?.removeFromParent(); chip?.material.dispose(); chip = null; chipKey = ''; statsCard?.removeFromParent(); statsCard?.material.dispose(); statsCard = null; statsKey = '';
       ringCard?.removeFromParent(); ringCard?.material.dispose(); ringCard = null; ringN = 0; bothHeld = 0; gripWas = false; aWas = false; clickWas = false;
       toastCard?.removeFromParent(); toastCard?.material.dispose(); toastCard = null;
@@ -634,6 +645,8 @@ export async function setupXR(host: XrHost) {
     press: (i: number) => btns[i]?.b.press(),
     /** the card menu: shown or hidden (the off-hand grip tap), and whether "More" is open; pass a boolean to set it */
     menu: (on?: boolean) => { if (on != null) setMenu(on); return { on: menuOn, more }; },
+    /** the ring menu on the wand hand: open or not, its page's labels, the lit slice, where it is */
+    ring: ring.state,
     /** the glance: the mode chip's and the stats card's words, and whether each shows */
     glance: () => ({ chip: chipKey, chipVisible: !!chip?.visible, stats: statsKey, statsVisible: !!statsCard?.visible }),
     /** the strip card on the off-hand controller: its words and whether it shows */

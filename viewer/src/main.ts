@@ -2632,6 +2632,16 @@ const wmButton = {
     } finally { wmBusy = false; }
   },
 };
+/** the futures fan on its own (the world-model card reaches it on its fourth press): ~30 imagined futures from where you stand */
+const fanButton = {
+  text: () => ['Fan out', fanFan.on() ? 'on: imagined futures as you walk' : 'the world model imagines what happens next'],
+  tone: () => 'plain' as const, on: () => fanFan.on(), ring: true,
+  press() {
+    if (wmBusy) return;
+    const v = !fanFan.on();
+    wmg.stop(); fanFan.set(v); wmStep = v ? 3 : 0;   // keep the world-model card in step: its next press hides the fan
+  },
+};
 const dangersButton = {
   text() {
     const n = spotList.length;
@@ -2705,7 +2715,7 @@ const xr = await setupXR({
   },
   exit() { comparison.endPreview(); inXR = false; game.xr = false; dangerVR.k = -1; tourSpot = -1; applyPerf(perfBeforeXR, false); if (current) drawPlan(current); say(); },
   // the story up front (dangers, night, the fix, vision); the rest behind "More" (also the panel's Tour tab)
-  buttons: [dangersButton, { ...nightButton, on: nightOn }, comparison.button, visionButton, comparison.previewButton, wmButton,
+  buttons: [dangersButton, { ...nightButton, on: nightOn }, comparison.button, visionButton, comparison.previewButton, wmButton, fanButton,
     toggleButton('particle-path', 'Walking paths', 'where trips go, as dots'), toggleButton('spot', 'Hazard highlights', 'glow on what is risky'), whoButton, costButton, roomMenuButton],
   primary: 4,
   status: () => [...(nightOn() ? ['Night'] : []), ...(visionSel.value !== 'normal' ? [visionName(visionSel.value)] : [])],
@@ -2790,7 +2800,7 @@ Object.assign(game, {
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
   debug: { renderer, scene, camera, marker: mk3d.root, stairs: stairs3d.root, spark: sparkR, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup],
-    vision, rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrSpawn: xr.spawn, xrButtons: xr.buttons, xrMenu: xr.menu, xrGlance: xr.glance, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
+    vision, rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrSpawn: xr.spawn, xrButtons: xr.buttons, xrMenu: xr.menu, xrRing: xr.ring, xrGlance: xr.glance, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); headTurn.yaw = 0; chairVel.v = chairVel.w = 0; Object.assign(body, { x, y, yaw }); },
