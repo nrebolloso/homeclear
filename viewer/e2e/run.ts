@@ -373,12 +373,36 @@ try {
     const h = await F('return game.fan.state()');
     const mat = (s: any) => Object.keys(s.fan.counts).some(k => k.startsWith('mat'));
     const hit = before.find(mat);
-    check('futures fan: 30 imagined futures from the current state, red at the mat, labelled', !!hit && hit.fan.n === 30 && /^World model: 30 imagined futures · \d+ hit the mat/.test(hit.label), hit ? `${hit.label}; ${JSON.stringify(hit.fan.counts)}` : `never hit the mat: ${before.map(s => s.label.split('· ')[1]).join(', ')}`);
+    check('futures fan: 30 imagined futures from the current state, red at the mat, labelled', !!hit && hit.fan.n === 30 && /^World model: \d+\/30 cross the mat · \d+ hit the edge/.test(hit.label), hit ? `${hit.label}; ${JSON.stringify(hit.fan.counts)}` : `never hit the mat: ${before.map(s => s.label.split('· ')[1]).join(', ')}`);
     check('futures fan: no future hits the mat once it is taped flat', after.length > 10 && !after.some(mat), `${after.length} fans, mat hits ${after.filter(mat).length}`);
     check('futures fan: hand rule toggle', h.model === 'hand' && /^Hand rule:/.test(h.label), h.label);
     check('futures fan: fps within ~10% of the fan-off rate (adaptive count)', fps >= 0.9 * off, `${off.toFixed(1)} fps off -> ${fps.toFixed(1)} on, ${before.at(-1)?.n} futures sampled`);
     check('futures fan: no page errors', ff.errors.length === 0, ff.errors.join(' | ') || 'none');
     await ff.p.close();
+  }
+  // 16. the fan's fork and foot lift (futures.ts routeOptions, LIFTS): at the fridge facing the mat the way ahead forks
+  // (over / around the mat), the low-clearance shuffler catches the mat edge more often than the average lift, a taped mat
+  // catches neither, and the mat's physics steps during autoplay without breaking the route
+  {
+    const fk = await open('kitchen4_lighter');
+    const F = (f: string) => G(fk.p, f);
+    const steps0 = await F('await new Promise(r => setTimeout(r, 3000)); return game.livephys.steps()');
+    await F('await new Promise(r => setTimeout(r, 4000))');
+    const auto = await F('return { steps: game.livephys.steps(), events: game.livephys.events.map(e => e.kind + ":" + e.object), err: game.current().error ?? null }');
+    check('fan fork: the mat physics steps during autoplay, route intact', auto.steps > steps0 + 20 && !auto.err, `${auto.steps - steps0} worker steps in 4 s of autoplay, events [${auto.events.join(', ')}], route error ${auto.err}`);
+    const at = "game.setFree(-0.7, 2.2, -0.91); game.fan.set(true); await new Promise(r => setTimeout(r, 1200));";
+    const mats = (l: string) => `game.fan.setLift('${l}'); const n = []; for (let i = 0; i < 8; i++) { await new Promise(r => setTimeout(r, 600)); const s = game.fan.state(); if (s.fan && s.fan.lift === '${l}') n.push(s.fan.counts['mat edge'] ?? 0); } return { n, s: game.fan.state() }`;
+    await F(at);
+    const fork = await F("for (let i = 0; i < 10; i++) { await new Promise(r => setTimeout(r, 400)); const s = game.fan.state(); if (s.fan?.routes.length > 1) return s; } return game.fan.state()");
+    check('fan fork: over vs around the mat at the fridge, counts on the card', fork.fan?.routes.length >= 2 && fork.fan.routes.some((r: any) => r.label === 'around the mat') && / around the mat/.test(fork.lines[1] ?? ''), fork.lines.join(' | '));
+    const avg = await F(mats('average')), sh = await F(mats('shuffler'));
+    const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
+    check('fan lift: the shuffler catches the mat edge more than the average lift', avg.n.length >= 4 && sh.n.length >= 4 && sum(sh.n) / sh.n.length > sum(avg.n) / avg.n.length, `average [${avg.n}] vs shuffler [${sh.n}]; ${sh.s.lines.join(' | ')}`);
+    await F('await game.fan.tapeMat()');
+    const tp = await F(mats('shuffler'));
+    check('fan lift: a taped mat catches no shuffler', tp.n.length >= 4 && sum(tp.n) === 0, `shuffler after tape [${tp.n}]; ${tp.s.lines[0]}`);
+    check('fan fork: no page errors', fk.errors.length === 0, fk.errors.join(' | ') || 'none');
+    await fk.p.close();
   }
 } finally {
   await browser.close();

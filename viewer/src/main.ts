@@ -1376,18 +1376,19 @@ game.livephys = live;
 // ---------- live futures fan (futuresfan.ts, futures.ts in fanworker.ts): ~30 imagined futures from where the walker is now ----------
 let fanFor: unknown = null, fanSc: any = null;
 const fanFan = createFuturesFan({ scene, walker: () => walkerCfg, worldModel,
-  fanScene: () => (fanFor === persona ? fanSc : (fanFor = persona, fanSc = { g, base, est, objects: objs, persona, risk, rules: sc.hazard_rules })),
+  fanScene: () => (fanFor === persona ? fanSc : (fanFor = persona, fanSc = { g, base, est, objects: objs, persona, risk, rules: sc.hazard_rules, plan: init.plan })),
   body: () => explore.parked ?? body, route: () => (current && !current.error ? current.xy : null), fold: () => live?.fold() ?? null,
   layout: () => ((tc as any).dragging && selected >= 0 ? { ...layout, poses: layout.poses.map((p, k) => (k === selected ? poseOf(k) : p)) } : layout),   // live while dragging
   night: () => routes[selRoute].night, fps: () => game.fps });
 $('fanon').onchange = e => fanFan.set((e.target as HTMLInputElement).checked);
 $('fanmodel').onchange = e => fanFan.setModel((e.target as HTMLSelectElement).value as 'learned' | 'hand');
 $('fanstyle').onchange = e => fanFan.setStyle((e.target as HTMLSelectElement).value);
+$('fanlift').onchange = e => fanFan.setLift((e.target as HTMLSelectElement).value as 'average' | 'shuffler');
 game.fan = { ...fanFan, tapeMat: () => tapeObject('mat') };   // VR: bind a button to game.fan.set(!game.fan.on())
-/** tape an object's edges flat (a bump object: its footprint's box, as tape_cord flattens the cord): the viewer's tape rule, height 0 under tape */
+/** tape an object's edges down: the one "taped" rule (grid.ts TAPED_EDGE_M edge, no slide or fold), as the planner's mat 'taped' */
 function tapeObject(name: string) {
-  const k = objs.findIndex(o => o.name === name), fp = worldFootprint(objs[k], layout.poses[k]), xs = fp.map(p => p[0]), ys = fp.map(p => p[1]);
-  layout = { ...layout, flattened: [...layout.flattened, [[Math.min(...xs) - 0.03, Math.min(...ys) - 0.03], [Math.max(...xs) + 0.03, Math.max(...ys) + 0.03]]] };
+  const k = objs.findIndex(o => o.name === name);
+  layout = { ...layout, poses: layout.poses.map((p, i) => (i === k ? { ...p, taped: true } : p)) };
   syncObjects();
   return replan();
 }
@@ -1422,6 +1423,7 @@ function describeChanges(): ActionOut[] {
   objs.forEach((o, k) => {   // drags and deletes done by hand
     const p = layout.poses[k], q = original[k];
     if (covered.has(o.name)) return;
+    if (p.taped && !p.removed) out.push({ label: `Tape the ${o.name}'s edges down (~1.5 mm edge left)`, product: 'double-sided carpet tape', at: [p.x, p.y] });
     if (p.removed) { const c = removeCost(o); out.push({ label: `Take the ${o.name} out of the room`, cost_usd: c.usd, minutes: c.minutes, at: [q.x, q.y] }); }
     else if (Math.hypot(p.x - q.x, p.y - q.y) > 0.02 || Math.abs(p.yaw - q.yaw) > 0.01) {
       const c = moveCost(o, q, p);
@@ -1950,7 +1952,7 @@ function step(dt: number, t: number) {
   walker.group.rotation.z = wb.yaw;
   reim.update(dt);
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
-  if (mode !== 'fly') live?.frame(dt, wb, mode === 'free' && !explore.on, walker.group);
+  if (mode !== 'fly') live?.frame(dt, wb, mode === 'free' && !explore.on, walker.group, !explore.on);
   labelStep();
   if (mode === 'fly') {
     const c = Math.cos(body.pitch);

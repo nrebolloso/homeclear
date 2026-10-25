@@ -152,11 +152,13 @@
     </section>
     <section id="fanpanel">
       <h2>Futures fan <span class="imagined">imagined (world model)</span></h2>
-      <label title="every 0.5 s, ~30 futures 2.5 s ahead from where the walker is now: green = clean, red = hits a hazard"><input type="checkbox" id="fanon"> Show the fan</label>
-      <select id="fanmodel" title="learned world model, or the hand rule (feet on the route + noise)"><option value="learned">learned model</option><option value="hand">hand rule</option></select>
+      <label title="every 0.5 s, ~30 futures 4-5 s ahead from where the walker is now: green = clean, red = hits a hazard"><input type="checkbox" id="fanon"> Show the fan</label>
+      <select id="fanmodel" title="learned world model, or the hand rule (feet on the route + noise)"><option value="learned">learned: tight on straights, wider at turns</option><option value="hand">hand rule: same wobble everywhere</option></select>
       <select id="fanstyle" title="whose gait embedding the learned model is folded with"></select>
-      <div class="hint">red = a swing crosses a bump of 4 mm or more (mat edge, cord, folded corner) or the frame comes within 3 cm of furniture; not a fall prediction</div>
+      <div class="hint">red = a swing catches a bump of 4 mm or more (mat edge, cord, folded corner) or the frame comes within 3 cm of furniture; not a fall prediction</div>
       <div id="fanstatus" class="status"></div>
+      <select id="fanlift" title="toe clearance from published gait data (Frontiers 2014: 14.1 ± 8.3 mm); the shuffler is the 16th percentile of it (an ASSUMPTION until shuffle recordings exist)"><option value="average">average foot lift (~12 mm)</option><option value="shuffler">low-clearance shuffler (~7 mm)</option></select>
+      <div class="hint">a crossing is a hit when that step's toe clearance (drawn from the lift above) is under the edge height. Routes at forks: odds from path length (ASSUMPTION)</div>
     </section>
   </aside>
   <div id="player" hidden>

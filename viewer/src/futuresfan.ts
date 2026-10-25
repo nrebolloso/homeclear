@@ -1,12 +1,14 @@
 // The live futures fan, life-size in the kitchen (desktop, demo mode and VR: everything is scene objects). Every ~0.5 s
-// fanworker.ts imagines ~30 futures 2.5 s ahead from where the walker is right now (futures.ts); each is drawn as a faint
+// fanworker.ts imagines ~30 futures 4-5 s ahead from where the walker is right now (futures.ts); each is drawn as a faint
 // trail on the floor plus a translucent walker + person at its end, green if clean, red if it hits a hazard (the hazard
 // flash red of wmghosts.ts). A card above the walker says how many hit what. Learned (the persona world model folded with
-// a gait style) or the hand rule. The sample count adapts so the frame rate stays within ~10% of the rate without the fan.
+// a gait style) or the hand rule. Where the way ahead forks (over / around the mat, past / wide of a chair) each route gets
+// a card at its tip with how many futures took it. Foot lift: average or low-clearance shuffler (futures.ts LIFTS).
+// The sample count adapts so the frame rate stays within ~10% of the rate without the fan.
 import * as THREE from 'three';
 import { card } from './reimagine.ts';
 import { toWorldModel, type Persona } from './gaitfit.ts';
-import { fanLabel, type Fan, type FanScene, type Fold } from './futures.ts';
+import { fanLabel, routeLabel, LIFTS, type Fan, type FanScene, type Fold, type Lift } from './futures.ts';
 import type { Layout, XY } from './grid.ts';
 import type { WalkerCfg } from './walker.ts';
 import type { WorldModel } from './worldmodel.ts';
@@ -24,7 +26,7 @@ export function createFuturesFan(D: FanDeps) {
   root.visible = false; root.renderOrder = 5;
   D.scene.add(root);
   const worker = new Worker(new URL('./fanworker.ts', import.meta.url), { type: 'module' });
-  let on = false, model: 'learned' | 'hand' = 'learned', style = 'mean', n = MAX_N, acc = EVERY_S, busy = false, seq = 0;
+  let on = false, model: 'learned' | 'hand' = 'learned', style = 'mean', lift: Lift = 'average', forks: THREE.Sprite[] = [], n = MAX_N, acc = EVERY_S, busy = false, seq = 0;
   let F: Fan | null = null, ms = 0, label: THREE.Sprite | null = null, text = '', sceneRef: object | null = null;
   let M: Persona | null = null, styles: { name: string; e: number[] }[] = [];
   // fps: the rate with the fan off (kept up to date while it is off) is the budget; checked every 2 s while it is on
@@ -85,12 +87,20 @@ export function createFuturesFan(D: FanDeps) {
     });
     trail.count = t; frame.count = F.futures.length; body.count = head.count = Math.ceil(F.futures.length / PERSON_EVERY);
     for (const im of [trail, body, head, frame]) { im.instanceMatrix.needsUpdate = true; im.instanceColor!.needsUpdate = true; }
-    const lines = [fanLabel(F, modelName()), `imagined, ${model === 'hand' ? 'hand-rule steps' : `learned gait · ${style === 'mean' ? 'average person' : style}`}, 2.5 s ahead`];
+    const lines = [fanLabel(F, modelName()), ...(routeLabel(F) ? [routeLabel(F)] : []),
+      `imagined, ${model === 'hand' ? 'hand-rule steps' : `learned gait · ${style === 'mean' ? 'average person' : style}`} · ${LIFTS[F.lift].label}, ${F.ahead_s.toFixed(1)} s ahead`];
     if (lines.join('|') !== text) {
       text = lines.join('|');
       if (label) { label.removeFromParent(); label.material.dispose(); }
+      for (const f of forks) { f.removeFromParent(); f.material.dispose(); }
+      // a card at each route's tip once the way ahead forks: "around the mat · 12/30"
+      forks = F.routes.length > 1 ? F.routes.flatMap(r => {
+        if (!r.tip || !r.n) return [];
+        const hit = F!.futures.filter(f => F!.routes[f.route] === r && f.hazard).length, c = card([`${r.label} · ${r.n}/${F!.futures.length}`], hit ? '#ffd0d0' : '#c8ffd8', 'rgba(14,20,28,0.7)', 0.05);
+        c.position.set(r.tip[0], r.tip[1], 0.5); c.renderOrder = 6; root.add(c); return [c];
+      }) : [];
       label = card(lines, Object.keys(F.counts).length ? '#ffd0d0' : '#c8ffd8', 'rgba(14,20,28,0.78)', 0.07); label.renderOrder = 6; root.add(label);
-      const s = $('fanstatus'); if (s) s.textContent = `${lines[0]} (${n} sampled, ${ms.toFixed(0)} ms in the worker${F.path === 'heading' ? ', off the route: straight ahead' : ''})`;
+      const s = $('fanstatus'); if (s) s.textContent = `${lines.slice(0, -1).join(' · ')} (${n} sampled, ${ms.toFixed(0)} ms in the worker${F.path === 'heading' ? ', off the route: straight ahead' : ''}; route odds: ASSUMPTION, from path length)`;
     }
   }
 
@@ -116,20 +126,21 @@ export function createFuturesFan(D: FanDeps) {
     acc += dt;
     if (acc < EVERY_S || busy) return;
     acc = 0; busy = true;
-    worker.postMessage({ type: 'fan', id: ++seq, layout: D.layout(), fold: D.fold(), state: { x: b.x, y: b.y, yaw: b.yaw }, route: D.route(), n, seed: seq, night: D.night() });
+    worker.postMessage({ type: 'fan', id: ++seq, layout: D.layout(), fold: D.fold(), state: { x: b.x, y: b.y, yaw: b.yaw }, route: D.route(), n, seed: seq, night: D.night(), lift });
   }
   function set(v: boolean) {
     on = v; root.visible = v; acc = EVERY_S; fpsT = fpsSum = 0; F = null; text = '';
-    if (!v) for (const im of [trail, body, head, frame]) im.count = 0;
+    if (!v) { for (const im of [trail, body, head, frame]) im.count = 0; for (const f of forks) f.removeFromParent(); forks = []; }
     const cb = $('fanon') as HTMLInputElement | null; if (cb) cb.checked = v;
   }
   return {
     ready, set, update, on: () => on,
     setModel(m: 'learned' | 'hand') { model = m; sendModel(); text = ''; },
     setStyle(name: string) { style = name; sendModel(); text = ''; },
+    setLift(l: Lift) { lift = l; text = ''; acc = EVERY_S; const sel = $('fanlift') as HTMLSelectElement | null; if (sel) sel.value = l; },
     /** for e2e and the recording: the last fan (futures, counts, spread), the sample count and the fps budget */
-    state: () => ({ on, model, style, n, offFps, ms, label: text.split('|')[0], styles: styles.map(s => s.name),
-      fan: F && { n: F.futures.length, counts: { ...F.counts }, spread_m: F.spread_m, path: F.path, red: F.futures.filter(f => f.hazard).length, hits: F.futures.flatMap(f => (f.at ? [f.at] : [])) } }),
+    state: () => ({ on, model, style, lift, n, offFps, ms, label: text.split('|')[0], lines: text.split('|'), styles: styles.map(s => s.name),
+      fan: F && { n: F.futures.length, counts: { ...F.counts }, crossed: { ...F.crossed }, routes: F.routes.map(r => ({ ...r })), ahead_s: F.ahead_s, lift: F.lift, spread_m: F.spread_m, path: F.path, red: F.futures.filter(f => f.hazard).length, hits: F.futures.flatMap(f => (f.at ? [f.at] : [])) } }),
     root,
   };
 }

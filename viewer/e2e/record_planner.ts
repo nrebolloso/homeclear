@@ -21,14 +21,14 @@ const SHOTS: Record<string, { panel: string; run: string }> = {
     await W.twoStyles('P07 (training)'); await wait(11000); await W.twoStyles('P10 (training)'); await wait(3000);
     await W.twoStyles('P10 (training)'); game.setFly(-0.9, -0.6, 1.7, 54, -40); await wait(8000);
     await W.month('before'); await wait(21000); await W.month('after'); await wait(21000); W.stop(); await game.planfix.goto(game.planfix.layouts().scan)` },
-  // the live futures fan (demo mode): free walk away from the fridge toward the mat, the fan turns red, the mat is taped flat
-  // (a flattened box, like the planner's "taped" fix but with no edge left) and the fan goes green, then on past it (where
-  // the route squeezes past the trash can, so it reddens again: that brush is real)
+  // the live futures fan (demo mode), standing at the fridge before the walker moves: the fork over / around the mat with
+  // the average foot lift, then the low-clearance shuffler (more red at the mat edge), then the mat taped (grid.ts
+  // TAPED_EDGE_M: a ~1.5 mm edge, below bump_min) and the fan goes green; then a walk on toward the mat
   futures_fan: { panel: 'fanpanel', run: `const wait = ms => new Promise(r => setTimeout(r, ms)), key = (t, code) => dispatchEvent(new KeyboardEvent(t, { code }));
-    game.setFree(-0.7, 2.2, -0.91); game.setThird(true, 0.9, 1.1); game.fan.set(true); await wait(3500);
-    key('keydown', 'KeyW'); await wait(1500); key('keyup', 'KeyW'); await wait(3500);
+    game.setFree(-0.7, 2.2, -0.91); game.setThird(true, 0.9, 1.1); game.fan.setLift('average'); game.fan.set(true); await wait(5000);
+    game.fan.setLift('shuffler'); await wait(5000);
     await game.fan.tapeMat(); await wait(5000);
-    key('keydown', 'KeyW'); await wait(2000); key('keyup', 'KeyW'); await wait(3000)` },
+    key('keydown', 'KeyW'); await wait(2500); key('keyup', 'KeyW'); await wait(3000)` },
 };
 const S = SHOTS[shot];
 if (!S || !out) { console.error(`usage: record_planner.ts <${Object.keys(SHOTS).join('|')}> <out.mp4> [url]`); process.exit(2); }
