@@ -9,7 +9,7 @@ test('strip: height is the header plus one row per action; width follows the wid
   assert.equal(stripSize([{ keyW: 400, textW: 300 }], 100).w, 724 + STRIP_PAD * 2);
   assert.equal(stripSize([], 700).w, 700 + STRIP_PAD * 2);
 });
-test('strip: a row reads at least 3 cm tall and the card stays under a quarter metre wide for ordinary rows', () => {
+test('strip: a row reads at least 3 cm tall and the card stays under 35 cm wide for ordinary rows', () => {
   assert.ok(STRIP_ROW_PX * M_PER_PX >= 0.03);
-  assert.ok(stripSize([{ keyW: 330, textW: 130 }], 330).w * M_PER_PX < 0.25);   // 'Hold stick click' + 'menu'
+  assert.ok(stripSize([{ keyW: 330, textW: 130 }], 330).w * M_PER_PX < 0.35);   // 'Hold stick click' + 'menu'
 });

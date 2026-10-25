@@ -4,7 +4,7 @@
 // turns them into metres so a row reads about 3 cm tall at arm's length.
 import * as THREE from 'three';
 
-export const M_PER_PX = 0.00036;
+export const M_PER_PX = 0.00055;
 export const STRIP_PAD = 22, STRIP_HEAD_PX = 66, STRIP_ROW_PX = 94, STRIP_MIN_W = 440;
 export interface StripRow { key: string; text: string }
 

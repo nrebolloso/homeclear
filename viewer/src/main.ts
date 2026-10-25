@@ -398,7 +398,7 @@ function drawPlan(r: Eval) {
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.22, 32), new THREE.MeshBasicMaterial({ color: bump ? 0xff8a1f : 0xffe14d, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide }));
     ring.position.set(h.position[0], h.position[1], 0.03);
     ring.userData.s = routeS[h.a] ?? 0;
-    const t = wantXR || inXR ? card([text], bump ? '#ffcf99' : '#fff0a8', 'rgba(14,20,28,0.8)', 0.07) : label(text);   // DOM labels don't render in WebXR
+    const t = wantXR || inXR ? card([text], bump ? '#ffcf99' : '#fff0a8', 'rgba(14,20,28,0.8)', 0.1) : label(text);   // DOM labels don't render in WebXR
     t.position.set(0, 0, 0.6);
     if (t instanceof THREE.Sprite) ring.userData.card = t;   // headset cards are laid out per frame (xrHazardCards)
     ring.add(t);
@@ -1568,7 +1568,7 @@ setupStairs();
 // The marking lane owns these actions; xr.ts supplies tracked rays and gives editing priority over its story card.
 let xrPlacing = false, xrSnap = true;
 let markGripWas = false, markAWas = false, markBWas = false, markOAWas = false, markOBWas = false;
-const xrMarkHelp = card(['A/X: mark doorway · B/Y: mark stairs', 'wand B/Y: edit saved marks'], '#ffe27a', undefined, 0.025);
+const xrMarkHelp = card(['A/X: mark doorway · B/Y: mark stairs', 'wand B/Y: edit saved marks'], '#ffe27a', undefined, 0.04);
 xrMarkHelp.position.set(0, 0.12, -0.15); xrMarkHelp.renderOrder = 4;
 const markerXR: XrEditor = {
   hint: xrMarkHelp,
