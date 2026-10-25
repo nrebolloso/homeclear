@@ -1367,7 +1367,7 @@ const live: LivePhys | null = PARAMS.has('nophys') ? null : createLivePhys({ bas
   walker: () => walkerCfg, layout: () => layout, overlap: overlapOk.flatMap((s, k) => [...s].filter(n => n > k).map(n => [k, n] as [number, number])),
   hold: k => reim.t() < 1 || ((tc as any).dragging && k === selected), log: $('physevents'), sampledEl: $('physsampled'),
   settled: moves => {   // the layout follows where the walker left things (no yaw snap: it lies as it fell)
-    layout = { ...layout, poses: layout.poses.map((q, n) => { const m = moves.find(v => v.k === n); return m ? { ...m.pose, removed: q.removed } : q; }) };
+    layout = { ...layout, poses: layout.poses.map((q, n) => { const m = moves.find(v => v.k === n); return m ? { ...q, ...m.pose } : q; }) };   // keeps removed / taped
     syncObjects(); replan();
   } });
 $('physresample').onclick = () => live?.resample();
