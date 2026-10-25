@@ -211,6 +211,8 @@ button.pill { cursor: pointer; } button.pill:hover { border-color: var(--btn-hov
 .persona-card { min-height: 52px; padding: 8px 10px; text-align: left; }
 .persona-card[aria-checked="true"] { color: var(--pressed-fg); background: var(--pressed-bg); border-color: var(--pressed-line); font-weight: 700; }
 #pane-view #filter-menu label { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0; font-size: calc(0.75rem * var(--fs)); }
+#planner-controls label, #world-controls label { display: flex; align-items: center; gap: 8px; margin: 10px 0; font-size: calc(0.75rem * var(--fs)); }
+#planner-controls h2, #world-controls h2 { margin-top: 20px; }
 #mark-controls { margin: 10px 0 16px; padding: 12px; border: 1px solid var(--line); border-left: 4px solid var(--tone-mark); border-radius: 10px; }
 #mark-controls h2 { margin-top: 0; } #mark-buttons button { flex: 1 1 auto; }
 body.demo #controls-strip, body.demo #status-pills { display: none; }

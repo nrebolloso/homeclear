@@ -525,6 +525,90 @@ try {
   check('reach: no page errors', rm.errors.length === 0, rm.errors.join(' | ') || 'none');
   await rm.p.close();
   }
+  // 20. the storyboard in the planning drawer (frontend.ts), demo mode: every step clicked as a visitor would, so a control
+  // that ends up in a hidden legacy panel fails here (Playwright only clicks what is visible). Selecting furniture stands in
+  // for the canvas click (game.select runs the same handler); the move itself is real arrow-key presses.
+  if (existsSync(`${ROOT}viewer/public/planner/kitchen4_lighter/search.json`) && existsSync(`${ROOT}viewer/public/scene/kitchen4_lighter/scene.json`)) {
+    const sb = await open('kitchen4_lighter&demo=1'), sp = sb.p;
+    const S = (f: string) => G(sp, f), step = async (name: string, f: () => Promise<string>) => {
+      try { check(`storyboard: ${name}`, true, await f()); } catch (e) { check(`storyboard: ${name}`, false, String(e).split('\n')[0]); } };
+    await S('await game.planfix.ready');
+    await step('futures fan on, learned vs hand rule, average vs shuffler (View tab)', async () => {
+      await sp.click('#tab-view'); await sp.check('#fanon'); await sp.selectOption('#fanmodel', 'hand'); const hand = await S('return game.fan.state().model');
+      await sp.selectOption('#fanmodel', 'learned'); await sp.selectOption('#fanlift', 'shuffler'); const st = await S('return game.fan.state()');
+      if (!st.on || hand !== 'hand' || st.model !== 'learned' || st.lift !== 'shuffler') throw Error(JSON.stringify({ on: st.on, hand, model: st.model, lift: st.lift }));
+      await sp.selectOption('#fanlift', 'average'); return `on, ${hand} -> ${st.model}, lift ${st.lift}`;
+    });
+    await step('round-trip autoplay from the Route menu', async () => {
+      await sp.click('#workspace-toggle'); await sp.selectOption('#routesel', 'rt0'); await sp.waitForTimeout(500);
+      const rt = await S('return { on: game.roundTrip.on(), leg: game.roundTrip.leg() }');
+      await sp.selectOption('#routesel', '0'); await sp.keyboard.press('Escape');
+      if (!rt.on) throw Error(JSON.stringify(rt)); return `round trip on, leg ${rt.leg}`;
+    });
+    await step('night view (View tab) and Light the path (Reimagine tab)', async () => {
+      await sp.click('#tab-view'); await sp.check('#night'); await sp.click('#tab-reimagine'); await sp.click('#light-path');
+      await sp.waitForFunction(() => document.getElementById('light-path-note')!.textContent!.length > 0, null, { timeout: 60000 });
+      const n = await S('return game.lights.list().length'), note = await sp.textContent('#light-path-note');
+      await S('await game.lights.clear()'); await sp.click('#tab-view'); await sp.uncheck('#night');
+      if (!n && !/no |already/i.test(note ?? '')) throw Error(note ?? ''); return `${n} nightlight(s): ${note}`;
+    });
+    await step('move furniture with the arrow keys and the route re-plans', async () => {
+      await S("game.select('chair8'); window.__e = game.current()"); await sp.waitForSelector('#selected-controls', { state: 'visible' });
+      for (let i = 0; i < 3; i++) await sp.keyboard.press('ArrowRight');
+      await sp.waitForFunction(() => (window as any).game.current() !== (window as any).__e, null, { timeout: 30000 });
+      await sp.keyboard.press('Escape'); return `selected-controls shown, re-planned: ${(await S('return game.current().per_month')).toFixed(2)}/month`;
+    });
+    await step('Plan fixes replays the B200 search and ends on Easiest / Keep my mat / Safest (Reimagine tab)', async () => {
+      await sp.click('#tab-reimagine'); await sp.click('#pfplay');
+      await sp.waitForFunction(() => document.querySelectorAll('#pfoptions li').length >= 2 && !(window as any).game.planfix.state().playing, null, { timeout: 180000 })
+        .catch(async e => { throw Error(`${String(e).split('\n')[0]} ${JSON.stringify(await S("const s = game.planfix.state(); return { playing: s.playing, frame: s.frame, res: document.getElementById('pfresult').textContent.slice(0, 90) }"))}`); });
+      const li = await sp.$$eval('#pfoptions > li', ls => ls.map(l => l.textContent!.split(':')[0].trim()));
+      if (!/^Easiest/.test(li[0]) || !li.some(l => /^Keep my mat/.test(l)) || !li.some(l => /^Safest/.test(l))) throw Error(li.join(' / ')); return li.join(' / ');
+    });
+    await step('Keep my mat shows only mat-keeping layouts; Apply works', async () => {
+      await sp.check('#pfkeepmat'); await sp.waitForTimeout(2500);
+      const li = await sp.$$eval('#pfoptions > li', ls => ls.map(l => l.textContent!.split(':')[0].trim()));
+      const apply = sp.locator('#pfoptions button:not([disabled])').last(); if (await apply.count()) { await apply.click(); await sp.waitForTimeout(2500); }
+      const mat = await S('return game.planfix.layouts().now.mat'); await sp.uncheck('#pfkeepmat');
+      if (!/^Easiest, mat kept/.test(li[0] ?? '') || mat === 'removed') throw Error(`${li.join(' / ')}; mat ${mat}`); return `${li.join(' / ')}; room now: mat ${mat}`;
+    });
+    await step('judge vs AI: Improve my layout from a moved chair', async () => {
+      await S("await game.moveObject('chair8', 1.6, -0.9, 0)"); await sp.check('#pfmattaped'); await sp.click('#pflive');
+      await sp.waitForFunction(() => /→ AI/.test(document.getElementById('pfresult')!.textContent!), null, { timeout: 120000 });
+      await sp.uncheck('#pfmattaped'); return (await sp.textContent('#pfresult'))!.split('/month')[0] + '/month';
+    });
+    await step('world model month replay and gait fit (View tab)', async () => {
+      await sp.click('#tab-view'); await sp.click('#wgmonth'); await sp.waitForTimeout(1500); const wg = await sp.textContent('#wgstatus'); await sp.click('#wgstop');
+      await sp.click('#gfplay'); await sp.waitForFunction(() => document.getElementById('gfstatus')!.textContent!.length > 0, null, { timeout: 30000 });
+      if (!wg) throw Error('no month replay status'); return `${wg.slice(0, 60)} | ${(await sp.textContent('#gfstatus'))!.slice(0, 60)}`;
+    });
+    await step('Cosmos clip plays from Scan setup & advanced tools', async () => {
+      await sp.click('#workspace-toggle'); await sp.locator('#workspace-menu summary').filter({ hasText: 'advanced' }).click();
+      const play = sp.locator('#clips li:not(.dbg) button').first(); await play.click(); await sp.waitForSelector('#player', { state: 'visible' });
+      const src = await sp.getAttribute('#video', 'src'); await sp.click('#closeplayer'); return `playing ${src}`;
+    });
+    await step('OT report and QR fix card from the workspace menu', async () => {
+      if (await sp.locator('#workspace-menu').isHidden()) await sp.click('#workspace-toggle');
+      const [rep] = await Promise.all([sp.context().waitForEvent('page'), sp.click('#report')]);
+      await rep.waitForURL(/report\.html/, { timeout: 60000 }); const ok = /Expected toe (contacts|catches)/.test((await rep.textContent('body')) ?? ''); await rep.close();
+      if (await sp.locator('#workspace-menu').isHidden()) await sp.click('#workspace-toggle');
+      await sp.click('#fixcard'); await sp.waitForSelector('#qr', { state: 'visible' }); const href = await sp.getAttribute('#qrlink', 'href'); await sp.click('#closeqr');
+      if (!ok || !/fixcard\.html#/.test(href ?? '')) throw Error(`report ${ok}, card ${href}`); return `report renders, card ${href!.split('#')[0]}`;
+    });
+    await step('VR entry button is mounted (WebXR itself needs a headset)', async () => {
+      const xr = await sp.evaluate(() => { const b = document.querySelector('[data-xr-persistent]'); return b ? { text: b.textContent, legacy: !!b.closest('#left, #right') } : null; });
+      if (!xr || xr.legacy) throw Error(JSON.stringify(xr)); return `"${xr.text}"`;
+    });
+    await step('demo mode hides the scan library, wheelchair / stroke and the reach map', async () => {
+      await sp.click('#tab-view');
+      const shown = await sp.evaluate(() => ['#scan-library', '.persona-card[data-persona=wheelchair]', '.persona-card[data-persona=stroke]', '#reach', '#coverage']
+        .filter(q => [...document.querySelectorAll<HTMLElement>(q)].some(e => e.checkVisibility())));
+      const cards = await sp.$$eval('#persona-cards .persona-card', bs => bs.filter(b => (b as HTMLElement).checkVisibility()).map(b => b.textContent));
+      if (shown.length || cards.some(c => /Wheelchair|Stroke/.test(c ?? ''))) throw Error(`visible: ${shown.join(', ')}; cards ${cards.join(' | ')}`); return `${cards.length} persona cards: ${cards.join(' | ')}`;
+    });
+    check('storyboard: no page errors', sb.errors.length === 0, sb.errors.join(' | ') || 'none');
+    await sp.close();
+  }
 } finally {
   await browser.close();
   writeFileSync(new URL('results.json', import.meta.url), JSON.stringify(results, null, 1));

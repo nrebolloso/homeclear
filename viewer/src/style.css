@@ -55,6 +55,7 @@ select { max-width: 100%; background: #1b1f24; color: var(--fg); border: 1px sol
 .demo #fanstyle { display: none !important; }
 /* off the storyboard, hidden in demo mode: the scan library, wheelchair and stroke personas, the reach map */
 .demo #scan-library, .demo #persona option[value=wheelchair], .demo #persona option[value=stroke],
+.demo .persona-card[data-persona=wheelchair], .demo .persona-card[data-persona=stroke],
 .demo h2:has(+ label #reach), .demo label:has(#reach), .demo label:has(#coverage), .demo label:has(#reachwidth), .demo #reachplay,
 .demo #markpoint, .demo #clearpoints, .demo #copypoints, .demo #reachstatus, .demo #reachfindings, .demo #reachtargets,
 .demo #reachcost, .demo #reachcostinfo { display: none !important; }
