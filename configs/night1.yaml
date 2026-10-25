@@ -31,6 +31,8 @@ clean:
   ceiling_m: 4.0
   floater_voxel_m: 0.05
   floater_min_neighbours: 8
+  lighter_crop_m: 1.0   # viewer-only: debris far past the floor grid ringed the plaza from above
+  lighter_air: {min_opacity: 0.1, max_scale_m: 0.3}   # viewer-only: faint/large haze above the floor band; looser than indoors (trees are large Gaussians)
 floor:
   ransac_iters: 2000
   inlier_m: 0.02

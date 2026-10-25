@@ -1,5 +1,6 @@
 """Apply lighter_clean's crop/air rules to an already exported viewer scene, in place, without rebuilding it (hand fixes,
-object splits and fills stay as they are). Trims main.ply and each object's splat (shifted back by its pivot).
+object splits and fills stay as they are). Trims main.ply; object splats (shifted back by
+its pivot) get the crop only: the air rule ate solid furniture (aleroom bed kept 5%).
   python tools/lighter_trim.py <config.yaml> viewer/public/scene/<run>_lighter
 Keeps each input once as <name>.untrimmed (not a .ply, so nothing loads it); running again starts from those.
 """
@@ -20,7 +21,7 @@ def main():
             shutil.copy2(dst / f, src)
         v = read_ply(src)
         p = ply_xyz(v); p[:, :2] += pivot   # object splats are stored relative to their pivot
-        drop = crop_air_drop(v, p, cfg["clean"], sc["grid"])
+        drop = crop_air_drop(v, p, cfg["clean"] if f == "main.ply" else {**cfg["clean"], "lighter_air": None}, sc["grid"])
         write_ply(dst / f, v[~drop])
         print(f"{dst / f}: kept {int((~drop).sum())} of {len(v)} Gaussians")
 
