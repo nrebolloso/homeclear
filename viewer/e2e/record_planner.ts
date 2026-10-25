@@ -1,4 +1,4 @@
-// Record the planner / personalization proof videos (proof/demo/): node e2e/record_planner.ts <planner|planner_vs_judge|personalization|ghosts_kitchen|futures_fan> <out.mp4> [url]
+// Record the planner / personalization proof videos (proof/demo/): node e2e/record_planner.ts <planner|planner_vs_judge|personalization|ghosts_kitchen|futures_fan|futures_fan_fridge> <out.mp4> [url]
 // Needs `npm run dev` (5179), ffmpeg, and the published planner search + persona (planner/publish.sh, worldmodel/persona.py).
 import { CHROME } from './env.ts';
 import { chromium } from 'playwright-core';
@@ -24,11 +24,19 @@ const SHOTS: Record<string, { panel: string; run: string }> = {
   // the live futures fan (demo mode), standing at the fridge before the walker moves: the fork over / around the mat with
   // the average foot lift, then the low-clearance shuffler (more red at the mat edge), then the mat taped (grid.ts
   // TAPED_EDGE_M: a ~1.5 mm edge, below bump_min) and the fan goes green; then a walk on toward the mat
-  futures_fan: { panel: 'fanpanel', run: `const wait = ms => new Promise(r => setTimeout(r, ms)), key = (t, code) => dispatchEvent(new KeyboardEvent(t, { code }));
+  futures_fan_fridge: { panel: 'fanpanel', run: `const wait = ms => new Promise(r => setTimeout(r, ms)), key = (t, code) => dispatchEvent(new KeyboardEvent(t, { code }));
     game.setFree(-0.7, 2.2, -0.91); game.setThird(true, 0.9, 1.1); game.fan.setLift('average'); game.fan.set(true); await wait(5000);
     game.fan.setLift('shuffler'); await wait(5000);
     await game.fan.tapeMat(); await wait(5000);
     key('keydown', 'KeyW'); await wait(2500); key('keyup', 'KeyW'); await wait(3000)` },
+  // the scripted demo (roundtrip.ts): at the fridge, average vs shuffler lift; then the shuffler's round trip, entrance ->
+  // fridge -> entrance under live physics with the fan following each leg; then the mat taped and the fan goes green
+  futures_fan: { panel: 'fanpanel', run: `const wait = ms => new Promise(r => setTimeout(r, ms));
+    game.setFree(-0.7, 2.2, -0.91); game.setThird(true, 0.9, 1.1); game.fan.setLift('average'); game.fan.set(true); await wait(8000);
+    game.fan.setLift('shuffler'); await wait(8000);   // 8 s each: a lift's first fan or two can still be the previous lift's
+    await game.roundTrip.set(true); game.setAuto(); const legs = [game.roundTrip.leg()];
+    for (let i = 0; i < 300 && legs.length < 3; i++) { await wait(250); if (game.roundTrip.leg() !== legs.at(-1)) legs.push(game.roundTrip.leg()); }
+    game.setFree(game.body.x, game.body.y, game.body.yaw); await game.fan.tapeMat(); await wait(5000)` },
 };
 const S = SHOTS[shot];
 if (!S || !out) { console.error(`usage: record_planner.ts <${Object.keys(SHOTS).join('|')}> <out.mp4> [url]`); process.exit(2); }
