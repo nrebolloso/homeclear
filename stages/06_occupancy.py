@@ -3,14 +3,16 @@ import json, sys, warnings
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import run_stage, read_ply, ply_xyz, solid_mask
+from tools.freespace import camera_path
 
 import cv2
 import numpy as np
 from scipy import ndimage
 
 
-def layers(p, g, lo, shape):
-    """Grid layers from solid Gaussian centres p (floor frame): floor, obstacles, bumps, bump height (m), filled floor holes."""
+def layers(p, g, lo, shape, pf=None, walked=None):
+    """Grid layers from solid Gaussian centres p (floor frame): floor, obstacles, bumps, bump height (m), filled floor holes.
+    pf: extra (faint) Gaussian centres that count as floor evidence in the floor band only; walked: cells the capture walked."""
     cell = g["cell_m"]
     ij = np.floor((p[:, :2] - lo) / cell).astype(int)
     ok = (ij >= 0).all(1) & (ij < shape).all(1)
@@ -33,14 +35,24 @@ def layers(p, g, lo, shape):
         obstacles &= ~np.r_[False, speck][lab]
     # bump heights are measured from the LOCAL floor, not z=0: a gently tilted or warped floor is not a bump
     p = p.copy()
-    p[:, 2] -= local_floor(p, ij, g, shape)[tuple(ij.T)]
+    lf = local_floor(p, ij, g, shape)
+    p[:, 2] -= lf[tuple(ij.T)]
     bc, bsel = count(*g["bump_z"])
     bumps = (bc >= g["min_count"]) & ~ndimage.binary_dilation(obstacles, iterations=2)  # furniture bases aren't rugs
     # lone specks are splat noise, not hazards (cells up to one apart count as one patch: sparse splats leave gaps)
     lab, _ = ndimage.label(ndimage.binary_dilation(bumps), np.ones((3, 3)))
     bumps &= (np.bincount(lab[bumps], minlength=lab.max() + 1) >= g.get("bump_min_cells", 4))[lab]
     # rugs hide the floor under them, so bump cells count as observed floor too
-    floor = ndimage.binary_closing((count(-g["floor_band_m"], g["floor_band_m"])[0] > 0) | bumps, iterations=g["floor_close_cells"])
+    seen = count(-g["floor_band_m"], g["floor_band_m"])[0] > 0
+    if pf is not None:
+        fij = np.floor((pf[:, :2] - lo) / cell).astype(int)
+        fin = (fij >= 0).all(1) & (fij < shape).all(1)
+        fij = fij[fin]
+        band = np.abs(pf[fin, 2] - lf[tuple(fij.T)]) < g["floor_band_m"]
+        seen[tuple(fij[band].T)] = True
+    if walked is not None:
+        seen |= walked & ~obstacles
+    floor = ndimage.binary_closing(seen | bumps, iterations=g["floor_close_cells"])
     # faint floor (few solid Gaussians) leaves holes too big to close; one ringed by floor with nothing standing in it is
     # floor (otherwise an invisible wall in the open). Counted in the metrics as filled_floor_m2.
     lab, n = ndimage.label(ndimage.binary_fill_holes(floor) & ~floor)
@@ -121,6 +133,28 @@ def stamp_synthetic(g, lo, shape, floor, obstacles, bumps, bump_h):
             obstacles[i0:i1, j0:j1] = True
 
 
+def floor_evidence(w, g, lo, shape):
+    """Floor seen other than as solid Gaussians in the band (layers() pf, walked); both opt-in per config. Stage 12 rebuilds
+    the grid with the same evidence, else its export walls the walker in again."""
+    cell = g["cell_m"]
+    # textureless floor (vinyl, concrete) trains as faint Gaussians that 5b drops: in the thin floor band (only) they are
+    # floor evidence too, else the walker meets invisible walls on open floor (gator_lounge). Obstacles stay solid-only.
+    fo, pf = g.get("floor_min_opacity"), None
+    if fo is not None:
+        r = read_ply(w / "splat_aligned_raw.ply")
+        pf = ply_xyz(r)[solid_mask(r, min_opacity=fo)]
+    # the floor under the capture camera is rarely filmed (the phone looks ahead), but the person walked it: a disc of
+    # floor_walked_m round the camera path is floor too (obstacles still win: a phone held out over a table opens nothing)
+    walked = None
+    if g.get("floor_walked_m"):
+        ij = np.floor((camera_path(w)[:, :2] - lo) / cell).astype(int)
+        ij = ij[(ij >= 0).all(1) & (ij < shape).all(1)]
+        walked = np.zeros(shape, bool)
+        walked[tuple(ij.T)] = True
+        walked = ndimage.distance_transform_edt(~walked) * cell <= g["floor_walked_m"]
+    return pf, walked
+
+
 def main(cfg):
     w, g = cfg["work"], cfg["grid"]
     v = read_ply(w / "splat_aligned.ply")
@@ -130,7 +164,8 @@ def main(cfg):
     hi = np.percentile(near_floor[:, :2], 99.5, 0) + 0.2
     cell = g["cell_m"]
     shape = tuple(np.ceil((hi - lo) / cell).astype(int))
-    floor, obstacles, bumps, bump_h, filled = layers(p, g, lo, shape)
+    pf, walked = floor_evidence(w, g, lo, shape)
+    floor, obstacles, bumps, bump_h, filled = layers(p, g, lo, shape, pf, walked)
     stamp_synthetic(g, lo, shape, floor, obstacles, bumps, bump_h)
     est = classify_thin(g, bumps, bump_h)
 
