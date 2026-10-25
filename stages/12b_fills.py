@@ -39,6 +39,7 @@ MIN_RING = 200       # real-floor pixels around a patch needed to calibrate its 
 SMOOTH_PX = 12       # blur of the painted floor, in 1 cm pixels (see smooth_context): the DC colours around a chair are white and
                      # dark-brown blotches 10-20 cm wide that render as one even grey, so the fill takes that local average
 SMOOTH_SEEN = 0.25   # share of the blur window that must be seen floor for a pixel to count as seen
+SKIRT = 0.08         # floor this close to a shell wall is the wall's foot (baseboard, plaster), not floor: it does not colour the context
 CONTRAST = 0.35      # how much of the inpainted patch's own light/dark variation survives (see match_ring)
 
 
@@ -146,18 +147,31 @@ def gaussians(dtype, pts, rgb, normal_axis, alpha=None):
     return fv
 
 
-def floor_fill(v, xyz, floor_band, foot_world, backends):
+def near_wall(shell, gx, gy, d=SKIRT):
+    """Pixels (gx, gy world metres) within d of any shell wall line: the wall's foot sits in the floor band and paints it pale."""
+    out = np.zeros(gx.shape, bool)
+    for w in shell.get("walls", []) if shell else []:
+        a, b = np.array(w["a"]), np.array(w["b"])
+        e = b - a
+        t = np.clip(((gx - a[0]) * e[0] + (gy - a[1]) * e[1]) / max(float(e @ e), 1e-9), 0, 1)
+        out |= np.hypot(gx - (a[0] + t * e[0]), gy - (a[1] + t * e[1])) < d
+    return out
+
+
+def floor_fill(v, xyz, floor_band, foot_world, backends, shell=None):
     """Fills for the floor under one footprint (world polygon). Returns {backend: (pts, rgb)}, stats."""
     lo, hi = foot_world.min(0) - MARGIN, foot_world.max(0) + MARGIN
     W, H = int(np.ceil((hi[0] - lo[0]) / PX)), int(np.ceil((hi[1] - lo[1]) / PX))
     near = floor_band & (xyz[:, 0] >= lo[0]) & (xyz[:, 0] <= hi[0]) & (xyz[:, 1] >= lo[1]) & (xyz[:, 1] <= hi[1])
     uv = np.floor((xyz[near, :2] - lo) / PX).astype(int)
     r = np.clip(np.round(np.exp(np.max(np.stack([v["scale_0"][near], v["scale_1"][near]], 1), 1)) / PX), 0, 3).astype(int)
-    img, hit = smooth_context(*paint(uv, rgb_of(v[near]), r, (H, W), opacity_of(v[near])))
     gx, gy = np.meshgrid(lo[0] + (np.arange(W) + 0.5) * PX, lo[1] + (np.arange(H) + 0.5) * PX)
     c = foot_world.mean(0)
     grown = c + (foot_world - c) * (1 + 2 * GROW / max(np.ptp(foot_world, 0).min(), 0.1))
     under = Path2d(grown).contains_points(np.stack([gx.ravel(), gy.ravel()], 1)).reshape(H, W)
+    img, hit = paint(uv, rgb_of(v[near]), r, (H, W), opacity_of(v[near]))
+    hit &= ~under & ~near_wall(shell, gx, gy)   # the object's own base inside the footprint and a wall's foot are not floor: neither may bleed into the blur below
+    img, hit = smooth_context(img, hit)
     mask = under | ~hit
     ring = hit & ~under & (cv2.dilate(under.astype(np.uint8), np.ones((21, 21), np.uint8)) > 0)
     out, rim = {}, rim_alpha(under)
@@ -229,7 +243,7 @@ def main(cfg_path, backends, run=None):
     report = {}
     for o in sc["objects"]:
         foot = np.array(o["footprint"]) + np.array(o["pivot"][:2])
-        fills, stats = floor_fill(v, xyz, floor_band, foot, backends)
+        fills, stats = floor_fill(v, xyz, floor_band, foot, backends, shell)
         wall = nearest_wall(shell, foot) if o["height_m"] > 0.5 else None
         walls = wall_fill(v, xyz, faint, wall, foot, o["height_m"], backends) if wall else {}
         o.setdefault("fills", {"median": o["fill"]})
