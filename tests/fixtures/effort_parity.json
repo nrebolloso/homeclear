@@ -1,0 +1,8648 @@
+{
+ "note": "made by tests/make_effort_parity.ts from viewer/src/effort.ts; do not edit",
+ "mass": [
+  {
+   "name": "chair",
+   "kind": "chair",
+   "footprint": [
+    [
+     0.2619999945163727,
+     0.35100001096725464
+    ],
+    [
+     -0.2849999964237213,
+     0.3149999976158142
+    ],
+    [
+     -0.24199999868869781,
+     -0.3409999907016754
+    ],
+    [
+     0.3050000071525574,
+     -0.3050000071525574
+    ]
+   ],
+   "height_m": 0.674,
+   "mass_kg": 5,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 5 kg (from measured size)"
+  },
+  {
+   "name": "chair2",
+   "kind": "chair",
+   "footprint": [
+    [
+     -0.050999999046325684,
+     0.3880000114440918
+    ],
+    [
+     -0.3799999952316284,
+     -0.10000000149011612
+    ],
+    [
+     0.052000001072883606,
+     -0.38999998569488525
+    ],
+    [
+     0.3799999952316284,
+     0.09799999743700027
+    ]
+   ],
+   "height_m": 0.676,
+   "mass_kg": 5,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 5 kg (from measured size)"
+  },
+  {
+   "name": "bedside_table",
+   "kind": "nightstand",
+   "footprint": [
+    [
+     -0.21299999952316284,
+     0.24699999392032623
+    ],
+    [
+     -0.2809999883174896,
+     -0.1899999976158142
+    ],
+    [
+     0.24799999594688416,
+     -0.2720000147819519
+    ],
+    [
+     0.3160000145435333,
+     0.16500000655651093
+    ]
+   ],
+   "height_m": 0.689,
+   "mass_kg": 20,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 20 kg (from measured size)"
+  },
+  {
+   "name": "bedside_table2",
+   "kind": "nightstand",
+   "footprint": [
+    [
+     -0.014000000432133675,
+     0.4339999854564667
+    ],
+    [
+     -0.34299999475479126,
+     -0.1459999978542328
+    ],
+    [
+     0.0010000000474974513,
+     -0.3409999907016754
+    ],
+    [
+     0.33000001311302185,
+     0.23899999260902405
+    ]
+   ],
+   "height_m": 0.615,
+   "mass_kg": 19,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 19 kg (from measured size)"
+  },
+  {
+   "name": "rug",
+   "kind": "rug",
+   "footprint": [
+    [
+     -0.27900001406669617,
+     0.4690000116825104
+    ],
+    [
+     -0.3109999895095825,
+     -0.4580000042915344
+    ],
+    [
+     0.28200000524520874,
+     -0.4790000021457672
+    ],
+    [
+     0.3149999976158142,
+     0.4480000138282776
+    ]
+   ],
+   "height_m": 0.006,
+   "mass_kg": 1,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 1 kg (from measured size)"
+  },
+  {
+   "name": "chair3",
+   "kind": "chair",
+   "footprint": [
+    [
+     -0.2619999945163727,
+     0.29600000381469727
+    ],
+    [
+     -0.33000001311302185,
+     -0.20600000023841858
+    ],
+    [
+     0.24500000476837158,
+     -0.2840000092983246
+    ],
+    [
+     0.31299999356269836,
+     0.21799999475479126
+    ]
+   ],
+   "height_m": 0.728,
+   "mass_kg": 5,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 5 kg (from measured size)"
+  },
+  {
+   "name": "chair4",
+   "kind": "chair",
+   "footprint": [
+    [
+     -0.3779999911785126,
+     0.3319999873638153
+    ],
+    [
+     -0.42500001192092896,
+     -0.27300000190734863
+    ],
+    [
+     0.3100000023841858,
+     -0.33000001311302185
+    ],
+    [
+     0.3569999933242798,
+     0.2750000059604645
+    ]
+   ],
+   "height_m": 0.731,
+   "mass_kg": 7,
+   "from_size": true,
+   "flagged": true,
+   "explain": "measured size gave 7 kg, outside 4–7 kg for a chair: set to 7, check in person"
+  },
+  {
+   "name": "chair5",
+   "kind": "chair",
+   "footprint": [
+    [
+     0.19599999487400055,
+     0.3100000023841858
+    ],
+    [
+     -0.29100000858306885,
+     0.21299999952316284
+    ],
+    [
+     -0.18799999356269836,
+     -0.3089999854564667
+    ],
+    [
+     0.29899999499320984,
+     -0.21299999952316284
+    ]
+   ],
+   "height_m": 0.732,
+   "mass_kg": 4,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 4 kg (from measured size)"
+  },
+  {
+   "name": "table",
+   "kind": "other",
+   "footprint": [
+    [
+     -0.699999988079071,
+     0.5339999794960022
+    ],
+    [
+     -0.8119999766349792,
+     -0.335999995470047
+    ],
+    [
+     0.7239999771118164,
+     -0.5339999794960022
+    ],
+    [
+     0.8360000252723694,
+     0.335999995470047
+    ]
+   ],
+   "height_m": 0.775,
+   "mass_kg": 38,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 38 kg (from measured size)"
+  },
+  {
+   "name": "chair7",
+   "kind": "chair",
+   "footprint": [
+    [
+     -0.23899999260902405,
+     0.37599998712539673
+    ],
+    [
+     -0.30799999833106995,
+     -0.3140000104904175
+    ],
+    [
+     0.2529999911785126,
+     -0.36899998784065247
+    ],
+    [
+     0.32100000977516174,
+     0.3199999928474426
+    ]
+   ],
+   "height_m": 0.733,
+   "mass_kg": 6,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 6 kg (from measured size)"
+  },
+  {
+   "name": "chair8",
+   "kind": "chair",
+   "footprint": [
+    [
+     -0.20999999344348907,
+     0.3050000071525574
+    ],
+    [
+     -0.2930000126361847,
+     -0.2290000021457672
+    ],
+    [
+     0.21199999749660492,
+     -0.30799999833106995
+    ],
+    [
+     0.29600000381469727,
+     0.22599999606609344
+    ]
+   ],
+   "height_m": 0.733,
+   "mass_kg": 4,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 4 kg (from measured size)"
+  },
+  {
+   "name": "basket",
+   "kind": "other",
+   "footprint": [
+    [
+     -0.2160000056028366,
+     0.32499998807907104
+    ],
+    [
+     -0.27300000190734863,
+     -0.2849999964237213
+    ],
+    [
+     0.2680000066757202,
+     -0.335999995470047
+    ],
+    [
+     0.32499998807907104,
+     0.27399998903274536
+    ]
+   ],
+   "height_m": 1.278,
+   "mass_kg": 3,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 3 kg (from measured size)"
+  },
+  {
+   "name": "box",
+   "kind": "other",
+   "footprint": [
+    [
+     -0.10400000214576721,
+     0.18199999630451202
+    ],
+    [
+     -0.19699999690055847,
+     0.009999999776482582
+    ],
+    [
+     0.10199999809265137,
+     -0.1509999930858612
+    ],
+    [
+     0.1940000057220459,
+     0.019999999552965164
+    ]
+   ],
+   "height_m": 2.141,
+   "mass_kg": 7,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 7 kg (from measured size)"
+  },
+  {
+   "name": "box2",
+   "kind": "other",
+   "footprint": [
+    [
+     -0.01600000075995922,
+     0.1589999943971634
+    ],
+    [
+     -0.16200000047683716,
+     -0.010999999940395355
+    ],
+    [
+     0.11299999803304672,
+     -0.24699999392032623
+    ],
+    [
+     0.2590000033378601,
+     -0.07599999755620956
+    ]
+   ],
+   "height_m": 2.259,
+   "mass_kg": 9,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 9 kg (from measured size)"
+  },
+  {
+   "name": "trash_can",
+   "kind": "other",
+   "footprint": [
+    [
+     0.20900000631809235,
+     0.19200000166893005
+    ],
+    [
+     -0.26100000739097595,
+     0.1420000046491623
+    ],
+    [
+     -0.22699999809265137,
+     -0.18299999833106995
+    ],
+    [
+     0.24400000274181366,
+     -0.13300000131130219
+    ]
+   ],
+   "height_m": 0.663,
+   "mass_kg": 4,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 4 kg (from measured size)"
+  },
+  {
+   "name": "box3",
+   "kind": "other",
+   "footprint": [
+    [
+     0.035999998450279236,
+     0.1979999989271164
+    ],
+    [
+     -0.07599999755620956,
+     0.18700000643730164
+    ],
+    [
+     -0.03999999910593033,
+     -0.18700000643730164
+    ],
+    [
+     0.07199999690055847,
+     -0.17599999904632568
+    ]
+   ],
+   "height_m": 2.139,
+   "mass_kg": 5,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 5 kg (from measured size)"
+  },
+  {
+   "name": "box4",
+   "kind": "other",
+   "footprint": [
+    [
+     -0.09600000083446503,
+     0.1080000028014183
+    ],
+    [
+     -0.1080000028014183,
+     -0.07100000232458115
+    ],
+    [
+     0.2029999941587448,
+     -0.09099999815225601
+    ],
+    [
+     0.2150000035762787,
+     0.08799999952316284
+    ]
+   ],
+   "height_m": 2.279,
+   "mass_kg": 6,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 6 kg (from measured size)"
+  },
+  {
+   "name": "mat",
+   "kind": "rug",
+   "footprint": [
+    [
+     -0.45,
+     0.3
+    ],
+    [
+     -0.45,
+     -0.3
+    ],
+    [
+     0.45,
+     -0.3
+    ],
+    [
+     0.45,
+     0.3
+    ]
+   ],
+   "height_m": 0.015,
+   "mass_kg": 3,
+   "from_size": true,
+   "flagged": false,
+   "explain": "about 3 kg (from measured size)"
+  },
+  {
+   "name": "nightlight",
+   "kind": "nightlight",
+   "footprint": [
+    [
+     -0.04,
+     0.03
+    ],
+    [
+     -0.04,
+     -0.03
+    ],
+    [
+     0.04,
+     -0.03
+    ],
+    [
+     0.04,
+     0.03
+    ]
+   ],
+   "height_m": 0.2,
+   "mass_kg": 0.5,
+   "from_size": false,
+   "flagged": false,
+   "explain": "about 0.5 kg (guess by kind)"
+  }
+ ],
+ "moves": [
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.3,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.25,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.5625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.9500000000000002,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.875,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.5625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.5625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.6900000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.625,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 1.9375,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.3400000000000003,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.25,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 1.9375,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 1.9375,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.275,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.1875,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.5,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.925,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.8125,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.5,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.5,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.3,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.25,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.5625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.9500000000000002,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.875,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.5625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.5625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.6900000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.625,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 1.9375,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.3400000000000003,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.25,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 1.9375,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 1.9375,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.275,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.1875,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.5,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.925,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.8125,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.5,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair2",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.5,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 2,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 2,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 2.5,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 2.5,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 3,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 3,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 2.5,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 2.5,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 2.5,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 2.5,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 2.6,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 2.6,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 3.1,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 3.1,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 3.6,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 3.6,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 3.1,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 3.1,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 3.1,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 3.1,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 3.5,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 3.5,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 4,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 4,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 4.5,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 4.5,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 4,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 4,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 4,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table",
+   "mass_kg": 20,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 4,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 2,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.95,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 2.5,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 2.4375,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 3,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 2.925,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 2.5,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 2.4375,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 2.5,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 2.4375,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 2.6,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 2.535,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 3.1,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 3.0225,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 3.6,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 3.5100000000000002,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 3.1,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 3.0225,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 3.1,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 3.0225,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 3.5,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 3.4125,
+   "minutes": 54,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 4,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 3.9,
+   "minutes": 54,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 4.5,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 4.3875,
+   "minutes": 54,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 4,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 3.9,
+   "minutes": 54,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 4,
+   "minutes": 55,
+   "people": 1
+  },
+  {
+   "kind": "nightstand",
+   "name": "bedside_table2",
+   "mass_kg": 19,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 3.9,
+   "minutes": 54,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "rug",
+   "mass_kg": 1,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.3,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.25,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.5625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.9500000000000002,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.875,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.5625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.5625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.6900000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.625,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 1.9375,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.3400000000000003,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.25,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 1.9375,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 1.9375,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.275,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.1875,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.5,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.925,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.8125,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.5,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair3",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.5,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.3,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.35,
+   "minutes": 24,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.6875,
+   "minutes": 24,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.9500000000000002,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 2.0250000000000004,
+   "minutes": 24,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.6875,
+   "minutes": 24,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.6875,
+   "minutes": 24,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.6900000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.7550000000000001,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.0925000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.3400000000000003,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.43,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.0925000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.0925000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.275,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.3625000000000003,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.7,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.925,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 3.0375000000000005,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.7,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair4",
+   "mass_kg": 7,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.7,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.3,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.2,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.5,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.9500000000000002,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.7999999999999998,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.5,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.5,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.6900000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.56,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 1.86,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.3400000000000003,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.16,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 1.86,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 1.86,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.275,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.1,
+   "minutes": 37,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.4,
+   "minutes": 37,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.925,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.7,
+   "minutes": 37,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.4,
+   "minutes": 37,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair5",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.4,
+   "minutes": 37,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 2.5,
+   "minutes": 35,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 2.9,
+   "minutes": 39,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 3.125,
+   "minutes": 35,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 3.625,
+   "minutes": 39,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 3.75,
+   "minutes": 35,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 4.35,
+   "minutes": 39,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 3.125,
+   "minutes": 35,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 3.625,
+   "minutes": 39,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 3.125,
+   "minutes": 35,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 3.625,
+   "minutes": 39,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 3.25,
+   "minutes": 48,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 3.77,
+   "minutes": 54,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 3.875,
+   "minutes": 48,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 4.495,
+   "minutes": 54,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 4.5,
+   "minutes": 48,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 5.22,
+   "minutes": 54,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 3.875,
+   "minutes": 48,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 4.495,
+   "minutes": 54,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 3.875,
+   "minutes": 48,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 4.495,
+   "minutes": 54,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 4.375,
+   "minutes": 66,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 5.075,
+   "minutes": 75,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 5,
+   "minutes": 66,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 5.8,
+   "minutes": 75,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 5.625,
+   "minutes": 66,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 6.525,
+   "minutes": 75,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 5,
+   "minutes": 66,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 5.8,
+   "minutes": 75,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 5,
+   "minutes": 66,
+   "people": 2
+  },
+  {
+   "kind": "other",
+   "name": "table",
+   "mass_kg": 38,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 5.8,
+   "minutes": 75,
+   "people": 2
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.3,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.3,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.9500000000000002,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.9500000000000002,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.6900000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.6900000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.3400000000000003,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.3400000000000003,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.275,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.275,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.925,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.925,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair7",
+   "mass_kg": 6,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.3,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.2,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.5,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.9500000000000002,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.7999999999999998,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.5,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.5,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.6900000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.56,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 1.86,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.3400000000000003,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.16,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 1.86,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 1.86,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.275,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.1,
+   "minutes": 37,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.4,
+   "minutes": 37,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.925,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.7,
+   "minutes": 37,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.4,
+   "minutes": 37,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "chair",
+   "name": "chair8",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.4,
+   "minutes": 37,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.1,
+   "minutes": 21,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.15,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.375,
+   "minutes": 21,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.4375,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.6500000000000001,
+   "minutes": 21,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.7249999999999999,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.375,
+   "minutes": 21,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.4375,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.375,
+   "minutes": 21,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.4375,
+   "minutes": 22,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.4300000000000002,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.4949999999999999,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 1.705,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 1.7824999999999998,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 1.9800000000000002,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.07,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 1.705,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 1.7824999999999998,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 1.705,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 1.7824999999999998,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 1.9250000000000003,
+   "minutes": 35,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.0124999999999997,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.2,
+   "minutes": 35,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.3,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.4750000000000005,
+   "minutes": 35,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.5874999999999995,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.2,
+   "minutes": 35,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.3,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.2,
+   "minutes": 35,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "basket",
+   "mass_kg": 3,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.3,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.75,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.35,
+   "minutes": 24,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.6875,
+   "minutes": 24,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 2.625,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 2.0250000000000004,
+   "minutes": 24,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.6875,
+   "minutes": 24,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.6875,
+   "minutes": 24,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 2.275,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.7550000000000001,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.0925000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 3.15,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.43,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.0925000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.0925000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 3.0625,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.3625000000000003,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.7,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 3.9375,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 3.0375000000000005,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.7,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box",
+   "mass_kg": 7,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.7,
+   "minutes": 40,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.75,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.45,
+   "minutes": 25,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.8125,
+   "minutes": 25,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 2.625,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 2.175,
+   "minutes": 25,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.8125,
+   "minutes": 25,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.8125,
+   "minutes": 25,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 2.275,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.885,
+   "minutes": 32,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.2475,
+   "minutes": 32,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 3.15,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.61,
+   "minutes": 32,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.2475,
+   "minutes": 32,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.2475,
+   "minutes": 32,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 3.0625,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.5375,
+   "minutes": 43,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.9,
+   "minutes": 43,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 3.9375,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 3.2625,
+   "minutes": 43,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.9,
+   "minutes": 43,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box2",
+   "mass_kg": 9,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.9,
+   "minutes": 43,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.75,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.68,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 2.1,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 2.625,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 2.52,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 2.1,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 2.1,
+   "minutes": 27,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 2.275,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 2.184,
+   "minutes": 35,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.604,
+   "minutes": 35,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 3.15,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 3.024,
+   "minutes": 35,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.604,
+   "minutes": 35,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.604,
+   "minutes": 35,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 3.0625,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.94,
+   "minutes": 48,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 3.36,
+   "minutes": 48,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 3.9375,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 3.78,
+   "minutes": 48,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 3.36,
+   "minutes": 48,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "trash_can",
+   "mass_kg": 4,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 3.36,
+   "minutes": 48,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.75,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.25,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.5625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 2.625,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.875,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.5625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.5625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 2.275,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.625,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 1.9375,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 3.15,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.25,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 1.9375,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 1.9375,
+   "minutes": 29,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 3.0625,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.1875,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.5,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 3.9375,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.8125,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.5,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box3",
+   "mass_kg": 5,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.5,
+   "minutes": 38,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.75,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 1.3,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 2.625,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 1.9500000000000002,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 2.1875,
+   "minutes": 28,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 1.625,
+   "minutes": 23,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 2.275,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 1.6900000000000002,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 3.15,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 2.3400000000000003,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.7125,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 2.015,
+   "minutes": 30,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 3.0625,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 2.275,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 3.9375,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 2.925,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 3.5,
+   "minutes": 49,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": "box4",
+   "mass_kg": 6,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 2.6,
+   "minutes": 39,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "rug",
+   "name": "mat",
+   "mass_kg": 3,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 0,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 1,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 0,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 180,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": 270,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "nightlight",
+   "name": "nightlight",
+   "mass_kg": null,
+   "distance_m": 2.5,
+   "turn_deg": -90,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "bed",
+   "name": null,
+   "mass_kg": null,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 7.0874999999999995,
+   "minutes": 89,
+   "people": 2
+  },
+  {
+   "kind": "bed",
+   "name": null,
+   "mass_kg": 10,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 2.3625,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "bed",
+   "name": null,
+   "mass_kg": 40,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 4.725,
+   "minutes": 63,
+   "people": 2
+  },
+  {
+   "kind": "dresser",
+   "name": null,
+   "mass_kg": null,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 5.5125,
+   "minutes": 71,
+   "people": 2
+  },
+  {
+   "kind": "dresser",
+   "name": null,
+   "mass_kg": 10,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 2.3625,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "dresser",
+   "name": null,
+   "mass_kg": 40,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 4.725,
+   "minutes": 63,
+   "people": 2
+  },
+  {
+   "kind": "sofa",
+   "name": null,
+   "mass_kg": null,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 5.1187499999999995,
+   "minutes": 67,
+   "people": 2
+  },
+  {
+   "kind": "sofa",
+   "name": null,
+   "mass_kg": 10,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 2.3625,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "sofa",
+   "name": null,
+   "mass_kg": 40,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 4.725,
+   "minutes": 63,
+   "people": 2
+  },
+  {
+   "kind": "door",
+   "name": null,
+   "mass_kg": null,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "door",
+   "name": null,
+   "mass_kg": 10,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "door",
+   "name": null,
+   "mass_kg": 40,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "cord",
+   "name": null,
+   "mass_kg": null,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "cord",
+   "name": null,
+   "mass_kg": 10,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "cord",
+   "name": null,
+   "mass_kg": 40,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 0.3,
+   "minutes": 10,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": null,
+   "mass_kg": null,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 2.75625,
+   "minutes": 41,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": null,
+   "mass_kg": 10,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 2.3625,
+   "minutes": 36,
+   "people": 1
+  },
+  {
+   "kind": "other",
+   "name": null,
+   "mass_kg": 40,
+   "distance_m": 1.5,
+   "turn_deg": 45,
+   "effort": 4.725,
+   "minutes": 63,
+   "people": 2
+  }
+ ],
+ "pose_moves": [
+  {
+   "name": "chair3",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    1,
+    0,
+    90
+   ],
+   "effort": 1.9375,
+   "minutes": 29
+  },
+  {
+   "name": "chair3",
+   "a": [
+    0.3,
+    -1.1,
+    90
+   ],
+   "b": [
+    0.3,
+    -1.1,
+    0
+   ],
+   "effort": 1.5625,
+   "minutes": 23
+  },
+  {
+   "name": "chair3",
+   "a": [
+    1.9,
+    -0.83,
+    0
+   ],
+   "b": [
+    1.2,
+    0.4,
+    180
+   ],
+   "effort": 2.405714435925762,
+   "minutes": 31
+  },
+  {
+   "name": "chair3",
+   "a": [
+    0,
+    0,
+    270
+   ],
+   "b": [
+    2.5,
+    0,
+    0
+   ],
+   "effort": 2.5,
+   "minutes": 38
+  },
+  {
+   "name": "chair3",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    0,
+    0
+   ],
+   "effort": 1.25,
+   "minutes": 23
+  },
+  {
+   "name": "chair4",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    1,
+    0,
+    90
+   ],
+   "effort": 2.0925000000000002,
+   "minutes": 30
+  },
+  {
+   "name": "chair4",
+   "a": [
+    0.3,
+    -1.1,
+    90
+   ],
+   "b": [
+    0.3,
+    -1.1,
+    0
+   ],
+   "effort": 1.6875,
+   "minutes": 24
+  },
+  {
+   "name": "chair4",
+   "a": [
+    1.9,
+    -0.83,
+    0
+   ],
+   "b": [
+    1.2,
+    0.4,
+    180
+   ],
+   "effort": 2.598171590799823,
+   "minutes": 33
+  },
+  {
+   "name": "chair4",
+   "a": [
+    0,
+    0,
+    270
+   ],
+   "b": [
+    2.5,
+    0,
+    0
+   ],
+   "effort": 2.7,
+   "minutes": 40
+  },
+  {
+   "name": "chair4",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    0,
+    0
+   ],
+   "effort": 1.35,
+   "minutes": 24
+  },
+  {
+   "name": "chair5",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    1,
+    0,
+    90
+   ],
+   "effort": 1.86,
+   "minutes": 28
+  },
+  {
+   "name": "chair5",
+   "a": [
+    0.3,
+    -1.1,
+    90
+   ],
+   "b": [
+    0.3,
+    -1.1,
+    0
+   ],
+   "effort": 1.5,
+   "minutes": 22
+  },
+  {
+   "name": "chair5",
+   "a": [
+    1.9,
+    -0.83,
+    0
+   ],
+   "b": [
+    1.2,
+    0.4,
+    180
+   ],
+   "effort": 2.3094858584887317,
+   "minutes": 30
+  },
+  {
+   "name": "chair5",
+   "a": [
+    0,
+    0,
+    270
+   ],
+   "b": [
+    2.5,
+    0,
+    0
+   ],
+   "effort": 2.4,
+   "minutes": 37
+  },
+  {
+   "name": "chair5",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    0,
+    0
+   ],
+   "effort": 1.2,
+   "minutes": 22
+  },
+  {
+   "name": "chair7",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    1,
+    0,
+    90
+   ],
+   "effort": 2.015,
+   "minutes": 30
+  },
+  {
+   "name": "chair7",
+   "a": [
+    0.3,
+    -1.1,
+    90
+   ],
+   "b": [
+    0.3,
+    -1.1,
+    0
+   ],
+   "effort": 1.625,
+   "minutes": 23
+  },
+  {
+   "name": "chair7",
+   "a": [
+    1.9,
+    -0.83,
+    0
+   ],
+   "b": [
+    1.2,
+    0.4,
+    180
+   ],
+   "effort": 2.5019430133627925,
+   "minutes": 32
+  },
+  {
+   "name": "chair7",
+   "a": [
+    0,
+    0,
+    270
+   ],
+   "b": [
+    2.5,
+    0,
+    0
+   ],
+   "effort": 2.6,
+   "minutes": 39
+  },
+  {
+   "name": "chair7",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    0,
+    0
+   ],
+   "effort": 1.3,
+   "minutes": 23
+  },
+  {
+   "name": "chair8",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    1,
+    0,
+    90
+   ],
+   "effort": 1.86,
+   "minutes": 28
+  },
+  {
+   "name": "chair8",
+   "a": [
+    0.3,
+    -1.1,
+    90
+   ],
+   "b": [
+    0.3,
+    -1.1,
+    0
+   ],
+   "effort": 1.5,
+   "minutes": 22
+  },
+  {
+   "name": "chair8",
+   "a": [
+    1.9,
+    -0.83,
+    0
+   ],
+   "b": [
+    1.2,
+    0.4,
+    180
+   ],
+   "effort": 2.3094858584887317,
+   "minutes": 30
+  },
+  {
+   "name": "chair8",
+   "a": [
+    0,
+    0,
+    270
+   ],
+   "b": [
+    2.5,
+    0,
+    0
+   ],
+   "effort": 2.4,
+   "minutes": 37
+  },
+  {
+   "name": "chair8",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    0,
+    0
+   ],
+   "effort": 1.2,
+   "minutes": 22
+  },
+  {
+   "name": "table",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    1,
+    0,
+    90
+   ],
+   "effort": 4.495,
+   "minutes": 54
+  },
+  {
+   "name": "table",
+   "a": [
+    0.3,
+    -1.1,
+    90
+   ],
+   "b": [
+    0.3,
+    -1.1,
+    0
+   ],
+   "effort": 3.625,
+   "minutes": 39
+  },
+  {
+   "name": "table",
+   "a": [
+    1.9,
+    -0.83,
+    0
+   ],
+   "b": [
+    1.2,
+    0.4,
+    180
+   ],
+   "effort": 5.581257491347768,
+   "minutes": 60
+  },
+  {
+   "name": "table",
+   "a": [
+    0,
+    0,
+    270
+   ],
+   "b": [
+    2.5,
+    0,
+    0
+   ],
+   "effort": 5.8,
+   "minutes": 75
+  },
+  {
+   "name": "table",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    0,
+    0
+   ],
+   "effort": 2.9,
+   "minutes": 39
+  },
+  {
+   "name": "trash_can",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    1,
+    0,
+    90
+   ],
+   "effort": 2.604,
+   "minutes": 35
+  },
+  {
+   "name": "trash_can",
+   "a": [
+    0.3,
+    -1.1,
+    90
+   ],
+   "b": [
+    0.3,
+    -1.1,
+    0
+   ],
+   "effort": 2.1,
+   "minutes": 27
+  },
+  {
+   "name": "trash_can",
+   "a": [
+    1.9,
+    -0.83,
+    0
+   ],
+   "b": [
+    1.2,
+    0.4,
+    180
+   ],
+   "effort": 3.233280201884224,
+   "minutes": 39
+  },
+  {
+   "name": "trash_can",
+   "a": [
+    0,
+    0,
+    270
+   ],
+   "b": [
+    2.5,
+    0,
+    0
+   ],
+   "effort": 3.36,
+   "minutes": 48
+  },
+  {
+   "name": "trash_can",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    0,
+    0
+   ],
+   "effort": 1.68,
+   "minutes": 27
+  },
+  {
+   "name": "basket",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    1,
+    0,
+    90
+   ],
+   "effort": 1.7824999999999998,
+   "minutes": 27
+  },
+  {
+   "name": "basket",
+   "a": [
+    0.3,
+    -1.1,
+    90
+   ],
+   "b": [
+    0.3,
+    -1.1,
+    0
+   ],
+   "effort": 1.4375,
+   "minutes": 22
+  },
+  {
+   "name": "basket",
+   "a": [
+    1.9,
+    -0.83,
+    0
+   ],
+   "b": [
+    1.2,
+    0.4,
+    180
+   ],
+   "effort": 2.2132572810517006,
+   "minutes": 30
+  },
+  {
+   "name": "basket",
+   "a": [
+    0,
+    0,
+    270
+   ],
+   "b": [
+    2.5,
+    0,
+    0
+   ],
+   "effort": 2.3,
+   "minutes": 36
+  },
+  {
+   "name": "basket",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    0,
+    0
+   ],
+   "effort": 1.15,
+   "minutes": 22
+  },
+  {
+   "name": "mat",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    1,
+    0,
+    90
+   ],
+   "effort": 0.3,
+   "minutes": 10
+  },
+  {
+   "name": "mat",
+   "a": [
+    0.3,
+    -1.1,
+    90
+   ],
+   "b": [
+    0.3,
+    -1.1,
+    0
+   ],
+   "effort": 0.3,
+   "minutes": 10
+  },
+  {
+   "name": "mat",
+   "a": [
+    1.9,
+    -0.83,
+    0
+   ],
+   "b": [
+    1.2,
+    0.4,
+    180
+   ],
+   "effort": 0.3,
+   "minutes": 10
+  },
+  {
+   "name": "mat",
+   "a": [
+    0,
+    0,
+    270
+   ],
+   "b": [
+    2.5,
+    0,
+    0
+   ],
+   "effort": 0.3,
+   "minutes": 10
+  },
+  {
+   "name": "mat",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    0,
+    0
+   ],
+   "effort": 0.3,
+   "minutes": 10
+  },
+  {
+   "name": "bedside_table",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    1,
+    0,
+    90
+   ],
+   "effort": 3.1,
+   "minutes": 40
+  },
+  {
+   "name": "bedside_table",
+   "a": [
+    0.3,
+    -1.1,
+    90
+   ],
+   "b": [
+    0.3,
+    -1.1,
+    0
+   ],
+   "effort": 2.5,
+   "minutes": 30
+  },
+  {
+   "name": "bedside_table",
+   "a": [
+    1.9,
+    -0.83,
+    0
+   ],
+   "b": [
+    1.2,
+    0.4,
+    180
+   ],
+   "effort": 3.8491430974812193,
+   "minutes": 44
+  },
+  {
+   "name": "bedside_table",
+   "a": [
+    0,
+    0,
+    270
+   ],
+   "b": [
+    2.5,
+    0,
+    0
+   ],
+   "effort": 4,
+   "minutes": 55
+  },
+  {
+   "name": "bedside_table",
+   "a": [
+    0,
+    0,
+    0
+   ],
+   "b": [
+    0,
+    0,
+    0
+   ],
+   "effort": 2,
+   "minutes": 30
+  }
+ ],
+ "fixes": [
+  {
+   "id": "remove_mat",
+   "kind": "remove",
+   "object": "mat",
+   "effort_cfg": 1,
+   "target_kind": "rug",
+   "effort": 0.3
+  },
+  {
+   "id": "tape_cord",
+   "kind": "flatten",
+   "object": null,
+   "effort_cfg": 1,
+   "target_kind": null,
+   "effort": 0.3
+  },
+  {
+   "id": "push_in_chair",
+   "kind": "move",
+   "object": "chair8",
+   "effort_cfg": 1,
+   "target_kind": "chair",
+   "effort": 1
+  },
+  {
+   "id": "add_nightlight",
+   "kind": "move",
+   "object": "nightlight",
+   "effort_cfg": 1,
+   "target_kind": "nightlight",
+   "effort": 0.3
+  }
+ ],
+ "from": {
+  "chairs": {
+   "chair3": [
+    -0.111,
+    -1.158,
+    0
+   ],
+   "chair4": [
+    0.128,
+    -1.796,
+    0
+   ],
+   "chair5": [
+    0.274,
+    -0.636,
+    0
+   ],
+   "chair7": [
+    0.641,
+    -1.764,
+    0
+   ],
+   "chair8": [
+    1.9,
+    -0.83,
+    0
+   ]
+  },
+  "mat": "present",
+  "cord": "present",
+  "nightlight": "hall"
+ },
+ "layouts": [
+  {
+   "layout": {
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.9,
+      -0.83,
+      0
+     ]
+    },
+    "cord": "present",
+    "mat": "present",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 0,
+    "minutes": 0,
+    "effort": 0,
+    "items": []
+   }
+  },
+  {
+   "layout": {
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.9,
+      -0.83,
+      0
+     ]
+    },
+    "cord": "present",
+    "mat": "removed",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 0,
+    "minutes": 2,
+    "effort": 0.3,
+    "items": [
+     {
+      "key": "mat",
+      "label": "Remove the kitchen mat",
+      "usd": 0,
+      "minutes": 2,
+      "effort": 0.3
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.9,
+      -0.83,
+      0
+     ]
+    },
+    "cord": "taped",
+    "mat": "removed",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 12,
+    "effort": 0.6,
+    "items": [
+     {
+      "key": "mat",
+      "label": "Remove the kitchen mat",
+      "usd": 0,
+      "minutes": 2,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "caps": false,
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.9,
+      -0.85,
+      0
+     ]
+    },
+    "cord": "taped",
+    "mat": "removed",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 34,
+    "effort": 1.8072000000000001,
+    "items": [
+     {
+      "key": "chair8",
+      "label": "Move chair8 to (1.90, -0.85)",
+      "usd": 0,
+      "minutes": 22,
+      "effort": 1.2072
+     },
+     {
+      "key": "mat",
+      "label": "Remove the kitchen mat",
+      "usd": 0,
+      "minutes": 2,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "caps": false,
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.85,
+      -0.85,
+      270
+     ]
+    },
+    "cord": "taped",
+    "mat": "removed",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 34,
+    "effort": 2.119386593305684,
+    "items": [
+     {
+      "key": "chair8",
+      "label": "Move chair8 to (1.85, -0.85), turned 270 deg",
+      "usd": 0,
+      "minutes": 22,
+      "effort": 1.5193865933056843
+     },
+     {
+      "key": "mat",
+      "label": "Remove the kitchen mat",
+      "usd": 0,
+      "minutes": 2,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "caps": false,
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.85,
+      -0.9,
+      180
+     ]
+    },
+    "cord": "taped",
+    "mat": "removed",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 35,
+    "effort": 2.430968370961353,
+    "items": [
+     {
+      "key": "chair8",
+      "label": "Move chair8 to (1.85, -0.90), turned 180 deg",
+      "usd": 0,
+      "minutes": 23,
+      "effort": 1.8309683709613536
+     },
+     {
+      "key": "mat",
+      "label": "Remove the kitchen mat",
+      "usd": 0,
+      "minutes": 2,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "caps": false,
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.85,
+      -0.95,
+      270
+     ]
+    },
+    "cord": "taped",
+    "mat": "removed",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 35,
+    "effort": 2.1468,
+    "items": [
+     {
+      "key": "chair8",
+      "label": "Move chair8 to (1.85, -0.95), turned 270 deg",
+      "usd": 0,
+      "minutes": 23,
+      "effort": 1.5468
+     },
+     {
+      "key": "mat",
+      "label": "Remove the kitchen mat",
+      "usd": 0,
+      "minutes": 2,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "caps": false,
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.75,
+      -1,
+      270
+     ]
+    },
+    "cord": "taped",
+    "mat": "removed",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 35,
+    "effort": 2.1816176451510336,
+    "items": [
+     {
+      "key": "chair8",
+      "label": "Move chair8 to (1.75, -1.00), turned 270 deg",
+      "usd": 0,
+      "minutes": 23,
+      "effort": 1.5816176451510335
+     },
+     {
+      "key": "mat",
+      "label": "Remove the kitchen mat",
+      "usd": 0,
+      "minutes": 2,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "caps": false,
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.65,
+      -1,
+      90
+     ]
+    },
+    "cord": "taped",
+    "mat": "removed",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 36,
+    "effort": 2.208836758496383,
+    "items": [
+     {
+      "key": "chair8",
+      "label": "Move chair8 to (1.65, -1.00), turned 90 deg",
+      "usd": 0,
+      "minutes": 24,
+      "effort": 1.608836758496383
+     },
+     {
+      "key": "mat",
+      "label": "Remove the kitchen mat",
+      "usd": 0,
+      "minutes": 2,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "caps": false,
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.75,
+      -1.2,
+      90
+     ]
+    },
+    "cord": "taped",
+    "mat": "removed",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 36,
+    "effort": 2.2437297463992754,
+    "items": [
+     {
+      "key": "chair8",
+      "label": "Move chair8 to (1.75, -1.20), turned 90 deg",
+      "usd": 0,
+      "minutes": 24,
+      "effort": 1.6437297463992753
+     },
+     {
+      "key": "mat",
+      "label": "Remove the kitchen mat",
+      "usd": 0,
+      "minutes": 2,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "caps": false,
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.7,
+      -1.25,
+      0
+     ]
+    },
+    "cord": "taped",
+    "mat": "removed",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 37,
+    "effort": 1.9674677282344275,
+    "items": [
+     {
+      "key": "chair8",
+      "label": "Move chair8 to (1.70, -1.25)",
+      "usd": 0,
+      "minutes": 25,
+      "effort": 1.3674677282344274
+     },
+     {
+      "key": "mat",
+      "label": "Remove the kitchen mat",
+      "usd": 0,
+      "minutes": 2,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "caps": false,
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      0.4,
+      -0.2,
+      180
+     ]
+    },
+    "cord": "taped",
+    "mat": "removed",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 44,
+    "effort": 2.9856946644797095,
+    "items": [
+     {
+      "key": "chair8",
+      "label": "Move chair8 to (0.40, -0.20), turned 180 deg",
+      "usd": 0,
+      "minutes": 32,
+      "effort": 2.38569466447971
+     },
+     {
+      "key": "mat",
+      "label": "Remove the kitchen mat",
+      "usd": 0,
+      "minutes": 2,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.9,
+      -0.83,
+      0
+     ]
+    },
+    "cord": "present",
+    "mat": "present",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 0,
+    "minutes": 0,
+    "effort": 0,
+    "items": []
+   }
+  },
+  {
+   "layout": {
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.9,
+      -0.83,
+      0
+     ]
+    },
+    "cord": "present",
+    "mat": "taped",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 10,
+    "minutes": 10,
+    "effort": 0.3,
+    "items": [
+     {
+      "key": "mat",
+      "label": "Tape the mat's edges down",
+      "usd": 10,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "double-sided carpet tape",
+      "assumption": "ASSUMPTION: taped edges stop the simulated slide and corner fold; ~1.5 mm of edge stays under the tape (grid.ts TAPED_EDGE_M, not measured)"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "caps": false,
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.9,
+      -0.83,
+      0
+     ]
+    },
+    "cord": "present",
+    "mat": "moved",
+    "mat_at": [
+     -0.1,
+     0.6,
+     0
+    ],
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 0,
+    "minutes": 10,
+    "effort": 0.3,
+    "items": [
+     {
+      "key": "mat",
+      "label": "Move the mat",
+      "usd": 0,
+      "minutes": 10,
+      "effort": 0.3
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.9,
+      -0.83,
+      0
+     ]
+    },
+    "cord": "taped",
+    "mat": "taped",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 18,
+    "minutes": 20,
+    "effort": 0.6,
+    "items": [
+     {
+      "key": "mat",
+      "label": "Tape the mat's edges down",
+      "usd": 10,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "double-sided carpet tape",
+      "assumption": "ASSUMPTION: taped edges stop the simulated slide and corner fold; ~1.5 mm of edge stays under the tape (grid.ts TAPED_EDGE_M, not measured)"
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "caps": false,
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.9,
+      -0.83,
+      0
+     ]
+    },
+    "cord": "taped",
+    "mat": "moved",
+    "mat_at": [
+     -0.1,
+     0.6,
+     0
+    ],
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 20,
+    "effort": 0.6,
+    "items": [
+     {
+      "key": "mat",
+      "label": "Move the mat",
+      "usd": 0,
+      "minutes": 10,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "caps": false,
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.85,
+      -0.95,
+      270
+     ]
+    },
+    "cord": "taped",
+    "mat": "moved",
+    "mat_at": [
+     -0.25,
+     0.65,
+     90
+    ],
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 43,
+    "effort": 2.1468,
+    "items": [
+     {
+      "key": "chair8",
+      "label": "Move chair8 to (1.85, -0.95), turned 270 deg",
+      "usd": 0,
+      "minutes": 23,
+      "effort": 1.5468
+     },
+     {
+      "key": "mat",
+      "label": "Move the mat",
+      "usd": 0,
+      "minutes": 10,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "caps": false,
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.5,
+      -1.65,
+      180
+     ]
+    },
+    "cord": "taped",
+    "mat": "moved",
+    "mat_at": [
+     0,
+     0.4,
+     0
+    ],
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 47,
+    "effort": 2.728449448165162,
+    "items": [
+     {
+      "key": "chair8",
+      "label": "Move chair8 to (1.50, -1.65), turned 180 deg",
+      "usd": 0,
+      "minutes": 27,
+      "effort": 2.1284494481651626
+     },
+     {
+      "key": "mat",
+      "label": "Move the mat",
+      "usd": 0,
+      "minutes": 10,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "caps": true,
+    "chairs": {
+     "chair3": [
+      -0.15,
+      -0.05,
+      180
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.6,
+      -0.45,
+      90
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      0.55,
+      -0.95,
+      180
+     ]
+    },
+    "cord": "taped",
+    "mat": "moved",
+    "mat_at": [
+     -0.05,
+     0.4,
+     0
+    ],
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 16,
+    "minutes": 108,
+    "effort": 7.813792040068932,
+    "items": [
+     {
+      "key": "chair3",
+      "label": "Move chair3 to (-0.15, -0.05), turned 180 deg",
+      "usd": 0,
+      "minutes": 29,
+      "effort": 2.290757309767369
+     },
+     {
+      "key": "chair5",
+      "label": "Move chair5 to (0.60, -0.45), turned 90 deg",
+      "usd": 0,
+      "minutes": 24,
+      "effort": 1.6351185079846575
+     },
+     {
+      "key": "chair8",
+      "label": "Move chair8 to (0.55, -0.95), turned 180 deg",
+      "usd": 0,
+      "minutes": 30,
+      "effort": 2.2879162223169054
+     },
+     {
+      "key": "mat",
+      "label": "Move the mat",
+      "usd": 0,
+      "minutes": 10,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     },
+     {
+      "key": "caps",
+      "label": "Glide caps or slit tennis balls on the walker's rear legs",
+      "usd": 8,
+      "minutes": 5,
+      "effort": 1,
+      "product": "walker glide caps (or 2 tennis balls, slit)",
+      "assumption": "ASSUMPTION: caps cut the glide-on-rug friction to 0.10-0.20 (not measured); the mat's slide / fold events scale by the cloth-rug sim's fold-or-drag rate with caps over without (physics/rug_calib.json)"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      90
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.2,
+      0.4,
+      180
+     ]
+    },
+    "mat": "taped",
+    "cord": "rerouted",
+    "nightlight": "kitchen"
+   },
+   "cost": {
+    "usd": 28,
+    "minutes": 93,
+    "effort": 6.471985858488732,
+    "items": [
+     {
+      "key": "chair3",
+      "label": "Move chair3 to (-0.11, -1.16), turned 90 deg",
+      "usd": 0,
+      "minutes": 23,
+      "effort": 1.5625
+     },
+     {
+      "key": "chair8",
+      "label": "Move chair8 to (1.20, 0.40), turned 180 deg",
+      "usd": 0,
+      "minutes": 30,
+      "effort": 2.3094858584887317
+     },
+     {
+      "key": "mat",
+      "label": "Tape the mat's edges down",
+      "usd": 10,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "double-sided carpet tape",
+      "assumption": "ASSUMPTION: taped edges stop the simulated slide and corner fold; ~1.5 mm of edge stays under the tape (grid.ts TAPED_EDGE_M, not measured)"
+     },
+     {
+      "key": "cord",
+      "label": "Run the cord along the wall instead of across the path",
+      "usd": 6,
+      "minutes": 25,
+      "effort": 2,
+      "product": "adhesive cord clips",
+      "assumption": "ASSUMPTION: the cord leaves the floor box entirely (same map effect as taping), clips and labour estimated"
+     },
+     {
+      "key": "nightlight",
+      "label": "Plug in a nightlight between the mat and the cord",
+      "usd": 12,
+      "minutes": 5,
+      "effort": 0.3,
+      "product": "plug-in motion-sensor nightlight"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      1.1280000000000001,
+      -1.796,
+      270
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.9,
+      -0.83,
+      0
+     ]
+    },
+    "mat": "moved",
+    "cord": "present",
+    "nightlight": "off",
+    "mat_at": [
+     0.5,
+     -0.3,
+     90
+    ],
+    "caps": true
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 46,
+    "effort": 3.6925,
+    "items": [
+     {
+      "key": "chair4",
+      "label": "Move chair4 to (1.13, -1.80), turned 270 deg",
+      "usd": 0,
+      "minutes": 30,
+      "effort": 2.0925000000000002
+     },
+     {
+      "key": "mat",
+      "label": "Move the mat",
+      "usd": 0,
+      "minutes": 10,
+      "effort": 0.3
+     },
+     {
+      "key": "nightlight",
+      "label": "Unplug the nightlight",
+      "usd": 0,
+      "minutes": 1,
+      "effort": 0.3
+     },
+     {
+      "key": "caps",
+      "label": "Glide caps or slit tennis balls on the walker's rear legs",
+      "usd": 8,
+      "minutes": 5,
+      "effort": 1,
+      "product": "walker glide caps (or 2 tennis balls, slit)",
+      "assumption": "ASSUMPTION: caps cut the glide-on-rug friction to 0.10-0.20 (not measured); the mat's slide / fold events scale by the cloth-rug sim's fold-or-drag rate with caps over without (physics/rug_calib.json)"
+     }
+    ]
+   }
+  },
+  {
+   "layout": {
+    "chairs": {
+     "chair3": [
+      -0.111,
+      -1.158,
+      0
+     ],
+     "chair4": [
+      0.128,
+      -1.796,
+      0
+     ],
+     "chair5": [
+      0.274,
+      -0.636,
+      0
+     ],
+     "chair7": [
+      0.641,
+      -1.764,
+      0
+     ],
+     "chair8": [
+      1.9,
+      -0.83,
+      0
+     ]
+    },
+    "mat": "removed",
+    "cord": "taped",
+    "nightlight": "hall"
+   },
+   "cost": {
+    "usd": 8,
+    "minutes": 12,
+    "effort": 0.6,
+    "items": [
+     {
+      "key": "mat",
+      "label": "Remove the kitchen mat",
+      "usd": 0,
+      "minutes": 2,
+      "effort": 0.3
+     },
+     {
+      "key": "cord",
+      "label": "Tape the cord flat",
+      "usd": 8,
+      "minutes": 10,
+      "effort": 0.3,
+      "product": "flat cord cover or gaffer tape"
+     }
+    ]
+   }
+  }
+ ]
+}
