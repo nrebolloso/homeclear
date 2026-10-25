@@ -52,7 +52,7 @@ export function controlHints(x: HintCtx): Hints {
       break;
     case 'selected':
       label = vr ? 'Pointing at an object' : 'Object selected';
-      chips = vr ? [c('move', 'Trigger'), c('delete', 'A'), c('reset', 'Grip')]   // the three a headset needs on an object; undo stays on the stick click
+      chips = vr ? [c('move', 'Trigger'), c('delete', 'Hold A'), c('reset', 'Grip')]   // the three a headset needs on an object; undo stays on the stick click
         : [c('grab', 'G'), c('remove', 'X'), c('put back', 'Z'), c('undo', 'Ctrl', 'Z'), c('move / turn', 'T', 'R')];
       break;
     case 'inspect':

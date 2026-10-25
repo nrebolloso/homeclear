@@ -8,8 +8,9 @@
 // free walk could stand (walls, furniture and unfilmed floor stop it). Left stick walks (same checks), right stick snap-turns
 // 30 deg about the head; a held left-stick click is the planning shell's menu (frontend-xr.ts), not movement. A wand-stick
 // click undoes the last object edit (with the off-hand grip held: redoes).
-// Wand (right hand or controller; ?wand=left): point at furniture and hold to drag it (twist the wrist to turn it), hold
-// still to delete it; point at filmed floor and release to teleport. A pinch and a trigger are the same WebXR "select".
+// Wand (right hand or controller; ?wand=left): point at furniture and hold to drag it (twist the wrist to turn it; the wand
+// stick pushes and pulls it along the ray; a dashed ghost and an arrow (xrdrag.ts) show where it came from), hold still to
+// delete it (or hold A), grip puts it back; point at filmed floor and release to teleport. A pinch and a trigger are the same WebXR "select".
 // Moves go through the host's placement check and re-plan, like a desktop drag.
 // Lining the scan up with the real room: ?scale= (size), ?floor= (cm up or down) and ?measure=1 (the wand's height).
 import * as THREE from 'three';
@@ -17,12 +18,13 @@ import { bindXR } from './xr-session.ts';
 import { onThree, own } from './lifetime.ts';
 import { XRHandModelFactory } from 'three/addons/webxr/XRHandModelFactory.js';
 import type { Pose, XY } from './grid.ts';
-import { floorHit, twistAngle, snapQuarter, holdProgress, DELETE_HOLD_S, DELETE_SHOW_S, DRAG_DEADZONE_M } from './wand.ts';
+import { floorHit, rayPlaneHit, pushPull, confirmProgress, twistAngle, snapQuarter, holdProgress, DELETE_HOLD_S, DELETE_SHOW_S, DRAG_DEADZONE_M } from './wand.ts';
 import { tierAtLoad, xrCfg, type Tier } from './perf.ts';
 import { resetHoldProgress } from './resets.ts';
 import { card } from './reimagine.ts';
 import { pulse } from './controls.ts';
 import { stripSprite } from './xrstrip.ts';
+import { dragFeedback } from './xrdrag.ts';
 
 export interface XrItem { proxy: THREE.Object3D; group: THREE.Object3D; outline: THREE.LineSegments }
 export interface XrHost {
@@ -48,6 +50,8 @@ export interface XrHost {
   buttons?: XrButton[];
   lock?(k: number): boolean; unlock?(k: number): void;
   resetObject(k: number): unknown; resetAll(): unknown;
+  /** where the scan had object k (a reset puts it back here): the ghost and arrow after a reset */
+  home?(k: number): Pose;
   /** what the controls are for right now (hints.ts): a label and at most three key rows, drawn as the strip on the off-hand controller */
   hints?(): { label: string; rows: { key: string; text: string }[]; tone: string };
   /** undo / redo the last object edit (move, remove, reset); resolves to a line to show, e.g. "Undid: removed rug" */
@@ -135,7 +139,13 @@ export async function setupXR(host: XrHost) {
     new THREE.MeshBasicMaterial({ color: 0x44ff88, transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide }));
   tpRing.renderOrder = 1; tpRing.visible = false;
   scene.add(tpRing);
-  let grab: { k: number; off: XY; start: XY; drag: number; t0: number; yaw0: number; q0: THREE.Quaternion; valid?: Pose; blocked?: boolean } | null = null;
+  // planeZ: the height of the plane the ray drags along (where it first hit the object, so a far or low-aimed ray doesn't jump);
+  // push: metres added along the ray by the wand stick; from: the pose it was grabbed at (the arrow's tail)
+  let grab: { k: number; off: XY; start: XY; drag: number; t0: number; yaw0: number; q0: THREE.Quaternion; planeZ: number; push: number; from: Pose; valid?: Pose; blocked?: boolean } | null = null;
+  const fb = dragFeedback(scene, items, card);
+  let hoverHit: THREE.Vector3 | null = null, wandStickY = 0;
+  const ground = (o: THREE.Vector3, d: THREE.Vector3, z: number) => (z > 0.02 ? rayPlaneHit(o, d, z) : null) ?? floorHit(o, d);
+  const VERBS = ['drag · hold still to delete', 'hold A delete · grip put back'];
   let aiming = false, hover = -1;
   let snapReady = true;   // one 30 deg turn per flick of the right stick
   const pinching = new Set<object>();   // non-wand hands/controllers holding select: glide
@@ -168,9 +178,9 @@ export async function setupXR(host: XrHost) {
     if (host.editor?.active() && host.editor.down(r, q)) { toolHeld = true; return; }
     if (host.editor?.down(r, q)) { toolHeld = true; return; }
     if (hover < 0) { aiming = true; return; }
-    const f = floorHit(r.origin, r.direction), p = host.poses()[hover], at: XY = f ? [f.x, f.y] : [p.x, p.y];
+    const planeZ = Math.max(0, hoverHit?.z ?? 0), f = ground(r.origin, r.direction, planeZ), p = host.poses()[hover], at: XY = f ? [f.x, f.y] : [p.x, p.y];
     if (host.lock && !host.lock(hover)) return;
-    grab = { k: hover, off: [p.x - at[0], p.y - at[1]], start: at, drag: 0, t0: performance.now(), yaw0: p.yaw, q0: c.group.getWorldQuaternion(new THREE.Quaternion()) };
+    grab = { k: hover, off: [p.x - at[0], p.y - at[1]], start: at, drag: 0, t0: performance.now(), yaw0: p.yaw, q0: c.group.getWorldQuaternion(new THREE.Quaternion()), planeZ, push: 0, from: { x: p.x, y: p.y, yaw: p.yaw } };
   }
   function wandUp() {
     if (toolHeld) { toolHeld = false; const c = ctls.find(isWand); if (c) host.editor?.up(aim(c)); return; }
@@ -216,7 +226,7 @@ export async function setupXR(host: XrHost) {
     if (ruler.parent !== c.group) c.group.add(ruler);
     ruler.visible = true;
   }
-  function wandStep() {
+  function wandStep(dt = 0) {
     const c = ctls.find(isWand);
     rulerStep(c);
     const other = ctls.find(o => o.source && !isWand(o)), hint = host.editor?.hint;
@@ -229,10 +239,16 @@ export async function setupXR(host: XrHost) {
     tpRing.visible = false;
     let prog = -1;
     if (c) {
-      const r = aim(c), f = floorHit(r.origin, r.direction);
+      const r = aim(c), f0 = grab ? ground(r.origin, r.direction, grab.planeZ) : floorHit(r.origin, r.direction);
+      let f = f0;
+      if (grab && f0) {   // the wand stick pushes the object away along the ray (up) or pulls it in (down)
+        grab.push = pushPull(grab.push, wandStickY, dt);
+        const hd = Math.hypot(r.direction.x, r.direction.y);
+        if (grab.push && hd > 0.05) f = new THREE.Vector3(f0.x + r.direction.x / hd * grab.push, f0.y + r.direction.y / hd * grab.push, f0.z);
+      }
       const toolDistance = host.editor?.frame(r, c.group.getWorldQuaternion(new THREE.Quaternion()));
       if (toolDistance != null) {
-        hover = -1; aiming = false;
+        hover = -1; aiming = false; fb.hover(-1, null, []); fb.clearDrag();
         for (const it of items) it.outline.visible = false;
         c.ray.scale.z = toolDistance; return;
       }
@@ -246,27 +262,32 @@ export async function setupXR(host: XrHost) {
           // it follows the wand either way; a spot that collides (furniture, a wall, unfilmed floor) turns it red and is never committed
           it.group.position.set(p.x, p.y, 0); it.group.rotation.z = p.yaw;
           const fits = host.canPlace(grab.k, p);
+          fb.drag(grab.k, grab.from, p, fits);
           if (fits) grab.valid = p;
           if (!fits && !grab.blocked) pulse(c.source?.gamepad, 0.5, 60);
           grab.blocked = !fits;
         }
         prog = holdProgress((performance.now() - grab.t0) / 1000, grab.drag);
-        if (prog >= 1) { const k = grab.k; grab = null; Promise.resolve(host.remove(k)).finally(() => host.unlock?.(k)); prog = -1; }
+        if (prog >= 1) { const k = grab.k; grab = null; removeWithToast(k, true); prog = -1; }
+        fb.hover(-1, null, []);
       } else {
         const poses = host.poses();
         const hit = host.readOnly?.() ? undefined : wandRay.intersectObjects(items.filter((_, k) => !poses[k].removed).map(i => i.proxy))[0];
         hover = hit ? items.findIndex(i => i.proxy === hit.object) : -1;
+        hoverHit = hit ? hit.point.clone() : null;
         if (hit) len = hit.distance;
+        fb.clearDrag(); fb.hover(hover, hover >= 0 ? poses[hover] : null, VERBS);
         if (!host.readOnly?.() && host.movement?.() !== 'physical' && hover < 0 && aiming && f && host.standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
       }
       c.ray.scale.z = len;
       if (hover >= 0 && !grab) host.shell?.hover(hover);
-    } else { hover = -1; host.editor?.frame(null, null); }
+    } else { hover = -1; fb.hover(-1, null, []); fb.clearDrag(); host.editor?.frame(null, null); }
     items.forEach((it, k) => {   // blue = pointed at, yellow = held, turning red = about to be deleted
-      const held = grab?.k === k, m = it.outline.material as THREE.LineBasicMaterial;
+      const held = grab?.k === k, m = it.outline.material as THREE.LineBasicMaterial, ap = !held && !grab && aHeld > 0 && !aFired && k === aTarget ? confirmProgress(aHeld) : 0;
       it.outline.visible = held || (!grab && k === hover);
       m.color.setHex(held ? (grab?.blocked ? 0xff2020 : 0xffd84d) : 0x66ccff);   // red = this spot collides
       if (held && prog > 0) m.color.lerp(RED3, THREE.MathUtils.clamp((prog * DELETE_HOLD_S - DELETE_SHOW_S) / (DELETE_HOLD_S - DELETE_SHOW_S), 0, 1));
+      else if (ap > 0) m.color.lerp(RED3, ap);   // holding A: fills red, then it goes
     });
   }
 
@@ -277,23 +298,47 @@ export async function setupXR(host: XrHost) {
 
   // Controller shortcuts share the same priority as the wand: annotation gestures consume input before furniture.
   let clickWas = false, toastCard: THREE.Sprite | null = null, toastUntil = 0;
+  let aHeld = 0, aTarget = -1, aFired = false;   // A held on an object: it goes once held CONFIRM_S
   let gripWas = false, aWas = false, bothHeld = 0, resetFired = false, ringN = 0, ringCard: THREE.Sprite | null = null;
+  function toast(lines: string[], color = '#9be8b0') {
+    toastCard?.removeFromParent(); toastCard?.material.dispose(); toastCard = card(lines, color); scene.add(toastCard); toastUntil = performance.now() + 2200;
+  }
+  /** remove object k and say so, with the way back: a delete should never be silent */
+  function removeWithToast(k: number, unlockAfter = false) {
+    const name = (host.names[k] ?? 'object').replace(/_/g, ' ');
+    const done = Promise.resolve(host.remove(k));
+    if (unlockAfter) done.finally(() => host.unlock?.(k));
+    toast([`Removed ${name}`, 'stick-click to undo'], '#ffd27a');
+  }
   function controllerButtons(dt: number, pads: Record<string, Gamepad>) {
     const wp = pads[WAND], op = pads[WAND === 'left' ? 'right' : 'left'];
     const grip = !!wp?.buttons[1]?.pressed, a = !!wp?.buttons[4]?.pressed, click = !!wp?.buttons[3]?.pressed, both = grip && !!op?.buttons[1]?.pressed;
     const consumed = host.readOnly?.() || (host.editor?.buttons(pads, WAND) ?? false);
     if (consumed) {
       if (grab) { host.resync(); host.unlock?.(grab.k); }
-      grab = null; aiming = false;
+      grab = null; aiming = false; aHeld = 0; aFired = true;
     } else {
-      if (grip && !gripWas) { const k = grab?.k ?? hover; if (k >= 0) { host.unlock?.(k); grab = null; host.resync(); host.resetObject(k); pulse(wp, 0.5, 40); } }
-      if (a && !aWas && !grab && hover >= 0) { host.remove(hover); pulse(wp, 0.5, 40); }
+      if (grip && !gripWas) {
+        const k = grab?.k ?? hover;
+        if (k >= 0) {
+          const before = { ...host.poses()[k] }, home = host.home?.(k);
+          host.unlock?.(k); grab = null; host.resync(); host.resetObject(k); pulse(wp, 0.5, 40);
+          const after = host.poses()[k], near = (q: Pose) => !!home && Math.hypot(q.x - home.x, q.y - home.y) < 0.01 && Math.abs(q.yaw - home.yaw) < 0.01;
+          // it went back (not refused: the old spot taken, or it was already there): a green ghost of the spot, and an arrow from where it was
+          if (home && !after.removed && near(after) && (before.removed || !near(before))) fb.flash(k, before.removed ? null : before, home);
+        }
+      }
+      // A held on the pointed-at object removes it (a tap used to; the outline fills red while you hold)
+      if (!a) { aHeld = 0; aFired = false; aTarget = -1; }
+      else if (!aWas) { aTarget = hover; aHeld = 0; aFired = false; if (hover >= 0 && !grab) pulse(wp, 0.2, 25); }
+      else if (!aFired && !grab && aTarget >= 0 && hover === aTarget) {
+        aHeld += dt;
+        if (confirmProgress(aHeld) >= 1) { aFired = true; removeWithToast(aTarget); pulse(wp, 0.5, 40); }
+      } else if (!aFired) aHeld = 0;
       // wand stick click undoes the last object edit; with the off-hand grip held it redoes (marking has its own undo on B/Y)
       if (click && !clickWas && !grab && host.history) {
         pulse(wp, 0.4, 30);
-        host.history[op?.buttons[1]?.pressed ? 'redo' : 'undo']().then(text => {
-          toastCard?.removeFromParent(); toastCard?.material.dispose(); toastCard = card([text], '#9be8b0'); scene.add(toastCard); toastUntil = performance.now() + 1800;
-        });
+        host.history[op?.buttons[1]?.pressed ? 'redo' : 'undo']().then(text => toast([text]));
       }
     }
     gripWas = grip; aWas = a; clickWas = click;
@@ -305,7 +350,7 @@ export async function setupXR(host: XrHost) {
     if (consumed && both) resetFired = true;   // cancelling an edit cannot turn into a global reset before both grips are released
     if (!both) resetFired = false;
     const p = resetHoldProgress(bothHeld);
-    if (p >= 1 && !resetFired) { resetFired = true; host.resetAll(); }
+    if (p >= 1 && !resetFired) { resetFired = true; host.resetAll(); toast(['Room reset', 'stick-click to undo'], '#ffd84d'); }
     const n = both && !consumed && !resetFired ? Math.ceil(p * 5) : 0;
     if (n !== ringN) {
       ringN = n; ringCard?.removeFromParent(); ringCard?.material.dispose(); ringCard = null;
@@ -346,6 +391,7 @@ export async function setupXR(host: XrHost) {
     if (now - refusedAt > 200) { refusedAt = now; pulse(pad, 0.4, 60); }
   }
   function step(dt: number) {
+    fb.update(dt);
     if (pendingSpawn) {
       const reference = renderer.xr.getReferenceSpace(), pose = reference && renderer.xr.getFrame()?.getViewerPose(reference);
       if (!pose) return;
@@ -357,6 +403,7 @@ export async function setupXR(host: XrHost) {
     if (host.shell?.follow(dt)) { xrRig.x += body.x - head.x; xrRig.y += body.y - head.y; placeRig(); wandStep(); return; }   // the route drives the body
     const pads: Record<string, Gamepad> = {};
     for (const source of renderer.xr.getSession()?.inputSources ?? []) if (source.gamepad) pads[source.handedness] = source.gamepad;
+    wandStickY = grab ? pads[WAND]?.axes[3] ?? 0 : 0;   // while holding an object the wand stick pushes and pulls it, so it doesn't also walk or turn you
     if (pinching.size && !host.readOnly?.() && (host.movement?.() ?? 'all') === 'all') {   // glide forward in sub-steps of at most half a cell, as in free walk
       const v = 0.6 * dt, dx = Math.cos(yaw) * v, dy = Math.sin(yaw) * v, n = Math.max(1, Math.ceil(v / (host.cellM / 2)));
       let i = 0;
@@ -370,7 +417,7 @@ export async function setupXR(host: XrHost) {
       const wp = MOUNT ? walkerPose(yaw) : null, wy = wp?.yaw ?? null;
       // mounted: one stick, up/down along the walker's heading, left/right snap-turns; held: left walks relative to the view
       const [mx, my] = MOUNT ? stick(pads[MOUNT]) : [0, 0];
-      const [sx, sy] = MOUNT ? [0, my] : stick(pads.left), [tx] = MOUNT ? [mx] : stick(pads.right), dir = wy ?? yaw;
+      const [sx, sy] = MOUNT ? [0, my] : grab && WAND === 'left' ? [0, 0] : stick(pads.left), [tx] = MOUNT ? [mx] : stick(pads.right), dir = wy ?? yaw;
       if (sx || sy) {   // sub-steps of at most half a cell, as in free walk
         const v = 0.6 * dt, dx = (-sy * Math.cos(dir) + sx * Math.sin(dir)) * v, dy = (-sy * Math.sin(dir) - sx * Math.cos(dir)) * v;
         const n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / (host.cellM / 2)));
@@ -384,7 +431,7 @@ export async function setupXR(host: XrHost) {
         }
         if (i < n) refused(pads[MOUNT ?? 'left']);   // furniture or a wall stopped the move: the device flashes red
       }
-      if (Math.abs(tx) > 0.7 && snapReady) {
+      if (Math.abs(tx) > 0.7 && snapReady && !grab) {
         // held: turn the rig about the head, so turning doesn't also slide you sideways. Mounted: about the walker's centre,
         // like turning a real walker in place (you swing round behind it), and not into furniture: a refused turn buzzes
         const a = -Math.sign(tx) * Math.PI / 6, c = Math.cos(a), sn = Math.sin(a), cx = host.walkerCentre?.() ?? 0.5;
@@ -400,7 +447,7 @@ export async function setupXR(host: XrHost) {
     if (wpNow) Object.assign(body, wpNow);   // the walker is rigid: it stands and points where the real one does
     else { body.x = head.x; body.y = head.y; body.yaw += Math.atan2(Math.sin(yaw - body.yaw), Math.cos(yaw - body.yaw)) * Math.min(1, dt * 4); }
     controllerButtons(dt, pads);
-    wandStep();
+    wandStep(dt);
   }
   /** Put the head at floor-frame (x, y) looking along yaw by moving the rig: scripted viewpoints on a headset nobody wears. */
   function place(x: number, y: number, yaw: number) {
@@ -433,7 +480,7 @@ export async function setupXR(host: XrHost) {
     frameBufferScaleFactor: cfg.scale, fixedFoveation: cfg.foveation,
     onEnterXr: enterRoom,
     onExitXr: () => {
-      camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1;
+      camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1; fb.clear(); aHeld = 0; aTarget = -1; aFired = false;
       ringCard?.removeFromParent(); ringCard?.material.dispose(); ringCard = null; ringN = 0; bothHeld = 0; gripWas = false; aWas = false; clickWas = false;
       toastCard?.removeFromParent(); toastCard?.material.dispose(); toastCard = null;
       for (const it of items) { it.outline.visible = false; (it.outline.material as THREE.LineBasicMaterial).color.setHex(0x66ccff); }
@@ -457,6 +504,6 @@ export async function setupXR(host: XrHost) {
     /** the strip card on the off-hand controller: its words and whether it shows */
     strip: () => ({ key: stripKey, visible: !!strip?.visible }),
     wand: () => ({ hover: hover >= 0 ? host.names[hover] : null, button: -1, grab: grab ? host.names[grab.k] : null, aiming, teleport: tpRing.visible,
-      drag: grab?.drag, valid: grab?.valid ?? null, ruler: ruler?.visible ? rulerKey : null }),
+      drag: grab?.drag, valid: grab?.valid ?? null, planeZ: grab?.planeZ ?? null, push: grab?.push ?? 0, fx: fb.state(), ruler: ruler?.visible ? rulerKey : null }),
   };
 }

@@ -121,16 +121,21 @@ try {
   await G(p, "__xr.ctl('right').updateButtonValue('trigger', 1)");
   await wait();
   const grabbed = await G(p, 'return game.debug.wand()');
-  // the grab keeps the offset between the bed and where the ray met the floor: move that floor point by the same delta
+  // the grab keeps the offset between the bed and where the ray met the plane through the point it first hit (planeZ): move that point by the same delta
+  const pz = grabbed.planeZ ?? 0;
   const fh = await G(p, `const r = game.debug.rig, V = r.position.constructor, h = game.xrPose().head, o = new V(h[0], h[1], h[2] - 0.45),
-    t = new V(...${JSON.stringify(bedBox)}), d = t.clone().sub(o).normalize(), k = -o.z / d.z; return [o.x + d.x * k, o.y + d.y * k, 0]`);
-  const goal = [fh[0] + 2.0 - bed0.x, fh[1] + 1.0 - bed0.y, 0];
+    t = new V(...${JSON.stringify(bedBox)}), d = t.clone().sub(o).normalize(), k = (${pz} - o.z) / d.z; return [o.x + d.x * k, o.y + d.y * k, ${pz}]`);
+  const goal = [fh[0] + 2.0 - bed0.x, fh[1] + 1.0 - bed0.y, pz];
   await G(p, `__xr.aim(__xr.ctl('right'), ${JSON.stringify(goal)}, -Math.PI / 2)`);
   await wait(400);
+  const dragFx = await G(p, 'return game.debug.wand().fx');
   await G(p, "__xr.ctl('right').updateButtonValue('trigger', 0)");
   // the release re-plans in the worker: wait for the new route (the desktop test's same move gives 3.67 -> 3.98 m)
   await p.waitForFunction((l0) => { const g = (window as any).game; return Math.abs(g.current().length_m - l0) > 0.01; }, len0, { timeout: 5000 }).catch(() => {});
   const bed1 = await G(p, "return { pose: game.layout().poses[game.items.indexOf('bed')], len: game.current().length_m, err: game.current().error }");
+  const fxAfter = await G(p, 'return game.debug.wand().fx');
+  check('dragging shows the origin ghost and an arrow; both are gone after the drop', hov.fx?.hover && dragFx.arrow && dragFx.ghost && !fxAfter.arrow && !fxAfter.ghost,
+    `hover ring=${hov.fx?.hover}; while dragging ${JSON.stringify(dragFx)}; after ${JSON.stringify(fxAfter)}`);
   check('wand hovers, grabs, drags and turns the bed; the route re-plans', hov.hover === 'bed' && grabbed.grab === 'bed' && Math.hypot(bed1.pose.x - 2.0, bed1.pose.y - 1.0) < 0.05 &&
     Math.abs(Math.abs(bed1.pose.yaw - bed0.yaw) - Math.PI / 2) < 0.01 && !bed1.err && Math.abs(bed1.len - len0) > 0.01,
     `hover=${hov.hover} grab=${grabbed.grab}; bed (${bed0.x.toFixed(2)}, ${bed0.y.toFixed(2)}, ${(bed0.yaw * 180 / Math.PI).toFixed(0)}) -> (${bed1.pose.x.toFixed(2)}, ${bed1.pose.y.toFixed(2)}, ${(bed1.pose.yaw * 180 / Math.PI).toFixed(0)} deg), route ${len0.toFixed(2)} -> ${bed1.len?.toFixed(2)} m`);
@@ -250,18 +255,27 @@ try {
   await G(p, "__xr.ctl('right').updateButtonValue('squeeze', 1)");
   await wait();
   await G(p, "__xr.ctl('right').updateButtonValue('squeeze', 0)");
-  await wait(500);
+  await wait(200);
+  const resetFx = await G(p, 'return game.debug.wand().fx');
+  await wait(300);
   const bed2 = await G(p, "return game.layout().poses[game.items.indexOf('bed')]");
+  check('a reset flashes the spot it went back to', resetFx.flash > 0, JSON.stringify(resetFx));
   check('grip puts the pointed-at object back', Math.hypot(bed2.x - bed0.x, bed2.y - bed0.y) < 0.01 && Math.abs(bed2.yaw - bed0.yaw) < 0.01,
     `bed (${bed2.x.toFixed(2)}, ${bed2.y.toFixed(2)}) vs original (${bed0.x.toFixed(2)}, ${bed0.y.toFixed(2)})`);
   await G(p, `__xr.aim(__xr.ctl('right'), ${JSON.stringify(await G(p, "return __xr.proxy('bed')"))})`);
   await wait();
   await G(p, "__xr.ctl('right').updateButtonValue('a-button', 1)");
-  await wait();
+  await wait(150);
+  await G(p, "__xr.ctl('right').updateButtonValue('a-button', 0)");
+  await wait(300);
+  const tapInv = await G(p, 'return game.inventory()');
+  check('a tap on A no longer removes the object', !tapInv.includes('bed'), `removed: ${tapInv.join(', ')}`);
+  await G(p, "__xr.ctl('right').updateButtonValue('a-button', 1)");
+  await wait(700);
   await G(p, "__xr.ctl('right').updateButtonValue('a-button', 0)");
   await wait(500);
   const inv = await G(p, 'return game.inventory()');
-  check('A removes the pointed-at object', inv.includes('bed'), `removed: ${inv.join(', ')}`);
+  check('holding A removes the pointed-at object', inv.includes('bed'), `removed: ${inv.join(', ')}`);
   const stripNow = await G(p, 'return game.debug.xrStrip()');
   check('the off-hand strip card shows the current mode and keys', stripNow.visible && /Trigger|stick/i.test(stripNow.key), JSON.stringify(stripNow));
   await G(p, "__xr.ctl('right').updateButtonValue('thumbstick', 1)");
