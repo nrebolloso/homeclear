@@ -202,7 +202,15 @@ export function riggedMannequin(root: THREE.Object3D, heightM: number) {
   };
 }
 
-export async function loadRigged(url: string, heightM: number) {
+/** textured keeps the model's own texture (Cesium's logo, striped on a white body: it blows out against a bright splat); the
+ *  default is a matte neutral grey, as PLAN_ACCESSIBILITY_DEMO 3.4 asks for. The skin and bones are untouched. */
+export async function loadRigged(url: string, heightM: number, textured = false) {
   const gltf = await new GLTFLoader().loadAsync(url);
+  if (!textured) gltf.scene.traverse(o => {
+    const m = o as THREE.SkinnedMesh;
+    if (!m.isSkinnedMesh) return;
+    for (const old of ([] as THREE.Material[]).concat(m.material)) (old as THREE.MeshStandardMaterial).map?.dispose();
+    m.material = new THREE.MeshStandardMaterial({ color: 0x8c95a3, roughness: 0.85, metalness: 0 });
+  });
   return riggedMannequin(gltf.scene, heightM);
 }
