@@ -23,7 +23,7 @@
   "options": {
     "mat": {
       "taped": { "label": "Tape the mat's edges down", "cost_usd": 10, "minutes": 10, "effort": 1, "product": "double-sided carpet tape",
-        "assumption": "ASSUMPTION: taped edges stop the simulated slide and corner fold; the 1.5 cm edge stays (toe contacts unchanged)" },
+        "assumption": "ASSUMPTION: taped edges stop the simulated slide and corner fold; ~1.5 mm of edge stays under the tape (grid.ts TAPED_EDGE_M, not measured)" },
       "removed": { "from_fix": "remove_mat" }
     },
     "cord": {

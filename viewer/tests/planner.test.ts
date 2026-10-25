@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fromLayout, toLayout, check, cost, changed, score, type PlannerCfg } from '../src/planner.ts';
-import type { Pose } from '../src/grid.ts';
+import { polyCells, stamp, worldFootprint, TAPED_EDGE_M, type Pose } from '../src/grid.ts';
 import { loadScene } from './scene.ts';
 
 const cfg = JSON.parse(readFileSync(new URL('../../configs/planner/kitchen4_lighter.json', import.meta.url), 'utf8')) as PlannerCfg;
@@ -21,7 +21,10 @@ test('planner: the scanned room is a valid layout and round-trips through the en
   assert.equal(scanned.nightlight, 'hall');
   assert.deepEqual(fromLayout(s.init, cfg, base, toLayout(s.init, cfg, base, scanned)), scanned);
   const fix = { ...structuredClone(scanned), mat: 'taped' as const, cord: 'taped' as const, nightlight: 'kitchen' };
-  assert.deepEqual(fromLayout(s.init, cfg, base, toLayout(s.init, cfg, base, fix)), { ...fix, mat: 'present' }, 'taping a mat is not visible in the engine layout');
+  assert.deepEqual(fromLayout(s.init, cfg, base, toLayout(s.init, cfg, base, fix)), fix, 'a taped mat is a pose flag (grid.ts TAPED_EDGE_M)');
+  const L = toLayout(s.init, cfg, base, fix), k = s.init.objects.findIndex((o: any) => o.name === cfg.mat);
+  const bump = stamp(s.init.g, s.init.base, s.init.objects, L.poses, L.flattened, []).bump, mat = polyCells(s.init.g, worldFootprint(s.init.objects[k], L.poses[k]));
+  assert.ok(mat.length && mat.every(c => bump[c] > 0 && bump[c] <= TAPED_EDGE_M + 1e-9), 'the taped mat keeps a ~1.5 mm edge, not 0 and not its full height');
 });
 
 test('planner: invalid layouts say why', () => {

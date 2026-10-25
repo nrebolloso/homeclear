@@ -14,6 +14,7 @@ from scipy.ndimage import distance_transform_edt
 ROOT = Path(__file__).resolve().parents[1]
 MOVE_EFFORT = {"bed": 5, "nightstand": 2, "chair": 2, "nightlight": 1, "rug": 1, "other": 3, "door": 99}   # optimize.ts DEFAULTS
 EFFORT_PER_M = 0.3
+TAPED_EDGE_M = 0.0015   # grid.ts TAPED_EDGE_M (ASSUMPTION: edge left under carpet tape, not measured)
 
 
 def jround(x):
@@ -90,7 +91,8 @@ class Scene:
             if o["layer"] == "obstacle":
                 obst.flat[c] = True
             else:
-                bump.flat[c] = np.maximum(bump.flat[c], o["height_m"])
+                # grid.ts TAPED_EDGE_M: a taped object's edge still stands ~1.5 mm (pose tuple's 5th field = taped)
+                bump.flat[c] = np.maximum(bump.flat[c], min(o["height_m"], TAPED_EDGE_M) if len(p) > 4 and p[4] else o["height_m"])
         for (x0, y0), (x1, y1) in flattened:
             bump.flat[self.poly_cells(box([[x0, y0], [x1, y1]]))] = 0
         return floor, obst, bump
@@ -333,6 +335,8 @@ def to_poses(S, pl):
         P[m] = (*P[m][:3], True)
     elif pl["mat"] == "moved" and pl.get("mat_at"):
         P[m] = (pl["mat_at"][0], pl["mat_at"][1], math.radians(pl["mat_at"][2]), False)
+    elif pl["mat"] == "taped":
+        P[m] = (*P[m][:3], False, True)
     if pl["nightlight"] == "off":
         P[nl] = (*P[nl][:3], True)
     else:

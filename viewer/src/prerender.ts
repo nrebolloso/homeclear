@@ -9,6 +9,7 @@ export function layoutKey(objs: { name: string; pivot: number[] }[], lay: Layout
   const parts: string[] = [];
   objs.forEach((o, k) => {
     const p = lay.poses[k];
+    if (p.taped && !p.removed) parts.push(`${o.name}:taped`);
     if (p.removed) parts.push(`${o.name}:removed`);
     else {
       const yaw = ((Math.round((p.yaw * 180) / Math.PI / 90) * 90) % 360 + 360) % 360;

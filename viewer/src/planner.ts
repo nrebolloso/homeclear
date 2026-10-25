@@ -46,7 +46,7 @@ export function fromLayout(S: Init, cfg: PlannerCfg, base: Pose[], lay: Layout):
   const moved = Math.hypot(m.x - m0.x, m.y - m0.y) > 0.01 || Math.abs(m.yaw - m0.yaw) > 0.01;
   return {
     chairs: Object.fromEntries(cfg.chairs.map(n => [n, [p(n).x, p(n).y, deg(p(n).yaw)]])),
-    mat: m.removed ? 'removed' : moved ? 'moved' : 'present', ...(moved && !m.removed ? { mat_at: [m.x, m.y, deg(m.yaw)] as [number, number, number] } : {}),
+    mat: m.removed ? 'removed' : m.taped ? 'taped' : moved ? 'moved' : 'present', ...(moved && !m.removed ? { mat_at: [m.x, m.y, deg(m.yaw)] as [number, number, number] } : {}),
     cord: cordFlat ? 'taped' : 'present',
     nightlight: nl.removed ? 'off' : outlet ?? 'elsewhere', ...(!nl.removed && !outlet ? { nightlight_at: [nl.x, nl.y] as XY } : {}),
   };
@@ -59,6 +59,7 @@ export function toLayout(S: Init, cfg: PlannerCfg, base: Pose[], pl: PlanLayout)
   const m = idx(S, cfg.mat), nl = idx(S, cfg.nightlight);
   if (pl.mat === 'removed') poses[m] = { ...poses[m], removed: true };
   else if (pl.mat === 'moved' && pl.mat_at) poses[m] = { x: pl.mat_at[0], y: pl.mat_at[1], yaw: rad(pl.mat_at[2]) };
+  else if (pl.mat === 'taped') poses[m] = { ...poses[m], taped: true };
   if (pl.nightlight === 'off') poses[nl] = { ...poses[nl], removed: true };
   else { const at = cfg.outlets[pl.nightlight]?.xy ?? pl.nightlight_at; if (at) poses[nl] = { x: at[0], y: at[1], yaw: 0 }; }
   return { poses, flattened: pl.cord === 'present' ? [] : [cfg.cord_box_xy] };

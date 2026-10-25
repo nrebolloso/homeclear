@@ -15,7 +15,7 @@ const L0: Layers = { floor: new Uint8Array(await bin(sc.grid.floor)), obst: new 
   bump: new Float32Array(await bin(sc.grid.bump_height_m)) };
 const coverage = new Uint8Array(await bin(sc.grid.coverage));
 const original: Layout = { poses: sc.objects.map((o: any) => ({ x: o.pivot[0], y: o.pivot[1], yaw: 0 })), flattened: [] };
-const changed = new Map(card.p.map(([n, x, y, yaw, rm]) => [n, { x, y, yaw, removed: !!rm } as Pose]));
+const changed = new Map(card.p.map(([n, x, y, yaw, rm]) => [n, { x, y, yaw, removed: !!(rm & 1), taped: !!(rm & 2) } as Pose]));
 const layout: Layout = { poses: sc.objects.map((o: any, k: number) => changed.get(o.name) ?? original.poses[k]), flattened: card.f };
 const L = stamp(g, L0, sc.objects, layout.poses, layout.flattened);
 drawTopdown($('map') as HTMLCanvasElement, { g, L, coverage, coverageGood: sc.grid.coverage_good, objs: sc.objects, layout, original,
