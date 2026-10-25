@@ -20,6 +20,7 @@ import { createHeatOverlay, nights, drawTimeline } from './heat.ts';
 import { buildMannequin, feetAt, type Step } from './mannequin.ts';
 import { loadRigged } from './rig.ts';
 import { createLivePhys, type LivePhys } from './livephys.ts';
+import { createLockstep, demoSeed, TICK_S } from './demorun.ts';
 import { initClips, exportForCosmos, listClips, type ExportOpts } from './cosmos.ts';
 import { layoutKey } from './prerender.ts';
 import { drawTopdown } from './topdown.ts';
@@ -1633,9 +1634,10 @@ const markerXR: XrEditor = {
 };
 
 // ---------- live object physics (livephys.ts, Rapier in its own worker): objects the walker pushes, slides, tips ----------
+const SEED = demoSeed(PARAMS, RUN);   // demo autoplay's fixed seed (demorun.ts), or null
 const live: LivePhys | null = PARAMS.has('nophys') ? null : createLivePhys({ base: BASE, g, objs, items, scene, renderer, obst: placeBase.obst, bump: base.bump,
   walker: () => walkerCfg, layout: () => layout, overlap: overlapOk.flatMap((s, k) => [...s].filter(n => n > k).map(n => [k, n] as [number, number])),
-  hold: k => reim.t() < 1 || ((tc as any).dragging && k === selected) || grabbing?.k === k, log: $('physevents'), sampledEl: $('physsampled'),
+  hold: k => reim.t() < 1 || ((tc as any).dragging && k === selected) || grabbing?.k === k, log: $('physevents'), sampledEl: $('physsampled'), seed: SEED,
   settled: moves => {   // the layout follows where the walker left things (no yaw snap: it lies as it fell)
     layout = { ...layout, poses: layout.poses.map((q, n) => { const m = moves.find(v => v.k === n); return m ? { ...q, ...m.pose } : q; }) };   // keeps removed / taped
     syncObjects(); replan();
@@ -1649,12 +1651,28 @@ const fanFan = createFuturesFan({ scene, walker: () => walkerCfg, worldModel,
   fanScene: () => (fanFor === persona ? fanSc : (fanFor = persona, fanSc = { g, base, est, objects: objs, persona, risk, rules: sc.hazard_rules, plan: init.plan })),
   body: () => explore.parked ?? body, route: () => (current && !current.error ? (mode === 'auto' ? trip.route(current.xy) : current.xy) : null), fold: () => live?.fold() ?? layout.folds?.[0] ?? null,
   layout: () => ((tc as any).dragging && selected >= 0 ? { ...layout, poses: layout.poses.map((p, k) => (k === selected ? poseOf(k) : p)) } : layout),   // live while dragging
-  night: () => routes[selRoute].night, fps: () => game.fps });
+  night: () => routes[selRoute].night, fps: () => game.fps, seed: SEED });
 $('fanon').onchange = e => fanFan.set((e.target as HTMLInputElement).checked);
 $('fanmodel').onchange = e => fanFan.setModel((e.target as HTMLSelectElement).value as 'learned' | 'hand');
 $('fanstyle').onchange = e => fanFan.setStyle((e.target as HTMLSelectElement).value);
 $('fanlift').onchange = e => fanFan.setLift((e.target as HTMLSelectElement).value as 'average' | 'shuffler');
 game.fan = { ...fanFan, tapeMat: () => tapeObject('mat') };   // VR: bind a button to game.fan.set(!game.fan.on())
+// ---------- deterministic demo autoplay (demorun.ts): lockstep clock while seeded; Reset demo ----------
+const lockstepOn = () => SEED !== null && mode === 'auto' && !xr.presenting();
+const lock = createLockstep(() => (live?.idle() ?? true) && fanFan.idle(TICK_S) && game.pending() === 0, () => lockstepOn() && !game.manual);
+/** the demo's starting state: every object as scanned (no tape, moves, removals, folds, fixes), a fresh physics world on
+ *  the same seed, fan off, planner replay stopped, autoplay from the route's start */
+async function resetDemo() {
+  planfix.stop(); fanFan.set(false); rugCascade.reset();
+  for (let k = 0; k < 2; k++) await new Promise(r => requestAnimationFrame(r));   // the replay's last glide frame lands first
+  $('pfresult').innerHTML = ''; $('pfoptions').innerHTML = ''; $('physevents').innerHTML = ''; live?.events.splice(0);
+  await resetAll();
+  live?.resample(); lock.reset();
+  setWalk('auto'); routePaused = false;
+  if (current && !current.error) Object.assign(body, routePose(0, 0, Infinity, trip.leg() === 'in' ? trip.inbound(current.xy) : undefined));
+}
+$('resetdemo').onclick = () => void resetDemo();
+game.resetDemo = resetDemo; game.lockstep = { seed: SEED, on: lockstepOn, ticks: lock.ticks };
 /** tape an object's edges down: the one "taped" rule (grid.ts TAPED_EDGE_M edge, no slide or fold), as the planner's mat 'taped' */
 function tapeObject(name: string) {
   const k = objs.findIndex(o => o.name === name);
@@ -2482,16 +2500,17 @@ function placeCamera(cam: THREE.PerspectiveCamera, b: typeof body) {
 let last = performance.now(), frames = 0, fpsT = last, clockT = 0;
 function frame(now: number) {
   if (game.manual) return;   // recorder drives the clock with game.tick()
-  const dt = Math.min(0.1, (now - last) / 1000);
+  const real = Math.min(0.1, (now - last) / 1000);
   last = now;
-  step(dt, now / 1000);
+  if (lockstepOn()) { lock.frame(real, s => { clockT += s; step(s, clockT, false); }); vision.render(); css.render(scene, camera); }   // demorun.ts: the sim ticks between frames
+  else step(real, now / 1000);
   frames++;
   if (now - fpsT > 1000) {
     game.fps = (frames * 1000) / (now - fpsT); frames = 0; fpsT = now;
     $('hud').textContent = `${game.fps.toFixed(0)} fps · ${mode === 'auto' ? 'autoplay' : mode === 'fly' ? 'fly (noclip)' : explore.on ? 'look around' : isChair() ? 'drive' : 'walk'} · ${RUN}${sc.scale_note ? ` · ${sc.scale_note}` : ""}`;
   }
 }
-function step(dt: number, t: number) {
+function step(dt: number, t: number, draw = true) {
   frontendVR?.update();
   reach3d.tick(dt);   // the reach map's wave (desktop and headset)
   if (xr.presenting()) return xrFrame(dt, t);
@@ -2530,8 +2549,7 @@ function step(dt: number, t: number) {
   pulseSpots(t);
   replayStep(dt);
   liveChecks(t);
-  vision.render();
-  css.render(scene, camera);
+  if (draw) { vision.render(); css.render(scene, camera); }
 }
 
 // ---------- VR (xr.ts): the headset is the patient's eyes; main.ts hands it the scene, the walker and the editor ----------
@@ -2726,7 +2744,7 @@ $('export').onclick = () => exportForCosmos(ctx, { hero: $<HTMLInputElement>('he
 Object.assign(game, {
   ready: true, state, body, fly, items: objs.map(o => o.name), view,
   /** Fixed-step clock for recordings: game.manual = true stops the rAF loop; each tick advances dt s and renders. */
-  tick(dt: number) { clockT += dt; step(dt, clockT); },
+  tick(dt: number) { if (lockstepOn()) return lock.advance(dt, s => { clockT += s; step(s, clockT); }); clockT += dt; step(dt, clockT); },
   resume() { game.manual = false; last = performance.now(); },   // the animation loop never stopped: frame() was skipping
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */

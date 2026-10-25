@@ -29,6 +29,13 @@ export function rng(seed: number) {
 const pick = (r: Range, u: () => number) => r[0] + (r[1] - r[0]) * u();
 
 const VOX = 0.05;
+/** the mat top's edge slopes from the floor up over this many thicknesses (~14 deg): a rug edge gives under a wheel or
+ *  glide, which rides up onto it; a square step is a plow, and a 0.5-1.3 kg slab ahead of it slides away across the
+ *  room instead (real takes: the rug body stays put, only its edge folds) */
+const MAT_RAMP = 4;
+/** a rug soaks up a sustained push by bunching its edge; the rigid slab can't, so its body creeps (cm) instead of skating (m)
+ *  when a leg wedges against an edge or the flap: worst seeded corner pass 1.4 m -> ~20 cm, the real edge drag (rug_calib cloth p90 11-20 cm) */
+const MAT_DRAG = 60;
 /** Points -> vertical cuboids: occupied VOX voxels (>= 2 points), contiguous runs per column merged. Clipped to z >= 2 mm
  *  (runners lying flat dip below the floor band) so nothing starts inside the floor. */
 export function columns(p: Float32Array, stride = 3): { c: [number, number, number]; h: [number, number, number] }[] {
@@ -131,7 +138,7 @@ export function createWorld(I: WorldInit) {
     if (!mat) { const zs: number[] = []; for (let i = 2; i < o.points.length; i += 3) zs.push(o.points[i]); zs.sort((a, b) => a - b); z5 = zs[Math.floor(zs.length * 0.05)] ?? 0; }
     // a hinged leaf can't slide (swing not modelled), stands on a cabinet out of reach, or is a mat taped down (grid.ts TAPED_EDGE_M): kept still
     const fixed = mat ? !!p.taped : o.kind === 'door' || z5 > 0.15;
-    const rb = world.createRigidBody((fixed ? RAPIER.RigidBodyDesc.fixed() : RAPIER.RigidBodyDesc.dynamic().setSleeping(true).setLinearDamping(0.2).setAngularDamping(0.5))
+    const rb = world.createRigidBody((fixed ? RAPIER.RigidBodyDesc.fixed() : RAPIER.RigidBodyDesc.dynamic().setSleeping(true).setLinearDamping(mat ? MAT_DRAG : 0.2).setAngularDamping(mat ? MAT_DRAG : 0.5))
       .setTranslation(p.x, p.y, 0).setRotation(yawQ(p.yaw)).setEnabled(!p.removed));
     const s: Record<string, number> = {};
     const add = (d: RAPIER.ColliderDesc) => { const c = world.createCollider(d.setActiveHooks(RAPIER.ActiveHooks.FILTER_CONTACT_PAIRS).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS), rb); owner.set(c.handle, k); return c; };
@@ -153,10 +160,23 @@ export function createWorld(I: WorldInit) {
         s.flap_stiffness_nm_per_rad = pick(R.flap_stiffness_nm_per_rad, u); s.flap_damping = pick(R.flap_damping, u);
       }
       const prism = (pts: XY[], z0: number, z1: number) => new Float32Array(pts.flatMap(([x, y]) => [x, y, z0, x, y, z1]));
+      // bottom outline at z0, top at z1 inset by d on every edge but the hinge (`flush` = edge index from pts[i] to pts[i+1]):
+      // the mat top and the flap meet flush along the hinge, no step or groove for a glide to wedge in and drag the mat by
+      const ramp = (pts: XY[], z0: number, z1: number, d: number, flush = -1) => {
+        const n = pts.length, cw = pts.reduce((a, q, i) => a + q[0] * pts[(i + 1) % n][1] - pts[(i + 1) % n][0] * q[1], 0) < 0 ? -1 : 1;
+        const nrm = (i: number) => { const [a, b] = [pts[i], pts[(i + 1) % n]], l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [cw * (a[1] - b[1]) / l, cw * (b[0] - a[0]) / l]; };
+        return new Float32Array(pts.flatMap(([x, y], i) => {
+          const e = (i + n - 1) % n, [ax, ay] = nrm(e), [bx, by] = nrm(i), da = e === flush ? 0 : d, db = i === flush ? 0 : d, det = ax * by - ay * bx;
+          const [ox, oy] = Math.abs(det) < 1e-6 ? [ax * da, ay * da] : [(da * by - ay * db) / det, (ax * db - da * bx) / det];
+          return [x, y, z0, x + ox, y + oy, z1];
+        }));
+      };
       const area = Math.abs(poly.reduce((acc, q, i) => { const r = poly[(i + 1) % poly.length]; return acc + q[0] * r[1] - r[0] * q[1]; }, 0)) / 2;
       add(RAPIER.ColliderDesc.convexHull(prism(poly, 0, t / 2))!.setMass(s.mass_kg).setFriction(s.floor_friction).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min)
         .setCollisionGroups(grp(MATBOT, FLOOR | WALL)));
-      add(RAPIER.ColliderDesc.convexHull(prism(poly, t / 2, t))!.setMass(0.001).setFriction(1).setCollisionGroups(grp(MATTOP, OBJ | WALKER)));
+      // top (and flap) as slippery as the bottom: a glide standing on the mat can't carry it along like a sled. The real rug (data/
+      // recording_notes.csv) stays put and only its edge folds or bunches under the glide (the flap, rugcascade.ts)
+      add(RAPIER.ColliderDesc.convexHull(ramp(poly, 0.001, t, Math.min(MAT_RAMP * t, 0.25 * Math.min(...[0, 1].map(c => Math.max(...o.footprint.map(q => q[c])) - Math.min(...o.footprint.map(q => q[c]))))), tri ? curl!.corner : -1))!.setMass(0.001).setFriction(s.floor_friction).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min).setCollisionGroups(grp(MATTOP, OBJ | WALKER)));
       const body: Body = { k, o, rb, rest: { ...p }, disturbed: 0, announced: false, tipped: false, mat: true, fixed, still: 0 };
       bodies.push(body);
       if (tri && curl && !fixed) {
@@ -165,8 +185,9 @@ export function createWorld(I: WorldInit) {
         const axis = { x: out[1], y: -out[0], z: 0 };   // axis x out = +z: a positive angle lifts the corner
         const q0 = yawQ(p.yaw), mw = rot(q0, mid);
         const frb = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setSleeping(true).setTranslation(p.x + mw[0], p.y + mw[1], mw[2]).setRotation(q0).setAngularDamping(0.5));
-        const fc = world.createCollider(RAPIER.ColliderDesc.convexHull(prism(tri.map(([x, y]) => [x - mid[0], y - mid[1]] as XY), -t, 0))!
-          .setMass(Math.max(0.005, (s.mass_kg / area) * curl.size_m ** 2 / 2)).setFriction(1).setCollisionGroups(grp(FLAP, WALKER | FLOOR))
+        // its outer edges slope like the mat's (a square flap edge plows the whole mat ahead of a wheel); the lift is what catches a wheel
+        const fc = world.createCollider(RAPIER.ColliderDesc.convexHull(ramp(tri.map(([x, y]) => [x - mid[0], y - mid[1]] as XY), 0.001 - t, 0, Math.min(MAT_RAMP * t, 0.3 * curl.size_m), 2))!
+          .setMass(Math.max(0.005, (s.mass_kg / area) * curl.size_m ** 2 / 2)).setFriction(s.floor_friction).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min).setCollisionGroups(grp(FLAP, WALKER | FLOOR))
           .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS), frb);
         owner.set(fc.handle, -2);
         const j = world.createImpulseJoint(RAPIER.JointData.revolute({ x: mid[0], y: mid[1], z: mid[2] }, { x: 0, y: 0, z: 0 }, axis), rb, frb, true) as RAPIER.RevoluteImpulseJoint;
