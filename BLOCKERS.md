@@ -40,6 +40,6 @@
    described in `worldmodel/walker_videos.py`. Then run `python -m worldmodel.persona --extra <dir>`. Until then the embedding is
    trained on PhysioNet only.
 12. **VR: the 3D ghosts are untested in a headset (VR team).** `game.gait.ghost` and the life-size world-model ghosts
-   (`game.wmghosts`: two gait styles, futures fan, predicted self, month replay) are scene objects, so they should render in
+   (`game.wmghosts`: two gait styles, futures fan, predicted self, month replay) and the live futures fan (`game.fan`: 30 trails, 30 frames, 10 people, updated every 0.5 s in `xrFrame`) are scene objects, so they should render in
    WebXR, but nobody has looked at them on a Quest 2. Labels are sprites sized for a desktop camera, and the month replay
    draws 3 instanced meshes of 60. Check legibility and fps in the headset, and bind `twoStyles()` / `month()` from `xr.ts`.

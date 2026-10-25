@@ -28,6 +28,7 @@ const TEXT: Record<PhysEvent['kind'], string> = { bumped: 'bumped', moved: 'push
 
 export function createLivePhys(D: LivePhysDeps) {
   const worker = new Worker(new URL('./physworker.ts', import.meta.url), { type: 'module' });
+  let fold: { corner: XY; lift_m: number; size_m: number } | null = null;
   let busy = true, acc = 0, ready = false, seed = Math.floor(Math.random() * 1e9);
   const xf = new Map<number, number[]>();   // object -> latest [k, x, y, z, qx, qy, qz, qw]
   let walkerPose: { x: number; y: number; yaw: number } | null = null, target = { x: 0, y: 0, yaw: 0 };
@@ -100,6 +101,7 @@ export function createLivePhys(D: LivePhysDeps) {
     }
     if (m.type !== 'step' || m.none) return;
     walkerPose = m.walker;
+    fold = m.flapInfo?.folded ? { corner: m.flapInfo.corner, lift_m: m.flapInfo.lift_m, size_m: m.flapInfo.size_m } : null;
     for (const p of m.poses as number[][]) xf.set(p[0], p);
     if (m.flap && flapMesh.visible) { flapMesh.position.set(m.flap[0], m.flap[1], m.flap[2]); flapMesh.quaternion.set(m.flap[3], m.flap[4], m.flap[5], m.flap[6]); }
     if (!m.flapInfo) flapMesh.visible = false;
@@ -113,6 +115,8 @@ export function createLivePhys(D: LivePhysDeps) {
   const q = new THREE.Quaternion();
   return {
     events, ready: () => ready,
+    /** the mat's curled corner while folded over (futures.ts treats it as a bump), else null */
+    fold: () => fold,
     /** The layout changed (drag, remove, fix, reset): bodies jump to it. */
     sync(lay: Layout) {
       if (!ready) return;

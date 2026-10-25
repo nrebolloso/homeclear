@@ -150,6 +150,14 @@
       <button id="wgstop">Stop</button>
       <div id="wgstatus" class="status"></div>
     </section>
+    <section id="fanpanel">
+      <h2>Futures fan <span class="imagined">imagined (world model)</span></h2>
+      <label title="every 0.5 s, ~30 futures 2.5 s ahead from where the walker is now: green = clean, red = hits a hazard"><input type="checkbox" id="fanon"> Show the fan</label>
+      <select id="fanmodel" title="learned world model, or the hand rule (feet on the route + noise)"><option value="learned">learned model</option><option value="hand">hand rule</option></select>
+      <select id="fanstyle" title="whose gait embedding the learned model is folded with"></select>
+      <div class="hint">red = a swing crosses a bump of 4 mm or more (mat edge, cord, folded corner) or the frame comes within 3 cm of furniture; not a fall prediction</div>
+      <div id="fanstatus" class="status"></div>
+    </section>
   </aside>
   <div id="player" hidden>
     <div class="wrap"><video id="video" controls muted playsinline></video><canvas id="overlay"></canvas>

@@ -47,6 +47,7 @@ import { createXRComparison } from './xrcompare.ts';
 import { createPlanFix } from './planfix.ts';
 import { createGaitFit } from './gaitfit.ts';
 import { createWmGhosts } from './wmghosts.ts';
+import { createFuturesFan } from './futuresfan.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 // model and scene text (Cosmos Reason notes, hazard details) goes into innerHTML escaped; same as report.ts's, which can't
@@ -1372,6 +1373,24 @@ const live: LivePhys | null = PARAMS.has('nophys') ? null : createLivePhys({ bas
 $('physresample').onclick = () => live?.resample();
 if (!live) $('physpanel').hidden = true;
 game.livephys = live;
+// ---------- live futures fan (futuresfan.ts, futures.ts in fanworker.ts): ~30 imagined futures from where the walker is now ----------
+let fanFor: unknown = null, fanSc: any = null;
+const fanFan = createFuturesFan({ scene, walker: () => walkerCfg, worldModel,
+  fanScene: () => (fanFor === persona ? fanSc : (fanFor = persona, fanSc = { g, base, est, objects: objs, persona, risk, rules: sc.hazard_rules })),
+  body: () => explore.parked ?? body, route: () => (current && !current.error ? current.xy : null), fold: () => live?.fold() ?? null,
+  layout: () => ((tc as any).dragging && selected >= 0 ? { ...layout, poses: layout.poses.map((p, k) => (k === selected ? poseOf(k) : p)) } : layout),   // live while dragging
+  night: () => routes[selRoute].night, fps: () => game.fps });
+$('fanon').onchange = e => fanFan.set((e.target as HTMLInputElement).checked);
+$('fanmodel').onchange = e => fanFan.setModel((e.target as HTMLSelectElement).value as 'learned' | 'hand');
+$('fanstyle').onchange = e => fanFan.setStyle((e.target as HTMLSelectElement).value);
+game.fan = { ...fanFan, tapeMat: () => tapeObject('mat') };   // VR: bind a button to game.fan.set(!game.fan.on())
+/** tape an object's edges flat (a bump object: its footprint's box, as tape_cord flattens the cord): the viewer's tape rule, height 0 under tape */
+function tapeObject(name: string) {
+  const k = objs.findIndex(o => o.name === name), fp = worldFootprint(objs[k], layout.poses[k]), xs = fp.map(p => p[0]), ys = fp.map(p => p[1]);
+  layout = { ...layout, flattened: [...layout.flattened, [[Math.min(...xs) - 0.03, Math.min(...ys) - 0.03], [Math.max(...xs) + 0.03, Math.max(...ys) + 0.03]]] };
+  syncObjects();
+  return replan();
+}
 
 // ---------- what leaves the game: OT report, family fix card ----------
 /** Every change in the layout on screen, in order, with what it takes and where (for the card's numbered pins). */
@@ -1925,6 +1944,7 @@ function step(dt: number, t: number) {
   if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
   tourStep(dt);
   wmg.update(dt);
+  fanFan.update(dt);
   const wb = explore.parked ?? body;
   walker.group.position.set(wb.x, wb.y, 0);
   walker.group.rotation.z = wb.yaw;
@@ -2068,6 +2088,7 @@ function xrFrame(dt: number, t: number) {
   if (!comparison.previewing()) live?.frame(dt, wb, false, walker.group);
   pulseSpots(t);
   reim.update(dt);
+  fanFan.update(dt);
   comparison.step(dt);
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
   if (!comparison.previewing()) labelStep();
@@ -2112,7 +2133,7 @@ Object.assign(game, {
   setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); Object.assign(body, { x, y, yaw }); },
   explore: () => ({ on: explore.on, parked: explore.parked && { ...explore.parked } }),
   setFly(x: number, y: number, z: number, yawDeg: number, pitchDeg: number) { setWalk('fly'); Object.assign(fly, { x, y, z }); body.yaw = (yawDeg * Math.PI) / 180; body.pitch = (pitchDeg * Math.PI) / 180; },
-  setThird(on: boolean) { const h = $<HTMLInputElement>('third'); h.checked = on; h.dispatchEvent(new Event('change')); },
+  setThird(on: boolean, back?: number, up?: number) { const h = $<HTMLInputElement>('third'); h.checked = on; h.dispatchEvent(new Event('change')); if (on && back) Object.assign(view, { back, up: up ?? view.up }); },   // back/up: recordings where 1.8 m behind is inside a wall
   layout: () => layout, current: () => current, routes,
   spots: () => spotList, startTour, endTour, tourState: () => ({ ...tour }), replayState: () => ({ on: replay.on, t: replay.t }), startReplay, stopReplay, showPhysics,
   setPersona, physicsPass, personas: () => Object.keys(personas), persona: () => personaKey, suggest, applyOption, setFillBackend,

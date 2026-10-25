@@ -13,6 +13,14 @@
   - The month replay walks 60 trips as low-detail ghosts, as scanned and after the fixes, with a counter: e2e run 196 → 63 incidents vs the evaluator's 192.8 → 67.0. The "Plan fixes" fans now draw in the room.
   - fps (`viewer/e2e/fps_ghosts.ts`, ANGLE Intel Arc MTL, 1600×900, headless GPU): room 59, two styles + fan 60, month 51. A headed run was not possible because the screen was locked.
   - Proof: `proof/demo/ghosts_kitchen.mp4`, e2e check 14.
+- **Live futures fan** (`viewer/src/futuresfan.ts`, `futures.ts` in `fanworker.ts`; panel "Futures fan"; labelled "imagined"):
+  - Every 0.5 s it samples 30 futures 2.5 s ahead from the walker's current pose. The worker runs the same JS world-model MLP as the rollouts (there is no ONNX gait model). Each future is drawn as a floor trail, a frame silhouette, and a person on every 3rd future. Red = a swing crosses a bump ≥ `hazard_rules.bump_min_m`, or the frame comes within 3 cm of furniture. The card names the top hazard.
+  - It runs in autoplay, free walk and VR (xrFrame), and it follows drags, removals, flatten boxes and the physics rug fold. The fold exists only in free walk, where physics runs, and is approximated as a disc. `game.fan.tapeMat()` adds a flatten box, which removes the edge entirely. The planner's "taped" mat keeps its edge.
+  - Learned vs hand rule, measured on the smoothed route: learned 1.4–1.7 cm wide on straights, 3.4–3.7 cm on 24–44° turns. Hand rule 4.2–5.1 cm everywhere (its assumed 5 cm path offset). So the hand rule is not narrower, it just doesn't widen at turns.
+  - Persona: the styles barely shift the fan (mat 281–300/300 red for every style, chair 272–295). The embeddings don't differ enough, and there is no labelled "shuffler".
+  - The mat is ~1.4 m from the fridge, inside the 2.5 s horizon, so the fan is already 14–17/30 red at the fridge.
+  - fps (`viewer/e2e/fps_fan.ts`, Arc MTL, 1600×900, off/on alternated 4×): headed 23.8 off vs 24.3 learned (n stays 30), with a Firefox tab using ~145% CPU at the time. Headless 53 off vs 54 learned in 3 of 4 runs; the 4th dipped to 16 from outside load. The adaptive count (30 → 10 by fives) compares the 2 s mean to the smoothed fan-off rate.
+  - Proof: `proof/demo/futures_fan.mp4` (fridge → mat red → taped → all clear → 5/30 brush the trash can further on, a real 3 cm squeeze), e2e check 15.
 - **Risks:** zones and outlets are read off the viewer, not taped (BLOCKERS 10). Taped-mat and rerouted-cord effects and their costs are assumptions. Chair-move cost is the placeholder `movecost.ts` (about 35 min). `personalization.mp4` is 3 min because the re-plan runs 3,000 layouts live.
 
 ## Demo push (2026-10-24)

@@ -357,6 +357,29 @@ try {
     check('world model ghosts: no page errors', wg.errors.length === 0, wg.errors.join(' | ') || 'none');
     await wg.p.close();
   }
+  // 15. the live futures fan (futuresfan.ts): from the walker's current state during autoplay, red at the mat, green once
+  // it is taped, the hand-rule toggle, and the fps stays within ~10% of the fan-off rate (adaptive count)
+  {
+    const ff = await open('kitchen4_lighter');
+    const F = (f: string) => G(ff.p, f);
+    const watch = 'const seen = []; for (let i = 0; i < 28; i++) { await new Promise(r => setTimeout(r, 500)); const s = game.fan.state(); if (s.fan) seen.push(s); } return seen';
+    await F('await new Promise(r => setTimeout(r, 6000))');
+    const off = await F('return game.fps');
+    await F('game.fan.set(true)');
+    const before: any[] = await F(watch), fps = await F('return game.fps');
+    await F('await game.fan.tapeMat()');
+    const after: any[] = await F(watch);
+    await F("game.fan.setModel('hand'); await new Promise(r => setTimeout(r, 1500))");
+    const h = await F('return game.fan.state()');
+    const mat = (s: any) => Object.keys(s.fan.counts).some(k => k.startsWith('mat'));
+    const hit = before.find(mat);
+    check('futures fan: 30 imagined futures from the current state, red at the mat, labelled', !!hit && hit.fan.n === 30 && /^World model: 30 imagined futures · \d+ hit the mat/.test(hit.label), hit ? `${hit.label}; ${JSON.stringify(hit.fan.counts)}` : `never hit the mat: ${before.map(s => s.label.split('· ')[1]).join(', ')}`);
+    check('futures fan: no future hits the mat once it is taped flat', after.length > 10 && !after.some(mat), `${after.length} fans, mat hits ${after.filter(mat).length}`);
+    check('futures fan: hand rule toggle', h.model === 'hand' && /^Hand rule:/.test(h.label), h.label);
+    check('futures fan: fps within ~10% of the fan-off rate (adaptive count)', fps >= 0.9 * off, `${off.toFixed(1)} fps off -> ${fps.toFixed(1)} on, ${before.at(-1)?.n} futures sampled`);
+    check('futures fan: no page errors', ff.errors.length === 0, ff.errors.join(' | ') || 'none');
+    await ff.p.close();
+  }
 } finally {
   await browser.close();
   writeFileSync(new URL('results.json', import.meta.url), JSON.stringify(results, null, 1));
