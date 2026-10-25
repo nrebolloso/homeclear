@@ -70,4 +70,4 @@
    - wm-planner's STATUS planned to add the glide-caps fix: it is already here (config option, `engine.py` CAPS_FACTOR,
      planner cost item), so skip that. Rerunning the B200 search with caps is optional; the viewer merges the config's
      options over `search.json`.
-   - The ranking by toe catches puts caps at about 0 (caps only change snags in the planner); they show in `objective_cut`.
+   - Expect caps near 0 in a toe-catch ranking (in the planner they only scale snags; not checked in the merged viewer); their effect shows in `objective_cut`.
