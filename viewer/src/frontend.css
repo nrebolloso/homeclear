@@ -74,7 +74,12 @@
 #frontend .measured::before { content: "▣ "; content: "▣ " / ""; }
 #frontend .measured { color: var(--text); border-bottom-color: var(--text); }
 .frontend[data-theme="light"] #frontend .ot { color: #8a4b00; }
-#workspace-toggle { position: absolute; top: 20px; left: 20px; display: flex; gap: 10px; align-items: center; padding: 10px 14px; text-align: left; }
+#brand-bar { position: absolute; top: 20px; left: 20px; display: flex; align-items: stretch; }
+#workspace-toggle { display: flex; gap: 10px; align-items: center; padding: 10px 14px; text-align: left; background: none; border: 0; border-radius: 16px; }
+#scan-slot:not(:empty) { display: flex; align-items: center; padding: 6px 8px 6px 0; border-left: 1px solid var(--line); margin: 8px 0; padding-left: 8px; }
+#scan-slot #scan-picker { font: inherit; font-size: calc(0.8125rem * var(--fs)); color: var(--text); background: transparent; border: 1px solid transparent; border-radius: 10px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+#scan-slot #scan-picker:hover, #scan-slot #scan-picker[aria-expanded="true"] { background: var(--pressed-bg); border-color: var(--pressed-line); color: var(--pressed-fg); }
+#scan-slot #scan-current { display: none; }
 #workspace-toggle small { display: block; font-size: calc(0.75rem * var(--fs)); font-weight: 400; color: var(--muted); max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brand-mark { font-size: calc(1.8125rem * var(--fs)); font-weight: 900; color: var(--accent); }
 .chevron { color: var(--muted); margin-left: 15px; }
@@ -169,7 +174,7 @@
   .frontend { --drawer: min(370px, calc(100vw - 24px)); --scene-right: 0px; }
   #planning-panel { right: 12px; top: 95px; bottom: 155px; }
   #viewer-toolbar { bottom: 25px; left: 50%; width: max-content; }
-  #workspace-toggle { top: 12px; left: 12px; }
+  #brand-bar { top: 12px; left: 12px; } #scan-slot #scan-picker { padding: 6px; }
   #comparison { top: 12px; left: auto; right: 12px; transform: none; }
   #comparison > button { display: none; }
   #comparison button { min-height: 30px; padding: 6px; font-size: calc(0.75rem * var(--fs)); }

@@ -1,0 +1,768 @@
+{
+ "version": 1,
+ "run": "kitchen4_lighter",
+ "frame": "floor frame: metres, floor z=0, +z up",
+ "splat": "main.ply",
+ "removed_splat": null,
+ "shell": null,
+ "verification": null,
+ "synthetic": [],
+ "scale_note": null,
+ "grid": {
+  "origin_xy": [
+   -1.8303,
+   -2.2211
+  ],
+  "cell_m": 0.02,
+  "shape": [
+   276,
+   240
+  ],
+  "index": "flat i*ny + j; cell (i,j) spans origin + (i,j)*cell_m",
+  "floor": "floor.u8",
+  "obstacles": "obstacles.u8",
+  "bump_height_m": "bump.f32",
+  "bump_estimated": "bump_estimated.u8",
+  "coverage": "coverage.u8",
+  "coverage_good": 3
+ },
+ "objects": [
+  {
+   "name": "chair",
+   "kind": "chair",
+   "splat": "objects/chair.ply",
+   "surface_m": 0.336,
+   "fill": "objects/fill_chair_lama.ply",
+   "pivot": [
+    -2.014,
+    -1.366,
+    0.0
+   ],
+   "footprint": [
+    [
+     0.2619999945163727,
+     0.35100001096725464
+    ],
+    [
+     -0.2849999964237213,
+     0.3149999976158142
+    ],
+    [
+     -0.24199999868869781,
+     -0.3409999907016754
+    ],
+    [
+     0.3050000071525574,
+     -0.3050000071525574
+    ]
+   ],
+   "height_m": 0.674,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_chair.ply",
+    "telea": "objects/fill_chair_telea.ply",
+    "ns": "objects/fill_chair_ns.ply",
+    "lama": "objects/fill_chair_lama.ply"
+   }
+  },
+  {
+   "name": "chair2",
+   "kind": "chair",
+   "splat": "objects/chair2.ply",
+   "surface_m": 0.334,
+   "fill": "objects/fill_chair2_lama.ply",
+   "pivot": [
+    -1.726,
+    -0.225,
+    0.0
+   ],
+   "footprint": [
+    [
+     -0.050999999046325684,
+     0.3880000114440918
+    ],
+    [
+     -0.3799999952316284,
+     -0.10000000149011612
+    ],
+    [
+     0.052000001072883606,
+     -0.38999998569488525
+    ],
+    [
+     0.3799999952316284,
+     0.09799999743700027
+    ]
+   ],
+   "height_m": 0.676,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_chair2.ply",
+    "telea": "objects/fill_chair2_telea.ply",
+    "ns": "objects/fill_chair2_ns.ply",
+    "lama": "objects/fill_chair2_lama.ply"
+   }
+  },
+  {
+   "name": "bedside_table",
+   "kind": "nightstand",
+   "splat": "objects/bedside_table.ply",
+   "surface_m": 0.586,
+   "fill": "objects/fill_bedside_table_lama.ply",
+   "pivot": [
+    -1.777,
+    -0.7,
+    0.0
+   ],
+   "footprint": [
+    [
+     -0.21299999952316284,
+     0.24699999392032623
+    ],
+    [
+     -0.2809999883174896,
+     -0.1899999976158142
+    ],
+    [
+     0.24799999594688416,
+     -0.2720000147819519
+    ],
+    [
+     0.3160000145435333,
+     0.16500000655651093
+    ]
+   ],
+   "height_m": 0.689,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_bedside_table.ply",
+    "telea": "objects/fill_bedside_table_telea.ply",
+    "ns": "objects/fill_bedside_table_ns.ply",
+    "lama": "objects/fill_bedside_table_lama.ply"
+   }
+  },
+  {
+   "name": "bedside_table2",
+   "kind": "nightstand",
+   "splat": "objects/bedside_table2.ply",
+   "surface_m": 0.594,
+   "fill": "objects/fill_bedside_table2_lama.ply",
+   "pivot": [
+    -1.538,
+    -0.838,
+    0.0
+   ],
+   "footprint": [
+    [
+     -0.014000000432133675,
+     0.4339999854564667
+    ],
+    [
+     -0.34299999475479126,
+     -0.1459999978542328
+    ],
+    [
+     0.0010000000474974513,
+     -0.3409999907016754
+    ],
+    [
+     0.33000001311302185,
+     0.23899999260902405
+    ]
+   ],
+   "height_m": 0.615,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_bedside_table2.ply",
+    "telea": "objects/fill_bedside_table2_telea.ply",
+    "ns": "objects/fill_bedside_table2_ns.ply",
+    "lama": "objects/fill_bedside_table2_lama.ply"
+   }
+  },
+  {
+   "name": "rug",
+   "kind": "rug",
+   "splat": "objects/rug.ply",
+   "surface_m": null,
+   "fill": "objects/fill_rug_lama.ply",
+   "pivot": [
+    -0.898,
+    0.207,
+    0.0
+   ],
+   "footprint": [
+    [
+     -0.27900001406669617,
+     0.4690000116825104
+    ],
+    [
+     -0.3109999895095825,
+     -0.4580000042915344
+    ],
+    [
+     0.28200000524520874,
+     -0.4790000021457672
+    ],
+    [
+     0.3149999976158142,
+     0.4480000138282776
+    ]
+   ],
+   "height_m": 0.006,
+   "layer": "bump",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_rug.ply",
+    "telea": "objects/fill_rug_telea.ply",
+    "ns": "objects/fill_rug_ns.ply",
+    "lama": "objects/fill_rug_lama.ply"
+   }
+  },
+  {
+   "name": "chair3",
+   "kind": "chair",
+   "splat": "objects/chair3.ply",
+   "surface_m": 0.406,
+   "fill": "objects/fill_chair3_lama.ply",
+   "pivot": [
+    -0.111,
+    -1.158,
+    0.0
+   ],
+   "footprint": [
+    [
+     -0.2619999945163727,
+     0.29600000381469727
+    ],
+    [
+     -0.33000001311302185,
+     -0.20600000023841858
+    ],
+    [
+     0.24500000476837158,
+     -0.2840000092983246
+    ],
+    [
+     0.31299999356269836,
+     0.21799999475479126
+    ]
+   ],
+   "height_m": 0.728,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_chair3.ply",
+    "telea": "objects/fill_chair3_telea.ply",
+    "ns": "objects/fill_chair3_ns.ply",
+    "lama": "objects/fill_chair3_lama.ply"
+   }
+  },
+  {
+   "name": "chair4",
+   "kind": "chair",
+   "splat": "objects/chair4.ply",
+   "surface_m": 0.406,
+   "fill": "objects/fill_chair4_lama.ply",
+   "pivot": [
+    0.128,
+    -1.796,
+    0.0
+   ],
+   "footprint": [
+    [
+     -0.3779999911785126,
+     0.3319999873638153
+    ],
+    [
+     -0.42500001192092896,
+     -0.27300000190734863
+    ],
+    [
+     0.3100000023841858,
+     -0.33000001311302185
+    ],
+    [
+     0.3569999933242798,
+     0.2750000059604645
+    ]
+   ],
+   "height_m": 0.731,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_chair4.ply",
+    "telea": "objects/fill_chair4_telea.ply",
+    "ns": "objects/fill_chair4_ns.ply",
+    "lama": "objects/fill_chair4_lama.ply"
+   }
+  },
+  {
+   "name": "chair5",
+   "kind": "chair",
+   "splat": "objects/chair5.ply",
+   "surface_m": 0.414,
+   "fill": "objects/fill_chair5_lama.ply",
+   "pivot": [
+    0.274,
+    -0.636,
+    0.0
+   ],
+   "footprint": [
+    [
+     0.19599999487400055,
+     0.3100000023841858
+    ],
+    [
+     -0.29100000858306885,
+     0.21299999952316284
+    ],
+    [
+     -0.18799999356269836,
+     -0.3089999854564667
+    ],
+    [
+     0.29899999499320984,
+     -0.21299999952316284
+    ]
+   ],
+   "height_m": 0.732,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_chair5.ply",
+    "telea": "objects/fill_chair5_telea.ply",
+    "ns": "objects/fill_chair5_ns.ply",
+    "lama": "objects/fill_chair5_lama.ply"
+   }
+  },
+  {
+   "name": "table",
+   "kind": "other",
+   "splat": "objects/table.ply",
+   "surface_m": null,
+   "fill": "objects/fill_table_lama.ply",
+   "pivot": [
+    0.447,
+    -1.207,
+    0.0
+   ],
+   "footprint": [
+    [
+     -0.699999988079071,
+     0.5339999794960022
+    ],
+    [
+     -0.8119999766349792,
+     -0.335999995470047
+    ],
+    [
+     0.7239999771118164,
+     -0.5339999794960022
+    ],
+    [
+     0.8360000252723694,
+     0.335999995470047
+    ]
+   ],
+   "height_m": 0.775,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_table.ply",
+    "telea": "objects/fill_table_telea.ply",
+    "ns": "objects/fill_table_ns.ply",
+    "lama": "objects/fill_table_lama.ply"
+   }
+  },
+  {
+   "name": "chair7",
+   "kind": "chair",
+   "splat": "objects/chair7.ply",
+   "surface_m": 0.413,
+   "fill": "objects/fill_chair7_lama.ply",
+   "pivot": [
+    0.641,
+    -1.764,
+    0.0
+   ],
+   "footprint": [
+    [
+     -0.23899999260902405,
+     0.37599998712539673
+    ],
+    [
+     -0.30799999833106995,
+     -0.3140000104904175
+    ],
+    [
+     0.2529999911785126,
+     -0.36899998784065247
+    ],
+    [
+     0.32100000977516174,
+     0.3199999928474426
+    ]
+   ],
+   "height_m": 0.733,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_chair7.ply",
+    "telea": "objects/fill_chair7_telea.ply",
+    "ns": "objects/fill_chair7_ns.ply",
+    "lama": "objects/fill_chair7_lama.ply"
+   }
+  },
+  {
+   "name": "chair8",
+   "kind": "chair",
+   "splat": "objects/chair8.ply",
+   "surface_m": 0.413,
+   "fill": "objects/fill_chair8_lama.ply",
+   "pivot": [
+    0.874,
+    -0.669,
+    0.0
+   ],
+   "footprint": [
+    [
+     -0.20999999344348907,
+     0.3050000071525574
+    ],
+    [
+     -0.2930000126361847,
+     -0.2290000021457672
+    ],
+    [
+     0.21199999749660492,
+     -0.30799999833106995
+    ],
+    [
+     0.29600000381469727,
+     0.22599999606609344
+    ]
+   ],
+   "height_m": 0.733,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_chair8.ply",
+    "telea": "objects/fill_chair8_telea.ply",
+    "ns": "objects/fill_chair8_ns.ply",
+    "lama": "objects/fill_chair8_lama.ply"
+   }
+  },
+  {
+   "name": "basket",
+   "kind": "other",
+   "splat": "objects/basket.ply",
+   "surface_m": null,
+   "fill": "objects/fill_basket_lama.ply",
+   "pivot": [
+    0.954,
+    2.547,
+    0.0
+   ],
+   "footprint": [
+    [
+     -0.2160000056028366,
+     0.32499998807907104
+    ],
+    [
+     -0.27300000190734863,
+     -0.2849999964237213
+    ],
+    [
+     0.2680000066757202,
+     -0.335999995470047
+    ],
+    [
+     0.32499998807907104,
+     0.27399998903274536
+    ]
+   ],
+   "height_m": 1.278,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_basket.ply",
+    "telea": "objects/fill_basket_telea.ply",
+    "ns": "objects/fill_basket_ns.ply",
+    "lama": "objects/fill_basket_lama.ply"
+   }
+  },
+  {
+   "name": "box",
+   "kind": "other",
+   "splat": "objects/box.ply",
+   "surface_m": null,
+   "fill": "objects/fill_box_lama.ply",
+   "pivot": [
+    1.256,
+    2.552,
+    0.0
+   ],
+   "footprint": [
+    [
+     -0.10400000214576721,
+     0.18199999630451202
+    ],
+    [
+     -0.19699999690055847,
+     0.009999999776482582
+    ],
+    [
+     0.10199999809265137,
+     -0.1509999930858612
+    ],
+    [
+     0.1940000057220459,
+     0.019999999552965164
+    ]
+   ],
+   "height_m": 2.141,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_box.ply",
+    "telea": "objects/fill_box_telea.ply",
+    "ns": "objects/fill_box_ns.ply",
+    "lama": "objects/fill_box_lama.ply"
+   }
+  },
+  {
+   "name": "box2",
+   "kind": "other",
+   "splat": "objects/box2.ply",
+   "surface_m": null,
+   "fill": "objects/fill_box2_lama.ply",
+   "pivot": [
+    1.5,
+    2.584,
+    0.0
+   ],
+   "footprint": [
+    [
+     -0.01600000075995922,
+     0.1589999943971634
+    ],
+    [
+     -0.16200000047683716,
+     -0.010999999940395355
+    ],
+    [
+     0.11299999803304672,
+     -0.24699999392032623
+    ],
+    [
+     0.2590000033378601,
+     -0.07599999755620956
+    ]
+   ],
+   "height_m": 2.259,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_box2.ply",
+    "telea": "objects/fill_box2_telea.ply",
+    "ns": "objects/fill_box2_ns.ply",
+    "lama": "objects/fill_box2_lama.ply"
+   }
+  },
+  {
+   "name": "trash_can",
+   "kind": "other",
+   "splat": "objects/trash_can.ply",
+   "surface_m": null,
+   "fill": "objects/fill_trash_can_lama.ply",
+   "pivot": [
+    1.871,
+    0.336,
+    0.0
+   ],
+   "footprint": [
+    [
+     0.20900000631809235,
+     0.19200000166893005
+    ],
+    [
+     -0.26100000739097595,
+     0.1420000046491623
+    ],
+    [
+     -0.22699999809265137,
+     -0.18299999833106995
+    ],
+    [
+     0.24400000274181366,
+     -0.13300000131130219
+    ]
+   ],
+   "height_m": 0.663,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_trash_can.ply",
+    "telea": "objects/fill_trash_can_telea.ply",
+    "ns": "objects/fill_trash_can_ns.ply",
+    "lama": "objects/fill_trash_can_lama.ply"
+   }
+  },
+  {
+   "name": "box3",
+   "kind": "other",
+   "splat": "objects/box3.ply",
+   "surface_m": null,
+   "fill": "objects/fill_box3_lama.ply",
+   "pivot": [
+    1.98,
+    1.368,
+    0.0
+   ],
+   "footprint": [
+    [
+     0.035999998450279236,
+     0.1979999989271164
+    ],
+    [
+     -0.07599999755620956,
+     0.18700000643730164
+    ],
+    [
+     -0.03999999910593033,
+     -0.18700000643730164
+    ],
+    [
+     0.07199999690055847,
+     -0.17599999904632568
+    ]
+   ],
+   "height_m": 2.139,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_box3.ply",
+    "telea": "objects/fill_box3_telea.ply",
+    "ns": "objects/fill_box3_ns.ply",
+    "lama": "objects/fill_box3_lama.ply"
+   }
+  },
+  {
+   "name": "box4",
+   "kind": "other",
+   "splat": "objects/box4.ply",
+   "surface_m": null,
+   "fill": "objects/fill_box4_lama.ply",
+   "pivot": [
+    2.094,
+    2.08,
+    0.0
+   ],
+   "footprint": [
+    [
+     -0.09600000083446503,
+     0.1080000028014183
+    ],
+    [
+     -0.1080000028014183,
+     -0.07100000232458115
+    ],
+    [
+     0.2029999941587448,
+     -0.09099999815225601
+    ],
+    [
+     0.2150000035762787,
+     0.08799999952316284
+    ]
+   ],
+   "height_m": 2.279,
+   "layer": "obstacle",
+   "light_radius_m": null,
+   "fills": {
+    "median": "objects/fill_box4.ply",
+    "telea": "objects/fill_box4_telea.ply",
+    "ns": "objects/fill_box4_ns.ply",
+    "lama": "objects/fill_box4_lama.ply"
+   }
+  }
+ ],
+ "fixtures": [],
+ "transfer": {
+  "min_above_knee_m": 0.05,
+  "max_above_knee_m": 0.2,
+  "reach_height_m": [
+   0.3,
+   1.3
+  ]
+ },
+ "ems": {
+  "stretcher_width_m": 0.6,
+  "phone_reach_m": 3.0,
+  "entry": null
+ },
+ "hazards": "hazards.json",
+ "route": "route.json",
+ "routes": "routes.json",
+ "walker": "walker.json",
+ "personas": "personas.json",
+ "persona": "persona.json",
+ "interventions": [],
+ "risk": {
+  "rollouts": 500,
+  "trips_per_night": 2,
+  "days_per_month": 30,
+  "path_offset_sd_m": 0.05,
+  "step_jitter_m": 0.04,
+  "dark_contact_multiplier": 1.5,
+  "ghosts": 24,
+  "leg_flash_m": 0.01,
+  "contact_table": {
+   "older_adult_walker": {
+    "height_m": [
+     0,
+     0.0025,
+     0.005,
+     0.0075,
+     0.01,
+     0.0125,
+     0.015,
+     0.02,
+     0.03,
+     0.05
+    ],
+    "p_per_stride": [
+     0,
+     8.71e-06,
+     0.000241,
+     0.000875,
+     0.00168,
+     0.00242,
+     0.00302,
+     0.00381,
+     0.00442,
+     0.00463
+    ]
+   }
+  }
+ },
+ "plan": {
+  "preferred_clearance_m": 0.3,
+  "clearance_weight": 5.0
+ },
+ "hazard_rules": {
+  "clearance_margin_m": 0.1,
+  "bump_min_m": 0.004,
+  "bump_link_cells": 3,
+  "bump_limit_m": 0.01,
+  "margin_m": {
+   "width": 0.0,
+   "height": 0.0
+  }
+ },
+ "fill_note": "imagined, not measured: floor and wall under/behind movable objects, inpainted (stage 12b)"
+}

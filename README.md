@@ -129,6 +129,20 @@ Read start/goal points off `out/<run>/occupancy.png` (1 m grid lines, metres in 
 
 Viewer: `cd viewer && npm run dev`, then http://localhost:5179/?scene=<name> (`?step=learned` uses the learned step model).
 
+**Demo scene without running the pipeline** (`kitchen4_lighter`): its small JSON (scene, walker, personas, hazards,
+routes, `version.json`) is in git; the splats, floor maps and object plys are a versioned bundle
+(`kitchen4_lighter_v<N>.zip`, name and sha256 in `version.json`), in the Drive folder "Homeclear scene bundles"
+(https://drive.google.com/drive/folders/1sMKaR_2YbwhMRrhvPaULsURbEhZY0rlH) and in `/blue/dream_team/nrebolloso/scene_bundles/`.
+1. `git pull` (if `viewer/public/scene/kitchen4_lighter/` already exists untracked, move it aside first, or git refuses the checkout).
+2. `tools/get_scene.sh kitchen4_lighter ~/Downloads/kitchen4_lighter_v1.zip` after downloading from Drive, or
+   `tools/get_scene.sh` alone to fetch it from /blue (needs the HiPerGator ssh setup). It checks the sha256 and unzips;
+   the zip holds no tracked JSON, so it never overwrites what git checked out.
+3. Outside demo mode the viewer shows the scene version bottom left, and says "run tools/get_scene.sh" when the
+   installed bundle doesn't match `version.json`.
+
+New bundle: bump `version` and `bundle` in `version.json`, zip every non-JSON file plus `bundle.json` (`{"version": ...}`),
+put the sha256 in `version.json`, upload to both places, commit the JSON.
+
 VR (Quest 2/3 over USB): enable developer mode, plug in, allow USB debugging, then `cd viewer && npm run dev:quest`
 (`adb reverse` so the headset's `localhost:5179` is the laptop; IPv4 because adb forwards to 127.0.0.1). Open
 `http://localhost:5179/?scene=<name>` in the Quest Browser (the headset needs some Wi-Fi or it shows "no internet") and

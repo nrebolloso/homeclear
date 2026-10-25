@@ -2831,6 +2831,14 @@ const frontend = mountFrontend(frontendAdapter);
 document.body.classList.toggle('demo', PARAMS.get('demo') === '1');
 onWindow('keydown', e => { if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey && !/^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) document.body.classList.toggle('demo'); });
 game.setDemo = (on: boolean) => document.body.classList.toggle('demo', on);
+// ---------- scene version (tracked version.json vs the installed bundle.json, tools/get_scene.sh): debug corner, hidden in demo mode ----------
+Promise.all([json('version.json'), json('bundle.json')].map(p => p.catch(() => null))).then(([v, b]) => {
+  if (!v) return;
+  const el = Object.assign(document.createElement('div'), { id: 'sceneversion', className: 'dbg' });
+  el.textContent = b?.version === v.version ? v.version : `${v.version} (installed bundle ${b?.version ?? 'unknown'}: run tools/get_scene.sh)`;
+  el.style.cssText = 'position:fixed;left:6px;bottom:4px;font:11px monospace;opacity:.6;pointer-events:none;z-index:5';
+  document.body.append(el);
+});
 if (PARAMS.has('classic')) { for (const [n, p, s] of homes) p.insertBefore(n, s); document.body.classList.remove('frontend'); document.getElementById('frontend')!.hidden = true; document.getElementById('left')!.hidden = document.getElementById('right')!.hidden = false; }
 frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
 game.frontend = frontend;

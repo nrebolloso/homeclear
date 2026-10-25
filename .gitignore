@@ -7,7 +7,13 @@ __pycache__/
 logs/
 viewer/node_modules/
 viewer/dist/
-viewer/public/scene/
+!viewer/public/scene/
+viewer/public/scene/*
+# kitchen4_lighter's small JSON is tracked; the splats and maps come from the bundle (tools/get_scene.sh)
+!viewer/public/scene/kitchen4_lighter/
+viewer/public/scene/kitchen4_lighter/*
+!viewer/public/scene/kitchen4_lighter/*.json
+viewer/public/scene/kitchen4_lighter/bundle.json
 viewer/public/exports/
 viewer/public/clips/
 cosmos/inputs/
