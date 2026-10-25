@@ -47,6 +47,8 @@
    (`grid.ts TAPED_EDGE_M`, mirrored in `planner/engine.py`); the published search (job 47465023) used the old rule. A CPU
    re-score of the taped replays gives ~60.0-60.4/month, but `out/planner/kitchen4_lighter/search.json` was not regenerated.
    Run `planner/publish.sh` after the job.
+   **Done:** B200 job 47577852 (toe-catch objective, 1.5 mm taped edge, glide caps in the action set), critic 47577853;
+   published to `viewer/public/planner/kitchen4_lighter/` after `planner/check_options.py` passed.
 14. **Shuffle recordings for the fan's "shuffler".** The low-clearance foot lift is an ASSUMPTION (16th percentile of the
    Frontiers 2014 MTC curve, ~7 mm). Film a few deliberate shuffling passes over the mat edge (side view, tape in view) so
    the lift distribution comes from our own data.
@@ -54,6 +56,8 @@
    snags/brushes dominate (60.91 = 0.07 toe catches + the rest), so the option "least effort for 20% less risk" cuts the
    objective without saving any toe catches. The demo now leads with toe catches/month everywhere; changing the objective
    means a new B200 search.
+   **Decided (Nicolas):** objective = expected toe catches/month; snags + brushes only break ties (TIE_BREAK 1e-5) and are
+   shown as notes on each option. Done in job 47577852.
 16. **A real glide-cap / tennis-ball pass (rug-calibration).** Slit two tennis balls (or fit glide caps) onto the rear
    legs and push off the same loose rug at normal speed, floor camera plus wide, 3 or more passes. The sim's caps value
    (glide-rug friction 0.10-0.20, `CAPS_MU` in `physics/rug_calib.py`) is ASSUMED, and with it the sim says caps barely

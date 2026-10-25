@@ -155,9 +155,13 @@ def main():
     emax = max(p["cost"]["effort"] for p in pf) or 1
     knee = max(range(len(pf)), key=lambda k: (r0 - pf[k]["confirm"]["risk"]) / max(1e-9, r0 - rmin) - pf[k]["cost"]["effort"] / emax)
     low = min(range(len(pf)), key=lambda k: pf[k]["confirm"]["risk"])
-    cheap = next((k for k in range(len(pf)) if pf[k]["confirm"]["risk"] < 0.8 * r0 and k != knee), None)
-    options = [{"why": w, "k": k} for w, k in (("chosen: most risk removed per unit of effort", knee), ("lowest risk found", low),
-                                                ("least effort for 20% less risk", cheap)) if k is not None]
+    c0 = pf[0]["confirm"]["contacts"]   # pf[0] is the scanned room (effort 0)
+    saves = lambda k: pf[k]["confirm"]["contacts"] < c0
+    cheap = next((k for k in range(len(pf)) if pf[k]["confirm"]["risk"] < 0.8 * r0 and k != knee and saves(k)), None)
+    # shortcut: free fixes are looked for on the front only (a free layout off it costs more effort than some paid one)
+    free = None if cheap is not None else next((k for k in range(len(pf)) if pf[k]["cost"]["usd"] == 0 and k != knee and saves(k)), None)
+    options = [{"why": w, "k": k} for w, k in (("chosen: most toe catches removed per unit of effort", knee), ("fewest toe catches found", low),
+                                                ("least effort for 20% fewer toe catches", cheap), ("free fixes only", free)) if k is not None and saves(k)]
     options = [o for j, o in enumerate(options) if o["k"] not in [p["k"] for p in options[:j]]]
 
     # the featured chain: the chosen layout's effort weight, the chain whose final layout scores best; its accepted moves

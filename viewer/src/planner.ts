@@ -201,6 +201,9 @@ export function brushes(S: Init, cfg: PlannerCfg, lay: Layout, ev: Eval, walker:
   return { per_month: Object.values(by).reduce((s, v) => s + v, 0), lo: q(0.1), hi: q(0.9), by };
 }
 
+/** the objective is toe catches / month (sim.ts contacts); simulated snags + brushes only break ties. planner/engine.py TIE_BREAK */
+export const TIE_BREAK = 1e-5;
+
 /** Score one layout. shortcut: brushes only on the selected route (evaluate keeps walker poses for that one); score
  *  each route in turn when a scene has several that matter. */
 export function score(S: Init, cfg: PlannerCfg, base: Pose[], pl: PlanLayout, walker: { width_m: number; depth_m: number; leg_radius_m: number }): PlanScore {
@@ -211,8 +214,8 @@ export function score(S: Init, cfg: PlannerCfg, base: Pose[], pl: PlanLayout, wa
   const br = ev.error ? { per_month: 0, lo: 0, hi: 0, by: {} } : brushes(S, cfg, lay, ev, walker);
   const snags = snag_by.reduce((s, o) => s + o.per_month, 0);
   return {
-    risk: ev.per_month + snags + br.per_month, contacts: ev.per_month, snags, brushes: br.per_month,
-    lo: ev.per_month_lo + br.lo + snag_by.reduce((s, o) => s + o.lo, 0), hi: ev.per_month_hi + br.hi + snag_by.reduce((s, o) => s + o.hi, 0),
+    risk: ev.per_month + TIE_BREAK * (snags + br.per_month), contacts: ev.per_month, snags, brushes: br.per_month,
+    lo: ev.per_month_lo + TIE_BREAK * (br.lo + snag_by.reduce((s, o) => s + o.lo, 0)), hi: ev.per_month_hi + TIE_BREAK * (br.hi + snag_by.reduce((s, o) => s + o.hi, 0)),
     snag_by: snag_by.map(({ object, event, per_month }) => ({ object, event, per_month })), brush_by: br.by, error: ev.error, ev,
   };
 }

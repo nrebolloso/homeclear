@@ -17,6 +17,7 @@ _pool = lambda a: sum(r["disturbed"] * r["n"] for r in a.values()) / sum(r["n"] 
 CAPS_FACTOR = _pool(_rc["glide_caps"]) / _pool(_rc["fitted"])   # rugcascade.ts CAPS_FACTOR
 MOVE_EFFORT = {"bed": 5, "nightstand": 2, "chair": 2, "nightlight": 1, "rug": 1, "other": 3, "door": 99}   # optimize.ts DEFAULTS
 EFFORT_PER_M = 0.3
+TIE_BREAK = 1e-5   # planner.ts TIE_BREAK: the objective is toe catches / month; snags + brushes only break ties
 TAPED_EDGE_M = 0.0015   # grid.ts TAPED_EDGE_M (ASSUMPTION: edge left under carpet tape, not measured)
 
 
@@ -627,8 +628,8 @@ def _summaries(S, preps, contacts, touched, footsteps, kept, keep, T):
         by = {names[i]: v * month / T for i, v in enumerate(tc.sum(0).tolist()) if v}
         con, br = c.sum().item() * month / T, sum(by.values())
         sn = sum(e[2] for e in p["snags"])
-        r = {"risk": con + sn + br, "contacts": con, "snags": sn, "brushes": br,
-             "lo": _q(cb, 0.1) + _q(bb, 0.1) + sum(e[3] for e in p["snags"]), "hi": _q(cb, 0.9) + _q(bb, 0.9) + sum(e[4] for e in p["snags"]),
+        r = {"risk": con + TIE_BREAK * (sn + br), "contacts": con, "snags": sn, "brushes": br,
+             "lo": _q(cb, 0.1) + TIE_BREAK * (_q(bb, 0.1) + sum(e[3] for e in p["snags"])), "hi": _q(cb, 0.9) + TIE_BREAK * (_q(bb, 0.9) + sum(e[4] for e in p["snags"])),
              "footsteps": footsteps[l], "snag_by": [{"object": e[0], "event": e[1], "per_month": e[2]} for e in p["snags"]], "brush_by": by}
         if keep:   # heels + walker poses of the first `keep` trips, for the replay's fan of futures
             r["ghosts"] = []

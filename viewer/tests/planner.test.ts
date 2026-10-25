@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { fromLayout, toLayout, check, cost, changed, score, type PlannerCfg } from '../src/planner.ts';
+import { fromLayout, toLayout, check, cost, changed, score, TIE_BREAK, type PlannerCfg } from '../src/planner.ts';
 import { polyCells, stamp, worldFootprint, TAPED_EDGE_M, type Pose } from '../src/grid.ts';
 import { loadScene } from './scene.ts';
 
@@ -52,7 +52,7 @@ test('planner: pushing chair8 in, taping the mat and cord and lighting the kitch
   const b = score(s.init, cfg, base, fix, s.walker);
   assert.equal(a.error, undefined);
   assert.ok(a.lo <= a.risk && a.risk <= a.hi);
-  assert.ok(Math.abs(a.risk - (a.contacts + a.snags + a.brushes)) < 1e-9);
+  assert.ok(Math.abs(a.risk - (a.contacts + TIE_BREAK * (a.snags + a.brushes))) < 1e-9, 'objective = toe catches; snags + brushes break ties');
   assert.ok(a.snag_by.some(o => o.object === 'mat') && !b.snag_by.some(o => o.object === 'mat'), 'taped mat: no simulated slide');
   assert.ok(b.risk < a.risk * 0.7, `${a.risk} -> ${b.risk}`);
   assert.ok(b.contacts < a.contacts, 'the kitchen nightlight lights the mat edge');
