@@ -253,11 +253,15 @@ export function createPlanFix(D: PlanFixDeps) {
         objective_cut: scores[0].risk - sc.risk, clearance_gain_m: 0, cost_usd: it?.usd, minutes: it?.minutes, effort: it?.effort };
     }).sort((a, b) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.objective_cut - a.objective_cut));
   }
+  /** OT report: the options on show (Easiest / Keep my mat / Safest), each confirmed on fresh trips; null = no planner search */
+  const optionsOut = () => (data ? opts().map(o => { const q = data!.pareto[o.k];
+    return { name: o.why, per_month: q.confirm.contacts, cost_usd: q.cost.usd, minutes: q.cost.minutes, effort: q.cost.effort,
+      changes: cost(S(), cfg(), data!.scanned.layout, q.layout).items.map(i => i.label) }; }) : null);
   /** wmghosts.ts: the room as it is now / the scan / the chosen option, the evaluator's trips with one world model, and a
    *  glide + commit to a planner layout (before / after) */
   const layouts = () => (data ? { now: fromLayout(S(), cfg(), D.base, D.layout()), scan: data.scanned.layout, chosen: data.pareto[opts()[0].k].layout } : null);
   const imagine = (pl: PlanLayout, wm: WorldModel, n: number, nf = 0) => ready.then(() => ask({ type: 'imagine', pl, wm, n, nf }));
   async function goto(pl: PlanLayout) { await glide(fromLayout(S(), cfg(), D.base, D.layout()), pl, 900); await D.commit(toLayout(S(), cfg(), D.base, pl), fixesOf(pl)); }
-  return { ready, play, apply, improve, replanFor, rankedFixes, stop: () => { playing = false; }, state, score: (pls: PlanLayout[]) => ask({ type: 'score', pls }).then(r => r.scores),
+  return { ready, play, apply, improve, replanFor, rankedFixes, optionsOut, stop: () => { playing = false; }, state, score: (pls: PlanLayout[]) => ask({ type: 'score', pls }).then(r => r.scores),
     layouts, imagine, goto };
 }

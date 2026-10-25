@@ -32,6 +32,8 @@ function render(p: ReportPayload) {
     <td>${f.error ? `<span class="bad">${p.ranked_by ? esc(f.error) : 'blocks the route'}</span>` : `<span class="${f.reduction > 0 ? 'ok' : 'dim'}">−${f.reduction.toFixed(2)}</span> (${(f.share * 100).toFixed(0)}%)`}</td>
     <td>${f.clearance_gain_m > 0.005 ? `<span class="ok">+${(f.clearance_gain_m * 100).toFixed(0)} cm</span>` : '–'}</td>
     <td>${f.cost_usd !== undefined ? (f.cost_usd ? `$${f.cost_usd}` : 'free') : ''}</td><td>${f.minutes ? `${f.minutes} min` : ''}</td><td>${esc(EFF[f.effort ?? 0] ?? (f.effort ?? 0).toFixed(1))}</td></tr>`).join('');
+  const popts = (p.planner_options ?? []).map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${o.per_month.toFixed(2)}</td><td>${o.cost_usd ? `$${o.cost_usd}` : 'free'} · ${o.minutes} min</td>
+    <td>${o.effort.toFixed(1)}</td><td>${o.changes.map(esc).join('; ')}</td></tr>`).join('');
   const clips = p.clips.map(k => `<li><span class="imag">${esc(k)}</span></li>`).join('');
   document.getElementById('root')!.innerHTML = `
   <button onclick="print()">Print / save as PDF</button>
@@ -64,6 +66,8 @@ function render(p: ReportPayload) {
   <table><tr><th>#</th><th>Change</th><th>Cost</th><th>Time</th><th>Product</th></tr>${acts || '<tr><td colspan="5">none: the home as filmed</td></tr>'}</table>
   ${p.ranked_fixes ? `<h2>Recommended fixes, ranked</h2><table><tr><th>#</th><th>Fix</th><th>Toe catches/month saved</th><th>Passage gained</th><th>Cost</th><th>Time</th><th>Effort</th></tr>${ranked || '<tr><td colspan="7">every listed fix is already in this layout</td></tr>'}</table>
   <p class="dim">Each fix is simulated on its own from the layout above (${p.rollouts} trips per route); savings are not additive. ${p.ranked_by ? `Ranked by ${esc(p.ranked_by)}.` : 'Ranked by toe catches saved, then passage width, then cost.'}</p>` : ''}
+  ${popts ? `<h2>Planner options</h2><table><tr><th>Option</th><th>Toe catches/month</th><th>Cost · time</th><th>Effort</th><th>Changes from the scanned room</th></tr>${popts}</table>
+  <p class="dim">Each option re-run on fresh simulated trips (${p.rollouts} per route), not the search's own draws.</p>` : ''}
   ${sugg ? `<h2>Suggested layouts (optimizer)</h2><table><tr><th>Option</th><th>Contacts/month</th><th>Failed checks</th><th>Cost · time</th><th>Changes</th></tr>${sugg}</table>` : ''}
   ${objs ? `<h2>Furniture the walker could push (<span class="imag">simulated</span>)</h2><table><tr><th>Object</th><th>Event</th><th>Route</th><th>Approach</th><th>Contact</th><th>P per touch/crossing (95% CI)</th><th>Per month</th></tr>${objs}</table>
   <p class="dim">SIMULATED (MuJoCo batch, physics/batch_mujoco.py): shapes from the scan; masses, frictions and corner stiffness sampled from assumed ranges, not measured; not yet checked against the real walker. Approach angle 0° = straight at the edge.</p>` : ''}
