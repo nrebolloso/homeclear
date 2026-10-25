@@ -8,7 +8,8 @@
  },
  "mat": {
   "mass_per_m2_kg": [0.8, 2.5],
-  "floor_friction": [0.15, 0.6],
+  "floor_friction": [0.3, 0.6],
+  "_floor_friction": "lower bound FITTED to displacement: in 9/9 real walker passes (data/recording_notes.csv, wide views) the rug body moved <= ~2 cm and only its edge folded or bunched; below 0.3 the rigid slab (objphys.ts) slides 2.5 m on some passes. The fold itself is the flap and the measured cascade, not this slide",
   "_flap": "curled corner: a hinged triangle; stiffness = how hard the curl springs back (N m per rad)",
   "flap_stiffness_nm_per_rad": [0.01, 0.15],
   "flap_damping": [0.001, 0.01],
