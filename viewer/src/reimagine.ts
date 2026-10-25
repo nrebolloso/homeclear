@@ -6,8 +6,7 @@
 import * as THREE from 'three';
 import type { Intervention, Layout, Pose, XY } from './grid.ts';
 import { fixCost, moveCost, removeCost, sumCosts, type MoveCost } from './movecost.ts';
-import { effortKind } from './effort.ts';
-import { difficulty } from './effort.ts';
+import { effortKind, difficulty } from './effort.ts';
 
 export interface Change {
   /** object index (-1: a fix with no object, e.g. taped cable) */

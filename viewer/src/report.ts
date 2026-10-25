@@ -42,14 +42,12 @@ function render(p: ReportPayload) {
   const pct = (x: number) => `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}%`, EV: Record<string, string> = { slid: 'slides ≥ 2 cm', folded: 'corner folds over', moved: 'moves ≥ 2 cm', tipped: 'tips > 30°' };
   const objs = (c.objects ?? []).map(e => `<tr><td>${esc(e.object.replace(/_/g, ' '))}</td><td>${EV[e.event] ?? esc(e.event)}</td><td>${esc(e.route)}</td><td>${e.angle_deg.toFixed(0)}° · ${e.speed_mps.toFixed(2)} m/s</td>`
     + `<td>${e.p_contact < 1 ? `${pct(e.p_contact)} of trips touch it` : 'every trip crosses it'}</td><td>${pct(e.p)} (${pct(e.ci95[0] ?? 0)}–${pct(e.ci95[1] ?? 0)}, n=${e.n})</td><td>${f1(e.per_month)}</td></tr>`).join('');
-  const EFF = ['', 'easy', 'moderate', 'some effort', 'heavy', 'needs help'];
   const ranked = (p.ranked_fixes ?? []).map((f, n) => `<tr><td>${n + 1}</td><td><b>${esc(f.label)}</b>${f.product ? `<div class="dim">${esc(f.product)}</div>` : ''}</td>
     <td>${f.error ? `<span class="bad">${p.ranked_by ? esc(f.error) : 'blocks the route'}</span>` : `<span class="${f.reduction > 0 ? 'ok' : 'dim'}">−${f.reduction.toFixed(2)}</span> (${(f.share * 100).toFixed(0)}%)`}</td>
     <td>${f.clearance_gain_m > 0.005 ? `<span class="ok">+${(f.clearance_gain_m * 100).toFixed(0)} cm</span>` : '–'}</td>
-    <td>${f.cost_usd !== undefined ? (f.cost_usd ? `$${f.cost_usd}` : 'free') : ''}</td><td>${f.minutes ? `${f.minutes} min` : ''}</td><td>${esc(EFF[f.effort ?? 0] ?? (f.effort ?? 0).toFixed(1))}</td></tr>`).join('');
-  const popts = (p.planner_options ?? []).map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${o.per_month.toFixed(2)}</td><td>${o.cost_usd ? `$${o.cost_usd}` : 'free'} · ${o.minutes} min</td>
-    <td>${o.effort.toFixed(1)}</td><td>${o.changes.map(esc).join('; ')}</td></tr>`).join('');
-  // the $$$ window's plan: checked = the plan of action; a suggested fix left unchecked was declined (budget or choice)
+    <td>${f.cost_usd !== undefined ? (f.cost_usd ? `$${f.cost_usd}` : 'free') : ''}</td><td>${f.effort ? `${f.effort.toFixed(1)} · ${difficulty(f.effort)}` : ''}</td><td>${f.helpers ?? ''}</td></tr>`).join('');
+  const popts = (p.planner_options ?? []).map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${o.per_month.toFixed(2)}</td><td>${o.cost_usd ? `$${o.cost_usd}` : 'free'}</td>
+    <td>${o.effort.toFixed(1)} · ${difficulty(o.effort)}</td><td>${o.helpers}</td><td>${o.changes.map(esc).join('; ')}</td></tr>`).join('');
   const bp = p.budget, bud = (bp?.items ?? []).filter(i => i.checked || i.suggested).map(i => `<tr><td>${i.checked ? '✓' : '<span class="ot">declined</span>'}</td>`
     + `<td>${esc(i.label)}${i.suggested ? ' <span class="dim">(suggested)</span>' : ''}</td><td>${money(i.cost_usd)}</td><td>${i.effort.toFixed(1)} · ${difficulty(i.effort)}</td>`
     + `<td>${i.benefit !== undefined ? `−${f1(i.benefit)}` : '<span class="ot">OT to verify</span>'}</td><td class="dim">${esc(i.product ?? '')}</td></tr>`).join('');
@@ -87,9 +85,9 @@ function render(p: ReportPayload) {
   Helpers: two above 25 kg. Prices come from the product catalog; an unlisted item says "price needed" and is not added in.</p>
   ${never ? `<p><b>Not suggested to move:</b> ${never}</p>` : ''}
   ${masses ? `<h2>Furniture weights (for move effort)</h2><table><tr><th>Object</th><th>Mass</th><th>1 m carry</th><th>Helpers</th><th>How we know</th></tr>${masses}</table>` : ''}
-  ${p.ranked_fixes ? `<h2>Recommended fixes, ranked</h2><table><tr><th>#</th><th>Fix</th><th>Toe catches/month saved</th><th>Passage gained</th><th>Cost</th><th>Time</th><th>Effort</th></tr>${ranked || '<tr><td colspan="7">every listed fix is already in this layout</td></tr>'}</table>
+  ${p.ranked_fixes ? `<h2>Recommended fixes, ranked</h2><table><tr><th>#</th><th>Fix</th><th>Toe catches/month saved</th><th>Passage gained</th><th>Cost</th><th>Effort</th><th>Helpers</th></tr>${ranked || '<tr><td colspan="7">every listed fix is already in this layout</td></tr>'}</table>
   <p class="dim">Each fix is simulated on its own from the layout above (${p.rollouts} trips per route); savings are not additive. ${p.ranked_by ? `Ranked by ${esc(p.ranked_by)}.` : 'Ranked by toe catches saved, then passage width, then cost.'}</p>` : ''}
-  ${popts ? `<h2>Planner options</h2><table><tr><th>Option</th><th>Toe catches/month</th><th>Cost · time</th><th>Effort</th><th>Changes from the scanned room</th></tr>${popts}</table>
+  ${popts ? `<h2>Planner options</h2><table><tr><th>Option</th><th>Toe catches/month</th><th>Cost</th><th>Effort</th><th>Helpers</th><th>Changes from the scanned room</th></tr>${popts}</table>
   <p class="dim">Each option re-run on fresh simulated trips (${p.rollouts} per route), not the search's own draws.</p>` : ''}
   ${sugg ? `<h2>Suggested layouts (optimizer)</h2><table><tr><th>Option</th><th>Contacts/month</th><th>Failed checks</th><th>Cost · effort</th><th>Changes</th></tr>${sugg}</table>` : ''}
   ${objs ? `<h2>Furniture the walker could push (<span class="imag">simulated</span>)</h2><table><tr><th>Object</th><th>Event</th><th>Route</th><th>Approach</th><th>Contact</th><th>P per touch/crossing (95% CI)</th><th>Per month</th></tr>${objs}</table>

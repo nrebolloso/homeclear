@@ -29,7 +29,7 @@ import { spots, vantage, heightTexels, type Spot } from './spotlight.ts';
 import { summarize, drawPushChart, poseAt, pushColor, sampleText } from './physdebug.ts';
 import { cardState, encodeCard, type ActionOut, type ReportPayload } from './share.ts';
 import { createReimagine, undoChange, costText, card, poseAt as layoutPoseAt, type Change } from './reimagine.ts';
-import { fixCost, moveCost, removeCost, sumCosts } from './movecost.ts';
+import { moveCost, removeCost, sumCosts, fixCost } from './movecost.ts';
 import { currentBudget } from './budget.ts';
 import { isMoved, movedText, resetPose } from './resets.ts';
 import { twistAngle, snapQuarter } from './wand.ts';
@@ -49,7 +49,7 @@ import { createMarker3d } from './marker3d.ts';
 import { MAX_EXTRA_LIGHTS, type PointLight } from './night.ts';
 import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } from './perf.ts';
 import QRCode from 'qrcode';
-import { objectEffort, moveEffort, difficulty } from './effort.ts';
+import { objectEffort, moveEffort, difficulty, effortKind } from './effort.ts';
 import { logEvent, parseLog, retrieve, toJSONL, type Entry } from './ledger.ts';
 import { mountFrontend, type FrontendAdapter } from './frontend.ts';
 import { mountLayers } from './layers.ts';
@@ -340,13 +340,26 @@ const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'modu
 let init: Init = { g, base, est, objects: objs, routes, persona, risk, interventions, stepModel, worldModel, fixtures: sc.fixtures, transfer: sc.transfer, ems: sc.ems, coverage, coverage_good: sc.grid.coverage_good,
   plan: { walker_width_m: walkerCfg.width_m, ...sc.plan }, rules: sc.hazard_rules };
 worker.postMessage({ type: 'init', init });
-let seq = 0, latestEval = 0;
+let seq = 0, latestEval = 0, evalSeq = 0;
 const waiting = new Map<number, (d: any) => void>();
 worker.onmessage = e => {
   if (e.data.type === 'progress') { $('optstatus').textContent = e.data.msg; return; }   // the optimizer reports as it goes
   waiting.get(e.data.id)?.(e.data); waiting.delete(e.data.id);
 };
 const ask = (msg: object) => new Promise<any>(res => { const id = ++seq; waiting.set(id, res); worker.postMessage({ ...msg, id }); });
+// evaluations by layout: going back to a proposal already shown (or prefetched) skips the worker. Cleared with the worker's init.
+const evalCache = new Map<string, Promise<any>>(), evalDone = new Set<string>();
+const evalKey = (lay: { poses: unknown[] }) => JSON.stringify([selRoute, $<HTMLInputElement>('heat').checked, lay]);
+function evalOf(lay: Layout): Promise<{ r: Eval }> {
+  const key = evalKey(lay);
+  let p = evalCache.get(key);
+  if (!p) {
+    p = ask({ type: 'eval', layout: lay, sel: selRoute, heat: $<HTMLInputElement>('heat').checked }).then(d => (evalDone.add(key), d));
+    evalCache.set(key, p);
+    if (evalCache.size > 24) { const oldest = evalCache.keys().next().value!; evalCache.delete(oldest); evalDone.delete(oldest); }
+  }
+  return p;
+}
 
 const editLocks = createEditLocks();
 const game: any = { ready: false, fps: 0, evals: 0, pending: () => waiting.size, ledger };
@@ -365,9 +378,9 @@ async function replan(): Promise<number> {
   L = stamp(g, base, objs, layout.poses, layout.flattened, carvedPolys(layout));
   stampFolds(g, L.bump, layout.folds);
   updateHeights();
-  const id = seq + 1;
+  const id = ++evalSeq;
   latestEval = id;
-  const { r } = await ask({ type: 'eval', layout, sel: selRoute, heat: $<HTMLInputElement>('heat').checked });
+  const { r } = await evalOf(layout);
   if (id !== latestEval) return performance.now() - t;    // a newer layout is already on its way
   current = r;
   baselinePerMonth ??= r.per_month;
@@ -821,9 +834,11 @@ let suggestions: any[] = [];
 async function suggest() {
   $('optstatus').textContent = 'searching layouts…';
   $('options').innerHTML = '';
-  const res = await ask({ type: 'optimize', layout });
+  const t0 = performance.now(), planned = await planfix.proposals();   // the scene's precomputed B200 search if it has one, else a live search
+  const res = planned ? { options: planned, evals: planfix.state().stats?.layouts_searched ?? 0, ms: performance.now() - t0, planned: true } : await ask({ type: 'optimize', layout });
   suggestions = res.options;
-  $('optstatus').textContent = `${res.evals} layouts scored in ${(res.ms / 1000).toFixed(1)} s · every number below is a full re-run of that layout`;
+  $('optstatus').textContent = res.planned ? 'precomputed B200 layout search · every number is a re-run of that layout on fresh trips'
+    : `${res.evals} layouts scored in ${(res.ms / 1000).toFixed(1)} s · every number below is a full re-run of that layout`;
   for (const [n, o] of suggestions.entries()) {
     const li = document.createElement('li');
     li.className = 'option';
@@ -844,13 +859,42 @@ function applyOption(n: number) {
   const o = suggestions[n];
   const was = snap();
   layout = o.layout;
-  applied = o.actions.map((a: any) => a.id);
+  applied = o.applied ?? o.actions.map((a: any) => a.id);
   editHist.record('applied proposed layout', was, snap());
   logEvent(ledger, 'viewer', 'apply_option', { name: o.name, actions: applied }, 'simulated');
   syncObjects();
   return replan().then(ms => { if (!renderer.xr.isPresenting && !current?.error) { Object.assign(body, routePose(0, 0, Infinity)); setWalk('auto'); } reim.play(); return ms; });
 }
 $('suggest').onclick = () => suggest();
+// Generate proposals: the room before the search, so stepping through the options is undone by Reset until one is applied
+let proposalPrior: ReturnType<typeof snap> | null = null, proposalApplied = false, previewSeq = 0, proposalShown = -1;
+/** show option n in the room without recording an edit: the objects move at once, the route and numbers follow once stepping pauses */
+function previewOption(n: number) {
+  const o = suggestions[n];
+  if (!o) return Promise.reject(Error('No such proposal'));
+  if (renderer.xr.isPresenting && editLocks.busy() && editLocks.owner('*') !== 'desktop') return Promise.reject(Error('Release the held object before previewing a layout.'));
+  comparison.endPreview();   // the headset's read-only before/after, if it is up
+  proposalPrior ??= snap();
+  layout = o.layout; applied = o.applied ?? o.actions.map((a: any) => a.id); proposalShown = n;
+  syncObjects();
+  const mine = ++previewSeq, seen = evalDone.has(evalKey(layout));
+  return new Promise<void>(res => setTimeout(async () => {
+    if (mine === previewSeq) { await replan(); reim.setT(1); prefetchProposals(); }
+    res();
+  }, seen ? 0 : 120));   // a layout already evaluated needs no pause to coalesce quick steps
+}
+/** the other proposals' evaluations in the background, once the one on show is up (not in the seeded demo: its clock waits for an idle worker) */
+let prefetched: unknown = null;
+async function prefetchProposals() {
+  if (SEED !== null || prefetched === suggestions) return;
+  const list = prefetched = suggestions;
+  for (const o of list) { if (suggestions !== list) return; await evalOf(o.layout); }
+}
+/** back to the room as it was when proposals were generated */
+async function resetProposals() {
+  previewSeq++;
+  if (proposalPrior) { layout = proposalPrior.layout; applied = proposalPrior.applied; proposalPrior = null; syncObjects(); await replan(); reim.setT(1); }
+}
 
 // ---------- reimagined room (reimagine.ts): the room morphing into the layout on screen, with what each change takes ----------
 let stairsSetT: ((t: number) => void) | null = null;   // stairs3d.ts, made below: its additions build up with the morph
@@ -1066,6 +1110,7 @@ function setupStairs() {
   init = { ...init, interventions, stairs, doors, strong_side: strongSide, device: walkerCfg.device,
     walker: { width_m: parkedWalkerCfg.width_m, depth_m: parkedWalkerCfg.depth_m, user_gap_m: parkedWalkerCfg.user_gap_m } };
   worker.postMessage({ type: 'init', init });
+  evalCache.clear(); evalDone.clear();
   suggestions = [];   // searched without these stairs
   drawStairs();
   $('stairstatus').textContent = stairs.length ? stairs.map(st => `${st.name}: ${st.treads_z?.length ?? 0} treads ${st.measured === 'tape' ? 'tape-measured' : 'seen in the scan'}` +
@@ -1752,9 +1797,10 @@ async function openReport() {
   const p = personas[personaKey], c = current!;
   const { before, fixes } = await ask({ type: 'fixes', layout, sel: selRoute });   // the fixes not yet applied, each rolled out from this layout
   const ranked_fixes = fixes.filter((f: any) => !applied.includes(f.id)).map((f: any) => {
-    const iv = interventions.find(i => i.id === f.id);
+    const iv = interventions.find(i => i.id === f.id), on = objs.find(o => o.name === iv?.object);
+    const fc = iv && fixCost(iv, on && effortKind(on));   // priced as the optimizer and the Changes panel price it (effort.ts interventionEffort)
     return { label: f.label, error: f.error, reduction: Math.max(0, f.reduction), share: before > 0 ? f.reduction / before : 0, clearance_gain_m: f.clearance_gain_m,
-      cost_usd: iv?.cost_usd, minutes: iv?.minutes, effort: iv?.effort, product: iv?.product };
+      cost_usd: iv?.cost_usd, effort: fc?.effort, helpers: fc?.helpers, product: iv?.product };
   }).sort((a: any, b: any) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.clearance_gain_m - a.clearance_gain_m) || ((a.cost_usd ?? 0) - (b.cost_usd ?? 0)));
   const planned = await planfix.rankedFixes();   // kitchen planner scenes: its layout's changes, ranked by real risk removed (planfix.ts)
   // log what goes on paper, then build the payload from the log (newest entry per thing wins)
@@ -1767,7 +1813,8 @@ async function openReport() {
   logEvent(ledger, 'viewer', 'ranked_fixes', ranked_fixes, 'simulated', 'report');
   logEvent(ledger, 'viewer', 'reason', hzFile.hazards.filter(h => h.source === 'cosmos_reason'), 'imagined', 'report');
   const latest = (kind: string) => retrieve(ledger, { kind, latest: true }), one = (kind: string) => latest(kind)[0]?.values;
-  const optNames = new Set(suggestions.map(o => o.name));
+  // the planner's proposals print once, as Planner options (planfix.optionsOut); this table is for the live optimizer's
+  const optNames = new Set(suggestions.filter(o => !o.planned).map(o => o.name));
   const payload: ReportPayload = {
     scene: RUN, created: new Date().toISOString(), synthetic: (sc.synthetic ?? []).length > 0 || /synth/.test(RUN), scale_note: sc.scale_note,
     route: routes[selRoute].name,
@@ -1835,7 +1882,7 @@ function resetAll() {
    // hand-marked stairs and doors are scan annotations, not renovations: they stay
   select(-1);
   const was = snap();
-  layout = { poses: original.map(resetPose), flattened: [] }; applied = []; suggestions = [];
+  layout = { poses: original.map(resetPose), flattened: [] }; applied = []; suggestions = []; proposalPrior = null; proposalApplied = false; previewSeq++;
   editHist.record('reset the whole room', was, snap());
   $('fixes').innerHTML = ''; $('options').innerHTML = '';
   $<HTMLInputElement>('reimt').value = '100'; reim.setT(1);   // not left mid-morph
@@ -2714,7 +2761,7 @@ function fixNumbers() {
   const c = summarizeChanges(reim.changes()), base = baseEvals[selRoute]?.per_month, now = current?.per_month;
   const catches = base != null && now != null ? `toe catches ${fmt(base)} → ${fmt(now)} a month` : 'toe catches: recalculating';
   const cost = !c.count ? 'no changes' : c.unpriced ? `${c.count} changes · cost pending` : `${c.count} change${c.count === 1 ? '' : 's'} · ~$${Math.round(c.knownSubtotal)}`;
-  return { catches, line: c.untimed || !c.count ? cost : `${cost} · ${c.setupMinutes} min setup`, count: c.count };
+  return { catches, line: !c.count ? cost : `${cost} · effort ${c.effort.toFixed(1)}`, count: c.count };
 }
 const costButton = {
   text() {
@@ -2933,8 +2980,24 @@ const frontendAdapter: FrontendAdapter = {
   leaveInspect() { if (renderer.xr.isPresenting && !game.xrUIAction || game.remoteSession) return; if (inspectReturn) { const back = inspectReturn; Object.assign(body, back.body); Object.assign(fly, back.fly); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.restoreRig(back.rig)); setWalk(back.mode); inspectReturn = null; } },
   pause() { routePaused = !routePaused; }, restart() { autoS = 0; autoPause = 0; trip.reset(); routePaused = false; }, speed(v) { routeSpeed = v; },
   compare(t) { reim.setT(t); }, animate() { reim.play(); },
-  suggest: () => game.remoteSession ? game.suggest() : suggest(), async apply(index) { stairPhase = 'proposed'; await (game.remoteSession ? game.applyPreparedOption(index) : applyOption(index)); setWalk('free'); reim.setT(1); },   // a previewed proposal: x-ray until accepted or inspected
-  commit() { commitProposal(); },
+  suggest: () => { if (proposalApplied) { proposalPrior = null; proposalApplied = false; } return game.remoteSession ? game.suggest() : suggest(); },
+  preview: index => (game.remoteSession ? game.applyPreparedOption(index).then(() => reim.setT(1)) : previewOption(index)),   // a companion has no preview: it applies
+  keepMat(on) {
+    const box = $<HTMLInputElement>('pfkeepmat');
+    if (!planfix.keepMatOffered()) return null;
+    if (on !== undefined && box.checked !== on) { box.checked = on; box.dispatchEvent(new Event('change')); }
+    return box.checked;
+  },
+  reset: () => { if (game.remoteSession) return Promise.reject(Error('Reset the room on the desktop.')); return resetProposals(); },
+  async apply(index) { stairPhase = 'proposed'; await (game.remoteSession ? game.applyPreparedOption(index) : applyOption(index)); setWalk('free'); reim.setT(1); },   // a previewed proposal: x-ray until accepted or inspected
+  commit() {
+    if (proposalPrior && !game.remoteSession) {
+      editHist.record('applied proposed layout', proposalPrior, snap());   // previewing recorded nothing: one undo step for the whole choice
+      const o = suggestions[proposalShown];
+      if (o) logEvent(ledger, 'viewer', 'apply_option', { name: o.name, actions: applied }, 'simulated');   // as applyOption does
+    }
+    proposalApplied = true; commitProposal();
+  },
   undo: c => game.remoteSession ? game.sessionLink.request('undoChange', [c.name, c.iv]) : undoReimagined(c), select,
   path(on) { routeLine.visible = on; },
   async lightPath() { const r = await lightPath(); game.setNight(true); return r; },

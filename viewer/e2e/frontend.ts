@@ -28,13 +28,18 @@ try {
   await game("await game.applyFix('remove_rug')");
   await page.click('#tab-changes'); await page.waitForFunction(() => document.querySelector('#change-count')?.textContent === '1');
   assert.match(await page.locator('#change-summary').innerText(), /Pending/); assert.match(await page.locator('#change-list').innerText(), /Placeholder model/);
-  await page.click('#cost-breakdown'); assert.match(await page.locator('#change-list').innerText(), /Effort cost/); check('placeholder cost and effort cost never masquerade as confirmed totals');
+  await page.click('#cost-breakdown'); assert.match(await page.locator('#change-list').innerText(), /Effort/); check('placeholder cost and effort never masquerade as confirmed totals');
   await page.click('#show-original'); assert.equal(await page.getAttribute('#show-original', 'aria-pressed'), 'true');
   assert.match(await page.locator('#view-caption').innerText(), /metrics describe proposed/); await page.click('#show-proposed'); check('comparison labels distinguish visual preview from evaluated endpoint');
   await page.locator('[data-undo-change]').first().click(); await page.waitForFunction(() => (window as any).game.reimagine.changes().length === 0); check('unified change list undo uses existing layout actions');
+  await game('await game.resetAll()');   // a clean room, so the top proposal differs from it
+  const layoutKey = () => game('return game.layoutKey()'), roomBefore = await layoutKey();
   await page.click('#tab-reimagine'); await page.click('#generate-proposals');
-  await page.waitForSelector('[data-preview]', { timeout: 120000 });
-  await page.locator('[data-preview]').first().click(); await page.waitForSelector('[data-use]:not([disabled])'); await page.locator('[data-use]:not([disabled])').click();
+  await page.waitForSelector('#proposal-cards .stepper', { timeout: 120000 });
+  assert.match(await page.locator('#proposal-cards .stepper').innerText(), /Proposal 1 of/); const top = await layoutKey(); assert.notEqual(top, roomBefore);   // the top proposal is in the room already
+  if (await page.locator('[data-step="1"]:not([disabled])').count()) { await page.click('[data-step="1"]'); await page.waitForFunction(k => (window as any).game.layoutKey() !== k, top); await page.click('[data-step="-1"]'); }
+  await page.click('[data-reset]'); await page.waitForFunction(k => (window as any).game.layoutKey() === k, roomBefore); check('Generate shows the top proposal, stepping follows, Reset restores the room');
+  await page.click('#generate-proposals'); await page.waitForSelector('#proposal-cards [data-use]', { timeout: 120000 }); await page.locator('[data-use]').click();
   assert.equal(await page.getAttribute('#tab-changes', 'aria-selected'), 'true'); check('unified proposal generation, preview and use');
   await page.click('#panel-close'); assert.equal(await page.locator('#planning-panel').isVisible(), false); await page.click('#panel-open');
   await page.click('#tab-reimagine'); await page.locator('summary').filter({ hasText: 'Improve nighttime visibility' }).click();
