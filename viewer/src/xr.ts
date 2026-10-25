@@ -44,6 +44,7 @@ export interface XrHost {
   enter(tier: Tier): void; exit(): void;
   /** big buttons on a card that follows you lazily: pressed like furniture is grabbed (point the wand, pinch) */
   buttons?: XrButton[];
+  lock?(k: number): boolean; unlock?(k: number): void;
   resetObject(k: number): unknown; resetAll(): unknown;
   /** what the controls are for right now (hints.ts): a label and one line of keys, drawn as a strip card on the off-hand controller */
   hints?(): { lines: string[]; tone: string };
@@ -53,6 +54,7 @@ export interface XrHost {
   editor?: XrEditor;
   /** A visual comparison is read-only; only the story-card buttons remain interactive. */
   readOnly?(): boolean;
+  movement?(): 'all' | 'teleport' | 'physical';
   /** The planning shell (frontend-xr.ts) lays a menu over the wand: it can swallow a trigger press, freeze locomotion while
    *  its menu is open, drive the body along the route, and hears which furniture the wand points at. */
   shell?: XrShell;
@@ -148,18 +150,19 @@ export async function setupXR(host: XrHost) {
     if (host.editor?.down(r, q)) { toolHeld = true; return; }
     if (hover < 0) { aiming = true; return; }
     const f = floorHit(r.origin, r.direction), p = host.poses()[hover], at: XY = f ? [f.x, f.y] : [p.x, p.y];
+    if (host.lock && !host.lock(hover)) return;
     grab = { k: hover, off: [p.x - at[0], p.y - at[1]], start: at, drag: 0, t0: performance.now(), yaw0: p.yaw, q0: c.group.getWorldQuaternion(new THREE.Quaternion()) };
   }
   function wandUp() {
     if (toolHeld) { toolHeld = false; const c = ctls.find(isWand); if (c) host.editor?.up(aim(c)); return; }
     if (host.editor?.active()) return;
     if (btnPressed >= 0) { const i = btnPressed; btnPressed = -1; if (btnHover === i) btns[i].b.press(); return; }
-    if (grab) { const { k, valid } = grab; grab = null; if (valid) host.commit(k, valid); return; }
-    if (aiming && tpRing.visible) { xrRig.x += tpRing.position.x - head.x; xrRig.y += tpRing.position.y - head.y; placeRig(); anchor.set = false; }
+    if (grab) { const { k, valid } = grab; grab = null; if (valid) Promise.resolve(host.commit(k, valid)).finally(() => host.unlock?.(k)); else host.unlock?.(k); return; }
+    if (aiming && tpRing.visible && host.movement?.() !== 'physical') { xrRig.x += tpRing.position.x - head.x; xrRig.y += tpRing.position.y - head.y; placeRig(); anchor.set = false; }
     aiming = false; tpRing.visible = false;
   }
   function dropWand() {   // wand lost mid-gesture (hand out of view): put a dragged object back where the layout has it
-    if (grab) host.resync();
+    if (grab) { host.resync(); host.unlock?.(grab.k); }
     btnPressed = -1; grab = null; aiming = false; tpRing.visible = false;
     toolHeld = false; host.editor?.cancelDrag();
   }
@@ -207,7 +210,7 @@ export async function setupXR(host: XrHost) {
           if (host.canPlace(grab.k, p)) { it.group.position.set(p.x, p.y, 0); it.group.rotation.z = p.yaw; grab.valid = p; }
         }
         prog = holdProgress((performance.now() - grab.t0) / 1000, grab.drag);
-        if (prog >= 1) { const k = grab.k; grab = null; host.remove(k); prog = -1; }
+        if (prog >= 1) { const k = grab.k; grab = null; Promise.resolve(host.remove(k)).finally(() => host.unlock?.(k)); prog = -1; }
       } else {
         const bh = dash.visible ? wandRay.intersectObjects(btns.map(x => x.mesh))[0] : undefined;   // buttons sit in front of the room
         btnHover = bh ? btns.findIndex(x => x.mesh === bh.object) : -1;
@@ -215,7 +218,7 @@ export async function setupXR(host: XrHost) {
         const hit = bh || host.readOnly?.() ? undefined : wandRay.intersectObjects(items.filter((_, k) => !poses[k].removed).map(i => i.proxy))[0];
         hover = hit ? items.findIndex(i => i.proxy === hit.object) : -1;
         if (bh) len = bh.distance; else if (hit) len = hit.distance;
-        if (!host.readOnly?.() && !bh && hover < 0 && aiming && f && host.standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
+        if (!host.readOnly?.() && host.movement?.() !== 'physical' && !bh && hover < 0 && aiming && f && host.standable(f.x, f.y)) { tpRing.position.set(f.x, f.y, 0.03); tpRing.visible = true; }
       }
       c.ray.scale.z = len;
       if (hover >= 0 && !grab) host.shell?.hover(hover);
@@ -287,11 +290,11 @@ export async function setupXR(host: XrHost) {
     const grip = !!wp?.buttons[1]?.pressed, a = !!wp?.buttons[4]?.pressed, click = !!wp?.buttons[3]?.pressed, both = grip && !!op?.buttons[1]?.pressed;
     const consumed = host.readOnly?.() || (host.editor?.buttons(pads, WAND) ?? false);
     if (consumed) {
-      if (grab) host.resync();
+      if (grab) { host.resync(); host.unlock?.(grab.k); }
       grab = null; aiming = false;
       if (!host.readOnly?.()) btnPressed = -1;   // comparison mode still needs the card's press/release gesture
     } else {
-      if (grip && !gripWas) { const k = grab?.k ?? hover; if (k >= 0) { grab = null; host.resync(); host.resetObject(k); pulse(wp, 0.5, 40); } }
+      if (grip && !gripWas) { const k = grab?.k ?? hover; if (k >= 0) { host.unlock?.(k); grab = null; host.resync(); host.resetObject(k); pulse(wp, 0.5, 40); } }
       if (a && !aWas && !grab && hover >= 0) { host.remove(hover); pulse(wp, 0.5, 40); }
       // wand stick click undoes the last object edit; with the off-hand grip held it redoes (marking has its own undo on B/Y)
       if (click && !clickWas && !grab && host.history) {
@@ -334,18 +337,18 @@ export async function setupXR(host: XrHost) {
 
   // ---------- per frame ----------
   function step(dt: number) {
-    if (host.shell?.open()) return;
+    if (host.shell?.open()) { dash.visible = false; return; }
     const yaw = readHead();
     if (host.shell?.follow(dt)) { xrRig.x += body.x - head.x; xrRig.y += body.y - head.y; placeRig(); wandStep(); return; }   // the route drives the body
     const pads: Record<string, Gamepad> = {};
     for (const source of renderer.xr.getSession()?.inputSources ?? []) if (source.gamepad) pads[source.handedness] = source.gamepad;
-    if (pinching.size && !host.readOnly?.()) {   // glide forward in sub-steps of at most half a cell, as in free walk
+    if (pinching.size && !host.readOnly?.() && (host.movement?.() ?? 'all') === 'all') {   // glide forward in sub-steps of at most half a cell, as in free walk
       const v = 0.6 * dt, dx = Math.cos(yaw) * v, dy = Math.sin(yaw) * v, n = Math.max(1, Math.ceil(v / (host.cellM / 2)));
       for (let i = 0; i < n && host.standable(head.x + dx / n, head.y + dy / n); i++) {
         xrRig.x += dx / n; xrRig.y += dy / n; head.x += dx / n; head.y += dy / n;
       }
     }
-    if (!host.readOnly?.()) {   // thumbsticks: left walks (forward/back, sideways, relative to where you look), right snap-turns
+    if (!host.readOnly?.() && (host.movement?.() ?? 'all') === 'all') {   // thumbsticks: left walks (forward/back, sideways, relative to where you look), right snap-turns
       const stick = (g?: Gamepad) => (g ? [g.axes[2] ?? 0, g.axes[3] ?? 0].map(a => (Math.abs(a) < 0.2 ? 0 : a)) : [0, 0]);
       const wy = MOUNT ? walkerYaw(yaw) : null;
       // mounted: one stick, up/down along the walker's heading, left/right snap-turns; held: left walks relative to the view

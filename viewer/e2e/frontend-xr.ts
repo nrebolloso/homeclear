@@ -24,7 +24,7 @@ try {
   const select = async (label: string) => { await G(`__aimUI(${JSON.stringify(label)})`); await wait(); await G("game.debug.xrDevice.controllers.right.updateButtonValue('trigger', 1)"); await wait(); await G("game.debug.xrDevice.controllers.right.updateButtonValue('trigger', 0)"); await wait(); };
   assert.equal(await G('return game.frontendXR.isOpen()'), false); await stick(150); assert.equal(await G('return game.frontendXR.isOpen()'), false); console.log('PASS a stick tap does not open the menu');
   await stick(); assert.equal(await G('return game.frontendXR.isOpen()'), true);
-  assert.equal(await page.locator('#frontend').isVisible(), false); console.log('PASS controller opens spatial menu; desktop DOM is hidden');
+  assert.equal(await page.locator('#frontend').isVisible(), true); console.log('PASS controller opens spatial menu while desktop companion remains available');
   const before = await G('return JSON.stringify(game.layout())');
   await select('View filters'); await select('Off · Night view'); assert.equal(await page.isChecked('#night'), true);
   await select('On · Particle path'); assert.equal(await G('return game.debug.overlays[0].visible'), false);

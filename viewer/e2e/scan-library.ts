@@ -1,13 +1,14 @@
 import { chromium } from 'playwright-core';
+import { fileURLToPath } from 'node:url';
 import { CHROME } from './env.ts';
 import assert from 'node:assert/strict';
-const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 page.setDefaultTimeout(20000);
 const errors: string[] = []; page.on('pageerror', e => errors.push(String(e))); page.on('console', m => { if (m.type() === 'error') console.error(m.text().slice(0, 400)); });
 const base = process.argv[2] ?? 'http://127.0.0.1:5182';
 try {
-  await page.goto(`${base}/?scene=game_synth&noground&nophys&emulate=quest2`);
+  await page.goto(`${base}/?scene=game_synth&noground&nophys&emulate=quest2&xrscale=0.25`);
   await page.waitForFunction(() => (window as any).game?.scanLibrary, null, { timeout: 60000 });
   assert.ok(await page.evaluate(() => (window as any).scanLibrary.entries().length >= 3));
   await page.locator('#scan-picker').click(); assert.ok(await page.locator('#scan-gallery').isVisible());
@@ -29,5 +30,30 @@ try {
   assert.equal(await page.evaluate(() => (window as any).game.debug.renderer.xr.getSession() === (window as any).__session), true);
   assert.equal(await page.evaluate(() => (window as any).game.xr), true);
   console.log('PASS scan switching preserves the same immersive XR session');
+  console.log('Checking companion');
+  await page.waitForFunction(() => document.body.classList.contains('companion-active')); 
+  const rigBefore = await page.evaluate(() => (window as any).game.xrPose().rig);
+  await page.evaluate(() => { const c = (window as any).game.companion; c.camera.position.x += 1; c.controls.target.x += 1; c.controls.update(); });
+  assert.deepEqual(await page.evaluate(() => (window as any).game.xrPose().rig), rigBefore);
+  assert.ok(await page.locator('#frontend').isVisible());
+  await page.evaluate(() => (window as any).game.companion.setMode('split'));
+  await page.waitForFunction(() => !(document.getElementById('headset-preview') as HTMLElement).hidden);
+  console.log('Checking per-eye vision');
+  await page.evaluate(() => (window as any).game.setVision('cataract'));
+  await page.waitForFunction(() => (window as any).game.debug.vision.xrStats().eyeFrames >= 4, null, { timeout: 20000 });
+  assert.equal(await page.evaluate(() => (window as any).game.debug.vision.xrStats().profile), 'cataract');
+  await page.evaluate(() => { const g = (window as any).game; g.setVision('normal'); g.frontendXR.showPage('scans'); });
+  assert.ok(await page.evaluate(() => (window as any).game.frontendXR.root.children.some((c: any) => c.userData.label === 'Kitchen')));
+  await page.evaluate(() => (window as any).game.frontendXR.close());
+  const beforeEdit = await page.evaluate(() => (window as any).game.layout());
+  await page.evaluate(async () => { const g = (window as any).game; await g.sharedEdit(g.items[0], () => g.removeObject(g.items[0])); });
+  assert.equal(await page.evaluate(() => (window as any).game.layout().poses[0].removed), true);
+  await page.evaluate(() => (window as any).game.history.undo());
+  assert.deepEqual(await page.evaluate(() => (window as any).game.layout()), beforeEdit);
+  await page.evaluate(() => (window as any).game.bookmarks.save('Saved in headset'));
+  assert.ok(await page.evaluate(() => (window as any).game.bookmarks.list().some((p: any) => p.label === 'Saved in headset')));
+  await import('node:fs/promises').then(fs => fs.mkdir(new URL('./artifacts/', import.meta.url), { recursive: true }));
+  await page.screenshot({ path: fileURLToPath(new URL('./artifacts/scan-companion.png', import.meta.url)) });
+  console.log('PASS independent desktop camera, split preview, per-eye vision, VR catalog, shared edits, undo and bookmarks');
   assert.deepEqual(errors, []);
 } finally { await browser.close(); }

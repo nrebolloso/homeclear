@@ -49,6 +49,9 @@ import { mountCostCard } from './costcard.ts';
 import { mountReview } from './hazardreview.ts';
 import { headingMismatch, nearestStandable, routeResume } from './navmode.ts';
 import { createFrontendXR } from './frontend-xr.ts';
+import { createCompanion } from './companion.ts';
+import { createBookmarks } from './bookmarks.ts';
+import { createEditLocks } from './edit-locks.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
 import type { Ghost } from './sim.ts';
 import type { WorldModel } from './worldmodel.ts';
@@ -295,6 +298,7 @@ function setExplore(on: boolean) { explore.on = on; explore.parked = on ? { x: b
 const chairVel = { v: 0, w: 0 };   // the wheelchair's speed and turn rate (driving: see "wheelchair driving" below)
 const isChair = () => walkerCfg.device === 'wheelchair';
 let mode: 'auto' | 'free' | 'fly' = 'auto', autoS = 0, autoPause = 0;
+let companion: ReturnType<typeof createCompanion> | null = null;
 let routePaused = false, routeSpeed = 1, frontendVR: ReturnType<typeof createFrontendXR> | null = null, xrFollowRoute = false;
 
 // ---------- layout state + worker ----------
@@ -315,6 +319,7 @@ worker.onmessage = e => {
 };
 const ask = (msg: object) => new Promise<any>(res => { const id = ++seq; waiting.set(id, res); worker.postMessage({ ...msg, id }); });
 
+const editLocks = createEditLocks();
 const game: any = { ready: false, fps: 0, evals: 0, pending: () => waiting.size };
 runtime.scope.own(() => { worker.terminate(); renderer.setAnimationLoop(null); });
 (window as any).game = game;
@@ -322,7 +327,7 @@ runtime.scope.own(() => { worker.terminate(); renderer.setAnimationLoop(null); }
 function replanRoute(k: number) {
   selRoute = k; autoS = 0;
   showPhysics();
-  return replan().then(ms => { if (!current?.error) Object.assign(body, routePose(0, 0, Infinity)); return ms; });
+  return replan().then(ms => { if (!renderer.xr.isPresenting && !current?.error) Object.assign(body, routePose(0, 0, Infinity)); return ms; });
 }
 async function replan(): Promise<number> {
   const t = performance.now();
@@ -532,6 +537,8 @@ const poseOf = (k: number): Pose => ({ x: items[k].group.position.x, y: items[k]
 let onSelect: ((k: number) => void) | null = null;   // the reimagined room shows the picked object's cost tag
 function select(k: number) {
   if (selected >= 0) items[selected].outline.visible = false;
+  if (k >= 0 && renderer.xr.isPresenting && editLocks.owner(String(k)) === 'vr') return;
+  if (companion && renderer.xr.isPresenting) tc.camera = companion.camera;
   selected = k;
   onSelect?.(k);
   if (k < 0) { tc.detach(); $<HTMLButtonElement>('remove').disabled = true; return; }
@@ -780,11 +787,14 @@ async function suggest() {
   return suggestions;
 }
 function applyOption(n: number) {
+  if (renderer.xr.isPresenting && (editLocks.owner('*') !== 'desktop' && editLocks.busy())) return Promise.reject(Error('Release the held object before applying a layout.'));
   const o = suggestions[n];
+  const was = snap();
   layout = o.layout;
   applied = o.actions.map((a: any) => a.id);
+  editHist.record('applied proposed layout', was, snap());
   syncObjects();
-  return replan().then(ms => { if (!current?.error) Object.assign(body, routePose(0, 0, Infinity)); setWalk('auto'); reim.play(); return ms; });
+  return replan().then(ms => { if (!renderer.xr.isPresenting && !current?.error) { Object.assign(body, routePose(0, 0, Infinity)); setWalk('auto'); } reim.play(); return ms; });
 }
 $('suggest').onclick = () => suggest();
 
@@ -1736,6 +1746,7 @@ function turnGrab() {
 }
 /** Undo or redo the last object edit; resolves to what happened, in one line (also shown as a toast and, in VR, a card). */
 async function stepHistory(dir: 'undo' | 'redo'): Promise<string> {
+  if (editLocks.busy()) return 'Release the edited object before undo or redo';
   const r = editHist[dir](snap());
   const tell = (m: string) => (keyHelp.toast(m), m);
   if (!r) return tell(dir === 'undo' ? 'Nothing to undo' : 'Nothing to redo');
@@ -1787,7 +1798,7 @@ onWindow('keydown', e => {
 // ---------- input ----------
 const keys = new Set<string>();
 onWindow('keydown', e => {
-  if (e.defaultPrevented || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) return;
+  if (renderer.xr.isPresenting || e.defaultPrevented || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target as HTMLElement).tagName)) return;
   if (selected >= 0 && e.code.startsWith('Arrow')) { nudge(e.code); e.preventDefault(); return; }   // arrows move the selected object, not you
   keys.add(e.code);
   if (e.code === 'KeyT') setMode('translate');
@@ -2150,6 +2161,7 @@ function frame(now: number) {
 function step(dt: number, t: number) {
   frontendVR?.update();
   if (xr.presenting()) return xrFrame(dt, t);
+  if (game.remoteSession) { reim.update(dt); companion?.frame(t * 1000); return; }
   if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
   tourStep(dt);
   const wb = walkerPose();
@@ -2260,7 +2272,8 @@ const xr = await setupXR({
   renderer, scene, camera, params: PARAMS, body, items, names: objs.map(o => o.name), poses: () => layout.poses,
   canPlace: (k, p) => placementOk(g, placeBase, objs, layout.poses.map((q, n) => (n === k ? p : q)), k, overlapOk[k]),
   commit: commitPose, remove: removeObject, resync: syncObjects, standable, cellM: g.cell_m,
-  resetObject, resetAll, editor: markerXR, readOnly: () => game.sessionBusy || comparison.previewing(), hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { lines: hintLines(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
+  lock: k => editLocks.acquire(String(k), 'vr'), unlock: k => editLocks.release(String(k), 'vr'),
+  resetObject, resetAll, editor: markerXR, readOnly: () => game.sessionBusy || comparison.previewing(), movement: () => game.comfort?.movement ?? 'all', hints: () => { const h = controlHints({ ...hintBase('vr'), inspect: false }); return { lines: hintLines(h), tone: h.tone }; }, history: { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') },
   startPose() {   // stay if this floor is seen as well as the route's median spot; else the first such point along the route
     if (!current || current.error) return null;
     const poses: { x: number; y: number; yaw: number }[] = [];
@@ -2300,6 +2313,7 @@ function xrFrame(dt: number, t: number) {
   if (!comparison.previewing()) labelStep();
   liveChecks(t);
   vision.renderXR();
+  companion?.frame(t * 1000);
 }
 // ---------- start ----------
 setWalk('auto');
@@ -2309,7 +2323,7 @@ else { const [sx, sy] = routes[selRoute].start; Object.assign(body, { x: sx - ce
 // ---------- room light on the meshes (ground.ts) ----------
 // the splat rendered into an env map from the room's middle, 1 m up, before the loop (it sorts the splats for the cube
 // camera; the loop would re-sort them for the main one mid-capture). Capped wait: a slow load keeps the old flat light.
-if (GROUND) {
+if (GROUND && !renderer.xr.isPresenting) {
   const ready = await Promise.race([Promise.all(splats.map(s => s.initialized)).then(() => true), new Promise<boolean>(r => later(() => r(false), 10000))]);
   if (ready) {
     await roomEnvironment(sparkR, scene, new THREE.Vector3(g.origin_xy[0] + (g.shape[0] * g.cell_m) / 2, g.origin_xy[1] + (g.shape[1] * g.cell_m) / 2, 1.0));
@@ -2446,6 +2460,18 @@ game.review = review;
 if (current) drawSpots(current);
 
 // Room state never crosses scan identities. Annotations already have per-scan storage keys.
+companion = createCompanion({ renderer, scene, head: camera, game, centre: [g.origin_xy[0] + nx * g.cell_m / 2, g.origin_xy[1] + ny * g.cell_m / 2], size: Math.max(nx, ny) * g.cell_m });
+game.companion = companion;
+game.bookmarks = createBookmarks(RUN, () => ({ position: camera.getWorldPosition(new THREE.Vector3()).toArray(), quaternion: camera.getWorldQuaternion(new THREE.Quaternion()).toArray() }), point => {
+  if (renderer.xr.isPresenting) { const d = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion().fromArray(point.quaternion)); if (standable(point.position[0], point.position[1])) frontendVR?.transition(() => xr.place(point.position[0], point.position[1], Math.atan2(d.y, d.x))); }
+  else { const d = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion().fromArray(point.quaternion)); game.setFly(...point.position, Math.atan2(d.y, d.x) * 180 / Math.PI, Math.asin(d.z) * 180 / Math.PI); }
+});
+game.editLocks = editLocks;
+game.applyPreparedOption = (index: number) => { frontendVR?.notify('Desktop is applying a proposed layout'); return applyOption(index); };
+game.sharedEdit = (name: string, task: () => unknown) => editLocks.run(String(objs.findIndex(o => o.name === name)), 'desktop', async () => { const result = await task(); frontendVR?.notify('Room updated by desktop'); return result; });
+game.history = { undo: () => stepHistory('undo'), redo: () => stepHistory('redo') };
+game.recenter = () => { const p = routePose(0, 0, Infinity); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.place(p.x, p.y, p.yaw)); else Object.assign(body, p); };
+game.comfort = { movement: 'all', cycle() { const choices = ['all', 'teleport', 'physical']; this.movement = choices[(choices.indexOf(this.movement) + 1) % choices.length]; } };
 game.saveSession = () => structuredClone({ layout, applied, body, fly, personaKey, selRoute, mode, autoS, explore });
 game.restoreSession = async (saved: any) => {
   if (!saved || saved.layout?.poses?.length !== objs.length) return;

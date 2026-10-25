@@ -106,6 +106,7 @@ export function mountReview(D: ReviewDeps) {
   onWindow('keydown', e => { if (e.code === 'Escape' && !panel.hidden && panel.contains(document.activeElement)) { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); btn.focus(); } });
   render();
   return {
+    note: (spot: Spot, note: string) => set(setNote(state, reviewKey(spot), note)),
     state: () => state, spots: () => visibleSpots(D.spots(), state), refresh: render,
     filter: (s: Spot) => state[reviewKey(s)]?.verdict !== 'dismissed',
     counts: () => reviewCounts(D.spots(), state),

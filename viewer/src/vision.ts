@@ -90,6 +90,16 @@ export function createVision(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
     resize: size,
     dispose() { composer.dispose(); pass.dispose(); eyes.forEach(e => e.dispose()); quad.geometry.dispose(); material.dispose(); },
     xrStats: () => ({ profile, eyeFrames }),
+    /** Explicit output for the desktop companion; never writes over the XR framebuffer. */
+    renderTo(output: THREE.WebGLRenderTarget) {
+      const target = renderer.getRenderTarget();
+      const input = eyes[0]; if (input.width !== output.width || input.height !== output.height) input.setSize(output.width, output.height);
+      try {
+        renderer.setRenderTarget(input); renderer.render(scene, camera);
+        material.uniforms.tDiffuse.value = input.texture; material.uniforms.res.value.set(input.width, input.height);
+        renderer.setRenderTarget(output); renderer.render(composite, camera);
+      } finally { renderer.setRenderTarget(target); }
+    },
     /** Render the measured room per eye, then filter each eye separately. UI is drawn afterward in normal vision. */
     renderXR() {
       if (profile === 'normal') { renderer.render(scene, camera); return; }
