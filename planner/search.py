@@ -61,6 +61,9 @@ def propose(S, pl, rnd, scan):
             if q["mat"] == "moved":
                 m = S.objects[S.idx[cfg["mat"]]]["pivot"]
                 q["mat_at"] = [snap(m[0] + rnd.uniform(-0.6, 0.6), g), snap(m[1] + rnd.uniform(-0.6, 0.6), g), rnd.choice([0, 90])]
+        elif r < 0.8:
+            if "walker" in cfg["options"]:
+                q["caps"] = not q.get("caps")
         elif r < 0.87:
             q["cord"] = rnd.choice(["present", "taped", "rerouted"])
         else:
