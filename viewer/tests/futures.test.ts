@@ -114,3 +114,11 @@ test('the label leads with the most expected catches and holds it ~1.5 s', () =>
   assert.equal(L(mk(19, 0, 0), 4.5), 'cord');
   assert.equal(L({ ...mk(0, 11, 0.02), crossed: { mat: 11 } } as Fan, 5), 'mat');   // the held one is gone: switch at once
 });
+
+test('futures fan: a taped mat the walker pushed onto the cord leaves the cord named, not the mat', () => {
+  // where the e2e walker pushed the mat (1.2, -0.1) before taping: 36 cord cells (5 mm) under it
+  const pushed = (taped: boolean) => ({ ...lay, poses: lay.poses.map((p, k) => (k === mat ? { ...p, x: 1.203, y: -0.104, yaw: 0, taped } : p)) });
+  const owners = (t: boolean) => { const st = prepare(S, pushed(t), null), on = new Set<number>(); st.L.bump.forEach((h, c) => { if (h >= init.rules.bump_min_m) on.add(st.owner[c]); }); return on; };
+  assert.ok(owners(false).has(mat + 1), 'untaped: the mat owns its own 15 mm edge');
+  assert.ok(!owners(true).has(mat + 1) && owners(true).has(-1), `taped: only the cord stands above bump_min_m (${[...owners(true)]})`);
+});
