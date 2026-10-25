@@ -25,7 +25,9 @@ export const DEFAULTS: OptimizerCfg = {
 export interface Action { id: string; key: string; label: string; effort: number; cost_usd: number; minutes: number; product?: string; apply: (l: Layout) => Layout }
 export interface OptionOut { name: string; lambda: number; actions: { id: string; label: string; cost_usd: number; minutes: number; product?: string }[];
   layout: Layout; per_month: number; per_month_lo: number; per_month_hi: number; effort: number; cost_usd: number; minutes: number; score: number;
-  checks_failed: number; min_side_m: number }
+  checks_failed: number; min_side_m: number;
+  /** set by the precomputed planner (planfix.ts proposals): its order is the planner's (Easiest first), and the fixes to record */
+  planned?: boolean; applied?: string[] }
 
 type Obj = Init['objects'][number] & { movable?: boolean };
 

@@ -52,7 +52,7 @@
 .frontend[data-theme="contrast"] #frontend { --focus: #ffe14d; }
 .frontend .primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; }
 .frontend .primary:hover { background: var(--accent-hover); }
-.frontend .full { width: 100%; margin-top: 12px; display: flex; justify-content: space-between; align-items: center; }
+.frontend .full { width: 100%; margin-top: 12px; display: flex; justify-content: flex-start; gap: 10px; align-items: center; text-align: left; }
 .frontend select { padding: 8px; min-height: 36px; font: inherit; background: var(--field); color: var(--text); border-color: var(--line); border-radius: 8px; }
 .frontend input[type="checkbox"] { accent-color: var(--accent); width: 17px; height: 17px; margin: 0; }
 .frontend h1 { font-size: calc(1.5625rem * var(--fs)); line-height: 1.25; letter-spacing: -.6px; margin: 8px 0; }
@@ -123,6 +123,8 @@ body:has(#workspace-toggle[aria-expanded="true"]) #layers { z-index: 3; }
 .frontend #hazards small, .frontend #checks small, .frontend #snags small { font-size: calc(0.75rem * var(--fs)); }
 .proposal-card, .change-card { padding: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin: 14px 0; }
 .proposal-card.recommended { border-color: var(--rec-line); background: linear-gradient(135deg, var(--rec-a), var(--rec-b)); }
+.proposal-card .stepper { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.proposal-card .stepper button { min-width: 44px; min-height: 44px; font-size: 1.3em; }
 .proposal-card h2 { margin: 12px 0 6px; }
 .proposal-card ol { font-size: calc(0.75rem * var(--fs)); color: var(--text-2); }
 .proposal-metrics { display: flex; gap: 18px; padding: 12px 0; border-top: 1px solid var(--line); }

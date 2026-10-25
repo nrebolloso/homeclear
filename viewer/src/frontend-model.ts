@@ -23,9 +23,15 @@ export function summarizeChanges(changes: Change[]) {
   };
 }
 // Compare final states, not option names or action order. Retain backend indices for Apply.
-export function distinctOptions<T extends { layout: unknown; score: number; actions: unknown[] }>(options: T[]) {
+const firstOfEachLayout = <T extends { option: { layout: unknown } }>(list: T[]) => {
   const seen = new Set<string>();
-  return options.map((option, index) => ({ option, index })).sort((a, b) => a.option.score - b.option.score || a.option.actions.length - b.option.actions.length)
-    .filter(({ option }) => { const key = JSON.stringify(option.layout); if (seen.has(key)) return false; seen.add(key); return true; });
+  return list.filter(({ option }) => { const key = JSON.stringify(option.layout); if (seen.has(key)) return false; seen.add(key); return true; });
+};
+export function distinctOptions<T extends { layout: unknown; score: number; actions: unknown[] }>(options: T[]) {
+  return firstOfEachLayout(options.map((option, index) => ({ option, index })).sort((a, b) => a.option.score - b.option.score || a.option.actions.length - b.option.actions.length));
+}
+/** The proposals in the order they are stepped through: the precomputed planner's own order (Easiest first), else the best-scored first */
+export function orderedProposals<T extends { layout: unknown; score: number; actions: unknown[]; planned?: boolean }>(options: T[]) {
+  return options.length && options.every(o => o.planned) ? firstOfEachLayout(options.map((option, index) => ({ option, index }))) : distinctOptions(options);
 }
 export const escapeHTML = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
