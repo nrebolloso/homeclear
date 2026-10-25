@@ -1,5 +1,12 @@
 # Status
 
+## While you were out (2026-10-24, branch merge-juan, nothing pushed, demo-safe tag untouched)
+- **Done:** lounge floor has no invisible obstacles left (97 m² walkable, open floor clear); removing an object now takes the whole object, including the parts 6c labelled too weakly (71649ea, self-check `tests/test_export_join.py`, all Python checks pass); `gator_lounge_lighter_v1.0.5.zip` is in the scratchpad; stage changes synced to HPG.
+- **Audit (remove each object, look from 3 angles):** sofa, chair3 and the other 14 come out clean with no regressions. sofa2 leaves thin floating streaks; stool2 leaves a small patch (probably the unlabelled bench).
+- **In progress:** bedbath_hall (nicoroom) on HPG (SfM map running, then densify and train); night1/turlington (GPU SfM running). Watchers build the demos when training finishes.
+- **Needs you:** BLOCKERS 10 (accept sofa2 streaks or retrain with a Gaussian-size cap; render lift not adopted); OK to push d012fb8..d129e81 to main.
+- **Risks:** the new stage 12 rules change every `objects: auto` scene on re-export (only the lounge rebuilt so far); e2e not re-run after this last change.
+
 ## Demo push (2026-10-24)
 - **Done:** steps 1-6, 9, 10 (OT report with ranked fixes). Then: the classic two-panel UI is the default again (`?planning` keeps the drawer); demo mode (`?demo=1` or H) hides debug rows, ranges, the "measured height error" line and the fps HUD, and `e2e/shot.ts` records in it on its own server with hot reload off; the fps HUD shows outside demo mode; one palette for ghosts, heatmap and hazards (cyan footsteps, orange to red contacts, white hand rule); the night shot with the nightlight (`proof/demo/shot7_night.mp4`); the optimize test timeout raised to 60 s.
 - **Next:** feature freeze at [TIME - 3h], then record `proof/demo/final.mp4` in demo mode at [TIME - 2h] following the storyboard. Judging is at [TIME]; the actual time is still needed (BLOCKERS.md). Step 8 VR with the VR team.
