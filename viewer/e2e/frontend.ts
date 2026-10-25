@@ -28,7 +28,7 @@ try {
   await game("await game.applyFix('remove_rug')");
   await page.click('#tab-changes'); await page.waitForFunction(() => document.querySelector('#change-count')?.textContent === '1');
   assert.match(await page.locator('#change-summary').innerText(), /Pending/); assert.match(await page.locator('#change-list').innerText(), /Placeholder model/);
-  await page.click('#cost-breakdown'); assert.match(await page.locator('#change-list').innerText(), /Setup time/); check('placeholder cost and setup time never masquerade as confirmed totals');
+  await page.click('#cost-breakdown'); assert.match(await page.locator('#change-list').innerText(), /Effort cost/); check('placeholder cost and effort cost never masquerade as confirmed totals');
   await page.click('#show-original'); assert.equal(await page.getAttribute('#show-original', 'aria-pressed'), 'true');
   assert.match(await page.locator('#view-caption').innerText(), /metrics describe proposed/); await page.click('#show-proposed'); check('comparison labels distinguish visual preview from evaluated endpoint');
   await page.locator('[data-undo-change]').first().click(); await page.waitForFunction(() => (window as any).game.reimagine.changes().length === 0); check('unified change list undo uses existing layout actions');

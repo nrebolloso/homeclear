@@ -1,4 +1,5 @@
 import type { Change } from './reimagine.ts';
+import { effortScore } from './effort.ts';
 
 // Frontend seams: a missing estimate stays unknown, never becomes a zero-dollar promise.
 export interface Installation {
@@ -19,6 +20,8 @@ export function summarizeChanges(changes: Change[]) {
     count: changes.length, knownSubtotal: priced.reduce((s, c) => s + c.cost.usd, 0),
     unpriced: changes.length - priced.length, setupMinutes: timed.reduce((s, c) => s + c.cost.minutes, 0),
     untimed: changes.length - timed.length,
+    // effort cost (effort.ts): every change has an effort, placeholder or not; minutes stay above in case we switch back
+    effortTotal: changes.reduce((s, c) => s + c.cost.effort, 0), effortScore: effortScore(changes.reduce((s, c) => s + c.cost.effort, 0)),
     helpers: changes.length && changes.every(c => c.cost.source !== 'placeholder') ? Math.max(...changes.map(c => c.cost.helpers)) : null,
   };
 }

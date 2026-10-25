@@ -2,6 +2,8 @@ import { onDocument, every, later } from './lifetime.ts';
 import './frontend.css';
 import { createAnnouncer, mountDisplaySettings, nameUnlabeled, watchDialog } from './a11y.ts';
 import { navOf } from './navmode.ts';
+import { difficulty } from './effort.ts';
+import { mountBudget, type BudgetAdapter } from './budget.ts';
 import { distinctOptions, escapeHTML as h, LIGHTING_IDEAS, summarizeChanges } from './frontend-model.ts';
 import type { Change } from './reimagine.ts';
 import type { Eval } from './evaluate.ts';
@@ -29,11 +31,15 @@ export interface FrontendAdapter {
   path(on: boolean): void; highlights(on: boolean): void; improvements(on: boolean): void;
   /** "Light the path": nightlights where the route is dark (lights.ts); resolves to how many were added and the note to show */
   lightPath?(): Promise<{ added: number; note: string }>;
+  /** the $$$ budget window (budget.ts) */
+  budget?: BudgetAdapter;
   /** what the viewer is doing now, for the controls strip and the status pills (hints.ts); `inspect` is the frontend's own */
   hintContext?(): Omit<HintCtx, 'inspect'> & { thirdPerson: boolean; personaLabel: string };
 }
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const money = (x: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(x);
+// effort cost replaced the hands-on minutes (22 min for one chair was wrong); flip back here, the minute markup is kept
+const SHOW_MINUTES = false;
 const number = (x?: number) => x === undefined || !Number.isFinite(x) ? 'Pending' : x.toFixed(1);   // one place, as the planner's cards show it
 
 export function mountFrontend(api: FrontendAdapter) {
@@ -243,12 +249,12 @@ export function mountFrontend(api: FrontendAdapter) {
 
   function installationHTML(c: Change, expanded: boolean) {
     const placeholder = c.cost.source === 'placeholder';
-    return `<div class="change-estimate"><span>${placeholder ? 'Estimate pending' : `${money(c.cost.usd)} · ${c.cost.minutes} min · ${c.cost.helpers} helper${c.cost.helpers === 1 ? '' : 's'}`}</span>${placeholder ? '<span class="badge">Placeholder model</span>' : ''}</div>${expanded ? `<dl class="details-grid"><dt>Setup time</dt><dd>${placeholder ? 'Pending estimate' : `${c.cost.minutes} min · hands-on estimate`}</dd><dt>Helpers</dt><dd>${placeholder ? 'Pending estimate' : c.cost.helpers}</dd><dt>Tools / installation</dt><dd>Verify requirements</dd><dt>Room disruption</dt><dd>Pending assessment</dd><dt>Funding</dt><dd>${c.cost.funding === 'unclassified' ? 'Unclassified' : h(c.cost.funding.replaceAll('_', ' '))} · verify eligibility</dd></dl>${placeholder ? `<p class="muted">Model placeholder: ${money(c.cost.usd)}, ${c.cost.minutes} min, ${c.cost.helpers} helper(s). Excluded from known totals.</p>` : ''}` : ''}`;
+    return `<div class="change-estimate"><span>${placeholder ? 'Estimate pending' : `${money(c.cost.usd)} · ${SHOW_MINUTES ? `${c.cost.minutes} min` : `effort ${c.cost.effort.toFixed(1)} · ${difficulty(c.cost.effort)}`} · ${c.cost.helpers} helper${c.cost.helpers === 1 ? '' : 's'}`}</span>${placeholder ? '<span class="badge">Placeholder model</span>' : ''}</div>${expanded ? `<dl class="details-grid">${SHOW_MINUTES ? `<dt>Setup time</dt><dd>${placeholder ? 'Pending estimate' : `${c.cost.minutes} min · hands-on estimate`}</dd>` : `<dt>Effort cost</dt><dd>${c.cost.effort.toFixed(1)} · ${difficulty(c.cost.effort)}${placeholder ? ' · placeholder' : ''}</dd>`}<dt>Helpers</dt><dd>${placeholder ? 'Pending estimate' : c.cost.helpers}</dd><dt>Tools / installation</dt><dd>Verify requirements</dd><dt>Room disruption</dt><dd>Pending assessment</dd><dt>Funding</dt><dd>${c.cost.funding === 'unclassified' ? 'Unclassified' : h(c.cost.funding.replaceAll('_', ' '))} · verify eligibility</dd></dl>${placeholder ? `<p class="muted">Model placeholder: ${money(c.cost.usd)}, ${c.cost.minutes} min, ${c.cost.helpers} helper(s). Excluded from known totals.</p>` : ''}` : ''}`;
   }
   function renderChanges(s: FrontendSnapshot) {
     const total = summarizeChanges(s.changes);
     $('change-count').textContent = total.count ? String(total.count) : '';
-    $('change-summary').innerHTML = `<div class="metric-grid"><div><small>Known subtotal</small><strong>${total.count && !total.unpriced ? money(total.knownSubtotal) : total.knownSubtotal ? money(total.knownSubtotal) : 'Pending'}</strong></div><div><small>Setup time</small><strong>${total.count && !total.untimed ? `${total.setupMinutes} min` : 'Pending'}</strong></div><div><small>Helpers needed</small><strong>${total.helpers ?? 'Pending'}</strong></div><div><small>Unpriced items</small><strong>${total.unpriced} / ${total.count}</strong></div></div><p class="muted">${total.count ? `${total.count - total.unpriced} of ${total.count} changes have non-placeholder cost estimates. Setup time is summed hands-on work, not a delivery or completion schedule.` : 'Add a change to see cost and installation estimates.'}</p>`;
+    $('change-summary').innerHTML = `<div class="metric-grid"><div><small>Known subtotal</small><strong>${total.count && !total.unpriced ? money(total.knownSubtotal) : total.knownSubtotal ? money(total.knownSubtotal) : 'Pending'}</strong></div>${SHOW_MINUTES ? `<div><small>Setup time</small><strong>${total.count && !total.untimed ? `${total.setupMinutes} min` : 'Pending'}</strong></div>` : `<div><small>Effort cost</small><strong>${total.effortScore}/100</strong><small>${total.count ? difficulty(total.effortTotal) : ''}</small></div>`}<div><small>Helpers needed</small><strong>${total.helpers ?? 'Pending'}</strong></div><div><small>Unpriced items</small><strong>${total.unpriced} / ${total.count}</strong></div></div><p class="muted">${total.count ? `${total.count - total.unpriced} of ${total.count} changes have non-placeholder cost estimates. ${SHOW_MINUTES ? 'Setup time is summed hands-on work, not a delivery or completion schedule.' : 'Effort cost adds up the moving effort of every change (mass, distance, turn) on a 0–100 dial.'}` : 'Add a change to see cost and installation estimates.'}</p>`;
     $('change-list').innerHTML = total.count ? s.changes.map((c, i) => `<article class="change-card"><div class="eyebrow">${h(c.kind === 'fix' ? 'Addition / fix' : c.kind)}</div><h3>${h(c.label)}</h3>${installationHTML(c, costDetail)}<div class="button-row"><button data-inspect-change="${i}">Inspect</button><button data-undo-change="${i}">Undo</button></div></article>`).join('') : '<div class="empty-state"><span aria-hidden="true">✧</span><h3>Your plan starts here</h3><p>Move an object or preview a proposal. Every change will appear in this list.</p></div>';
     $('change-list').querySelectorAll<HTMLButtonElement>('[data-undo-change]').forEach(b => b.onclick = async () => { b.disabled = true; try { await api.undo(s.changes[Number(b.dataset.undoChange)]); refresh(); } catch { notify('Could not undo this change. Try again.'); b.disabled = false; } });
     $('change-list').querySelectorAll<HTMLButtonElement>('[data-inspect-change]').forEach(b => b.onclick = () => { inspectKind = 'changes'; $<HTMLSelectElement>('inspect-filter').value = 'changes'; setNavigation('inspect'); inspectIndex = Number(b.dataset.inspectChange); showInspection(true); });
@@ -337,6 +343,8 @@ export function mountFrontend(api: FrontendAdapter) {
       $('persona-cards').append(b);
     }
   }
+  // ---------- budget (budget.ts) ----------
+  if (api.budget) mountBudget(api.budget, () => refresh());
   function refresh() { const s = api.snapshot(); renderAssessment(s); renderChanges(s); renderProposals(s); showInspection(); updateChrome(); }
   // Small scalar signature keeps the viewer frame loop free of DOM work; changes are polled only four times/sec.
   let lastSelected = -1;

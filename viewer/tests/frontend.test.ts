@@ -23,3 +23,11 @@ test('identical proposal outcomes collapse and retain their original Apply index
   assert.deepEqual(distinctOptions(options).map(x => x.index), [2, 1]);
 });
 test('scene labels cannot inject markup into the planning shell', () => assert.equal(escapeHTML('<img src=x onerror="x">'), '&lt;img src=x onerror=&quot;x&quot;&gt;'));
+test('effort cost is a 0..100 dial over summed effort', () => {
+  const s = summarizeChanges([change('catalog', 25), change('placeholder', 999, 999)]);
+  assert.equal(s.effortTotal, 2); assert.equal(s.effortScore, 15); assert.equal(summarizeChanges([]).effortScore, 0);
+});
+test('effort cost is a 0..100 dial over summed effort', () => {
+  const s = summarizeChanges([change('catalog', 25), change('placeholder', 999, 999)]);
+  assert.equal(s.effortTotal, 2); assert.equal(s.effortScore, 15); assert.equal(summarizeChanges([]).effortScore, 0);
+});
