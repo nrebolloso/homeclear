@@ -10,6 +10,7 @@ import type { Spot } from './spotlight.ts';
 import type { OptionOut } from './optimize.ts';
 import { controlHints, statusPills, type HintCtx } from './hints.ts';
 import { clampPanel, snapPanel, stepPanel, panelSnaps } from './panel-size.ts';
+import { mountBudget, type BudgetAdapter } from './budget.ts';
 
 export type NavigationMode = 'explore' | 'route' | 'walk' | 'fly' | 'inspect';
 export interface FrontendSnapshot {
@@ -34,6 +35,8 @@ export interface FrontendAdapter {
   path(on: boolean): void; highlights(on: boolean): void; improvements(on: boolean): void;
   /** "Light the path": nightlights where the route is dark (lights.ts); resolves to how many were added and the note to show */
   lightPath?(): Promise<{ added: number; note: string }>;
+  /** the $$$ budget window (budget.ts) */
+  budget?: BudgetAdapter;
   /** what the viewer is doing now, for the controls strip and the status pills (hints.ts); `inspect` is the frontend's own */
   hintContext?(): Omit<HintCtx, 'inspect'> & { thirdPerson: boolean; personaLabel: string };
 }
@@ -253,7 +256,7 @@ export function mountFrontend(api: FrontendAdapter) {
   function renderChanges(s: FrontendSnapshot) {
     const total = summarizeChanges(s.changes);
     $('change-count').textContent = total.count ? String(total.count) : '';
-    $('change-summary').innerHTML = `<div class="metric-grid"><div><small>Known subtotal</small><strong>${total.count && !total.unpriced ? money(total.knownSubtotal) : total.knownSubtotal ? money(total.knownSubtotal) : 'Pending'}</strong></div><div><small>Effort</small><strong>${total.count ? total.effort.toFixed(1) : 'Pending'}</strong></div><div><small>Helpers needed</small><strong>${total.helpers ?? 'Pending'}</strong></div><div><small>Unpriced items</small><strong>${total.unpriced} / ${total.count}</strong></div></div><p class="muted">${total.count ? `${total.count - total.unpriced} of ${total.count} changes have non-placeholder cost estimates. Effort is summed across changes (a 1 m chair carry is about 1).` : 'Add a change to see cost and installation estimates.'}</p>`;
+    $('change-summary').innerHTML = `<div class="metric-grid"><div><small>Known subtotal</small><strong>${total.count && !total.unpriced ? money(total.knownSubtotal) : total.knownSubtotal ? money(total.knownSubtotal) : 'Pending'}</strong></div><div><small>Effort cost</small><strong>${total.count ? `${total.effortScore}/100` : 'Pending'}</strong><small>${total.count ? difficulty(total.effort) : ''}</small></div><div><small>Helpers needed</small><strong>${total.helpers ?? 'Pending'}</strong></div><div><small>Unpriced items</small><strong>${total.unpriced} / ${total.count}</strong></div></div><p class="muted">${total.count ? `${total.count - total.unpriced} of ${total.count} changes have non-placeholder cost estimates. Effort is summed across changes (a 1 m chair carry is about 1).` : 'Add a change to see cost and installation estimates.'}</p>`;
     $('change-list').innerHTML = total.count ? s.changes.map((c, i) => `<article class="change-card"><div class="eyebrow">${h(c.kind === 'fix' ? 'Addition / fix' : c.kind)}</div><h3>${h(c.label)}</h3>${installationHTML(c, costDetail)}<div class="button-row"><button data-inspect-change="${i}">Inspect</button><button data-undo-change="${i}">Undo</button></div></article>`).join('') : '<div class="empty-state"><span aria-hidden="true">✧</span><h3>Your plan starts here</h3><p>Move an object or preview a proposal. Every change will appear in this list.</p></div>';
     $('change-list').querySelectorAll<HTMLButtonElement>('[data-undo-change]').forEach(b => b.onclick = async () => { b.disabled = true; try { await api.undo(s.changes[Number(b.dataset.undoChange)]); refresh(); } catch { notify('Could not undo this change. Try again.'); b.disabled = false; } });
     $('change-list').querySelectorAll<HTMLButtonElement>('[data-inspect-change]').forEach(b => b.onclick = () => { inspectKind = 'changes'; $<HTMLSelectElement>('inspect-filter').value = 'changes'; setNavigation('inspect'); inspectIndex = Number(b.dataset.inspectChange); showInspection(true); });
@@ -367,6 +370,8 @@ export function mountFrontend(api: FrontendAdapter) {
       $('persona-cards').append(b);
     }
   }
+  // ---------- budget (budget.ts) ----------
+  if (api.budget) mountBudget(api.budget, () => refresh());
   function refresh() { const s = api.snapshot(); renderAssessment(s); renderChanges(s); renderProposals(s); showInspection(); updateChrome(); }
   // Small scalar signature keeps the viewer frame loop free of DOM work; changes are polled only four times/sec.
   let lastSelected = -1;

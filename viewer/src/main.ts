@@ -30,6 +30,7 @@ import { summarize, drawPushChart, poseAt, pushColor, sampleText } from './physd
 import { cardState, encodeCard, type ActionOut, type ReportPayload } from './share.ts';
 import { createReimagine, undoChange, costText, card, poseAt as layoutPoseAt, type Change } from './reimagine.ts';
 import { moveCost, removeCost, sumCosts, fixCost } from './movecost.ts';
+import { currentBudget } from './budget.ts';
 import { isMoved, movedText, resetPose } from './resets.ts';
 import { twistAngle, snapQuarter } from './wand.ts';
 import { createObjLabel } from './objlabel.ts';
@@ -1829,6 +1830,7 @@ async function openReport() {
     changes: one('changes'), masses: latest('mass').map(e => ({ ...e.values, provenance: e.provenance })), not_suggested: latest('not_suggested').map(e => e.values),
     provenance: Object.entries(ledger.reduce((n: Record<string, number>, e) => (n[e.provenance] = (n[e.provenance] ?? 0) + 1, n), {})).map(([k, v]) => ({ provenance: k, n: v })),
     log_entries: ledger.length,
+    budget: currentBudget(),
   };
   sessionStorage.setItem(`report:${RUN}`, JSON.stringify(payload));
   if (!w) return window.open(`report.html?scene=${encodeURIComponent(RUN)}`, '_blank');
@@ -2941,6 +2943,19 @@ function hintBase(device: 'desktop' | 'vr'): Omit<HintCtx, 'inspect'> {
     parked: device === 'desktop' && mode === 'free' && explore.on, mismatch: device === 'desktop' && headMismatched() };
 }
 const frontendAdapter: FrontendAdapter = {
+  // ---------- budget (budget.ts): the $$$ window's checklist is the configured fixes; Apply makes the room match ----------
+  budget: {
+    async items() {
+      const { fixes } = await ask({ type: 'fixes', layout, sel: selRoute }), best = new Set((suggestions[0]?.actions ?? []).map((a: any) => a.id));
+      return interventions.map(iv => { const f = fixes.find((x: any) => x.id === iv.id);
+        return { id: iv.id, label: iv.label, usd: iv.cost_usd ?? (iv.product ? undefined : 0), effort: fixCost(iv).effort, product: iv.product,
+          suggested: applied.includes(iv.id) || best.has(iv.id), benefit: f && Number.isFinite(f.reduction) ? Math.max(0, f.reduction) : undefined, error: f?.error }; });
+    },
+    async commit(ids: string[]) {
+      for (const ch of reim.changes().filter(c => c.iv && applied.includes(c.iv) && !ids.includes(c.iv))) await undoReimagined(ch);
+      for (const id of ids) if (!applied.includes(id)) await applyFix(id);
+    },
+  },
   hintContext: () => ({ ...hintBase('desktop'), thirdPerson: view.third, personaLabel: personas[personaKey]?.label ?? personaKey }),   // the controls strip and status pills (hints.ts)
   snapshot: () => ({ room: RUN, patient: personaKey, route: routes[selRoute].name, current, baseline: baseEvals[selRoute] ?? null,
     changes: reim.changes(), spots: spotList, options: game.remoteOptions ?? suggestions, selected, selectedName: objs[selected]?.name, mode, explore: explore.on, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout),

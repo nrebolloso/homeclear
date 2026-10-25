@@ -1,4 +1,5 @@
 import type { Change } from './reimagine.ts';
+import { effortScore } from './effort.ts';
 
 // Frontend seams: a missing estimate stays unknown, never becomes a zero-dollar promise.
 export interface Installation {
@@ -19,6 +20,7 @@ export function summarizeChanges(changes: Change[]) {
     unpriced: changes.length - priced.length,
     // effort.ts prices every change, placeholder dollars or not; it adds up (movecost.ts sumCosts)
     effort: changes.reduce((s, c) => s + (Number.isFinite(c.cost.effort) ? c.cost.effort : 0), 0),
+    effortScore: effortScore(changes.reduce((s, c) => s + (Number.isFinite(c.cost.effort) ? c.cost.effort : 0), 0)),   // the same sum on a 0..100 dial
     helpers: changes.length && changes.every(c => c.cost.source !== 'placeholder') ? Math.max(...changes.map(c => c.cost.helpers)) : null,
   };
 }

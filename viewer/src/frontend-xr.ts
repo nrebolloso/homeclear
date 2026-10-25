@@ -129,7 +129,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
     } else if (page === 'bookmarks') {
       rows([['Save current viewpoint', () => { game().bookmarks.save(); notice = 'Viewpoint saved'; }], ...(game().bookmarks?.list() ?? []).map((b: any): Row => [b.label, () => { game().bookmarks.restore(b.id); close(); }])]);
     } else {
-      tile(`${costs.count} changes · ${costs.unpriced} unpriced\n${costs.unpriced || !costs.count ? 'Cost estimate pending' : `Known subtotal $${costs.knownSubtotal}`}\n${costs.count ? `Effort ${costs.effort.toFixed(1)}` : 'Effort pending'}\nHelpers: ${costs.helpers ?? 'pending'}`, 0, .12, .96, .32);
+      tile(`${costs.count} changes · ${costs.unpriced} unpriced\n${costs.unpriced || !costs.count ? 'Cost estimate pending' : `Known subtotal $${costs.knownSubtotal}`}\n${costs.count ? `Effort cost ${costs.effortScore}/100` : 'Effort cost pending'}\nHelpers: ${costs.helpers ?? 'pending'}`, 0, .12, .96, .32);
       tile('Selected item cost labels', 0, -.13, .96, .095, () => { const el = document.getElementById('reimtags') as HTMLSelectElement; el.value = 'selected'; el.dispatchEvent(new Event('change')); close(); });
       tile('Back', 0, -.34, .96, .085, back);
     }

@@ -18,6 +18,8 @@ export interface ReportPayload {
   masses?: { name: string; kind: string; mass_kg: number; flagged?: boolean; difficulty?: string; people: number; explain: string; provenance: string }[];
   not_suggested?: { name: string; kind: string; reason: string }[];
   provenance?: { provenance: string; n: number }[]; log_entries?: number;
+  /** the $$$ window's plan of action (budget.ts): what is checked within the family's budget */
+  budget?: import('./budget.ts').BudgetPlan;
 }
 
 /** The card's state, small enough for a QR code: the layout delta and the numbered actions. */

@@ -111,3 +111,7 @@ export function objectEffort(o: { kind: string; name?: string; footprint?: numbe
     : `${kg} · ${dif} · ${ref.people} ${ref.people > 1 ? 'people' : 'person'}${m.flagged ? ' · check in person' : ''}`;
   return { ...m, movable, carried, difficulty: dif, people: ref.people, tag };
 }
+
+/** Effort cost on a 0..100 dial for a whole plan's summed effort. Saturates instead of capping: a 1 m chair carry is
+ *  ~14, a bed ~35, a full-room rearrange 80+; 12 is roughly "three heavy pieces" (the dial's knee). */
+export const effortScore = (total: number): number => Math.round(100 * (1 - Math.exp(-Math.max(0, total) / 12)));

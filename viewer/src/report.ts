@@ -48,6 +48,9 @@ function render(p: ReportPayload) {
     <td>${f.cost_usd !== undefined ? (f.cost_usd ? `$${f.cost_usd}` : 'free') : ''}</td><td>${f.effort ? `${f.effort.toFixed(1)} · ${difficulty(f.effort)}` : ''}</td><td>${f.helpers ?? ''}</td></tr>`).join('');
   const popts = (p.planner_options ?? []).map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${o.per_month.toFixed(2)}</td><td>${o.cost_usd ? `$${o.cost_usd}` : 'free'}</td>
     <td>${o.effort.toFixed(1)} · ${difficulty(o.effort)}</td><td>${o.helpers}</td><td>${o.changes.map(esc).join('; ')}</td></tr>`).join('');
+  const bp = p.budget, bud = (bp?.items ?? []).filter(i => i.checked || i.suggested).map(i => `<tr><td>${i.checked ? '✓' : '<span class="ot">declined</span>'}</td>`
+    + `<td>${esc(i.label)}${i.suggested ? ' <span class="dim">(suggested)</span>' : ''}</td><td>${money(i.cost_usd)}</td><td>${i.effort.toFixed(1)} · ${difficulty(i.effort)}</td>`
+    + `<td>${i.benefit !== undefined ? `−${f1(i.benefit)}` : '<span class="ot">OT to verify</span>'}</td><td class="dim">${esc(i.product ?? '')}</td></tr>`).join('');
   const clips = p.clips.map(k => `<li><span class="imag">${esc(k)}</span></li>`).join('');
   document.getElementById('root')!.innerHTML = `
   <button onclick="print()">Print / save as PDF</button>
@@ -91,6 +94,9 @@ function render(p: ReportPayload) {
   <p class="dim">SIMULATED (MuJoCo batch, physics/batch_mujoco.py): shapes from the scan; masses, frictions and corner stiffness sampled from assumed ranges, not measured; not yet checked against the real walker. Approach angle 0° = straight at the edge.</p>` : ''}
   ${reason ? `<h2>Not measurable from the scan (proposed by a model)</h2><ul>${reason}</ul>` : ''}
   ${clips ? `<h2>Generated visualisations of this layout</h2><ul>${clips}</ul><p class="dim">Cosmos Transfer videos: imagined, for the family; hazard markers on them are the measured ones.</p>` : ''}
+
+  ${bp ? `<h2>Budget: $${bp.usd}</h2><table><tr><th></th><th>Fix</th><th>Cost</th><th>Effort</th><th>Toe contacts/month saved</th><th>Product</th></tr>${bud || '<tr><td colspan="6">nothing selected</td></tr>'}</table>
+  <p class="dim">Selected in the budget window: $${+bp.spent.toFixed(2)} of $${bp.usd}, effort cost ${bp.effort_score}/100. Savings are each fix on its own, not additive.</p>` : ''}
 
   <h2>Methods and limits</h2>
   <ul class="dim">
