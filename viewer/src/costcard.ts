@@ -1,3 +1,4 @@
+import { onWindow, every } from './lifetime.ts';
 // The cost card: what one proposed change takes, in plain words, when its object is picked. The in-room tags stay (they
 // are scene sprites, so they show in the headset); this is the larger desktop card with the detail they have no room for.
 // The model is pure (tests/costcard.test.ts) and never turns a missing number into a zero: a placeholder or absent field
@@ -78,8 +79,8 @@ export function mountCostCard(D: CostCardDeps) {
     el.querySelector<HTMLButtonElement>('.cc-close')!.onclick = () => { shown = null; el.hidden = true; };
   }
   D.onPick(k => { shown = k >= 0 ? { k } : null; render(); });
-  addEventListener('keydown', e => { if (e.code === 'Escape' && !el.hidden && el.contains(document.activeElement)) { shown = null; el.hidden = true; } });
-  setInterval(() => { if (shown) render(); }, 1000);   // the numbers change after a re-plan, with no event
+  onWindow('keydown', e => { if (e.code === 'Escape' && !el.hidden && el.contains(document.activeElement)) { shown = null; el.hidden = true; } });
+  every(() => { if (shown) render(); }, 1000);   // the numbers change after a re-plan, with no event
   return {
     show(k: number, fix?: string) { shown = { k, fix }; render(); },
     hide() { shown = null; el.hidden = true; },

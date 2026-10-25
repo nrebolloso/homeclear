@@ -1,3 +1,5 @@
+import { own } from './lifetime.ts';
+import { later } from './lifetime.ts';
 // Accessibility helpers for the planning frontend: display preferences (text size, theme, reduced motion),
 // a screen-reader announcer, dialog focus handling, and names for legacy controls that have none.
 // frontend.ts wires these in; the preference logic is pure so tests/a11y.test.ts can check it without a DOM.
@@ -49,7 +51,8 @@ export function mountDisplaySettings(root: HTMLElement, onChange: () => void) {
   theme.onchange = () => change({ theme: theme.value as Prefs['theme'] });
   motion.onchange = () => change({ reduceMotion: motion.checked });
   $in(root, '#a11y-reset').onclick = () => change({ ...DEFAULT_PREFS });
-  motionQ.addEventListener('change', () => { apply(); onChange(); }); contrastQ.addEventListener('change', apply);
+  const changed = () => { apply(); onChange(); }; motionQ.addEventListener('change', changed); contrastQ.addEventListener('change', apply);
+  own(() => { motionQ.removeEventListener('change', changed); contrastQ.removeEventListener('change', apply); });
   apply();
   return { reduceMotion: reduce };
 }
@@ -60,7 +63,7 @@ export function createAnnouncer(parent: HTMLElement) {
   parent.append(el);
   let timer = 0;
   // Clear first so repeating the same message is announced again.
-  return (message: string) => { window.clearTimeout(timer); el.textContent = ''; timer = window.setTimeout(() => { el.textContent = message; }, 60); };
+  return (message: string) => { window.clearTimeout(timer); el.textContent = ''; timer = later(() => { el.textContent = message; }, 60); };
 }
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),video[controls],[tabindex]:not([tabindex="-1"])';
@@ -79,11 +82,11 @@ export function watchDialog(el: HTMLElement | null, label: string, closeSelector
     if (e.shiftKey && (active === first || active === el)) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
   });
-  new MutationObserver(() => {
+  const observer = new MutationObserver(() => {
     const open = !el.hidden; if (open === wasOpen) return; wasOpen = open;
     if (open) { opener = document.activeElement as HTMLElement | null; el.focus(); }
     else if (opener && document.contains(opener)) { opener.focus(); opener = null; }
-  }).observe(el, { attributes: true, attributeFilter: ['hidden'] });
+  }); observer.observe(el, { attributes: true, attributeFilter: ['hidden'] }); own(() => observer.disconnect());
 }
 
 /** Legacy panels name some controls only with `title`; give those (and unlabeled canvases) a real accessible name. */

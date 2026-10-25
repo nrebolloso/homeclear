@@ -17,3 +17,6 @@ viewer/e2e/artifacts/
 viewer/e2e/renovations-results.json
 viewer/e2e/quest-sweep.json
 cluster.local.yaml
+
+viewer/.vite-cache/
+viewer/.scan-import-staging/

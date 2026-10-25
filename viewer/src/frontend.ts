@@ -1,3 +1,4 @@
+import { onDocument, every, later } from './lifetime.ts';
 import './frontend.css';
 import { createAnnouncer, mountDisplaySettings, nameUnlabeled, watchDialog } from './a11y.ts';
 import { navOf } from './navmode.ts';
@@ -137,7 +138,7 @@ export function mountFrontend(api: FrontendAdapter) {
   const defaults = new Map<HTMLInputElement | HTMLSelectElement, string | boolean>();
   $('filter-menu').querySelectorAll<HTMLInputElement | HTMLSelectElement>('input,select').forEach(el => defaults.set(el, el instanceof HTMLInputElement ? el.checked : el.value));
   let messageTimer = 0;
-  function notify(message: string) { window.clearTimeout(messageTimer); $('frontend-message').textContent = message; $('frontend-message').hidden = false; messageTimer = window.setTimeout(() => { $('frontend-message').hidden = true; }, Math.max(5500, 4000 + message.length * 80)); }   // longer messages stay long enough to read
+  function notify(message: string) { window.clearTimeout(messageTimer); $('frontend-message').textContent = message; $('frontend-message').hidden = false; messageTimer = later(() => { $('frontend-message').hidden = true; }, Math.max(5500, 4000 + message.length * 80)); }   // longer messages stay long enough to read
   function setTab(next: string) {
     tab = next;
     for (const name of TABS) { $(`pane-${name}`).hidden = name !== tab; $(`tab-${name}`).setAttribute('aria-selected', String(name === tab)); $(`tab-${name}`).tabIndex = name === tab ? 0 : -1; }
@@ -178,23 +179,23 @@ export function mountFrontend(api: FrontendAdapter) {
   handle.addEventListener('dblclick', () => { pinned = false; setWidth(null); });
   $('panel-pin').onclick = () => { pinned = !pinned; $('panel-pin').setAttribute('aria-pressed', String(pinned)); announce(pinned ? 'Panel pinned wide.' : 'Panel will narrow when you move.'); };
   // moving, looking, scrolling the scene or pressing Esc puts it back (pinned: stays)
-  document.addEventListener('keydown', e => { if ((/^(Key[WASDQE]|Arrow(Up|Down|Left|Right))$/.test(e.code) && !panelEl.contains(e.target as Node) && !(e.target as HTMLElement).closest('input,select,textarea')) || e.code === 'Escape') resetPanel(); });
-  document.addEventListener('pointerdown', e => { if (!(e.target as HTMLElement).closest('#frontend, #keyhelp')) resetPanel(); }, true);
-  document.addEventListener('wheel', e => { if (!(e.target as HTMLElement).closest('#frontend')) resetPanel(); }, { passive: true });
-  document.addEventListener('pointerlockchange', resetPanel);
+  onDocument('keydown', e => { if ((/^(Key[WASDQE]|Arrow(Up|Down|Left|Right))$/.test(e.code) && !panelEl.contains(e.target as Node) && !(e.target as HTMLElement).closest('input,select,textarea')) || e.code === 'Escape') resetPanel(); });
+  onDocument('pointerdown', e => { if (!(e.target as HTMLElement).closest('#frontend, #keyhelp')) resetPanel(); }, true);
+  onDocument('wheel', e => { if (!(e.target as HTMLElement).closest('#frontend')) resetPanel(); }, { passive: true });
+  onDocument('pointerlockchange', resetPanel);
   for (const [button, menu] of [['workspace-toggle', 'workspace-menu']]) $(button).onclick = () => {
     const open = $(menu).hidden;
     for (const [b, m] of [['workspace-toggle', 'workspace-menu']]) { $(m).hidden = true; $(b).setAttribute('aria-expanded', 'false'); }
     $(menu).hidden = !open; $(button).setAttribute('aria-expanded', String(open));
   };
-  document.addEventListener('pointerdown', e => { for (const [b, m] of [['workspace-toggle', 'workspace-menu']]) if (!$(m).hidden && !$(m).contains(e.target as Node) && !$(b).contains(e.target as Node)) { $(m).hidden = true; $(b).setAttribute('aria-expanded', 'false'); } });
+  onDocument('pointerdown', e => { for (const [b, m] of [['workspace-toggle', 'workspace-menu']]) if (!$(m).hidden && !$(m).contains(e.target as Node) && !$(b).contains(e.target as Node)) { $(m).hidden = true; $(b).setAttribute('aria-expanded', 'false'); } });
   function dismiss() { for (const [b, m] of [['workspace-toggle', 'workspace-menu']]) if (!$(m).hidden) { $(m).hidden = true; $(b).setAttribute('aria-expanded', 'false'); $(b).focus(); } $('frontend-message').hidden = true; }
   root.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !$('workspace-menu').hidden) { dismiss(); e.preventDefault(); e.stopPropagation(); return; }
     if (e.defaultPrevented || (e.target as HTMLElement).closest('input,select,textarea,[contenteditable]')) e.stopPropagation();
   });
   root.addEventListener('keyup', e => { if ((e.target as HTMLElement).closest('input,select,textarea,[contenteditable]')) e.stopPropagation(); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') dismiss(); });
+  onDocument('keydown', e => { if (e.key === 'Escape') dismiss(); });
   function setNavigation(next: NavigationMode) {
     if (nav === 'inspect' && next !== 'inspect') api.leaveInspect();
     const was = nav; nav = next; api.navigate(next); calmMotion();
@@ -335,7 +336,7 @@ export function mountFrontend(api: FrontendAdapter) {
   function refresh() { const s = api.snapshot(); renderAssessment(s); renderChanges(s); renderProposals(s); showInspection(); updateChrome(); }
   // Small scalar signature keeps the viewer frame loop free of DOM work; changes are polled only four times/sec.
   let lastSelected = -1;
-  const timer = window.setInterval(() => {
+  const timer = every(() => {
     const s = api.snapshot(); const next = JSON.stringify([s.current?.ms, s.current?.per_month, s.patient, s.route, s.changes.map(c => [c.name, c.kind, c.at, c.turn_deg]), s.options.map(o => o.layout), s.selected]);
     if (s.selected !== lastSelected) { if (s.selected >= 0) { setTab('changes'); announce(`${s.selectedName ?? 'Object'} selected. Arrow keys move it 5 cm; Delete removes it; Escape deselects.`); } else if (lastSelected >= 0) announce('Selection cleared.'); } lastSelected = s.selected;
     if (next !== signature) { signature = next; refresh(); } else updateChrome();

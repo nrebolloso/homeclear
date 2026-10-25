@@ -15,7 +15,11 @@
     "e2e:frontend:xr": "node e2e/frontend-xr.ts",
     "e2e:renovations": "node e2e/renovations.ts",
     "e2e:layers": "node e2e/layers.ts",
-    "quest:sweep": "node e2e/quest-sweep.ts"
+    "quest:sweep": "node e2e/quest-sweep.ts",
+    "scans:import": "python scripts/import_scans.py",
+    "e2e:scans": "node e2e/scan-library.ts",
+    "e2e:scan-sweep": "node e2e/scan-sweep.ts",
+    "e2e:session": "node e2e/session-link.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",

@@ -1,3 +1,4 @@
+import { onWindow, later } from './lifetime.ts';
 // In-viewer review of what the viewer flagged: an OT can confirm a highlighted hazard, dismiss it, or leave a note. This is
 // a judgement ON the flagged items, kept apart from the measurements: dismissing hides the highlight, pin and tour stop but the
 // measured number and the simulated toe contacts are unchanged. It is NOT the hand-labelled answer key (tools/label_hazards):
@@ -98,13 +99,14 @@ export function mountReview(D: ReviewDeps) {
     const ex = panel.querySelector<HTMLButtonElement>('#rev-export');
     if (ex) ex.onclick = () => {
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(exportReview(D.scene, spots, state), null, 2)], { type: 'application/json' }));
-      a.download = `hazard_review_${D.scene}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      a.download = `hazard_review_${D.scene}.json`; a.click(); later(() => URL.revokeObjectURL(a.href), 1000);
     };
   }
   btn.onclick = () => { last = ''; panel.hidden = !panel.hidden; btn.setAttribute('aria-expanded', String(!panel.hidden)); render(); };
-  addEventListener('keydown', e => { if (e.code === 'Escape' && !panel.hidden && panel.contains(document.activeElement)) { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); btn.focus(); } });
+  onWindow('keydown', e => { if (e.code === 'Escape' && !panel.hidden && panel.contains(document.activeElement)) { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); btn.focus(); } });
   render();
   return {
+    note: (spot: Spot, note: string) => set(setNote(state, reviewKey(spot), note)),
     state: () => state, spots: () => visibleSpots(D.spots(), state), refresh: render,
     filter: (s: Spot) => state[reviewKey(s)]?.verdict !== 'dismissed',
     counts: () => reviewCounts(D.spots(), state),
