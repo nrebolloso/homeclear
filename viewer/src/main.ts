@@ -1892,7 +1892,7 @@ async function setPersona(key: string) {
 }
 /** P: the next persona in the Who list, with the keys that drive it. */
 async function cyclePersona() {
-  const ks = Object.keys(personas), next = ks[(ks.indexOf(personaKey) + 1) % ks.length];
+  const ks = Object.keys(personas).filter(k => !(document.body.classList.contains('demo') && (k === 'wheelchair' || k === 'stroke'))), next = ks[(ks.indexOf(personaKey) + 1) % ks.length];
   await setPersona(next);
   keyHelp.toast(`${personas[next].label}${isChair() ? ': W/S roll · A/D steer while rolling · Q/E spin' : ''}`, 4000);
 }
