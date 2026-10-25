@@ -1,0 +1,47 @@
+{
+ "frame": "floor frame, metres, z up",
+ "hazards": [
+  {
+   "id": "mat",
+   "type": "floor_bump",
+   "position_m": [
+    0.25,
+    0.97,
+    0.015
+   ],
+   "max_bump_height_cm": 1.5,
+   "estimated": false,
+   "source": "placed",
+   "object": "mat",
+   "fix": "remove_mat",
+   "note": "1.5 cm kitchen mat edge across the route"
+  },
+  {
+   "id": "cord",
+   "type": "floor_bump",
+   "position_m": [
+    1.3,
+    -0.45,
+    0.005
+   ],
+   "max_bump_height_cm": 0.5,
+   "estimated": true,
+   "source": "placed",
+   "fix": "tape_cord",
+   "note": "5 mm cord across the route"
+  },
+  {
+   "id": "chair",
+   "type": "tight_clearance",
+   "position_m": [
+    1.9,
+    -0.35,
+    0.0
+   ],
+   "source": "placed",
+   "object": "chair8",
+   "fix": "push_in_chair",
+   "note": "chair pulled out beside the trash can narrows the passage"
+  }
+ ]
+}
