@@ -122,3 +122,18 @@ test('futures fan: a taped mat the walker pushed onto the cord leaves the cord n
   assert.ok(owners(false).has(mat + 1), 'untaped: the mat owns its own 15 mm edge');
   assert.ok(!owners(true).has(mat + 1) && owners(true).has(-1), `taped: only the cord stands above bump_min_m (${[...owners(true)]})`);
 });
+
+test('futures fan steps (the footprints): one per heel, sides alternate, top-of-scale steps at the mat, under a tenth of it once taped', () => {
+  const tapedPose = { ...lay, poses: lay.poses.map((p, k) => (k === mat ? { ...p, taped: true } : p)) };
+  for (const m of [wm, null]) {
+    const F = fan(S, prepare(S, lay, null), m, at(0.3), xy, 30, 7, { lift: 'shuffler' }), G = fan(S, prepare(S, tapedPose, null), m, at(0.3), xy, 30, 7, { lift: 'shuffler' });
+    for (const f of F.futures) { assert.equal(f.steps.length, f.heels.length); assert.ok(f.steps.every((s, k) => k === 0 || s.left !== f.steps[k - 1].left)); }
+    const mx = (H: Fan, e: string | null) => Math.max(0, ...H.futures.flatMap(f => f.steps.filter(s => e === null || s.edge === e).map(s => s.p)));
+    assert.ok(F.step_top > 0 && mx(F, 'mat') >= 0.5 * F.step_top, JSON.stringify([F.step_top, mx(F, 'mat')]));
+    // taped: the scale stays this room's (the untaped mat), so steps on/off the mat drop to grey instead of the scale shrinking to fit them
+    // (the cord further on is still a real lump: not checked here)
+    const fp = worldFootprint(init.objects[mat] as any, lay.poses[mat]), near = (h: XY) => h[0] > Math.min(...fp.map(p => p[0])) - 0.1 && h[0] < Math.max(...fp.map(p => p[0])) + 0.1 && h[1] > Math.min(...fp.map(p => p[1])) - 0.1 && h[1] < Math.max(...fp.map(p => p[1])) + 0.1;
+    const onMat = G.futures.flatMap(f => f.steps.filter((s, k) => near(f.heels[k])).map(s => s.p));
+    assert.ok(G.step_top === F.step_top && onMat.length > 20 && Math.max(...onMat) < F.step_top / 10 && G.futures.every(f => f.steps.every(s => s.edge !== 'mat')), JSON.stringify([G.step_top, onMat.length, Math.max(...onMat)]));
+  }
+});

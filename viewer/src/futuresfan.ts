@@ -1,8 +1,10 @@
 // The live futures fan, life-size in the kitchen (desktop, demo mode and VR: everything is scene objects). Every ~0.5 s
-// fanworker.ts imagines ~30 futures 4-5 s ahead from where the walker is right now (futures.ts); each is drawn as a faint
-// trail on the floor plus a translucent walker + person at its end, shaded by its chance of a toe catch (futures.ts p, the
-// calibrated contact table): green = crosses nothing, faint orange = a risky crossing, bright red = a likely catch (P_RED+);
-// a frame that brushes furniture is amber. A card above the walker says what they cross and the expected toe catches/month. Learned (the persona world model folded with
+// fanworker.ts imagines ~30 futures 4-5 s ahead from where the walker is right now (futures.ts); each step of each future is
+// a faint foot mark on the floor (30 futures x ~6 steps: a scatter that widens with time, where a filled band of 30 near-
+// identical trails read as one blob), plus one small faint walker outline on the floor at its end. Colour = that step's toe-catch chance
+// (futures.ts, the calibrated contact table) relative to this room's worst step (Fan.step_top), on a log scale: grey under a
+// tenth of it, orange -> red up to it; a step over the folded corner gets a red ring. The end outlines are grey, amber
+// where the frame brushes furniture. A card above the walker says what they cross and the expected toe catches/month. Learned (the persona world model folded with
 // a gait style) or the hand rule. Where the way ahead forks (over / around the mat, past / wide of a chair) each route gets
 // a card at its tip with how many futures took it. Foot lift: average or low-clearance shuffler (futures.ts LIFTS).
 // The sample count adapts so the frame rate stays within ~10% of the rate without the fan.
@@ -21,7 +23,7 @@ export interface FanDeps {
   /** fixed seed (demo autoplay, demorun.ts): every fan draws the same numbers and keeps all MAX_N futures */
   seed?: number | null;
 }
-const EVERY_S = 0.5, MAX_N = 30, MIN_N = 10, SEGS = 12, PERSON_EVERY = 3, RED = 0xff2020, ORANGE = 0x9a6a3c, GREEN = 0x3ddc84, AMBER = 0xffc040;
+const EVERY_S = 0.5, MAX_N = 30, MIN_N = 10, STEPS = 30, RED = 0xff2020, ORANGE = 0xff9a2e, GREY = 0x5f6b77, AMBER = 0xffc040, TOE_OUT = 0.12;
 /** a future at this catch chance or more is full red: ~the fan's top futures over the mat edge (average lift 2.5-3%, shuffler up to 4%) */
 export const P_RED = 0.03;
 const $ = (id: string) => document.getElementById(id);
@@ -51,13 +53,17 @@ export function createFuturesFan(D: FanDeps) {
     im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3); im.count = 0; im.renderOrder = 5; im.frustumCulled = false; root.add(im); return im;
   };
   const w0 = D.walker();
-  const trail = inst(new THREE.BoxGeometry(1, 0.025, 0.003), mat(0.35), MAX_N * SEGS);
-  // a person on every 3rd future only: 30 stacked translucent bodies turn into one opaque blob a metre in front of the camera
-  const body = inst(new THREE.CylinderGeometry(0.13, 0.15, 1.15, 8), mat(0.12), MAX_N), head = inst(new THREE.SphereGeometry(0.1, 8, 6), mat(0.12), MAX_N);
-  const frame = inst(new THREE.BoxGeometry(w0.depth_m, w0.width_m, 0.04), mat(0.28), MAX_N);
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), zAxis = new THREE.Vector3(0, 0, 1), up = q.clone().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
-  const red = new THREE.Color(RED), orange = new THREE.Color(ORANGE), green = new THREE.Color(GREEN), amber = new THREE.Color(AMBER), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
-  const shade = (p: number) => (p < 1e-4 ? green : orange.clone().lerp(red, Math.min(1, p / P_RED)));
+  // foot marks: a 14 x 6 cm sole (heel at the predicted heel, toed out a little per side), low opacity so the overlap shows the density
+  const foot = inst(new THREE.CircleGeometry(0.5, 12).scale(0.14, 0.06, 1).translate(0.06, 0, 0), mat(0.5), MAX_N * STEPS);
+  const ring = inst(new THREE.RingGeometry(0.075, 0.09, 20), mat(0.85), MAX_N * STEPS);
+  // the end of each future: a 60%-size walker outline on the floor (a 4-segment ring is a square). Standing frames and bodies
+  // at handle height stacked 30 deep into one opaque blob in front of the camera; outlines overlap only along their edges
+  const frame = inst(new THREE.RingGeometry(0.9 / Math.SQRT2, 1 / Math.SQRT2, 4, 1, Math.PI / 4).scale(0.6 * w0.depth_m, 0.6 * w0.width_m, 1), mat(0.25), MAX_N);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), zAxis = new THREE.Vector3(0, 0, 1);
+  const red = new THREE.Color(RED), orange = new THREE.Color(ORANGE), grey = new THREE.Color(GREY), amber = new THREE.Color(AMBER), v = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  /** 0 = a tenth of this room's worst step or less (grey), 1 = the worst step or more (red); log10 in between */
+  const level = (p: number, top: number) => (p <= 0 || top <= 0 ? 0 : Math.max(0, Math.min(1, 1 + Math.log10(p / top))));
+  const shade = (p: number, top: number) => { const t = level(p, top); return t <= 0 ? grey : orange.clone().lerp(red, t); };
 
   function wm(): WorldModel | null {
     if (model === 'hand') return null;
@@ -75,28 +81,22 @@ export function createFuturesFan(D: FanDeps) {
 
   function draw() {
     if (!F) return;
-    const w = D.walker(), off = w.user_gap_m + w.depth_m / 2;
-    let t = 0;
+    let t = 0, nr = 0;
     F.futures.forEach((f, i) => {
-      const c = shade(f.p);
-      for (let k = 1; k < f.walker.length && t < trail.instanceMatrix.count; k++, t++) {
-        const [ax, ay] = f.walker[k - 1], [bx, by] = f.walker[k], len = Math.hypot(bx - ax, by - ay);
-        m4.compose(v.set((ax + bx) / 2, (ay + by) / 2, 0.012), q.setFromAxisAngle(zAxis, Math.atan2(by - ay, bx - ax)), new THREE.Vector3(len, 1, 1));
-        trail.setMatrixAt(t, m4); trail.setColorAt(t, c);
-      }
-      const [x, y, yaw] = f.end, px = x - Math.cos(yaw) * off, py = y - Math.sin(yaw) * off;
-      if (i % PERSON_EVERY === 0) {
-        const j = i / PERSON_EVERY;
-        body.setMatrixAt(j, m4.compose(v.set(px, py, 0.6), up, one)); body.setColorAt(j, c);
-        head.setMatrixAt(j, m4.makeTranslation(px + 0.08 * Math.cos(yaw), py + 0.08 * Math.sin(yaw), 1.4)); head.setColorAt(j, c);
-      }
-      frame.setMatrixAt(i, m4.compose(v.set(x, y, w.handle_height_m), q.setFromAxisAngle(zAxis, yaw), one)); frame.setColorAt(i, f.hazard ? amber : c);
+      f.heels.forEach((h, k) => {
+        // walker[k + 1] is the frame as this foot lands: its heading points the sole
+        const a = f.walker[k] ?? f.walker[0], b = f.walker[k + 1] ?? a, st = f.steps[k], yaw = (Math.hypot(b[0] - a[0], b[1] - a[1]) > 1e-3 ? Math.atan2(b[1] - a[1], b[0] - a[0]) : f.end[2]) + (st.left ? TOE_OUT : -TOE_OUT);
+        foot.setMatrixAt(t, m4.compose(v.set(h[0], h[1], 0.012), q.setFromAxisAngle(zAxis, yaw), one)); foot.setColorAt(t++, shade(st.p, F!.step_top));
+        if (st.edge === 'folded corner') { ring.setMatrixAt(nr, m4.makeTranslation(h[0] + 0.06 * Math.cos(yaw), h[1] + 0.06 * Math.sin(yaw), 0.014)); ring.setColorAt(nr++, red); }
+      });
+      const [x, y, yaw] = f.end;
+      frame.setMatrixAt(i, m4.compose(v.set(x, y, 0.015), q.setFromAxisAngle(zAxis, yaw), one)); frame.setColorAt(i, f.hazard ? amber : grey);   // the risk colour is on the feet only
     });
-    trail.count = t; frame.count = F.futures.length; body.count = head.count = Math.ceil(F.futures.length / PERSON_EVERY);
-    for (const im of [trail, body, head, frame]) { im.instanceMatrix.needsUpdate = true; im.instanceColor!.needsUpdate = true; }
+    foot.count = t; ring.count = nr; frame.count = F.futures.length;
+    for (const im of [foot, ring, frame]) { im.instanceMatrix.needsUpdate = true; im.instanceColor!.needsUpdate = true; }
     const held = lead(F, performance.now() / 1000), lines = [fanLabel(F, modelName(), held), ...(routeLabel(F) ? [routeLabel(F)] : []),
       `imagined, ${model === 'hand' ? 'hand-rule steps' : `learned gait · ${style === 'mean' ? 'average person' : style}`} · ${LIFTS[F.lift].label}, ${F.ahead_s.toFixed(1)} s ahead`,
-      `colour = chance of a toe catch (1 in 578 strides at 1 cm) · full red ${P_RED * 100}%+`];
+      `toe-catch risk (relative): grey < 1/10 of this room's worst step · orange → red (log) up to it, ${(F.step_top * 100).toFixed(2)}% a step · red ring = over the fold`];
     if (lines.join('|') !== text) {
       text = lines.join('|');
       if (label) { label.removeFromParent(); label.material.dispose(); }
@@ -138,7 +138,7 @@ export function createFuturesFan(D: FanDeps) {
   }
   function set(v: boolean) {
     on = v; root.visible = v; acc = EVERY_S; fpsT = fpsSum = 0; F = null; text = '';
-    if (!v) { for (const im of [trail, body, head, frame]) im.count = 0; for (const f of forks) f.removeFromParent(); forks = []; }
+    if (!v) { for (const im of [foot, ring, frame]) im.count = 0; for (const f of forks) f.removeFromParent(); forks = []; }
     const cb = $('fanon') as HTMLInputElement | null; if (cb) cb.checked = v;
   }
   return {
@@ -153,7 +153,8 @@ export function createFuturesFan(D: FanDeps) {
     /** for e2e and the recording: the last fan (futures, counts, spread), the sample count and the fps budget */
     state: () => ({ on, model, style, lift, n, offFps, ms, label: text.split('|')[0], lines: text.split('|'), styles: styles.map(s => s.name),
       fan: F && { n: F.futures.length, counts: { ...F.counts }, crossed: { ...F.crossed }, routes: F.routes.map(r => ({ ...r })), ahead_s: F.ahead_s, lift: F.lift, spread_m: F.spread_m, path: F.path,
-        catches_month: F.catches_month, p: F.futures.map(f => f.p), red: F.futures.filter(f => f.p >= P_RED / 2).length, brushes: F.futures.filter(f => f.hazard).length, hits: F.futures.flatMap(f => (f.at ? [f.at] : [])) } }),
+        catches_month: F.catches_month, p: F.futures.map(f => f.p), red: F.futures.filter(f => f.p >= P_RED / 2).length, brushes: F.futures.filter(f => f.hazard).length, hits: F.futures.flatMap(f => (f.at ? [f.at] : [])),
+        step_top: F.step_top, feet: F.futures.reduce((a, f) => a + f.heels.length, 0), hot: F.futures.flatMap(f => f.steps.filter(s => level(s.p, F!.step_top) > 0).map(s => ({ p: s.p, edge: s.edge }))), rings: F.futures.reduce((a, f) => a + f.steps.filter(s => s.edge === 'folded corner').length, 0) } }),
     root,
   };
 }
