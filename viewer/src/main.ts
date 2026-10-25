@@ -1656,7 +1656,7 @@ $('fanon').onchange = e => fanFan.set((e.target as HTMLInputElement).checked);
 $('fanmodel').onchange = e => fanFan.setModel((e.target as HTMLSelectElement).value as 'learned' | 'hand');
 $('fanstyle').onchange = e => fanFan.setStyle((e.target as HTMLSelectElement).value);
 $('fanlift').onchange = e => fanFan.setLift((e.target as HTMLSelectElement).value as 'average' | 'shuffler');
-game.fan = { ...fanFan, tapeMat: () => tapeObject('mat') };   // VR: bind a button to game.fan.set(!game.fan.on())
+game.fan = { ...fanFan, tapeMat: () => { const r = tapeObject('mat'); fanFan.refresh(); return r; } };   // VR: bind a button to game.fan.set(!game.fan.on())
 // ---------- deterministic demo autoplay (demorun.ts): lockstep clock while seeded; Reset demo ----------
 const lockstepOn = () => SEED !== null && mode === 'auto' && !xr.presenting();
 const lock = createLockstep(() => (live?.idle() ?? true) && fanFan.idle(TICK_S) && game.pending() === 0, () => lockstepOn() && !game.manual);
