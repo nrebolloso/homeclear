@@ -6,6 +6,8 @@
 import * as THREE from 'three';
 import type { Intervention, Layout, Pose, XY } from './grid.ts';
 import { fixCost, moveCost, removeCost, sumCosts, type MoveCost } from './movecost.ts';
+import { effortKind } from './effort.ts';
+import { difficulty } from './effort.ts';
 
 export interface Change {
   /** object index (-1: a fix with no object, e.g. taped cable) */
@@ -27,7 +29,7 @@ export function diffLayouts(objs: Obj[], from: Layout, to: Layout, interventions
   const ivs = interventions.filter(iv => applied.includes(iv.id)), out: Change[] = [];
   objs.forEach((o, k) => {
     const a = from.poses[k], b = to.poses[k], iv = ivs.find(i => i.object === o.name);
-    const via = iv ? { label: iv.label, cost: fixCost(iv), iv: iv.id } : null;
+    const via = iv ? { label: iv.label, cost: fixCost(iv, effortKind(o)), iv: iv.id } : null;
     if (b.removed && !a.removed) {
       out.push({ k, name: o.name, kind: 'remove', label: via?.label ?? `Take the ${o.name} out of the room`, from: a, dist_m: 0, turn_deg: 0,
         at: [a.x, a.y], cost: via?.cost ?? removeCost(o), iv: via?.iv });
@@ -116,7 +118,7 @@ export function deltaOf(before: { per_month: number; hazards: Hz[] } | null, aft
 
 /** Short words for a cost tag. */
 export function costText(c: MoveCost): string {
-  return [c.usd ? `$${c.usd}` : 'free', `${c.minutes} min`, c.helpers > 1 ? `${c.helpers} people` : ''].filter(Boolean).join(' · ');
+  return [c.usd ? `$${c.usd}` : 'free', `${difficulty(c.effort)} effort`, c.helpers > 1 ? `${c.helpers} people` : ''].filter(Boolean).join(' · ');
 }
 
 // ---------- three.js: the overlays and the morph ----------
@@ -259,7 +261,7 @@ export function createReimagine(D: ReimagineDeps) {
       }
     if (changes.length) {   // the receipt over the middle of the room
       const tot = sumCosts(changes.map(c => c.cost));
-      const lines = ['Reimagined room', `${changes.length} change${changes.length === 1 ? '' : 's'} · ${tot.usd ? `$${tot.usd}` : 'no purchases'} · ${tot.minutes} min`];
+      const lines = ['Reimagined room', `${changes.length} change${changes.length === 1 ? '' : 's'} · ${tot.usd ? `$${tot.usd}` : 'no purchases'} · effort ${tot.effort.toFixed(1)} · ${tot.helpers} ${tot.helpers > 1 ? 'people' : 'person'}`];
       if (before && after) lines.push(`toe catches/month ${before.per_month.toFixed(2)} → ${after.per_month.toFixed(2)}`);
       if (resolved.length) lines.push(`${resolved.length} hazard${resolved.length === 1 ? '' : 's'} cleared`);
       if (changes.some(c => c.cost.source === 'placeholder')) lines.push('costs: placeholder estimates');
