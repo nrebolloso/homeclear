@@ -2,7 +2,7 @@
 
 ## Main: wm-planner + rug-calibration + PR #9 (VR / wheelchair / scan library) merged
 - **Merged:** wm-planner (toe-catch objective, B200 job 47577852, critic 47577853), rug-calibration (calibrated rug, fold cascade, cluster batch 47577456) and origin/main's PR #9. main.ts keeps both sides' hooks; the fan's fold is `live?.fold() ?? layout.folds?.[0] ?? null`; planfix.ts ranks "tape the mat edge" next to the search's picks; glide caps stay hidden in the viewer (friction ASSUMED).
-- **Proof:** `proof/demo/futures_fan.mp4` (49 s round trip, the mat folds on the way out and the fan turns red at the fold on the return; taping flattens it) and `proof/demo/backup_v6.mp4`.
+- **Proof:** `proof/demo/futures_fan.mp4` (49 s round trip, the mat folds on the way out and the fan turns red at the fold on the return; taping flattens it), `proof/demo/planner.mp4` (re-recorded on merged main, 43 s: B200 replay, 53,019 layouts, 1.14 -> 0.07/month, 3 options) and `proof/demo/backup_v7.mp4` (30 s, new Room planning UI). PR #9's frontend hides the legacy asides and its drawer has no planner/gait panel, so `record_planner.ts` unhides the panel's aside for the recording; in the live UI the B200 options are not reachable yet.
 - **Needs you:** BLOCKERS 16-20 (a real tennis-ball pass, the rug count, IMG_6800, the effort numbers, lounge leftovers).
 - **Risks:** the sim drags where the real rug folds; caps are friction-only and assumed. In the backup the live mat slides and the view switches to "Proposed".
 
