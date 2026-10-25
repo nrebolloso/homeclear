@@ -40,6 +40,13 @@
    described in `worldmodel/walker_videos.py`. Then run `python -m worldmodel.persona --extra <dir>`. Until then the embedding is
    trained on PhysioNet only.
 12. **VR: the 3D ghosts are untested in a headset (VR team).** `game.gait.ghost` and the life-size world-model ghosts
-   (`game.wmghosts`: two gait styles, futures fan, predicted self, month replay) and the live futures fan (`game.fan`: 30 trails, 30 frames, 10 people, updated every 0.5 s in `xrFrame`) are scene objects, so they should render in
+   (`game.wmghosts`: two gait styles, futures fan, predicted self, month replay) and the live futures fan (`game.fan`: 30 trails, 30 frames, 10 people, updated every 0.5 s in `xrFrame`, 4-5 s ahead, plus a card per route fork) are scene objects, so they should render in
    WebXR, but nobody has looked at them on a Quest 2. Labels are sprites sized for a desktop camera, and the month replay
    draws 3 instanced meshes of 60. Check legibility and fps in the headset, and bind `twoStyles()` / `month()` from `xr.ts`.
+13. **Re-run the planner's B200 search for the unified "taped" mat (Nicolas, HiPerGator).** A taped mat is now a 1.5 mm edge
+   (`grid.ts TAPED_EDGE_M`, mirrored in `planner/engine.py`); the published search (job 47465023) used the old rule. A CPU
+   re-score of the taped replays gives ~60.0-60.4/month, but `out/planner/kitchen4_lighter/search.json` was not regenerated.
+   Run `planner/publish.sh` after the job.
+14. **Shuffle recordings for the fan's "shuffler".** The low-clearance foot lift is an ASSUMPTION (16th percentile of the
+   Frontiers 2014 MTC curve, ~7 mm). Film a few deliberate shuffling passes over the mat edge (side view, tape in view) so
+   the lift distribution comes from our own data.
