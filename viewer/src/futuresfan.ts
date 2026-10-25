@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { card } from './reimagine.ts';
 import { toWorldModel, type Persona } from './gaitfit.ts';
-import { fanLabel, routeLabel, LIFTS, type Fan, type FanScene, type Fold, type Lift } from './futures.ts';
+import { fanLabel, stickyLead, routeLabel, LIFTS, type Fan, type FanScene, type Fold, type Lift } from './futures.ts';
 import type { Layout, XY } from './grid.ts';
 import type { WalkerCfg } from './walker.ts';
 import type { WorldModel } from './worldmodel.ts';
@@ -30,6 +30,7 @@ export function createFuturesFan(D: FanDeps) {
   D.scene.add(root);
   const worker = new Worker(new URL('./fanworker.ts', import.meta.url), { type: 'module' });
   let on = false, model: 'learned' | 'hand' = 'learned', style = 'mean', lift: Lift = 'average', forks: THREE.Sprite[] = [], n = MAX_N, acc = EVERY_S, busy = false, seq = 0;
+  const lead = stickyLead(1.5);
   let F: Fan | null = null, ms = 0, label: THREE.Sprite | null = null, text = '', sceneRef: object | null = null;
   let M: Persona | null = null, styles: { name: string; e: number[] }[] = [];
   // fps: the rate with the fan off (kept up to date while it is off) is the budget; checked every 2 s while it is on
@@ -91,7 +92,7 @@ export function createFuturesFan(D: FanDeps) {
     });
     trail.count = t; frame.count = F.futures.length; body.count = head.count = Math.ceil(F.futures.length / PERSON_EVERY);
     for (const im of [trail, body, head, frame]) { im.instanceMatrix.needsUpdate = true; im.instanceColor!.needsUpdate = true; }
-    const lines = [fanLabel(F, modelName()), ...(routeLabel(F) ? [routeLabel(F)] : []),
+    const lines = [fanLabel(F, modelName(), lead(F, performance.now() / 1000)), ...(routeLabel(F) ? [routeLabel(F)] : []),
       `imagined, ${model === 'hand' ? 'hand-rule steps' : `learned gait · ${style === 'mean' ? 'average person' : style}`} · ${LIFTS[F.lift].label}, ${F.ahead_s.toFixed(1)} s ahead`,
       `colour = chance of a toe catch (1 in 578 strides at 1 cm) · full red ${P_RED * 100}%+`];
     if (lines.join('|') !== text) {
