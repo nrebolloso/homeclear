@@ -36,6 +36,7 @@ floor:
   inlier_m: 0.02
   min_opacity: 0.1
   near_cameras_m: 2.0
+  fit: walked   # 85 x 65 m plaza reconstructed 1.9 deg tilted: RANSAC took the flat west end (2.5% inliers), the east end sat 0.7-1.4 m under z=0 with no floor; bike check (wheelbase 1.77 m) said scale ~1.6x too big (2026-10-25)
 grid:
   cell_m: 0.05   # outdoor plaza ~85 x 65 m: at 2 cm the 13.6M-cell grid x 1200 cameras stalls stage 12 coverage for hours (2026-10-25)
   min_opacity: 0.1
