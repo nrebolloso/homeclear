@@ -1412,7 +1412,8 @@ game.fan = { ...fanFan, tapeMat: () => tapeObject('mat') };   // VR: bind a butt
 /** tape an object's edges down: the one "taped" rule (grid.ts TAPED_EDGE_M edge, no slide or fold), as the planner's mat 'taped' */
 function tapeObject(name: string) {
   const k = objs.findIndex(o => o.name === name);
-  layout = { ...layout, poses: layout.poses.map((p, i) => (i === k ? { ...p, taped: true } : p)) };
+  // taping the rug also flattens its fold (rugcascade.ts: a taped rug never folds)
+  layout = { ...layout, poses: layout.poses.map((p, i) => (i === k ? { ...p, taped: true } : p)), ...(layout.folds?.length ? { folds: [] } : {}) };
   syncObjects();
   return replan();
 }
