@@ -44,6 +44,8 @@ import { mountFrontend, type FrontendAdapter } from './frontend.ts';
 import { mountLayers } from './layers.ts';
 import './layers.css';
 import { provenanceTexels, provenanceShare } from './provenance.ts';
+import { mountCostCard } from './costcard.ts';
+import { mountReview } from './hazardreview.ts';
 import { headingMismatch, nearestStandable, routeResume } from './navmode.ts';
 import { createFrontendXR } from './frontend-xr.ts';
 import type { Eval, Init, RouteDef } from './worker.ts';
@@ -420,11 +422,14 @@ const glow = items.map(it => {
 });
 const SPOT_RGB = { measured: 0xff2d2d, 'reason-confirmed': 0x2fd6a8, 'reason-ot': 0xb48cff };
 let spotList: Spot[] = [], tourSpot = -1;
+// every spot on the route vs the ones shown: an OT's dismissals (hazardreview.ts) hide a highlight, never the measurement
+let allSpots: Spot[] = [], spotFilter: (s: Spot) => boolean = () => true, onSpots: (() => void) | null = null;
 function clearGroup(grp: THREE.Group) { for (const c of [...grp.children]) { grp.remove(c); c.traverse(x => { if (x instanceof CSS2DObject) x.element.remove(); }); } }
 function drawSpots(r: Eval) {
   clearGroup(spotGroup);
   glow.forEach(m => { m.visible = false; m.userData.sev = 0; });
-  spotList = r.error ? [] : spots(r.hazards, objs, hzFile.hazards, sc.hazard_rules?.margin_m?.height ?? 0);
+  allSpots = r.error ? [] : spots(r.hazards, objs, hzFile.hazards, sc.hazard_rules?.margin_m?.height ?? 0);
+  spotList = allSpots.filter(spotFilter); onSpots?.();
   if (!$<HTMLInputElement>('spot').checked) return;
   for (const s of spotList) {
     if (s.object >= 0 && !layout.poses[s.object].removed) { glow[s.object].visible = true; glow[s.object].userData.sev = s.severity; }
@@ -2430,3 +2435,9 @@ game.provenance = { share: () => provenanceShare(base.floor, coverage, sc.grid.c
 
 // ---------- layers (layers.ts): presets, the all-layers popover and Hide UI (V) over the existing toggles ----------
 game.layers = mountLayers({ busy: () => !!mk || editing || !!grabbing, perf: () => perfOn, delta: () => reim.delta(), share: () => provenanceShare(base.floor, coverage, sc.grid.coverage_good) });
+// the cost card for the picked object, and the OT's confirm / dismiss / note on flagged hazards (costcard.ts, hazardreview.ts)
+game.costcard = mountCostCard({ changes: () => reim.changes(), resolved: () => reim.resolved(), onPick: cb => { const prev = onSelect; onSelect = k => { prev?.(k); cb(k); }; } });
+const review = mountReview({ scene: RUN, spots: () => allSpots, onChange: () => { if (current) drawSpots(current); } });
+spotFilter = review.filter; onSpots = review.refresh;
+game.review = review;
+if (current) drawSpots(current);

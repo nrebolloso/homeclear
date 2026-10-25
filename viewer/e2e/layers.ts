@@ -54,6 +54,40 @@ try {
   await page.evaluate(`(async () => { await window.game.resetAll?.(); })()`);
   await page.click('[data-preset="evidence"]');
 
+  // Cost card: pick a moved object and read what the change takes; placeholders and pending fields are labelled
+  await page.click('[data-preset="clean"]');
+  const mv = await page.evaluate(`(async () => { const cs = await window.game.reimagine.run(); const m = cs.find(c => c.kind === 'move'); if (m) window.game.select(m.name); return m ? m.name : null; })()`) as string | null;
+  if (mv) {
+    await page.waitForSelector('#costcard:not([hidden])'); const card = await page.locator('#costcard').innerText();
+    for (const w of ['Price', 'Time', 'People', 'Installation', 'Who might pay']) assert.ok(card.includes(w), w);
+    assert.match(card, /placeholder/i); assert.match(card, /verify/i); assert.match(card, /not a promise of coverage/);
+    await page.screenshot({ path: 'e2e/artifacts/layers-costcard.png' });
+    await page.click('#costcard .cc-close'); assert.equal(await page.locator('#costcard').isVisible(), false); check('cost card: price, time, people, installation, funding; placeholders and pending fields are labelled');
+  } else console.log('SKIP no suggested move for the cost card');
+  await page.evaluate(`(async () => { await window.game.resetAll?.(); window.game.select(''); })()`).catch(() => {});
+
+  // Review: dismiss hides the highlight but not the measurement; a second click restores; verdicts persist and export
+  await page.click('[data-preset="hazards"]');
+  const before = await page.evaluate(() => (window as any).game.spots().length) as number;
+  await page.click('#rev-open'); assert.equal(await page.locator('#rev-panel').isVisible(), true);
+  assert.equal(await page.locator('#rev-panel li[data-key]').count(), before);
+  const hazardsListed = await page.locator('#hazards li').count();
+  await page.locator('#rev-panel li[data-key]').first().locator('[data-act="dismissed"]').click();
+  assert.equal(await page.evaluate(() => (window as any).game.spots().length), before - 1);
+  assert.equal(await page.locator('#hazards li').count(), hazardsListed); check('dismissing hides the highlight; the measured findings list is unchanged');
+  await page.locator('#rev-panel li[data-key]').first().locator('input').fill('edge is taped down'); await page.locator('#rev-panel li[data-key]').first().locator('input').press('Tab');
+  const stored = await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('homeclear.review.game_synth') ?? '{}')) as any[]);
+  assert.equal(stored.length, 1); assert.equal(stored[0].verdict, 'dismissed'); assert.equal(stored[0].note, 'edge is taped down'); check('verdict and note are saved in the browser');
+  await page.reload(); await page.waitForFunction(() => (window as any).game?.review, null, { timeout: 60000 });
+  assert.equal(await page.evaluate(() => (window as any).game.spots().length), before - 1); check('a dismissal survives a reload');
+  await page.click('#rev-open'); await page.locator('#rev-panel li[data-key]').first().locator('[data-act="dismissed"]').click();
+  assert.equal(await page.evaluate(() => (window as any).game.spots().length), before); check('a second click on Dismiss puts the highlight back');
+  await page.locator('#rev-panel li[data-key]').first().locator('[data-act="confirmed"]').click();
+  assert.equal(await page.locator('#rev-panel li[data-verdict="confirmed"]').count(), 1); assert.match(await page.locator('#rev-panel .rev-note').innerText(), /not the blind answer key/);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#rev-export')]); assert.match(dl.suggestedFilename(), /^hazard_review_game_synth\.json$/); check('review exports as JSON and says it is not the answer key');
+  await page.screenshot({ path: 'e2e/artifacts/layers-review.png' });
+  await page.keyboard.press('Escape'); await page.evaluate(() => localStorage.removeItem('homeclear.review.game_synth'));
+
   // a toggle changed in the View tab updates the dock; one changed in the popover updates the View tab
   await page.click('#tab-view'); await page.uncheck('#spot');
   assert.equal(await page.locator('#lay-custom').isVisible(), true); check('changing a layer by hand reads as Custom');

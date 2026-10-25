@@ -144,7 +144,7 @@ export function mountLayers(opts: LayersOpts = {}): LayersApi {
   }
 
   // the strip under the presets: Compare's before/after, and Evidence's legend; each only while its layer is on
-  const info = q('#lay-info');
+  const info = q('#lay-info'); let lastInfo = '';
   const esc = (t: string) => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
   const renderInfo = () => {
     const parts: string[] = [];
@@ -159,7 +159,9 @@ export function mountLayers(opts: LayersOpts = {}): LayersApi {
       const note = (key: string) => key === 'measured' ? pct(sh?.measured ?? 0) : key === 'thin' ? pct(sh?.thin ?? 0) : key === 'inferred' ? pct(sh?.inferred ?? 0) : '';
       parts.push(`<ul class="lay-legend" data-kind="legend" aria-label="Evidence legend">${PROVENANCE_LEGEND.map(l => `<li><span class="lay-swatch" style="background:${l.css}"></span><b>${esc(l.label)}</b>${note(l.key)} <small>${esc(l.detail)}</small></li>`).join('')}</ul>`);
     }
-    info.innerHTML = parts.join(''); info.hidden = !parts.length;
+    const html = parts.join('');
+    if (html !== lastInfo) { lastInfo = html; info.innerHTML = html; }
+    info.hidden = !parts.length;
   };
 
   let hidden = false;
