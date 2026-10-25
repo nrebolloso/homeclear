@@ -2,7 +2,7 @@
 
 ## While you were out (rug-calibration)
 - **Done:** rug physics calibrated against 8 real flat-rug passes; fold cascade in autoplay (folds the mat on pass 2 in kitchen4_lighter); glide caps as a planner fix next to "tape the mat edge"; `proof/demo/real_vs_sim_rug.mp4` and `proof/demo/broll/` (16 clips).
-- **In progress:** cluster rug batch, job 47577456 (50 tasks x 40 trials: calibrated, glide caps, tape, wheels only, bare floor, both directions, 200 paired draws each); `python physics/rug_calib.py summarize out/rug_batch` writes `physics/rug_batch.json`. The branch passes `npm test` (166) and `npm run build`; a trial merge with wm-planner passes 172/172 and the build.
+- **Cluster rug batch (job 47577456, done):** 2,000 paired trials, `physics/rug_batch.json`; rates in the rug section. The branch passes `npm test` (166) and `npm run build`; a trial merge with wm-planner passes 172/172 and the build.
 - **Needs me:** BLOCKERS 13-17: a real tennis-ball pass, the 8-vs-9 rug count, IMG_6800, the effort numbers, and the main.ts/planfix.ts merge with wm-planner.
 - **Risks:** the sim drags where the real rug folds (disturbance matches, fold shape doesn't); the caps value is assumed and friction-only, so "caps barely help" is a sim result to test, not a finding.
 - **Overlap with futures fan:** main.ts and planfix.ts conflict (resolution in BLOCKERS 17); grid.ts, planner.ts, engine.py and the kitchen4_lighter config auto-merge. No futures-fan files touched.
@@ -11,6 +11,17 @@
 Glide caps / tennis balls on the rear legs = glide-rug friction **μ 0.10-0.20, ASSUMED** (PTFE-like on rug pile; not measured, no real caps pass yet). Without caps the calibrated glide-rug range is 0.35-0.9 (rug-floor 0.1-0.3). Source: `physics/rug_calib.py` `CAPS_MU`, `physics/rug_calib.json` `glide_caps_mu_assumed`; the viewer reads the ratio as `CAPS_FACTOR` (`viewer/src/rugcascade.ts`).
 
 ## Rug calibration (branch `rug-calibration`, not merged to demo-safe)
+- **Cluster batch** (job 47577456, 50 tasks, 200 paired draws per arm and direction; P(fold or drag), 95% interval). Real: 8/8 disturbed (7 off, 1 onto).
+
+  | Arm | off: fold / disturbed | onto: fold / disturbed |
+  |---|---|---|
+  | calibrated (glide-rug 0.35-0.9) | 0.02 / 0.82 [0.76, 0.87] | 0.09 / 0.74 [0.68, 0.80] |
+  | glide caps (0.10-0.20, ASSUMED) | 0.17 / 0.75 [0.69, 0.81] | 0.59 / 0.77 [0.70, 0.82] |
+  | tape the edge | 0.01 / 0.01 [0.01, 0.04] | 0.03 / 0.03 [0.01, 0.06] |
+  | front wheels only | 0.00 / 0.00 [0, 0.02] | 0.01 / 0.01 [0.01, 0.04] |
+  | bare floor | 0.00 / 0.00 [0, 0.02] | 0.00 / 0.00 [0, 0.02] |
+
+  The glides disturb the rug both ways and the wheels and bare floor stay clean, as in the real takes; the sim drags where the real rug folds. Caps lower friction but not disturbance (they fold more, dragging less), so in the sim they are no fix; tape is. 7.5% of passes (none on bare floor) stall before the end of the push.
 - **Data:** `data/walker_rug/pairs.csv` (floor/wide pairs, synced by audio cross-correlation, visual fallback), `data/recording_notes.csv` (tracked). 1000101382 / IMG_6801 syncs at -1.64 s (sure). The 6798 pair rechecked: audio -1.21 s, bracketed by the walker start/stop (-1.6 / -0.9 s), kept at -1.21 ±0.3 s.
 - **Physics** (`physics/rug_calib.py`, MuJoCo cloth rug, 30 paired trials per direction; ranges in `physics_ranges.json`: glide-rug friction 0.35-0.9, rug-floor 0.1-0.3):
 
