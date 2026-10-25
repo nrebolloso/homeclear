@@ -2,6 +2,7 @@ import { onThree, own } from './lifetime.ts';
 import * as THREE from 'three';
 import type { FrontendAdapter, mountFrontend } from './frontend.ts';
 import { summarizeChanges, orderedProposals } from './frontend-model.ts';
+import { costText } from './reimagine.ts';
 import { pulse, MENU_HOLD_S } from './controls.ts';
 import { LAYERS, PRESETS } from './layers.ts';
 import { PROFILES } from './vision.ts';
@@ -128,7 +129,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
     } else if (page === 'bookmarks') {
       rows([['Save current viewpoint', () => { game().bookmarks.save(); notice = 'Viewpoint saved'; }], ...(game().bookmarks?.list() ?? []).map((b: any): Row => [b.label, () => { game().bookmarks.restore(b.id); close(); }])]);
     } else {
-      tile(`${costs.count} changes · ${costs.unpriced} unpriced\n${costs.unpriced || !costs.count ? 'Cost estimate pending' : `Known subtotal $${costs.knownSubtotal}`}\n${costs.untimed || !costs.count ? 'Setup time pending' : `${costs.setupMinutes} min hands-on`}\nHelpers: ${costs.helpers ?? 'pending'}`, 0, .12, .96, .32);
+      tile(`${costs.count} changes · ${costs.unpriced} unpriced\n${costs.unpriced || !costs.count ? 'Cost estimate pending' : `Known subtotal $${costs.knownSubtotal}`}\n${costs.count ? `Effort ${costs.effort.toFixed(1)}` : 'Effort pending'}\nHelpers: ${costs.helpers ?? 'pending'}`, 0, .12, .96, .32);
       tile('Selected item cost labels', 0, -.13, .96, .095, () => { const el = document.getElementById('reimtags') as HTMLSelectElement; el.value = 'selected'; el.dispatchEvent(new Event('change')); close(); });
       tile('Back', 0, -.34, .96, .085, back);
     }
@@ -176,7 +177,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
         if (key !== inspectionKey) {
           inspectionKey = key; inspectionRoot.clear(); inspectionResources.splice(0).forEach(r => r.dispose());
           const title = item.title.match(/.{1,42}(?:\s|$)|.{1,42}/g)?.map(s => s.trim()).join('\n') ?? item.title;
-          const cost = item.change ? item.change.cost.source === 'placeholder' ? 'Cost & installation: pending estimate' : `$${item.change.cost.usd} · ${item.change.cost.minutes} min · ${item.change.cost.helpers} helper(s)` : 'Finding for occupational therapist review';
+          const cost = item.change ? item.change.cost.source === 'placeholder' ? 'Cost & installation: pending estimate' : costText(item.change.cost) : 'Finding for occupational therapist review';
           tile(`${title}\n${item.detail.slice(0, 90)}\n${cost}\nMenu: Findings to flag or save`, 0, 0, .7, .25, undefined, false, inspectionRoot);
           inspectionRoot.position.set(item.at[0], item.at[1], 1.3); inspectionRoot.scale.setScalar(1.6);
         }

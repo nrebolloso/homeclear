@@ -866,7 +866,7 @@ function applyOption(n: number) {
 }
 $('suggest').onclick = () => suggest();
 // Generate proposals: the room before the search, so stepping through the options is undone by Reset until one is applied
-let proposalPrior: ReturnType<typeof snap> | null = null, proposalApplied = false, previewSeq = 0;
+let proposalPrior: ReturnType<typeof snap> | null = null, proposalApplied = false, previewSeq = 0, proposalShown = -1;
 /** show option n in the room without recording an edit: the objects move at once, the route and numbers follow once stepping pauses */
 function previewOption(n: number) {
   const o = suggestions[n];
@@ -874,7 +874,7 @@ function previewOption(n: number) {
   if (renderer.xr.isPresenting && editLocks.busy() && editLocks.owner('*') !== 'desktop') return Promise.reject(Error('Release the held object before previewing a layout.'));
   comparison.endPreview();   // the headset's read-only before/after, if it is up
   proposalPrior ??= snap();
-  layout = o.layout; applied = o.applied ?? o.actions.map((a: any) => a.id);
+  layout = o.layout; applied = o.applied ?? o.actions.map((a: any) => a.id); proposalShown = n;
   syncObjects();
   const mine = ++previewSeq, seen = evalDone.has(evalKey(layout));
   return new Promise<void>(res => setTimeout(async () => {
@@ -1811,7 +1811,8 @@ async function openReport() {
   logEvent(ledger, 'viewer', 'ranked_fixes', ranked_fixes, 'simulated', 'report');
   logEvent(ledger, 'viewer', 'reason', hzFile.hazards.filter(h => h.source === 'cosmos_reason'), 'imagined', 'report');
   const latest = (kind: string) => retrieve(ledger, { kind, latest: true }), one = (kind: string) => latest(kind)[0]?.values;
-  const optNames = new Set(suggestions.map(o => o.name));
+  // the planner's proposals print once, as Planner options (planfix.optionsOut); this table is for the live optimizer's
+  const optNames = new Set(suggestions.filter(o => !o.planned).map(o => o.name));
   const payload: ReportPayload = {
     scene: RUN, created: new Date().toISOString(), synthetic: (sc.synthetic ?? []).length > 0 || /synth/.test(RUN), scale_note: sc.scale_note,
     route: routes[selRoute].name,
@@ -2757,7 +2758,7 @@ function fixNumbers() {
   const c = summarizeChanges(reim.changes()), base = baseEvals[selRoute]?.per_month, now = current?.per_month;
   const catches = base != null && now != null ? `toe catches ${fmt(base)} → ${fmt(now)} a month` : 'toe catches: recalculating';
   const cost = !c.count ? 'no changes' : c.unpriced ? `${c.count} changes · cost pending` : `${c.count} change${c.count === 1 ? '' : 's'} · ~$${Math.round(c.knownSubtotal)}`;
-  return { catches, line: c.untimed || !c.count ? cost : `${cost} · ${c.setupMinutes} min setup`, count: c.count };
+  return { catches, line: !c.count ? cost : `${cost} · effort ${c.effort.toFixed(1)}`, count: c.count };
 }
 const costButton = {
   text() {
@@ -2974,7 +2975,11 @@ const frontendAdapter: FrontendAdapter = {
   reset: () => { if (game.remoteSession) return Promise.reject(Error('Reset the room on the desktop.')); return resetProposals(); },
   async apply(index) { stairPhase = 'proposed'; await (game.remoteSession ? game.applyPreparedOption(index) : applyOption(index)); setWalk('free'); reim.setT(1); },   // a previewed proposal: x-ray until accepted or inspected
   commit() {
-    if (proposalPrior && !game.remoteSession) editHist.record('applied proposed layout', proposalPrior, snap());   // previewing recorded nothing: one undo step for the whole choice
+    if (proposalPrior && !game.remoteSession) {
+      editHist.record('applied proposed layout', proposalPrior, snap());   // previewing recorded nothing: one undo step for the whole choice
+      const o = suggestions[proposalShown];
+      if (o) logEvent(ledger, 'viewer', 'apply_option', { name: o.name, actions: applied }, 'simulated');   // as applyOption does
+    }
     proposalApplied = true; commitProposal();
   },
   undo: c => game.remoteSession ? game.sessionLink.request('undoChange', [c.name, c.iv]) : undoReimagined(c), select,

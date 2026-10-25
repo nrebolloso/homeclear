@@ -14,11 +14,11 @@ export const LIGHTING_IDEAS: LightingIdea[] = [
 ];
 export function summarizeChanges(changes: Change[]) {
   const priced = changes.filter(c => c.cost.source !== 'placeholder' && Number.isFinite(c.cost.usd));
-  const timed = changes.filter(c => c.cost.source !== 'placeholder' && Number.isFinite(c.cost.minutes));
   return {
     count: changes.length, knownSubtotal: priced.reduce((s, c) => s + c.cost.usd, 0),
-    unpriced: changes.length - priced.length, setupMinutes: timed.reduce((s, c) => s + c.cost.minutes, 0),
-    untimed: changes.length - timed.length,
+    unpriced: changes.length - priced.length,
+    // effort.ts prices every change, placeholder dollars or not; it adds up (movecost.ts sumCosts)
+    effort: changes.reduce((s, c) => s + (Number.isFinite(c.cost.effort) ? c.cost.effort : 0), 0),
     helpers: changes.length && changes.every(c => c.cost.source !== 'placeholder') ? Math.max(...changes.map(c => c.cost.helpers)) : null,
   };
 }

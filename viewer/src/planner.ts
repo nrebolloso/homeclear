@@ -6,6 +6,7 @@
 import { polyCells, worldFootprint, toCell, type Layout, type Pose, type XY } from './grid.ts';
 import { evaluate, type Init, type Eval } from './evaluate.ts';
 import { moveCost, fixCost } from './movecost.ts';
+import { effortKind } from './effort.ts';
 
 type Opt = { label: string; cost_usd: number; minutes: number; effort: number; product?: string; assumption?: string } | { from_fix: string };
 export interface PlannerCfg {
@@ -131,7 +132,7 @@ export function cost(S: Init, cfg: PlannerCfg, from: PlanLayout, pl: PlanLayout)
     if ('from_fix' in o) {
       const iv = S.interventions.find(i => i.id === o.from_fix);
       if (!iv) throw new Error(`planner: no fix ${o.from_fix}`);
-      const c = fixCost(iv);
+      const on = S.objects.find(o => o.name === iv.object), c = fixCost(iv, on && effortKind(on));
       return { key, label: iv.label ?? fallback, usd: c.usd, minutes: c.minutes, effort: c.effort, product: iv.product };
     }
     return { key, label: o.label, usd: o.cost_usd, minutes: o.minutes, effort: o.effort, product: o.product, assumption: o.assumption };

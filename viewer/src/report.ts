@@ -42,13 +42,12 @@ function render(p: ReportPayload) {
   const pct = (x: number) => `${(x * 100).toFixed(x < 0.1 ? 1 : 0)}%`, EV: Record<string, string> = { slid: 'slides ≥ 2 cm', folded: 'corner folds over', moved: 'moves ≥ 2 cm', tipped: 'tips > 30°' };
   const objs = (c.objects ?? []).map(e => `<tr><td>${esc(e.object.replace(/_/g, ' '))}</td><td>${EV[e.event] ?? esc(e.event)}</td><td>${esc(e.route)}</td><td>${e.angle_deg.toFixed(0)}° · ${e.speed_mps.toFixed(2)} m/s</td>`
     + `<td>${e.p_contact < 1 ? `${pct(e.p_contact)} of trips touch it` : 'every trip crosses it'}</td><td>${pct(e.p)} (${pct(e.ci95[0] ?? 0)}–${pct(e.ci95[1] ?? 0)}, n=${e.n})</td><td>${f1(e.per_month)}</td></tr>`).join('');
-  const EFF = ['', 'easy', 'moderate', 'some effort', 'heavy', 'needs help'];
   const ranked = (p.ranked_fixes ?? []).map((f, n) => `<tr><td>${n + 1}</td><td><b>${esc(f.label)}</b>${f.product ? `<div class="dim">${esc(f.product)}</div>` : ''}</td>
     <td>${f.error ? `<span class="bad">${p.ranked_by ? esc(f.error) : 'blocks the route'}</span>` : `<span class="${f.reduction > 0 ? 'ok' : 'dim'}">−${f.reduction.toFixed(2)}</span> (${(f.share * 100).toFixed(0)}%)`}</td>
     <td>${f.clearance_gain_m > 0.005 ? `<span class="ok">+${(f.clearance_gain_m * 100).toFixed(0)} cm</span>` : '–'}</td>
-    <td>${f.cost_usd !== undefined ? (f.cost_usd ? `$${f.cost_usd}` : 'free') : ''}</td><td>${f.minutes ? `${f.minutes} min` : ''}</td><td>${esc(EFF[f.effort ?? 0] ?? (f.effort ?? 0).toFixed(1))}</td></tr>`).join('');
+    <td>${f.cost_usd !== undefined ? (f.cost_usd ? `$${f.cost_usd}` : 'free') : ''}</td><td>${f.minutes ? `${f.minutes} min` : ''}</td><td>${f.effort ? `${f.effort.toFixed(1)} · ${difficulty(f.effort)}` : ''}</td></tr>`).join('');
   const popts = (p.planner_options ?? []).map(o => `<tr><td><b>${esc(o.name)}</b></td><td>${o.per_month.toFixed(2)}</td><td>${o.cost_usd ? `$${o.cost_usd}` : 'free'} · ${o.minutes} min</td>
-    <td>${o.effort.toFixed(1)}</td><td>${o.changes.map(esc).join('; ')}</td></tr>`).join('');
+    <td>${o.effort.toFixed(1)} · ${difficulty(o.effort)}</td><td>${o.changes.map(esc).join('; ')}</td></tr>`).join('');
   const clips = p.clips.map(k => `<li><span class="imag">${esc(k)}</span></li>`).join('');
   document.getElementById('root')!.innerHTML = `
   <button onclick="print()">Print / save as PDF</button>

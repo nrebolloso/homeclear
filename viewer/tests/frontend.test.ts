@@ -7,7 +7,7 @@ const change = (source: string, usd: number, minutes = 10): Change => ({ k: -1, 
   cost: { source, usd, minutes, helpers: 2, effort: 1, funding: 'unclassified' } });
 test('unknown placeholder prices and labor are excluded from known totals', () => {
   const s = summarizeChanges([change('catalog', 25), change('placeholder', 999, 999)]);
-  assert.equal(s.knownSubtotal, 25); assert.equal(s.setupMinutes, 10); assert.equal(s.unpriced, 1); assert.equal(s.untimed, 1); assert.equal(s.helpers, null);
+  assert.equal(s.knownSubtotal, 25); assert.equal(s.effort, 2); assert.equal(s.unpriced, 1); assert.equal(s.helpers, null);
 });
 test('a verified zero-dollar change is distinguished from a missing estimate', () => {
   const s = summarizeChanges([change('catalog', 0)]);
