@@ -1,0 +1,207 @@
+{
+ "tape_m": {
+  "length": 1.5748,
+  "width": 1.0414,
+  "height": 0.7112
+ },
+ "source": {
+  "kitchen1": "configs/kitchen1.yaml",
+  "kitchen2_nofar": "configs/kitchen2_nofar.yaml",
+  "kitchen3": "configs/kitchen3.yaml; the tabletop patch was cut off on one side (one-sided orbit)",
+  "kitchen4": "configs/kitchen4.yaml"
+ },
+ "captures": {
+  "kitchen1": {
+   "folds": [
+    {
+     "scale_from": [
+      "width",
+      "height"
+     ],
+     "predicts": "length",
+     "scale": 1.669972367522152,
+     "predicted_m": 1.669972367522152,
+     "tape_m": 1.5748,
+     "err_cm": 9.517236752215208,
+     "err_pct": 6.043457424571508
+    },
+    {
+     "scale_from": [
+      "length",
+      "height"
+     ],
+     "predicts": "width",
+     "scale": 1.5614161016453414,
+     "predicted_m": 0.8828297006964104,
+     "tape_m": 1.0414,
+     "err_cm": -15.857029930358967,
+     "err_pct": -15.226646754713812
+    },
+    {
+     "scale_from": [
+      "length",
+      "width"
+     ],
+     "predicts": "height",
+     "scale": 1.6875862566976214,
+     "predicted_m": 0.775092036221314,
+     "tape_m": 0.7112,
+     "err_cm": 6.38920362213139,
+     "err_pct": 8.983694631793293
+    }
+   ],
+   "mean_abs_err_cm": 10.587823434901855,
+   "max_abs_err_cm": 15.857029930358967,
+   "scale_all": 1.6355558898555462,
+   "fit_err_pct": {
+    "length": 3.8580067218406233,
+    "width": -11.201404252826276,
+    "height": 5.6235928361119125
+   }
+  },
+  "kitchen2_nofar": {
+   "folds": [
+    {
+     "scale_from": [
+      "width",
+      "height"
+     ],
+     "predicts": "length",
+     "scale": 1.614347797531007,
+     "predicted_m": 1.614347797531007,
+     "tape_m": 1.5748,
+     "err_cm": 3.954779753100701,
+     "err_pct": 2.5112901657992737
+    },
+    {
+     "scale_from": [
+      "length",
+      "height"
+     ],
+     "predicts": "width",
+     "scale": 1.5929052984120469,
+     "predicted_m": 1.025985164303011,
+     "tape_m": 1.0414,
+     "err_cm": -1.5414835696989204,
+     "err_pct": -1.4802031589196463
+    },
+    {
+     "scale_from": [
+      "length",
+      "width"
+     ],
+     "predicts": "height",
+     "scale": 1.5952652980793116,
+     "predicted_m": 0.7038722176493171,
+     "tape_m": 0.7112,
+     "err_cm": -0.7327782350682988,
+     "err_pct": -1.030340600489732
+    }
+   ],
+   "mean_abs_err_cm": 2.0763471859559735,
+   "max_abs_err_cm": 3.954779753100701,
+   "scale_all": 1.6007256807562675,
+   "fit_err_pct": {
+    "length": 1.6462840205910378,
+    "width": -0.9965193639443481,
+    "height": -0.6915805118825613
+   }
+  },
+  "kitchen3": {
+   "folds": [
+    {
+     "scale_from": [
+      "width",
+      "height"
+     ],
+     "predicts": "length",
+     "scale": 1.7266184086985497,
+     "predicted_m": 1.7266184086985497,
+     "tape_m": 1.5748,
+     "err_cm": 15.181840869854968,
+     "err_pct": 9.640488233334366
+    },
+    {
+     "scale_from": [
+      "length",
+      "height"
+     ],
+     "predicts": "width",
+     "scale": 1.5866096511819716,
+     "predicted_m": 0.8655979266327449,
+     "tape_m": 1.0414,
+     "err_cm": -17.58020733672552,
+     "err_pct": -16.8813206613458
+    },
+    {
+     "scale_from": [
+      "length",
+      "width"
+     ],
+     "predicts": "height",
+     "scale": 1.710084046113797,
+     "predicted_m": 0.760711580513202,
+     "tape_m": 0.7112,
+     "err_cm": 4.951158051320192,
+     "err_pct": 6.961695797694301
+    }
+   ],
+   "mean_abs_err_cm": 12.57106875263356,
+   "max_abs_err_cm": 17.58020733672552,
+   "scale_all": 1.6693468132863043,
+   "fit_err_pct": {
+    "length": 6.003734651149628,
+    "width": -12.546918912801575,
+    "height": 4.413678631382378
+   }
+  },
+  "kitchen4": {
+   "folds": [
+    {
+     "scale_from": [
+      "width",
+      "height"
+     ],
+     "predicts": "length",
+     "scale": 1.7459499099429432,
+     "predicted_m": 1.7459499099429432,
+     "tape_m": 1.5748,
+     "err_cm": 17.11499099429432,
+     "err_pct": 10.868041017458928
+    },
+    {
+     "scale_from": [
+      "length",
+      "height"
+     ],
+     "predicts": "width",
+     "scale": 1.5952652980793112,
+     "predicted_m": 0.8608257389119588,
+     "tape_m": 1.0414,
+     "err_cm": -18.05742610880413,
+     "err_pct": -17.339567993858395
+    },
+    {
+     "scale_from": [
+      "length",
+      "width"
+     ],
+     "predicts": "height",
+     "scale": 1.7167371009258905,
+     "predicted_m": 0.7551428099427563,
+     "tape_m": 0.7112,
+     "err_cm": 4.394280994275624,
+     "err_pct": 6.178685312536025
+    }
+   ],
+   "mean_abs_err_cm": 13.188899365791357,
+   "max_abs_err_cm": 18.05742610880413,
+   "scale_all": 1.6804888982043438,
+   "fit_err_pct": {
+    "length": 6.7112584584927415,
+    "width": -12.923613097869902,
+    "height": 3.9367657385719346
+   }
+  }
+ }
+}

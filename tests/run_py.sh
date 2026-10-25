@@ -5,7 +5,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) PY=.venv/Scripts/python ;; *) PY=.venv/bin/python ;; esac
 export PYTHONUTF8=1
-for t in test_synthetic make_game_scene test_contact_table test_shell test_fills test_reason_lift test_detect_vote test_score_proposals test_rescan_diff test_fill_composite test_floor_bed test_triangulate_robust test_verdict test_plan_auto test_table_scale test_clean test_export_join test_fixed; do
+for t in test_synthetic make_game_scene test_contact_table test_shell test_fills test_reason_lift test_detect_vote test_score_proposals test_rescan_diff test_fill_composite test_floor_bed test_triangulate_robust test_verdict test_plan_auto test_table_scale test_table_loo test_spec_export test_reason_eval test_clean test_export_join test_fixed; do
   printf '%-20s ' "$t"
   $PY tests/$t.py > "out/$t.log" 2>&1 || { echo FAIL; tail -20 "out/$t.log"; exit 1; }
   tail -1 "out/$t.log" | cut -c1-100

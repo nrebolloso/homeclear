@@ -10,6 +10,8 @@ import importlib, json, sys
 from pathlib import Path
 sys.path[:0] = [str(Path(__file__).resolve().parents[1]), str(Path(__file__).resolve().parent)]
 from common import run_stage, read_ply, write_ply, ply_xyz, solid_mask, ROOT
+from hazards_spec import add_spec_fields, validate as validate_hazards
+from maps_export import export_maps
 
 import cv2
 from matplotlib.path import Path as Path2d
@@ -391,6 +393,7 @@ def main(cfg):
     bump_h.astype(np.float32).tofile(out / "bump.f32")
     est.astype(np.uint8).tofile(out / "bump_estimated.u8")
     cov.tofile(out / "coverage.u8")
+    maps = export_maps(out, lo, cell, floor, obstacles, bump_h, cov, COVERAGE_GOOD)   # the same grids as PNG + JSON for people and other tools
 
     margin = cfg["hazards"]["clearance_margin_m"]
     hz = json.loads((w / "hazards.json").read_text())["hazards"] if (w / "hazards.json").exists() else []
@@ -407,7 +410,11 @@ def main(cfg):
         for r in json.loads((w / "reason.json").read_text())["hazards"]:
             hz.append({"id": len(hz), "type": r["kind"], "source": "cosmos_reason", "position_m": r["position_m"],
                        "verdict": r["verdict"], "measured": r.get("measured"), "frames": len(r["frames"]),
-                       "note": r["note"] or r["why"], "ot_check": r["verdict"] != "dismissed"})
+                       "note": r["note"] or r["why"] or f"Cosmos Reason: {r['kind']}", "ot_check": r["verdict"] != "dismissed", "height_m": r.get("height_m")})
+    for h in hz:
+        add_spec_fields(h)   # SPEC section 5's fields next to stage 8's own, which the viewer and the report read
+    bad = validate_hazards({"hazards": hz})
+    assert not bad, f"hazards.json is not in the SPEC shape: {bad}"
     (out / "hazards.json").write_text(json.dumps({"frame": "floor frame, metres, z up", "hazards": hz}, indent=1))
 
     path = json.loads((w / "path.json").read_text()) if (w / "path.json").exists() else {}
@@ -435,6 +442,7 @@ def main(cfg):
                       "floor": "floor.u8", "obstacles": "obstacles.u8", "bump_height_m": "bump.f32",
                       "bump_estimated": "bump_estimated.u8",
                       "coverage": "coverage.u8", "coverage_good": COVERAGE_GOOD},
+             "maps": maps,   # occupancy / bumps / coverage as PNG + JSON (additive: the viewer reads the raw grids above)
              "objects": objects, "fixtures": fixtures(gm, xyz, solid),
              # transfer / reach / emergency-access rules (checks.ts); persona carries knee height and reach
              "transfer": {"min_above_knee_m": 0.05, "max_above_knee_m": 0.20, "reach_height_m": [0.3, 1.3], **gm.get("transfer", {})},

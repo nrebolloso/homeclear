@@ -117,7 +117,7 @@ try {
   await p.waitForTimeout(500);
 
   // 4. night mode
-  await p.click('#filter-toggle');
+  await p.click('#tab-view');
   await p.click('#night');
   await p.waitForTimeout(4000);
   const nfps = await G(p, 'return game.fps');
@@ -190,7 +190,7 @@ try {
   await Q('game.setVision("cataract")'); await q.p.waitForTimeout(300); const n1 = await px();
   await Q('game.setVision("normal")');
   check('vision pass changes the frame (cataract blurs: smaller JPEG)', n1 < n0 * 0.95, `${n0} -> ${n1} bytes`);
-  await q.p.click('#filter-toggle');
+  await q.p.click('#tab-view');
   await q.p.locator('#filter-menu details').evaluate((el: HTMLDetailsElement) => { el.open = true; });
   await q.p.click('#heat'); await q.p.waitForTimeout(800);
   const heat = await Q('return !!game.current().heat');
@@ -321,6 +321,28 @@ try {
     `poses restored=${same}, taped strips=${all.flat}, removed=${all.gone.length}, reimagine changes=${all.changes}; ${r0.pm.toFixed(2)} -> ${all.pm.toFixed(2)}/month`);
   check('reset: no page errors', rs.errors.length === 0, rs.errors.join(' | ') || 'none');
   await rs.p.close();
+  }
+  // 13. movement modes: Fly looks without turning the walker, Look around parks it, Walk takes it back, 1-4 switch modes
+  {
+  const mv = await open('game_synth');
+  const MV = (f: string) => G(mv.p, f);
+  await mv.p.waitForTimeout(1500);
+  const m = await MV(`game.setFree(game.body.x, game.body.y, game.body.yaw); const w0 = { x: game.body.x, y: game.body.y, yaw: game.body.yaw };
+    document.getElementById('mode-fly').click(); game.manual = true;
+    for (let i = 0; i < 20; i++) { game.body.yaw += 0.1; game.tick(0.05); }   // look around while flying
+    document.getElementById('mode-explore').click(); game.tick(0.05);
+    const parked = game.explore().parked;
+    document.getElementById('mode-walk').click(); game.tick(0.05); game.manual = false;
+    return { w0, parked, back: { x: game.body.x, y: game.body.y, yaw: game.body.yaw }, pressed: [...document.querySelectorAll('#viewer-toolbar [id^=mode-][aria-pressed=true]')].map(b => b.id) };`);
+  check('movement: Look around parks the walker where it was and Walk takes it back (Fly looking never turned it)',
+    !!m.parked && Math.hypot(m.parked.x - m.w0.x, m.parked.y - m.w0.y) < 0.01 && Math.abs(m.parked.yaw - m.w0.yaw) < 0.01 && Math.hypot(m.back.x - m.w0.x, m.back.y - m.w0.y) < 0.01 && Math.abs(m.back.yaw - m.w0.yaw) < 0.01 && m.pressed.join() === 'mode-walk', JSON.stringify(m));
+  await mv.p.keyboard.press('Digit4');
+  const k4 = await MV("return [...document.querySelectorAll('#viewer-toolbar [id^=mode-][aria-pressed=true]')].map(b => b.id).join()");
+  await mv.p.keyboard.press('Digit1');
+  const k1 = await MV("return [...document.querySelectorAll('#viewer-toolbar [id^=mode-][aria-pressed=true]')].map(b => b.id).join()");
+  check('movement: keys 4 and 1 switch to Fly and Follow route', k4 === 'mode-fly' && k1 === 'mode-route', `${k4}, ${k1}`);
+  check('movement: no page errors', mv.errors.length === 0, mv.errors.join(' | ') || 'none');
+  await mv.p.close();
   }
 } finally {
   await browser.close();

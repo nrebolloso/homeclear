@@ -1,5 +1,7 @@
 """Cosmos Reason 2 on the real capture frames along the route (B200; cosmos/slurm/cosmos_reason.sbatch).
-  python cosmos/reason.py <config.yaml> [--frames 24] [--model nvidia/Cosmos-Reason2-8B]   -> <work>/reason.json
+  python cosmos/reason.py <config.yaml> [--frames 24] [--model nvidia/Cosmos-Reason2-8B] [--out reason.json]   -> <work>/reason.json
+  --model <another Qwen3-VL model> --out reason_general.json runs a general vision model the same way, for cosmos/reason_eval.py
+  (stage 12 only reads reason.json, so the comparison run never reaches the viewer).
 
 1. Frames: the capture photos whose camera stood within 1.2 m of the planned route (stage 7), spread along it.
 2. The model sees each photo with the patient's situation and lists hazards as JSON (kind, a point, why).
@@ -69,6 +71,7 @@ def main():
     ap.add_argument("config")
     ap.add_argument("--frames", type=int, default=24)
     ap.add_argument("--model", default="nvidia/Cosmos-Reason2-8B")
+    ap.add_argument("--out", default="reason.json")
     a = ap.parse_args()
     import torch
     from PIL import Image
@@ -130,8 +133,8 @@ def main():
         truth = yaml.safe_load(key.read_text()).get("items") or []
         # an empty key (the template, not filled in yet) would score every claim as a false positive: no score at all
         res["evaluation"] = rl.evaluate(merged, truth) if truth else {"note": f"{key.name} has no items yet: not scored"}
-    (w / "reason.json").write_text(json.dumps(res, indent=1))
-    (w / "reason_raw.json").write_text(json.dumps(raw, indent=1))
+    (w / a.out).write_text(json.dumps(res, indent=1))
+    (w / a.out.replace(".json", "_raw.json")).write_text(json.dumps(raw, indent=1))
     print(json.dumps({k: v for k, v in res.items() if k != "hazards"}, indent=1))
 
 
