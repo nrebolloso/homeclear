@@ -35,7 +35,7 @@ export function spots(hazards: HazardIn[], objects: { name: string }[], reason: 
     return {
       id: `m${n}`, kind: 'measured' as const, xy: h.position, object: bump ? obj : -1, severity: sev, measured_height_m: bump ? h.height_m : undefined,
       label: bump ? `${h.name} ${h.estimated ? '~' : ''}${cm(h.height_m!)} cm${h.estimated ? ' (est.)' : margin_m ? ` ±${cm(margin_m)}` : ''}` : `${(100 * h.min_side_clearance_m!).toFixed(0)} cm/side`,
-      detail: bump ? `${h.name}: ${h.estimated ? 'thin cord, height is a typical value' : `${cm(h.height_m!)} cm edge`}${h.per_month ? `, ${h.per_month.toFixed(2)} toe contacts/month` : ''}`
+      detail: bump ? `${h.name}: ${h.estimated ? 'thin cord, height is a typical value' : `${cm(h.height_m!)} cm edge`}${h.per_month ? `, ${h.per_month.toFixed(2)} toe catches/month` : ''}`
         : `tight gap: ${(100 * h.min_side_clearance_m!).toFixed(0)} cm each side of the walker`,
     };
   });

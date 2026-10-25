@@ -134,6 +134,46 @@
       <div id="physsampled" class="hint">loading object colliders…</div>
       <button id="physresample" title="new masses and frictions from the assumed ranges (physics_ranges.json)">Resample unknowns</button>
     </section>
+    <section id="planfixpanel">
+      <h2>Kitchen planner <span class="imagined">simulated</span></h2>
+      <button id="pfplay" title="replay the B200 layout search, then apply the layout it chose">Plan fixes</button>
+      <button id="pflive" title="the critic searches thousands of layouts starting from the room as you left it; the best 5 and yours are re-run for real">Improve my layout</button>
+      <label title="taping is not visible in the room: say whether your layout includes it"><input type="checkbox" id="pfmattaped" /> my layout has the mat's edges taped</label>
+      <div id="pfstats" class="status"></div>
+      <canvas id="pfchart" width="266" height="170"></canvas>
+      <div id="pfresult" class="status"></div>
+      <ol id="pfoptions"></ol>
+    </section>
+    <section id="gaitfitpanel">
+      <h2>Gait personalization <span class="imagined">model</span></h2>
+      <button id="gfplay" title="a held-out PhysioNet participant (never trained on) walks; the model fits their gait from walker + head only">Fit a new walker</button>
+      <select id="gfspeed" title="replay speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select>
+      <button id="gfreplan" title="rerun the kitchen planner with this person's fitted world model">Re-plan for me</button>
+      <div id="gfstatus" class="status"></div>
+      <canvas id="gfghost" width="266" height="170"></canvas>
+      <div id="gfmeter" class="status"></div>
+      <canvas id="gfchart" width="266" height="110"></canvas>
+      <canvas id="gfmap" width="266" height="200"></canvas>
+    </section>
+    <section id="wmghostpanel">
+      <h2>World model in the kitchen <span class="imagined">imagined (world model)</span></h2>
+      <button id="wgstyles" title="the average person and one participant's gait style walk the kitchen route from the fridge, life-size">Two gait styles</button>
+      <select id="wgstyle" title="whose style the second ghost walks"></select>
+      <button id="wgmonth" title="a month of trips (60) at once, as scanned or with the planner's fixes">Month replay</button>
+      <select id="wgmonthlay"><option value="before">as scanned</option><option value="after">after fixes</option></select>
+      <button id="wgstop">Stop</button>
+      <div id="wgstatus" class="status"></div>
+    </section>
+    <section id="fanpanel">
+      <h2>Futures fan <span class="imagined">imagined (world model)</span></h2>
+      <label title="every 0.5 s, ~30 futures 4-5 s ahead from where the walker is now: green = crosses nothing, faint orange to bright red = the chance of a toe catch (full red 3%+), amber frame = brushes furniture"><input type="checkbox" id="fanon"> Show the fan</label>
+      <select id="fanmodel" title="learned world model, or the hand rule (feet on the route + noise)"><option value="learned">learned: tight on straights, wider at turns</option><option value="hand">hand rule: same wobble everywhere</option></select>
+      <select id="fanstyle" title="whose gait embedding the learned model is folded with"></select>
+      <div class="hint">red = a swing catches a bump of 4 mm or more (mat edge, cord, folded corner) or the frame comes within 3 cm of furniture; not a fall prediction</div>
+      <div id="fanstatus" class="status"></div>
+      <select id="fanlift" title="toe clearance from published gait data (Frontiers 2014: 14.1 ± 8.3 mm); the shuffler is the 16th percentile of it (an ASSUMPTION until shuffle recordings exist)"><option value="average">average foot lift (~12 mm)</option><option value="shuffler">low-clearance shuffler (~7 mm)</option></select>
+      <div class="hint">a crossing is a hit when that step's toe clearance (drawn from the lift above) is under the edge height. Routes at forks: odds from path length (ASSUMPTION)</div>
+    </section>
   </aside>
   <div id="player" hidden>
     <div class="wrap"><video id="video" controls muted playsinline></video><canvas id="overlay"></canvas>

@@ -5,7 +5,10 @@ export type XY = [number, number];
 export interface GridMeta { origin_xy: XY; cell_m: number; shape: [number, number] }
 export interface Layers { floor: Uint8Array; obst: Uint8Array; bump: Float32Array }
 export interface Footprinted { footprint: XY[]; pivot: number[]; layer: 'obstacle' | 'bump' | 'none'; height_m: number }
-export interface Pose { x: number; y: number; yaw: number; removed?: boolean }
+export interface Pose { x: number; y: number; yaw: number; removed?: boolean; taped?: boolean }
+/** "Taped" everywhere (fan, physics, planner, OT report): edges taped down with carpet tape, the edge still stands this
+ *  high (ASSUMPTION: ~1-2 mm of tape and compressed pile, not measured) and the object can't slide or fold (objphys.ts). */
+export const TAPED_EDGE_M = 0.0015;
 export interface PlanParams {
   walker_width_m: number; preferred_clearance_m: number; clearance_weight: number;
   /** extra cost (metres of walking) per 90 degrees of turning: > 0 plans with heading (8 directions), e.g. freezing of
@@ -68,7 +71,7 @@ export function stamp(g: GridMeta, base: Layers, objs: Footprinted[], poses: Pos
     if (poses[k].removed || o.layer === 'none') return;
     for (const c of polyCells(g, worldFootprint(o, poses[k]))) {
       if (o.layer === 'obstacle') L.obst[c] = 1;
-      else L.bump[c] = Math.max(L.bump[c], o.height_m);
+      else L.bump[c] = Math.max(L.bump[c], poses[k].taped ? Math.min(o.height_m, TAPED_EDGE_M) : o.height_m);
     }
   });
   for (const [[x0, y0], [x1, y1]] of flattened)
@@ -314,6 +317,24 @@ export interface Layout {
   carved?: { id: string; target: string; poly: XY[]; by_m: number }[];
   /** added fixtures moved by hand (the second walker on the landing), by fix id; else they stand where the fix puts them */
   placed?: Record<string, Pose>;
+  /** rug corners folded by a walker pass (rugcascade.ts): a taller bump than the flat rug, until the layout changes */
+  folds?: Fold[];
+  /** glide caps / tennis balls on the walker's rear legs (planner fix): scales the rug's slide / fold events (evaluate.ts) */
+  walker_caps?: boolean;
+}
+/** A folded rug corner: lifted lift_m within size_m of the corner (the same shape the futures fan draws). */
+export interface Fold { corner: XY; lift_m: number; size_m: number }
+/** The folds raise the bump map in place; returns the cells they cover. */
+export function stampFolds(g: GridMeta, bump: Float32Array, folds: Fold[] = []): number[] {
+  const out: number[] = [];
+  for (const f of folds) {
+    const r = f.size_m, [x, y] = f.corner;
+    for (const c of polyCells(g, [[x - r, y - r], [x + r, y - r], [x + r, y + r], [x - r, y + r]])) {
+      const [cx, cy] = cellXY(g, c);
+      if (Math.hypot(cx - x, cy - y) <= r) { bump[c] = Math.max(bump[c], f.lift_m); out.push(c); }
+    }
+  }
+  return out;
 }
 /** The added fixtures in place, each at its hand-placed pose if it has one (x, y, yaw; z stays the fix's). */
 export function placedFixtures(ivs: Intervention[], lay: Layout) {

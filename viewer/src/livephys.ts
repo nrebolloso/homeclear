@@ -29,7 +29,8 @@ const TEXT: Record<PhysEvent['kind'], string> = { bumped: 'bumped', moved: 'push
 
 export function createLivePhys(D: LivePhysDeps) {
   const worker = new Worker(new URL('./physworker.ts', import.meta.url), { type: 'module' });
-  let busy = true, acc = 0, ready = false, seed = Math.floor(Math.random() * 1e9);
+  let fold: { corner: XY; lift_m: number; size_m: number } | null = null;
+  let busy = true, acc = 0, ready = false, steps = 0, seed = Math.floor(Math.random() * 1e9);
   const xf = new Map<number, number[]>();   // object -> latest [k, x, y, z, qx, qy, qz, qw]
   let walkerPose: { x: number; y: number; yaw: number } | null = null, target = { x: 0, y: 0, yaw: 0 };
   const events: PhysEvent[] = [];
@@ -37,6 +38,8 @@ export function createLivePhys(D: LivePhysDeps) {
   const flapMesh = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.75, side: THREE.DoubleSide }));
   flapMesh.visible = false; D.scene.add(flapMesh);
 
+  const tapedKey = (lay: Layout) => lay.poses.map(p => +!!p.taped).join('');
+  let taped = tapedKey(D.layout());
   const init = (): PhysInit => ({
     base: new URL(D.base, location.href).href, g: D.g, obst: D.obst, bump: D.bump, walker: D.walker(), ranges: ranges as unknown as PhysRanges, seed,
     overlap: D.overlap, poses: D.layout().poses, objects: D.objs.map(o => ({ name: o.name, kind: o.kind, splat: o.splat, pivot: o.pivot, footprint: o.footprint, height_m: o.height_m, layer: o.layer })),
@@ -100,7 +103,8 @@ export function createLivePhys(D: LivePhysDeps) {
       return;
     }
     if (m.type !== 'step' || m.none) return;
-    walkerPose = m.walker;
+    steps++; walkerPose = m.walker;
+    fold = m.flapInfo?.folded ? { corner: m.flapInfo.corner, lift_m: m.flapInfo.lift_m, size_m: m.flapInfo.size_m } : null;
     for (const p of m.poses as number[][]) xf.set(p[0], p);
     if (m.flap && flapMesh.visible) { flapMesh.position.set(m.flap[0], m.flap[1], m.flap[2]); flapMesh.quaternion.set(m.flap[3], m.flap[4], m.flap[5], m.flap[6]); }
     if (!m.flapInfo) flapMesh.visible = false;
@@ -113,22 +117,27 @@ export function createLivePhys(D: LivePhysDeps) {
 
   const q = new THREE.Quaternion();
   return {
-    events, ready: () => ready,
+    events, ready: () => ready, /** worker steps answered (e2e: physics runs in autoplay too) */ steps: () => steps,
+    /** the mat's curled corner while folded over (futures.ts treats it as a bump), else null */
+    fold: () => fold,
     /** The layout changed (drag, remove, fix, reset): bodies jump to it. */
     sync(lay: Layout) {
       if (!ready) return;
+      if (tapedKey(lay) !== taped) { taped = tapedKey(lay); return this.resample(); }   // taping fixes the mat and drops its flap: rebuilt from the layout
       worker.postMessage({ type: 'poses', poses: lay.poses });
       for (const [k] of xf) { const p = lay.poses[k], v = xf.get(k)!; if (Math.hypot(v[1] - p.x, v[2] - p.y) > 0.01) xf.delete(k); }
     },
     resample() { ready = false; busy = true; seed = Math.floor(Math.random() * 1e9); worker.postMessage({ type: 'init', init: init() }); },
     /** Per frame. `body` = where the person wants the walker (their body centre + heading). In free walking the walker is
-     *  where physics has it, and the person can't get more than 15 cm ahead of it (a heavy chair holds them back). */
-    frame(dt: number, body: { x: number; y: number; yaw: number }, free: boolean, walkerGroup: THREE.Object3D) {
+     *  where physics has it, and the person can't get more than 15 cm ahead of it (a heavy chair holds them back).
+     *  `run` (default: free) steps the mat without that: autoplay's walker stays on its route and passes furniture as
+     *  before, but the mat can still slide or fold under it, and the next lap meets the fold. */
+    frame(dt: number, body: { x: number; y: number; yaw: number }, free: boolean, walkerGroup: THREE.Object3D, run = free) {
       target = { x: body.x, y: body.y, yaw: body.yaw };
       acc += dt;
-      // physics only while the person walks: autoplay follows a planned route, and a jump (setFree, a new route) teleports the walker
-      if (!free) acc = 0;
-      else if (ready && !busy) { busy = true; worker.postMessage({ type: 'step', dt: Math.min(acc, 0.1), target }); acc = 0; }
+      // a jump (setFree, a new route, autoplay's loop back to the start) teleports the walker in the worker
+      if (!run) acc = 0;
+      else if (ready && !busy) { busy = true; worker.postMessage({ type: 'step', dt: Math.min(acc, 0.1), target, floorOnly: !free }); acc = 0; }
       for (const [k, s] of flashing) {
         if (s - dt > 0) { flashing.set(k, s - dt); continue; }
         flashing.delete(k); D.items[k].mesh.recolor = plain.get(k)!;

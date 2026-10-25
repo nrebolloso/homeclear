@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { stamp, carvedPolys, placementOk, polyCells, edt, worldFootprint, toCell, applyIntervention, placedFixtures, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
+import { stamp, stampFolds, carvedPolys, placementOk, polyCells, edt, worldFootprint, toCell, applyIntervention, placedFixtures, type GridMeta, type Layers, type Layout, type Pose, type XY, type Intervention } from './grid.ts';
 import { buildDevice as deviceMesh, type WalkerCfg } from './walker.ts';
 import { groundDevice, footShadows, roomEnvironment } from './ground.ts';
 import { WHEELCHAIR, wheelchairPersona, ZERO_CONTACTS, ADA, SEAT_Z, WHEEL_R } from './wheelchair.ts';
@@ -63,6 +63,12 @@ import type { WorldModel } from './worldmodel.ts';
 import { setupXR, type XrEditor } from './xr.ts';
 import { plainSpot, tourStand } from './xrtour.ts';
 import { createXRComparison } from './xrcompare.ts';
+import { createPlanFix } from './planfix.ts';
+import { createGaitFit } from './gaitfit.ts';
+import { createWmGhosts } from './wmghosts.ts';
+import { createFuturesFan } from './futuresfan.ts';
+import { createRoundTrip } from './roundtrip.ts';
+import { createRugCascade, P_FOLD } from './rugcascade.ts';
 
 export async function mountViewer(runtime: { renderer: THREE.WebGLRenderer; scope: import('./lifetime.ts').Lifetime }) {
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -302,6 +308,7 @@ function setExplore(on: boolean) { explore.on = on; explore.parked = on ? { x: b
 const chairVel = { v: 0, w: 0 };   // the wheelchair's speed and turn rate (driving: see "wheelchair driving" below)
 const isChair = () => walkerCfg.device === 'wheelchair';
 let mode: 'auto' | 'free' | 'fly' = 'auto', autoS = 0, autoPause = 0;
+const trip = createRoundTrip();   // round-trip autoplay (roundtrip.ts): the route backwards, then as planned
 let companion: ReturnType<typeof createCompanion> | null = null;
 let routePaused = false, routeSpeed = 1, frontendVR: ReturnType<typeof createFrontendXR> | null = null, xrFollowRoute = false;
 
@@ -331,13 +338,14 @@ runtime.scope.own(() => { worker.terminate(); renderer.setAnimationLoop(null); }
 function replanRoute(k: number) {
   if (game.remoteSession && !game.applyingRemote) return game.sessionLink.request('selectRoute', [k]);
 
-  selRoute = k; autoS = 0;
+  selRoute = k; autoS = 0; trip.reset();
   showPhysics();
-  return replan().then(ms => { if (!renderer.xr.isPresenting && !current?.error) Object.assign(body, routePose(0, 0, Infinity)); return ms; });
+  return replan().then(ms => { if (!renderer.xr.isPresenting && !current?.error) Object.assign(body, trip.leg() === 'in' ? routePose(0, 0, Infinity, trip.inbound(current!.xy)) : routePose(0, 0, Infinity)); return ms; });
 }
 async function replan(): Promise<number> {
   const t = performance.now();
   L = stamp(g, base, objs, layout.poses, layout.flattened, carvedPolys(layout));
+  stampFolds(g, L.bump, layout.folds);
   updateHeights();
   const id = seq + 1;
   latestEval = id;
@@ -407,7 +415,7 @@ function renderPanels() {
     (q.error ? '<span class="delta-bad">no route</span>' : `<span class="measured">${fmt(q.per_month)}</span><span class="dbg"> (${fmt(q.lo)}–${fmt(q.hi)})</span>`) + '</li>').join('');
   $('risk').innerHTML = r.error ? `<span class="delta-bad">no route for this walker</span><ul>${perRoute}</ul>` :
     `<div class="big measured">${fmt(r.per_month)}</div><div class="range dbg">likely ${fmt(r.per_month_lo)}–${fmt(r.per_month_hi)}</div>` +
-    `expected toe contacts / month, all routes (${risk.rollouts} simulated trips per route; steps: ${persona.step_model === 'world' ? 'world model (heels + walker)' : persona.step_model === 'learned' ? 'learned model' : 'hand rule'})` +
+    `expected toe catches / month, all routes (${risk.rollouts} simulated trips per route; steps: ${persona.step_model === 'world' ? 'world model (heels + walker)' : persona.step_model === 'learned' ? 'learned model' : 'hand rule'})` +
     `<span class="dbg"> range = measured height error ±${(100 * sc.hazard_rules.margin_m.height).toFixed(1)} cm + simulation noise</span>` +
     (r.hand ? `<div class="range">hand-rule baseline on the same route: ${fmt(r.hand.per_month)}</div>` : '') +
     `<ul class="routes">${perRoute}</ul>` +
@@ -873,7 +881,7 @@ async function reimagineRoom() {
   const better = (o: any, b: any) => o.score < b.score - 1e-9 || (o.score <= b.score + 1e-9 && o.actions.length < b.actions.length);
   const best = suggestions.reduce((b, o, n) => (better(o, suggestions[b]) ? n : b), 0);
   if (!suggestions[best].actions.length)
-    return why(`No change earns its place: ${fmt(current?.per_month ?? 0)} toe contacts/month already, and no move or fix lowers it or clears a failed check.`);
+    return why(`No change earns its place: ${fmt(current?.per_month ?? 0)} toe catches/month already, and no move or fix lowers it or clears a failed check.`);
   await applyOption(best);
   return reim.changes();
 }
@@ -889,6 +897,26 @@ onSelect = k => reim.selectChange(k);
 game.reimagine = { run: reimagineRoom, setT: reim.setT, overlay: reim.overlay, proposedShapes: reim.proposedShapes, delta: reim.delta, t: reim.t, play: reim.play, playing: reim.playing, refresh: refreshReimagine,
   changes: reim.changes, resolved: reim.resolved, undo: (n: number) => undoReimagined(reim.changes()[n]),
   pose: (name: string) => { const gr = items[objs.findIndex(o => o.name === name)].group; return { x: gr.position.x, y: gr.position.y, yaw: gr.rotation.z, visible: gr.visible }; } };
+
+// ---------- kitchen planner (planfix.ts, planworker.ts): the B200 layout search replayed; live critic search from the judge's layout ----------
+const planfix = createPlanFix({ run: RUN, scene, init: () => init, base: original, walker: () => walkerCfg, layout: () => layout,
+  show: lay => { layout = lay; syncObjects(); },   // gliding: no re-plan per frame
+  commit: (lay, ids) => { layout = lay; applied = ids; syncObjects(); return replan(); } });
+$('pfplay').onclick = () => planfix.play();
+$('pflive').onclick = () => planfix.improve();
+game.planfix = planfix;
+// ---------- gait personalization (gaitfit.ts): a per-person gait embedding fitted from walker + head; "Re-plan for me" ----------
+const gait = createGaitFit({ scene, walker: () => walkerCfg, replan: (wm, who, pop) => planfix.replanFor(wm, who, 3000, pop) });
+$('gfplay').onclick = () => gait.play(+($('gfspeed') as HTMLSelectElement).value);
+$('gfreplan').onclick = () => gait.replan();
+game.gait = gait;   // VR: feed game.gait.observe() per heel strike, hang game.gait.panel / show game.gait.ghost (HANDOFF_GAIT.md)
+// ---------- world model in the kitchen (wmghosts.ts): two gait styles life-size, futures fan, predicted self, a month of trips ----------
+const wmg = createWmGhosts({ scene, walker: () => walkerCfg, planfix, view: () => game.setFly(-0.7, -2.3, 2.3, 55, -36) });
+$('wgstyles').onclick = () => wmg.twoStyles();
+$('wgstyle').onchange = () => wmg.twoStyles();
+$('wgmonth').onclick = () => wmg.month();
+$('wgstop').onclick = () => wmg.stop();
+game.wmghosts = wmg;
 
 // ---------- stairs (stairs.ts, stairs3d.ts): measured against code and this patient; rail, step lights, a walker at the top ----------
 // From config game.stairs (stage 12) and/or marked here with three clicks and measured from the splat (kept per scene in
@@ -1606,12 +1634,32 @@ const live: LivePhys | null = PARAMS.has('nophys') ? null : createLivePhys({ bas
   walker: () => walkerCfg, layout: () => layout, overlap: overlapOk.flatMap((s, k) => [...s].filter(n => n > k).map(n => [k, n] as [number, number])),
   hold: k => reim.t() < 1 || ((tc as any).dragging && k === selected) || grabbing?.k === k, log: $('physevents'), sampledEl: $('physsampled'),
   settled: moves => {   // the layout follows where the walker left things (no yaw snap: it lies as it fell)
-    layout = { ...layout, poses: layout.poses.map((q, n) => { const m = moves.find(v => v.k === n); return m ? { ...m.pose, removed: q.removed } : q; }) };
+    layout = { ...layout, poses: layout.poses.map((q, n) => { const m = moves.find(v => v.k === n); return m ? { ...q, ...m.pose } : q; }) };   // keeps removed / taped
     syncObjects(); replan();
   } });
 $('physresample').onclick = () => live?.resample();
 if (!live) $('physpanel').hidden = true;
 game.livephys = live;
+// ---------- live futures fan (futuresfan.ts, futures.ts in fanworker.ts): ~30 imagined futures from where the walker is now ----------
+let fanFor: unknown = null, fanSc: any = null;
+const fanFan = createFuturesFan({ scene, walker: () => walkerCfg, worldModel,
+  fanScene: () => (fanFor === persona ? fanSc : (fanFor = persona, fanSc = { g, base, est, objects: objs, persona, risk, rules: sc.hazard_rules, plan: init.plan })),
+  body: () => explore.parked ?? body, route: () => (current && !current.error ? (mode === 'auto' ? trip.route(current.xy) : current.xy) : null), fold: () => live?.fold() ?? layout.folds?.[0] ?? null,
+  layout: () => ((tc as any).dragging && selected >= 0 ? { ...layout, poses: layout.poses.map((p, k) => (k === selected ? poseOf(k) : p)) } : layout),   // live while dragging
+  night: () => routes[selRoute].night, fps: () => game.fps });
+$('fanon').onchange = e => fanFan.set((e.target as HTMLInputElement).checked);
+$('fanmodel').onchange = e => fanFan.setModel((e.target as HTMLSelectElement).value as 'learned' | 'hand');
+$('fanstyle').onchange = e => fanFan.setStyle((e.target as HTMLSelectElement).value);
+$('fanlift').onchange = e => fanFan.setLift((e.target as HTMLSelectElement).value as 'average' | 'shuffler');
+game.fan = { ...fanFan, tapeMat: () => tapeObject('mat') };   // VR: bind a button to game.fan.set(!game.fan.on())
+/** tape an object's edges down: the one "taped" rule (grid.ts TAPED_EDGE_M edge, no slide or fold), as the planner's mat 'taped' */
+function tapeObject(name: string) {
+  const k = objs.findIndex(o => o.name === name);
+  // taping the rug also flattens its fold (rugcascade.ts: a taped rug never folds)
+  layout = { ...layout, poses: layout.poses.map((p, i) => (i === k ? { ...p, taped: true } : p)), ...(layout.folds?.length ? { folds: [] } : {}) };
+  syncObjects();
+  return replan();
+}
 
 // ---------- what leaves the game: OT report, family fix card ----------
 /** Every change in the layout on screen, in order, with what it takes and where (for the card's numbered pins). */
@@ -1643,6 +1691,7 @@ function describeChanges(): ActionOut[] {
   objs.forEach((o, k) => {   // drags and deletes done by hand
     const p = layout.poses[k], q = original[k];
     if (covered.has(o.name)) return;
+    if (p.taped && !p.removed) out.push({ label: `Tape the ${o.name}'s edges down (~1.5 mm edge left)`, product: 'double-sided carpet tape', at: [p.x, p.y] });
     if (p.removed) { const c = removeCost(o); out.push({ label: `Take the ${o.name} out of the room`, cost_usd: c.usd, minutes: c.minutes, at: [q.x, q.y] }); }
     else if (Math.hypot(p.x - q.x, p.y - q.y) > 0.02 || Math.abs(p.yaw - q.yaw) > 0.01) {
       const c = moveCost(o, q, p);
@@ -1666,6 +1715,7 @@ async function openReport() {
     return { label: f.label, error: f.error, reduction: Math.max(0, f.reduction), share: before > 0 ? f.reduction / before : 0, clearance_gain_m: f.clearance_gain_m,
       cost_usd: iv?.cost_usd, minutes: iv?.minutes, effort: iv?.effort, product: iv?.product };
   }).sort((a: any, b: any) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.clearance_gain_m - a.clearance_gain_m) || ((a.cost_usd ?? 0) - (b.cost_usd ?? 0)));
+  const planned = await planfix.rankedFixes();   // kitchen planner scenes: its layout's changes, ranked by real risk removed (planfix.ts)
   const payload: ReportPayload = {
     scene: RUN, created: new Date().toISOString(), synthetic: (sc.synthetic ?? []).length > 0 || /synth/.test(RUN), scale_note: sc.scale_note,
     route: routes[selRoute].name,
@@ -1676,7 +1726,8 @@ async function openReport() {
     margins: sc.hazard_rules.margin_m, actions: describeChanges(), suggestions,
     reason: hzFile.hazards.filter(h => h.source === 'cosmos_reason'),
     clips: (game.clips ?? []).filter((k: any) => k.layout_key === layoutKey(objs, layout)).map((k: any) => k.title ?? k.file),
-    topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85), ranked_fixes,
+    topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85), ranked_fixes: planned ?? ranked_fixes,
+    ranked_by: planned ? 'kitchen planner (B200 layout search + critic): each change alone on this layout, by toe catches/month saved (the same calculation as above), ties broken by the search objective (toe catches + simulated snags + brushes)' : undefined,
   };
   sessionStorage.setItem(`report:${RUN}`, JSON.stringify(payload));
   if (!w) return window.open(`report.html?scene=${encodeURIComponent(RUN)}`, '_blank');
@@ -1780,7 +1831,7 @@ async function lightPath() {
   syncObjects(); await replan(); drawStairs();
   const pct = before > 0 && current ? Math.round((100 * (before - current.per_month)) / before) : 0;
   return { added: fresh.length, note: `${fresh.length} motion nightlight${fresh.length === 1 ? '' : 's'} added along the ${routes[selRoute].name}` +
-    (pct > 0 ? `: simulated toe contacts down ${pct}%` : '') + ` (darkness raises contacts ${risk.dark_contact_multiplier}×, an assumed number). Designed, not built.` };
+    (pct > 0 ? `: simulated toe catches down ${pct}%` : '') + ` (darkness raises contacts ${risk.dark_contact_multiplier}×, an assumed number). Designed, not built.` };
 }
 async function clearPathLights() {
   const ids = new Set(pathLightIvs.map(iv => iv.id));
@@ -1807,8 +1858,8 @@ function drawNights() {   // 30 nights at the current rate; the selected night s
   drawTimeline($<HTMLCanvasElement>('timeline'), data, nightSel);
   const bad = data.filter(d => d.count).length;
   $('nightinfo').textContent = nightSel >= 0
-    ? `night ${nightSel + 1}: ${data[nightSel].count ? data[nightSel].at.join(', ') : 'no toe contact'}`
-    : `${bad} of 30 nights with a toe contact (one draw at ${current.per_month.toFixed(1)}/month)`;
+    ? `night ${nightSel + 1}: ${data[nightSel].count ? data[nightSel].at.join(', ') : 'no toe catch'}`
+    : `${bad} of 30 nights with a toe catch (one draw at ${current.per_month.toFixed(1)}/month)`;
 }
 $<HTMLInputElement>('nightscrub').oninput = e => { nightSel = +(e.target as HTMLInputElement).value - 1; drawNights(); };
 /** Swap who walks: device mesh + footprint, gait, planner penalties, default eyes; then re-plan everything. */
@@ -1860,9 +1911,10 @@ async function cyclePersona() {
 }
 { // route selector: the panels, autoplay and the Cosmos export follow the selected route; the risk total covers all of them
   const sel = $<HTMLSelectElement>('routesel');
-  sel.innerHTML = routes.map((r, k) => `<option value="${k}">${r.name}${r.night ? ' (night)' : ''}</option>`).join('');
-  sel.onchange = () => replanRoute(+sel.value);
-  sel.disabled = routes.length < 2;
+  sel.innerHTML = routes.map((r, k) => `<option value="${k}">${r.name}${r.night ? ' (night)' : ''}</option>`).join('')
+    + routes.map((r, k) => `<option value="rt${k}">${r.name}, round trip: back to its start and out again</option>`).join('');
+  sel.onchange = () => { trip.set(sel.value.startsWith('rt')); replanRoute(+sel.value.replace('rt', '')); };
+  game.roundTrip = { set: (on: boolean) => { sel.value = `${on ? 'rt' : ''}${selRoute}`; trip.set(on); return replanRoute(selRoute); }, on: trip.on, leg: trip.leg };
 }
 $('imagfill').onchange = () => syncObjects();
 $('imagceil').onchange = () => { if (ceiling) ceiling.visible = $<HTMLInputElement>('imagceil').checked; };
@@ -2111,7 +2163,7 @@ function setWalk(m: 'auto' | 'free' | 'fly') {
   if (m !== 'fly') body.pitch = THREE.MathUtils.clamp(body.pitch, -1.2, 0.6);
   mode = m;
   $('autoplay').classList.toggle('on', m === 'auto'); $('free').classList.toggle('on', m === 'free'); $('fly').classList.toggle('on', m === 'fly');
-  if (m === 'auto') { autoS = 0; autoPause = 0; setExplore(false); }
+  if (m === 'auto') { autoS = 0; autoPause = 0; trip.reset(); setExplore(false); }
   if (m !== 'free') { headTurn.yaw = 0; chairVel.v = chairVel.w = 0; }   // the head is the walker's in route-follow and fly
 }
 $('autoplay').onclick = () => setWalk('auto');
@@ -2176,11 +2228,10 @@ function canStand(b: { x: number; y: number; yaw: number }) {
   return walker.probes.every(p => { const k = cellAt(...walkerPoint(b, p)); return S.floor[k] && !S.obst[k]; });
 }
 /** Route point + heading at arc length s (the route is the walker frame's centre). */
-function routeAt(s: number): [number, number, number] {
-  const xy = current!.xy;
+function routeAt(s: number, xy = current!.xy, S = routeS): [number, number, number] {
   let k = 1;
-  while (k < routeS.length - 1 && routeS[k] < s) k++;
-  const f = THREE.MathUtils.clamp((s - routeS[k - 1]) / (routeS[k] - routeS[k - 1] || 1), 0, 1);
+  while (k < S.length - 1 && S[k] < s) k++;
+  const f = THREE.MathUtils.clamp((s - S[k - 1]) / (S[k] - S[k - 1] || 1), 0, 1);
   return [xy[k - 1][0] + f * (xy[k][0] - xy[k - 1][0]), xy[k - 1][1] + f * (xy[k][1] - xy[k - 1][1]), 0];
 }
 const SPEED = 0.45;   // m/s, also the Cosmos export's pace
@@ -2194,8 +2245,14 @@ function worldStep(dt: number): boolean {
   const W = gh.walker, d = [0];
   for (let k = 1; k < W.length; k++) d.push(d[k - 1] + Math.hypot(W[k][0] - W[k - 1][0], W[k][1] - W[k - 1][1]));
   const Ls = d[d.length - 1];
-  if (autoS >= Ls) { autoPause += dt; if (autoPause > 2) { autoS = 0; autoPause = 0; } }
-  else autoS = Math.min(Ls, autoS + SPEED * dt);
+  if (autoS >= Ls) { autoPause += dt; const turned = !trip.on() || turnToNext(dt); if (autoPause > 2 && turned) nextLeg(); return true; }
+  if (autoS < 0) {   // round trip: the route up to where ghost 0 starts (its first steps are the rollout's warm-up, not replayed)
+    autoS = Math.min(0, autoS + SPEED * dt);
+    Object.assign(body, routePose(nearestS(W[0][0], W[0][1]) + autoS, body.yaw, dt));
+    feet.visible = false;
+    return true;
+  }
+  autoS = Math.min(Ls, autoS + SPEED * dt);
   let k = 1;
   while (k < d.length - 1 && d[k] < autoS) k++;
   const f = THREE.MathUtils.clamp((autoS - d[k - 1]) / (d[k] - d[k - 1] || 1), 0, 1), a = W[k - 1], b = W[k];
@@ -2215,17 +2272,36 @@ function worldStep(dt: number): boolean {
 function autoStep(dt: number) {
   dt = routePaused ? 0 : dt * routeSpeed;
   if (!current || current.error || routeS.length < 2) return;
-  if (persona.step_model === 'world' && worldStep(dt)) return;
-  const Ls = routeS[routeS.length - 1];
-  if (autoS >= Ls) { autoPause += dt; if (autoPause > 2) { autoS = 0; autoPause = 0; } }
-  else autoS = Math.min(Ls, autoS + SPEED * dt);
-  const pose = routePose(autoS, body.yaw, dt);
-  Object.assign(body, pose);
+  feet.visible = trip.leg() === 'out';
+  const path = trip.leg() === 'in' ? trip.inbound(current.xy) : undefined;   // round trip, inbound: the route backwards
+  if (!path && persona.step_model === 'world' && worldStep(dt)) return;
+  const Ls = (path?.s ?? routeS).at(-1)!;
+  if (autoS >= Ls) { autoPause += dt; const turned = !trip.on() || turnToNext(dt); if (autoPause > 2 && turned) nextLeg(); return; }
+  autoS = Math.min(Ls, autoS + SPEED * dt);
+  Object.assign(body, routePose(autoS, body.yaw, dt, path));
 }
-/** Body pose that puts the walker frame centre on the route at s; heading eases toward the route ahead. */
-function routePose(s: number, prevYaw: number, dt: number) {
-  const [x, y] = routeAt(s), Ls = routeS[routeS.length - 1];
-  const [ax, ay] = routeAt(Math.min(Ls, s + 0.35)), [bx, by] = routeAt(Math.max(0, s - 0.1));
+function nextLeg() {
+  const gh = current?.ghosts[0]?.walker;
+  autoPause = 0; trip.next();
+  autoS = trip.on() && trip.leg() === 'out' && persona.step_model === 'world' && gh && gh.length > 1 ? -nearestS(gh[0][0], gh[0][1]) : 0;
+}
+/** round trip, pausing at a leg's end: person and walker turn about the point between them (≤ 115°/s) toward the next leg
+ *  while that point moves (≤ 0.3 m/s) onto the next leg's start; true once there. Turning 180° swings the walker to the
+ *  person's other side, and the world model's trip ends a little past the planned goal. */
+function turnToNext(dt: number) {
+  const to = routePose(0, 0, Infinity, trip.leg() === 'out' ? trip.inbound(current!.xy) : undefined), r = centreOffset / 2;
+  const c = walkerPoint(body, [r, 0]), tc = walkerPoint(to, [r, 0]), dy = Math.atan2(Math.sin(to.yaw - body.yaw), Math.cos(to.yaw - body.yaw));
+  const d = Math.hypot(tc[0] - c[0], tc[1] - c[1]), f = d > 1e-6 ? Math.min(1, 0.3 * dt / d) : 1;
+  const yaw = body.yaw + THREE.MathUtils.clamp(dy, -2 * dt, 2 * dt), x = c[0] + (tc[0] - c[0]) * f, y = c[1] + (tc[1] - c[1]) * f;
+  Object.assign(body, { x: x - Math.cos(yaw) * r, y: y - Math.sin(yaw) * r, yaw });
+  return f === 1 && Math.abs(dy) <= 2 * dt;
+}
+/** Body pose that puts the walker frame centre on the route at s (or on `path`: the round trip's inbound leg); heading
+ *  eases toward the route ahead. */
+function routePose(s: number, prevYaw: number, dt: number, path?: { xy: XY[]; s: number[] }) {
+  const at = (v: number) => (path ? routeAt(v, path.xy, path.s) : routeAt(v)), Ls = (path?.s ?? routeS).at(-1)!;
+  const [x, y] = at(s);
+  const [ax, ay] = at(Math.min(Ls, s + 0.35)), [bx, by] = at(Math.max(0, s - 0.1));
   const want = Math.atan2(ay - by, ax - bx);
   const yaw = dt === Infinity ? want : prevYaw + Math.atan2(Math.sin(want - prevYaw), Math.cos(want - prevYaw)) * Math.min(1, dt * 4);
   return { x: x - Math.cos(yaw) * centreOffset, y: y - Math.sin(yaw) * centreOffset, yaw };
@@ -2246,6 +2322,31 @@ function driveFree(dt: number) {
 }
 onWindow('blur', () => keys.clear());   // a key released in another window must not leave the chair rolling
 
+// ---------- rug fold cascade in autoplay (rugcascade.ts): a corner folded on one pass is a taller bump on the next ----------
+// on with ?rugfold=1 or game.rugFolds.set(true); off by default so the e2e numbers stay fixed
+const rugCascade = createRugCascade(objs.flatMap((o, k) => (o.kind === 'rug' ? [{ index: k, poly: (p: Pose) => worldFootprint(o, p) }] : [])));
+const foldMark = new THREE.Mesh(new THREE.CircleGeometry(1, 32), new THREE.MeshBasicMaterial({ color: 0xff3030, transparent: true, opacity: 0.55, depthWrite: false }));
+foldMark.visible = false; foldMark.renderOrder = 2; scene.add(foldMark);
+let rugOn = PARAMS.has('rugfold'), atEnd = false;
+function rugLap() {   // a pass ends when autoplay's end pause gives way to the restart
+  if (autoPause > 0) { atEnd = true; return; }
+  if (!atEnd || !rugOn || !current || current.error) return;
+  atEnd = false;
+  const next = rugCascade.lap(current.xy, layout);
+  if (!next) return;
+  layout = next;
+  replan().then(() => {
+    const f = layout.folds?.[0];
+    if (f) $('status').textContent += ` · rug corner folded on pass ${rugCascade.passes} (P ${P_FOLD.toFixed(2)} per edge crossing, measured; lift ${(f.lift_m * 100).toFixed(1)} cm, simulated)`;
+  });
+}
+function drawFold() {
+  const f = layout.folds?.[0];
+  foldMark.visible = !!f;
+  if (f) { foldMark.position.set(f.corner[0], f.corner[1], f.lift_m + 0.01); foldMark.scale.setScalar(f.size_m); }
+}
+game.rugFolds = { set(on: boolean) { rugOn = on; }, on: () => rugOn, passes: () => rugCascade.passes, folds: () => layout.folds ?? [],
+  clear() { layout = { ...layout, folds: [] }; rugCascade.reset(); return replan(); } };
 function freeStep(dt: number) {
   if (isChair()) return driveFree(dt);
   const k = (c: string) => keys.has(c);
@@ -2297,9 +2398,9 @@ function liveChecks(t: number) {
   gapTag.visible = state.red;
   if (state.red) { gapTag.position.set(at[0], at[1], walkerCfg.handle_height_m + 0.1); gapTag.element.textContent = `${Math.max(0, gap * 100).toFixed(0)} cm gap`; }
   // upcoming hazards (next 2.5 m of the route) glow
-  const sNow = mode === 'auto' ? autoS : nearestS(...walkerPoint(wb, [centreOffset, 0]));
+  const inb = mode === 'auto' && trip.leg() === 'in', sNow = mode === 'auto' && !inb ? autoS : nearestS(...walkerPoint(wb, [centreOffset, 0]));
   for (const ring of hazardGroup.children as THREE.Mesh[]) {
-    const ahead = ring.userData.s - sNow, mat = ring.material as THREE.MeshBasicMaterial;
+    const ahead = (ring.userData.s - sNow) * (inb ? -1 : 1), mat = ring.material as THREE.MeshBasicMaterial;
     const glow = ahead > -0.3 && ahead < 2.5;
     if (perfOn && ring.children[0]) ring.children[0].visible = glow;   // performance mode: a label only for the hazards just ahead
     mat.opacity = glow ? 0.55 + 0.45 * Math.sin(t * 8) : 0.35;
@@ -2392,14 +2493,17 @@ function step(dt: number, t: number) {
   reach3d.tick(dt);   // the reach map's wave (desktop and headset)
   if (xr.presenting()) return xrFrame(dt, t);
   if (game.remoteSession) { reim.update(dt); companion?.frame(t * 1000); return; }
-  if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
+  if (mode === 'auto') { autoStep(dt); rugLap(); } else if (mode === 'fly') flyStep(dt); else freeStep(dt);
+  drawFold();
   tourStep(dt);
+  wmg.update(dt);
+  fanFan.update(dt);
   const wb = walkerPose();
   walker.group.position.set(wb.x, wb.y, 0);
   walker.group.rotation.z = wb.yaw;
   reim.update(dt);
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
-  if (mode !== 'fly') live?.frame(dt, wb, mode === 'free' && !explore.on, walker.group);
+  if (mode !== 'fly') live?.frame(dt, wb, mode === 'free' && !explore.on, walker.group, !explore.on);
   labelStep(); movementVisuals();
   camTweenStep(dt);
   mk3d.update(camera, t);
@@ -2409,7 +2513,7 @@ function step(dt: number, t: number) {
     camera.lookAt(fly.x + Math.cos(body.yaw) * c, fly.y + Math.sin(body.yaw) * c, fly.z + Math.sin(body.pitch));
   } else placeCamera(camera, body);
   markStep(); grabStep();
-  const showMan = view.third && mode === 'auto' && heroSteps.length > 0;
+  const showMan = view.third && mode === 'auto' && heroSteps.length > 0 && trip.leg() === 'out';   // the inbound leg isn't simulated: no hero steps
   const seatedMan = isChair() && mode === 'free' && !explore.on;   // driving: the person sits in the chair; first person has no head in the way
   mannequin.group.visible = showMan || seatedMan;
   mannequin.head.visible = !seatedMan || view.third;
@@ -2540,6 +2644,7 @@ function xrFrame(dt: number, t: number) {
   if (!comparison.previewing()) live?.frame(dt, wb, false, walker.group);
   pulseSpots(t);
   reim.update(dt);
+  fanFan.update(dt);
   comparison.step(dt);
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
   if (!comparison.previewing()) labelStep();
@@ -2587,7 +2692,7 @@ Object.assign(game, {
   setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); headTurn.yaw = 0; chairVel.v = chairVel.w = 0; Object.assign(body, { x, y, yaw }); },
   explore: () => ({ on: explore.on, parked: explore.parked && { ...explore.parked } }),
   setFly(x: number, y: number, z: number, yawDeg: number, pitchDeg: number) { setWalk('fly'); Object.assign(fly, { x, y, z }); body.yaw = (yawDeg * Math.PI) / 180; body.pitch = (pitchDeg * Math.PI) / 180; },
-  setThird(on: boolean) { const h = $<HTMLInputElement>('third'); h.checked = on; h.dispatchEvent(new Event('change')); },
+  setThird(on: boolean, back?: number, up?: number) { const h = $<HTMLInputElement>('third'); h.checked = on; h.dispatchEvent(new Event('change')); if (on && back) Object.assign(view, { back, up: up ?? view.up }); },   // back/up: recordings where 1.8 m behind is inside a wall
   layout: () => layout, current: () => current, routes,
   spots: () => spotList, startTour, endTour, tourState: () => ({ ...tour }), replayState: () => ({ on: replay.on, t: replay.t }), startReplay, stopReplay, showPhysics,
   setPersona, physicsPass, personas: () => Object.keys(personas), persona: () => personaKey, suggest, applyOption, setFillBackend,
@@ -2664,7 +2769,7 @@ const frontendAdapter: FrontendAdapter = {
     reim.selectChange(item.object, item.change?.iv);
   },
   leaveInspect() { if (renderer.xr.isPresenting && !game.xrUIAction || game.remoteSession) return; if (inspectReturn) { const back = inspectReturn; Object.assign(body, back.body); Object.assign(fly, back.fly); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.restoreRig(back.rig)); setWalk(back.mode); inspectReturn = null; } },
-  pause() { routePaused = !routePaused; }, restart() { autoS = 0; autoPause = 0; routePaused = false; }, speed(v) { routeSpeed = v; },
+  pause() { routePaused = !routePaused; }, restart() { autoS = 0; autoPause = 0; trip.reset(); routePaused = false; }, speed(v) { routeSpeed = v; },
   compare(t) { reim.setT(t); }, animate() { reim.play(); },
   suggest: () => game.remoteSession ? game.suggest() : suggest(), async apply(index) { stairPhase = 'proposed'; await (game.remoteSession ? game.applyPreparedOption(index) : applyOption(index)); setWalk('free'); reim.setT(1); },   // a previewed proposal: x-ray until accepted or inspected
   commit() { commitProposal(); },

@@ -129,7 +129,8 @@ export function createWorld(I: WorldInit) {
     const p = I.poses[k], mat = o.kind === 'rug';
     let z5 = 0;
     if (!mat) { const zs: number[] = []; for (let i = 2; i < o.points.length; i += 3) zs.push(o.points[i]); zs.sort((a, b) => a - b); z5 = zs[Math.floor(zs.length * 0.05)] ?? 0; }
-    const fixed = !mat && (o.kind === 'door' || z5 > 0.15);   // a hinged leaf can't slide (swing not modelled), or stands on a cabinet out of reach: kept still
+    // a hinged leaf can't slide (swing not modelled), stands on a cabinet out of reach, or is a mat taped down (grid.ts TAPED_EDGE_M): kept still
+    const fixed = mat ? !!p.taped : o.kind === 'door' || z5 > 0.15;
     const rb = world.createRigidBody((fixed ? RAPIER.RigidBodyDesc.fixed() : RAPIER.RigidBodyDesc.dynamic().setSleeping(true).setLinearDamping(0.2).setAngularDamping(0.5))
       .setTranslation(p.x, p.y, 0).setRotation(yawQ(p.yaw)).setEnabled(!p.removed));
     const s: Record<string, number> = {};
@@ -156,9 +157,9 @@ export function createWorld(I: WorldInit) {
       add(RAPIER.ColliderDesc.convexHull(prism(poly, 0, t / 2))!.setMass(s.mass_kg).setFriction(s.floor_friction).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min)
         .setCollisionGroups(grp(MATBOT, FLOOR | WALL)));
       add(RAPIER.ColliderDesc.convexHull(prism(poly, t / 2, t))!.setMass(0.001).setFriction(1).setCollisionGroups(grp(MATTOP, OBJ | WALKER)));
-      const body: Body = { k, o, rb, rest: { ...p }, disturbed: 0, announced: false, tipped: false, mat: true, fixed: false, still: 0 };
+      const body: Body = { k, o, rb, rest: { ...p }, disturbed: 0, announced: false, tipped: false, mat: true, fixed, still: 0 };
       bodies.push(body);
-      if (tri && curl) {
+      if (tri && curl && !fixed) {
         const [A, C, B] = tri, mid: [number, number, number] = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2, t];
         const ol = Math.hypot(C[0] - mid[0], C[1] - mid[1]), out: [number, number, number] = [(C[0] - mid[0]) / ol, (C[1] - mid[1]) / ol, 0];
         const axis = { x: out[1], y: -out[0], z: 0 };   // axis x out = +z: a positive angle lifts the corner
@@ -229,13 +230,15 @@ export function createWorld(I: WorldInit) {
   const hooks: RAPIER.PhysicsHooks = {
     filterContactPair(c1, c2) {
       const a = owner.get(c1), b = owner.get(c2);
+      // autoplay (floorOnly): the scripted walker passes furniture as before; only the mat (and its flap) feels it
+      if (floorOnly && (a === -1 || b === -1) && bodies.some(B => B.k === (a === -1 ? b : a) && !B.mat)) return null;
       if (a === undefined || b === undefined || a < 0 || b < 0 || a === b) return RAPIER.SolverFlags.COMPUTE_IMPULSE;
       return ignore.has(`${Math.min(a, b)},${Math.max(a, b)}`) ? null : RAPIER.SolverFlags.COMPUTE_IMPULSE;
     },
     filterIntersectionPair: () => true,
   };
 
-  let t = 0, acc = 0, lastBump = new Map<number, number>();
+  let t = 0, acc = 0, lastBump = new Map<number, number>(), floorOnly = false;
   const flapAngle = () => {
     if (!flap) return 0;
     const o = rot(flap.rb.rotation(), flap.out), m = rot(flap.mat.rb.rotation(), flap.out), up = rot(flap.mat.rb.rotation(), [0, 0, 1]);
@@ -260,8 +263,10 @@ export function createWorld(I: WorldInit) {
         if (B.mat && flap) { flap.rb.setEnabled(false); flap = null; }   // a moved mat lies flat where it is put (no corner flap)
       }
     },
-    /** Advance dt seconds with the person pushing the walker toward `target` (body centre + heading). */
-    step(dt: number, target: { x: number; y: number; yaw: number }) {
+    /** Advance dt seconds with the person pushing the walker toward `target` (body centre + heading). floorOnly: the walker
+     *  touches only the mat (autoplay: a pushed chair would block the planned route). */
+    step(dt: number, target: { x: number; y: number; yaw: number }, floorOnly_ = false) {
+      floorOnly = floorOnly_;
       const out: PhysEvent[] = [], settled: { k: number; pose: Pose; moved_m: number; tipped: boolean }[] = [];
       acc = Math.min(acc + dt, 0.1);   // a slow frame catches up, up to 0.1 s (below that the walk runs in slow motion)
       const wp = walker.translation();

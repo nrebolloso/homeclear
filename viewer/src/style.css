@@ -49,3 +49,7 @@ select { max-width: 100%; background: #1b1f24; color: var(--fg); border: 1px sol
 .demo label:has(#topdevice), .demo label:has(#strongside), .demo .row:has(#railleft), .demo #stairstatus,
 .demo h2:has(+ #markdoor), .demo #markdoor, .demo #cleardoors, .demo #copydoors, .demo #editdoors, .demo #doorstatus,
 .demo label:has(#prompt), .demo #export, .demo label:has(#hero), .demo #exportstatus, .demo #physpanel { display: none !important; }
+/* "Re-plan for me" hidden in demo mode: across 15 gait embeddings the plan never changes (planner/persona_effect.py) */
+.demo #gfreplan { display: none !important; }
+/* the gait-style dropdown hidden in demo mode: across the styles the fan barely changes; foot lift (#fanlift) is the persona that does */
+.demo #fanstyle { display: none !important; }
