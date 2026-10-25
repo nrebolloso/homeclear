@@ -13,7 +13,7 @@ export interface PlannerCfg {
   mat: string; cord_box_xy: [XY, XY]; nightlight: string;
   zones: Record<string, { box_xy: [XY, XY]; source: string }>;
   outlets: Record<string, { xy: XY; source: string }>;
-  options: { mat: Record<string, Opt>; cord: Record<string, Opt>; nightlight: Record<string, Opt> };
+  options: { mat: Record<string, Opt>; cord: Record<string, Opt>; nightlight: Record<string, Opt>; walker?: Record<string, Opt> };
   brush_m: number;
 }
 export type MatState = 'present' | 'taped' | 'moved' | 'removed';
@@ -22,6 +22,8 @@ export type CordState = 'present' | 'taped' | 'rerouted';
 export interface PlanLayout {
   chairs: Record<string, [number, number, number]>; mat: MatState; mat_at?: [number, number, number];
   cord: CordState; nightlight: string; nightlight_at?: XY;
+  /** glide caps / tennis balls on the walker's rear legs (options.walker.caps) */
+  caps?: boolean;
 }
 export interface Item { key: string; label: string; usd: number; minutes: number; effort: number; product?: string; assumption?: string }
 export interface Cost { usd: number; minutes: number; effort: number; items: Item[] }
@@ -49,6 +51,7 @@ export function fromLayout(S: Init, cfg: PlannerCfg, base: Pose[], lay: Layout):
     mat: m.removed ? 'removed' : m.taped ? 'taped' : moved ? 'moved' : 'present', ...(moved && !m.removed ? { mat_at: [m.x, m.y, deg(m.yaw)] as [number, number, number] } : {}),
     cord: cordFlat ? 'taped' : 'present',
     nightlight: nl.removed ? 'off' : outlet ?? 'elsewhere', ...(!nl.removed && !outlet ? { nightlight_at: [nl.x, nl.y] as XY } : {}),
+    ...(lay.walker_caps ? { caps: true } : {}),
   };
 }
 
@@ -62,7 +65,7 @@ export function toLayout(S: Init, cfg: PlannerCfg, base: Pose[], pl: PlanLayout)
   else if (pl.mat === 'taped') poses[m] = { ...poses[m], taped: true };
   if (pl.nightlight === 'off') poses[nl] = { ...poses[nl], removed: true };
   else { const at = cfg.outlets[pl.nightlight]?.xy ?? pl.nightlight_at; if (at) poses[nl] = { x: at[0], y: at[1], yaw: 0 }; }
-  return { poses, flattened: pl.cord === 'present' ? [] : [cfg.cord_box_xy] };
+  return { poses, flattened: pl.cord === 'present' ? [] : [cfg.cord_box_xy], ...(pl.caps ? { walker_caps: true } : {}) };
 }
 
 /** Cells an object may stand on: static floor without walls; every object's scanned spot counts as floor (nobody
@@ -147,6 +150,7 @@ export function cost(S: Init, cfg: PlannerCfg, from: PlanLayout, pl: PlanLayout)
   }
   if (pl.cord !== from.cord && pl.cord !== 'present') items.push(opt('cord', cfg.options.cord[pl.cord], pl.cord));
   if (pl.nightlight !== from.nightlight) items.push(opt('nightlight', cfg.options.nightlight[pl.nightlight], pl.nightlight));
+  if (pl.caps && !from.caps) items.push(opt('caps', cfg.options.walker?.caps, 'caps'));
   return { usd: items.reduce((s, i) => s + i.usd, 0), minutes: items.reduce((s, i) => s + i.minutes, 0), effort: items.reduce((s, i) => s + i.effort, 0), items };
 }
 
@@ -156,6 +160,7 @@ export function changed(cfg: PlannerCfg, a: PlanLayout, b: PlanLayout): string[]
   if (a.mat !== b.mat || String(a.mat_at) !== String(b.mat_at)) out.push('mat');
   if (a.cord !== b.cord) out.push('cord');
   if (a.nightlight !== b.nightlight || String(a.nightlight_at) !== String(b.nightlight_at)) out.push('nightlight');
+  if (!!a.caps !== !!b.caps) out.push('caps');
   return out;
 }
 

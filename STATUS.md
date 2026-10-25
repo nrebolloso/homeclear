@@ -1,10 +1,50 @@
 # Status
 
-## While you were out (wm-planner, 2026-10-24 late)
-- **Done:** B200 search 47577852 (toe-catch objective, 1.5 mm taped edge, glide caps μ 0.10-0.20 ASSUMED) + critic 47577853; options checked (`planner/check_options.py`: only the mat, cord, chair5/chair8 move), published, planner.mp4 re-recorded; tests 168/168, build, run_py OK.
-- **In progress:** nothing on wm-planner; the other session in `Homeclear-main` is re-recording futures_fan.mp4 / backup on its merged main.
-- **Needs you:** BLOCKERS 17: one session should merge wm-planner's 5 new commits into main (trial merge clean, 212/212), re-record, then move demo-safe.
-- **Risks:** caps never change toe catches (they only scale mat snags) and the rug batch says caps are no fix; "least effort for 20% fewer" (effort 2) costs more than the chosen option (effort 1), which already saves 94%; the critic's MAE prints 0.0 (2-decimal rounding on a 0-1.3 scale).
+## Main: wm-planner + rug-calibration + PR #9 (VR / wheelchair / scan library) merged
+- **Merged:** wm-planner (toe-catch objective, B200 job 47577852, critic 47577853), rug-calibration (calibrated rug, fold cascade, cluster batch 47577456) and origin/main's PR #9. main.ts keeps both sides' hooks; the fan's fold is `live?.fold() ?? layout.folds?.[0] ?? null`; planfix.ts ranks "tape the mat edge" next to the search's picks; glide caps stay hidden in the viewer (friction ASSUMED).
+- **Proof:** `proof/demo/futures_fan.mp4` (49 s round trip, the mat folds on the way out and the fan turns red at the fold on the return; taping flattens it) and `proof/demo/backup_v6.mp4`.
+- **Needs you:** BLOCKERS 16-20 (a real tennis-ball pass, the rug count, IMG_6800, the effort numbers, lounge leftovers).
+- **Risks:** the sim drags where the real rug folds; caps are friction-only and assumed. In the backup the live mat slides and the view switches to "Proposed".
+
+## Glide caps friction (for the futures-fan branch)
+Glide caps / tennis balls on the rear legs = glide-rug friction **μ 0.10-0.20, ASSUMED** (PTFE-like on rug pile; not measured, no real caps pass yet). Without caps the calibrated glide-rug range is 0.35-0.9 (rug-floor 0.1-0.3). Source: `physics/rug_calib.py` `CAPS_MU`, `physics/rug_calib.json` `glide_caps_mu_assumed`; the viewer reads the ratio as `CAPS_FACTOR` (`viewer/src/rugcascade.ts`).
+
+## Rug calibration (branch `rug-calibration`, not merged to demo-safe)
+- **Cluster batch** (job 47577456, 50 tasks, 200 paired draws per arm and direction; P(fold or drag), 95% interval). Real: 8/8 disturbed (7 off, 1 onto).
+
+  | Arm | off: fold / disturbed | onto: fold / disturbed |
+  |---|---|---|
+  | calibrated (glide-rug 0.35-0.9) | 0.02 / 0.82 [0.76, 0.87] | 0.09 / 0.74 [0.68, 0.80] |
+  | glide caps (0.10-0.20, ASSUMED) | 0.17 / 0.75 [0.69, 0.81] | 0.59 / 0.77 [0.70, 0.82] |
+  | tape the edge | 0.01 / 0.01 [0.01, 0.04] | 0.03 / 0.03 [0.01, 0.06] |
+  | front wheels only | 0.00 / 0.00 [0, 0.02] | 0.01 / 0.01 [0.01, 0.04] |
+  | bare floor | 0.00 / 0.00 [0, 0.02] | 0.00 / 0.00 [0, 0.02] |
+
+  The glides disturb the rug both ways and the wheels and bare floor stay clean, as in the real takes; the sim drags where the real rug folds. Caps lower friction but not disturbance (they fold more, dragging less), so in the sim they are no fix; tape is. 7.5% of passes (none on bare floor) stall before the end of the push.
+- **Data:** `data/walker_rug/pairs.csv` (floor/wide pairs, synced by audio cross-correlation, visual fallback), `data/recording_notes.csv` (tracked). 1000101382 / IMG_6801 syncs at -1.64 s (sure). The 6798 pair rechecked: audio -1.21 s, bracketed by the walker start/stop (-1.6 / -0.9 s), kept at -1.21 ±0.3 s.
+- **Physics** (`physics/rug_calib.py`, MuJoCo cloth rug, 30 paired trials per direction; ranges in `physics_ranges.json`: glide-rug friction 0.35-0.9, rug-floor 0.1-0.3):
+
+  | | off: fold / drag / disturbed | onto: fold / drag / disturbed |
+  |---|---|---|
+  | REAL | 0.86 / 0.14 / 1.00 (n=7) | 0 / 1.00 / 1.00 (n=1) |
+  | sim, uncalibrated | 0.03 / 0.37 / 0.40 | 0.40 / 0.23 / 0.63 |
+  | sim, fitted | 0 / 0.70 / 0.70 | 0 / 0.80 / 0.80 |
+  | sim, fitted + glide caps (μ 0.10-0.20, ASSUMED) | 0.20 / 0.47 / 0.67 | 0.73 / 0.07 / 0.80 |
+  | sim, fitted + taped edge | 0 / 0.03 / 0.03 | 0 / 0 / 0 |
+  | sim, front wheels only | 0 | 0 / 0.03 / 0.03 |
+
+  Rear glides are what disturb the rug (wheels only: ~0); bare floor is clean in both. The fit was not tuned to the single onto-rug take.
+- **Cascade** (`viewer/src/rugcascade.ts`, `?rugfold` or `game.rugFolds.set(true)`, off by default so e2e numbers hold): each edge crossing folds the nearest corner with P 0.75 (6/8, MEASURED); the fold is a 4.2 cm bump (sim median of folded passes, SIMULATED) reaching 15 cm (ASSUMED). It applies to whichever rug the route crosses, and clears when that rug moves, is removed or taped. In a trial merge with wm-planner, the mat folded on pass 2: toe contacts/month 1.21 → 1.72, and the futures fan logged 270 "folded corner" futures over 41 samples (0 before).
+- **Glide caps vs tape** (planner, kitchen4_lighter as scanned, 400 trips, seed 2; caps scale snags by the sim's 0.978):
+
+  | Layout | Risk/month | Snags | Cost |
+  |---|---|---|---|
+  | As scanned | 216.66 [206.0, 228.4] | 66.57 | |
+  | Tape the mat edge | 175.56 | 25.47 (-41.1) | $10, 10 min, effort 1 |
+  | Glide caps / tennis balls | 215.74 | 65.66 (-0.9) | $8, 5 min, effort 1 |
+
+  Both are in the planner's fix list and the OT report's ranked fixes.
+- **Proof:** `proof/demo/real_vs_sim_rug.mp4` (take 1000101382 floor + wide, the fitted sim pass dragging the edge 14 cm, and an empty slot for a tennis-ball pass; `tools/rug_video.py --caps` fills it). `proof/demo/broll/`: four fold takes' last 5 s, floor and wide, at speed and 0.5x (75 MB).
 
 ## Kitchen planner + gait personalization (branch `wm-planner`, 2026-10-24, not merged to demo-safe)
 - **Planner** (`planner/`, `viewer/src/planner.ts`, `planfix.ts`, `planworker.ts`). A layout is chair x/y on a 5 cm grid with yaw in 90° steps, plus the mat, cord and nightlight states. It is checked for overlaps, chairs within 0.8 m of the table, clear fridge-swing/sink/entrance zones, and a walker-feasible route. Objective = expected toe catches/month from world-model rollouts with common seeds; simulated snags (MuJoCo tables) and brushes only break ties (`TIE_BREAK` 1e-5, `engine.py` and `planner.ts`) and are shown as notes on each option; effort is tracked separately; options that save no toe catches are dropped. B200 job 47577852 (Slurm, 1.5 mm taped edge, glide caps in the action set): 53,019 layouts (50,297 valid), 102,528 evaluations, 10.09 M imagined trips, 1,053 s wall time (41.1 s GPU rollout). Scanned 1.14 toe catches/month; options (confirm seed 2, `planner/check_options.py`, each fix put back alone): **chosen** remove the mat, effort 1, $0 → 0.07 (mat saves 1.06); **fewest** chair5 + chair8 moved, mat removed, cord rerouted, effort 8.9, $6 → 0.00 (mat 1.06, cord 0.07, chairs ~0: they cut brushes 148 → 60); **least effort for 20% fewer** mat removed + cord taped, effort 2, $8 → 0.00. Outputs are in `out/planner/kitchen4_lighter/` (replay, Pareto front, job stats).
@@ -34,7 +74,7 @@
   - **Round trip (`roundtrip.ts`, the scripted demo):** route selector "…, round trip" or `game.roundTrip.set(true)`: the planned route backwards (entrance → fridge), a rate-limited turn about the walker's centre, then out as planned; one way stays the default. The inbound leg follows the line only (the evaluator simulates the planned direction: no world-model replay, mannequin or step cloud on it); live physics and the fan run on both legs. e2e check 17. **Folds:** on wm-planner the Rapier flap never folds on the round trip (0/8 inbound legs; the body passes ~0.2 m from the curled corner, `corner_caught` 2/8, mat slides 2-3 cm). With `rug-calibration` merged (trial merge in a scratch worktree, not committed) and `?rugfold=1`, the measured cascade (P 0.75 per crossing) folded the mat at the end of the inbound leg in 4/4 runs and the outbound fan listed "folded corner" (BLOCKERS 16).
   - **Fix:** a live-physics settle in flight when the mat was taped rebuilt the poses without `taped`, so the fan saw the mat untaped again (e2e 15 "taped mat crossings 12" was real; 0 after).
   - e2e reruns one block at a time: the 4 checks that failed in the full suite (14/15 fps ratio and "never red at mat", 15 taped crossings, bed re-plan time) pass alone; bed re-plan 95/106/89 ms with physics in autoplay vs 65/99/190 ms without, so the 1,439 ms was Chrome contention from other sessions.
-  - Proof: `proof/demo/futures_fan.mp4` (78 s: average vs shuffler at the fridge, then the shuffler's round trip, then the mat taped → 0.1/month, all clear; `record_planner.ts futures_fan`, the old fridge-only shot is `futures_fan_fridge`), e2e checks 15-17.
+  - Proof: `proof/demo/futures_fan.mp4` (49 s: average vs shuffler at the fridge, then the shuffler's round trip with the rug cascade on: the outbound pass folds a mat corner, the return leg's fan runs red at the 4.2 cm fold, then the mat taped (which flattens the fold) → 0.1/month; `record_planner.ts futures_fan out.mp4 'http://localhost:<port>/?scene=kitchen4_lighter&demo=1&rugfold=1'`, the old fridge-only shot is `futures_fan_fridge`), e2e checks 15-17. Backup: `proof/demo/backup_v6.mp4` (`e2e/shot.ts backup_v6.mp4 30 --setup "game.setThird(true)"` on the merged main; the mat slides under the walker mid-walk and live physics carries it into the layout, so the view switches to "Proposed").
 - **Coordination with the rug session (`rug-calibration`):** the glide-caps / tennis-balls fix already exists there (planner fix, μ 0.10-0.20 ASSUMPTION, `CAPS_FACTOR` in `planner/engine.py`, $8 / 5 min), so wm-planner does not add a second one. It arrives with the merge (BLOCKERS 16); the trial merge combined its fix list with the toe-catch ranking without conflict beyond `main.ts` imports and `planfix.ts rankedFixes`.
 - **Risks:** zones and outlets are read off the viewer, not taped (BLOCKERS 10). Taped-mat and rerouted-cord effects and their costs are assumptions. Chair-move cost is the placeholder `movecost.ts` (about 35 min). `personalization.mp4` is 3 min because the re-plan runs 3,000 layouts live.
 
@@ -47,14 +87,14 @@ Each result counts once it is reproduced here, with proof in `proof/`.
 
 | Spec milestone | In place | To do |
 |---|---|---|
-| Kitchen splat + scale + accuracy (Must) | SfM, GLOMAP + stray-camera drop, gsplat MCMC, table scale, stage 6b margins | leave-one-out over all three table dimensions; check the kitchen1 table width (BLOCKERS #1) |
-| Maps + hazards (Must) | stages 5–8: floor, floater cleanup, occupancy, local-floor bumps, verdicts | coverage map export; hazards.json in the SPEC §5 shape |
+| Kitchen splat + scale + accuracy (Must) | SfM, GLOMAP + stray-camera drop, gsplat MCMC, table scale, stage 6b margins | re-measure the table width (BLOCKERS #1); leave-one-out is in ([proof/accuracy](proof/accuracy/table_loo.md): width folds 15-18 % short in 3 of 4 kitchens, kitchen2_nofar within 3 %) |
+| Maps + hazards (Must) | stages 5–8: floor, floater cleanup, occupancy, local-floor bumps, verdicts | – (coverage, occupancy and bump maps export as PNG + JSON under `maps/`; `hazards.json` carries the SPEC §5 fields beside stage 8's own, validated at export) |
 | Baseline world model + rollouts (Must) | hand rule, `worldmodel/` rollout engine, contact table calibrated to published toe clearance (`tools/contact_table.py`) | 200 trips on the demo kitchen route |
-| Viewer core (Must) | autoplay, free walk, live hazard checks, ghosts, fog, night mode, drag objects, tinted fills, several routes with a risk range, personas, vision filters, heatmap, transfer/reach/EMS checks ([proof](proof/viewer_features/README.md)) | demo route on the demo kitchen; fps check |
-| Learned world model (Should) | MDN on PhysioNet, closed-loop / coverage / counterfactual / sanity tests | 20+ step rollouts; sideways spread over-confident in corners; our own walker videos |
-| Mannequin + world-model visuals (Should) | third-person mannequin on the simulated footsteps (world-model heels with `?step=world`) | rigged mannequin with foot IK; next-step cloud |
+| Viewer core (Must) | autoplay, free walk, live hazard checks, ghosts, fog, night mode, drag objects, tinted fills, several routes with a risk range, personas, vision filters, heatmap, transfer/reach/EMS checks, reach map (where the device can go, causes, dead ends, cost to get through) ([proof](proof/viewer_features/README.md)) | demo route on the demo kitchen; fps check |
+| Learned world model (Should) | MDN on PhysioNet, closed-loop / coverage / counterfactual / sanity tests | held-out corner trials stop at 20 steps, so 20+ steps is shown on straights only (6 trials); learned sideways spread is calibrated to slightly wide at corners, the hand rule's is over-confident ([proof](proof/world_model/WORLD_MODEL.md)); our own walker videos |
+| Mannequin + world-model visuals (Should) | third-person mannequin on the simulated footsteps (world-model heels with `?step=world`); skinned, rigged figure (CesiumMan, CC BY 4.0) posed by two-bone IK: ankles on the footsteps to <1 cm, no skating, hands on the grips (`?mannequin=basic` keeps the plain one); its short legs and arms leave its hands about 5 cm short of the wheelchair rims | next-step cloud |
 | Editable scene + ranked fixes (Should) | dragging, re-planning, ranked fixes, suggested layouts, fix card (QR) | |
 | Walker physics (Should) | Rapier walker pass over the measured floor, snags listed; live object physics (Rapier worker: chairs pushed/tipped, mat slides, curled-corner flap); MuJoCo batch on HiPerGator (9,600 pushes) feeding the rollouts and OT report ([proof](proof/physics/README.md)) | real-walker validation (BLOCKERS #7); batch reruns per scene |
 | Cosmos Transfer clip (Should) | controls export, chunking, tinting, settings (edge 0.7, guidance 3) | worst-case clip of the demo kitchen |
-| Cosmos Reason evaluation (Should) | – | pipeline + answer key |
+| Cosmos Reason evaluation (Should) | three-arm scorer (`cosmos/reason_eval.py`), answer-key labeller (`tools/label_hazards`), protocol in [proof/reason](proof/reason/README.md); tested on synthetic claims only | hand-label the key (30-50 hazards), run Reason and a general model on HiPerGator, score it |
 | OT report (Should) | stage 11 HTML report; live OT report from the viewer layout | all SPEC §4.12 sections |

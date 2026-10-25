@@ -69,7 +69,7 @@ Open the viewer with **`?mount=left`** (e.g. `http://localhost:5179/?scene=k4_15
 | `?mount=left`: stick walks along the walker, snap-turns; virtual walker follows the real one; line-up at entry and on the card; mounted trigger ignored | Built, `viewer/src/xr.ts` (`npm run e2e:xr`, emulated) |
 | Wand: point, drag, twist, hold-to-delete, teleport; card buttons (dangers tour, night walk, safer room, compare) | Built |
 | Hand pinch as a stand-in for the trigger | Built |
-| Juan's planning menu opens on a **left-stick click** | Easy to press by accident on a mounted stick: worth moving to a button |
+| Juan's planning menu opens on a **held** left-stick click (0.4 s, short buzz); a click closes it | A tap no longer opens it, so an accidental press on the mounted stick does nothing |
 | Dock detection (wand in its holder = walk mode, lifted = edit mode) | Not built |
 | The feel on the real walker | Needs the parts and charged controllers |
 

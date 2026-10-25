@@ -42,6 +42,8 @@ grid:
   min_opacity: 0.1
   floor_band_m: 0.015
   floor_close_cells: 10   # textureless vinyl floor, seen sparsely (fills gaps up to 40 cm in observed floor)
+  floor_min_opacity: 0.02   # the vinyl trained as faint Gaussians: solid-only floor left 60% of the walked path an invisible wall
+  floor_walked_m: 0.25      # the floor under the walk is rarely filmed: the operator stood there (half a shoulder width)
   obstacle_z:
   - 0.05
   - 1.8

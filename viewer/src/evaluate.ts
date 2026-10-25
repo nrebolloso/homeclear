@@ -1,6 +1,6 @@
 // One layout -> every route planned, rolled out and checked. Pure (no Worker globals): the worker, the optimizer and the
 // tests all call it.
-import { stamp, carvedPolys, placedFixtures, plan, routeHazards, bumpComponents, polyCells, worldFootprint, applyIntervention,
+import { stamp, stampFolds, carvedPolys, placedFixtures, plan, routeHazards, bumpComponents, polyCells, worldFootprint, applyIntervention,
   type GridMeta, type Layers, type Footprinted, type Layout, type Intervention, type XY, type RouteHazard } from './grid.ts';
 import { rollouts, type Persona, type Risk, type Heat, type Ghost } from './sim.ts';
 import type { StepModel } from './stepmodel.ts';
@@ -9,6 +9,7 @@ import { runChecks, type Fixture, type TransferRules, type EmsRules, type BodyFa
 import { objectRisk, type BatchResults, type ObjEvent } from './objrisk.ts';
 // shortcut: one batch, run on kitchen4_lighter's chairs and mat, serves every scene; rerun the batch per scene when it matters
 import batch from '../../physics/batch_results.json' with { type: 'json' };
+import { CAPS_FACTOR } from './rugcascade.ts';
 import { stairChecks, type Stair, type Side, type WalkerDims } from './stairs.ts';
 import { doorChecks, doorFixes, doorGain, doorOnRoute, needWidth, type Door } from './doors.ts';
 import { wheelchairChecks, ADA } from './wheelchair.ts';
@@ -46,6 +47,8 @@ export interface Init {
   walker?: WalkerDims;
   /** doorways (doors.ts): marked in the viewer or config game.doors */
   doors?: Door[];
+  /** cameras that saw each cell (stage 12 coverage.u8) and how many make it trustworthy: the reach map's holes (reach.ts) */
+  coverage?: Uint8Array; coverage_good?: number;
 }
 export interface HazardOut extends RouteHazard { name: string; per_month: number; ot_check: boolean; estimated: boolean }
 export interface RouteSummary {
@@ -71,6 +74,7 @@ export interface Eval {
 export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: number; heat?: boolean }): Eval {
   const t = performance.now(), { g, objects: O } = S, sel = Math.min(opts.sel ?? 0, S.routes.length - 1);
   const L = stamp(g, S.base, O, lay.poses, lay.flattened, carvedPolys(lay));
+  const folded = stampFolds(g, L.bump, lay.folds);
   const comps = bumpComponents(g, L.bump, S.rules.bump_min_m, S.rules.bump_link_cells);
   const names: Record<number, string> = {}, estComp = new Set<number>();
   S.est.forEach((e, c) => { if (e && comps[c]) estComp.add(comps[c]); });
@@ -78,6 +82,7 @@ export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: nu
     if (o.layer === 'bump' && !lay.poses[k].removed)
       for (const c of polyCells(g, worldFootprint(o, lay.poses[k]))) if (comps[c]) names[comps[c]] = o.name;
   });
+  for (const c of folded) if (comps[c]) names[comps[c]] = 'folded rug corner';
   const lights = [...O.flatMap((o, k) => (o.kind === 'nightlight' && !lay.poses[k].removed ? [{ x: lay.poses[k].x, y: lay.poses[k].y, r: o.light_radius_m ?? 1.5 }] : [])),
     ...placedFixtures(S.interventions, lay).flatMap(f => (f.light_r && f.xyz ? [{ x: f.xyz[0], y: f.xyz[1], r: f.light_r }] : []))];   // added nightlights (lights.ts)
   const out = { per_month: 0, per_month_lo: 0, per_month_hi: 0, routes: [], sel, hazards: [], ghosts: [], steps: [], objects: [] } as unknown as Eval;
@@ -97,7 +102,9 @@ export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: nu
     Object.assign(summary, { per_month: R.per_month, lo: R.per_month_lo, hi: R.per_month_hi });
     out.per_month += R.per_month; out.per_month_lo += R.per_month_lo; out.per_month_hi += R.per_month_hi;
     out.objects.push(...objectRisk(batch as unknown as BatchResults, rd.name, P.xy, O.flatMap((o, j) => (lay.poses[j].removed ? [] : [{ name: o.name, kind: o.kind, poly: worldFootprint(o, lay.poses[j]) }])),
-      S.persona.speed_mps ?? 0.5, rd.trips_per_night * S.risk.days_per_month, S.plan.walker_width_m / 2, S.risk.path_offset_sd_m));
+      S.persona.speed_mps ?? 0.5, rd.trips_per_night * S.risk.days_per_month, S.plan.walker_width_m / 2, S.risk.path_offset_sd_m)
+      // glide caps: the cloth-rug sim's P(fold or drag) with capped glides over without (rug_calib.json), SIMULATED
+      .map(e => (lay.walker_caps && O.find(o => o.name === e.object)?.kind === 'rug' ? { ...e, p: e.p * CAPS_FACTOR, ci95: e.ci95.map(c => c * CAPS_FACTOR) as [number, number], per_month: e.per_month * CAPS_FACTOR } : e)));
     if (k !== sel) return;
     out.ghosts = R.ghosts; out.heat = R.heat; out.steps = R.steps;
     out.hazards = routeHazards(g, L, P, S.plan.walker_width_m, S.rules.clearance_margin_m, S.rules.bump_min_m, comps).map(h => ({

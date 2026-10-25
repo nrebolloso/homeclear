@@ -157,6 +157,8 @@ export function plan(g: GridMeta, L: Layers, start: XY, goal: XY, pp: PlanParams
   const empty = { cells: [], xy: [], side: [], length_m: 0, dist_m: dist };
   const s = snap(start), t = snap(goal);
   if (s < 0) return { ...empty, error: `no cell has ${half} m clearance; walker cannot fit anywhere` };
+  // both ends in the same one-cell pocket: a 1-point "route" is not a route (and breaks the viewer's route interpolation)
+  if (s === t) return { ...empty, error: 'no path: start and goal snap to the same spot for this walker width' };
   const narrowW = pp.narrow_weight ?? 0, narrowM = pp.narrow_m ?? 0.15;
   const stepCost = (n: number, len: number) => {
     const sd = dist[n] - half;
@@ -315,6 +317,24 @@ export interface Layout {
   carved?: { id: string; target: string; poly: XY[]; by_m: number }[];
   /** added fixtures moved by hand (the second walker on the landing), by fix id; else they stand where the fix puts them */
   placed?: Record<string, Pose>;
+  /** rug corners folded by a walker pass (rugcascade.ts): a taller bump than the flat rug, until the layout changes */
+  folds?: Fold[];
+  /** glide caps / tennis balls on the walker's rear legs (planner fix): scales the rug's slide / fold events (evaluate.ts) */
+  walker_caps?: boolean;
+}
+/** A folded rug corner: lifted lift_m within size_m of the corner (the same shape the futures fan draws). */
+export interface Fold { corner: XY; lift_m: number; size_m: number }
+/** The folds raise the bump map in place; returns the cells they cover. */
+export function stampFolds(g: GridMeta, bump: Float32Array, folds: Fold[] = []): number[] {
+  const out: number[] = [];
+  for (const f of folds) {
+    const r = f.size_m, [x, y] = f.corner;
+    for (const c of polyCells(g, [[x - r, y - r], [x + r, y - r], [x + r, y + r], [x - r, y + r]])) {
+      const [cx, cy] = cellXY(g, c);
+      if (Math.hypot(cx - x, cy - y) <= r) { bump[c] = Math.max(bump[c], f.lift_m); out.push(c); }
+    }
+  }
+  return out;
 }
 /** The added fixtures in place, each at its hand-placed pose if it has one (x, y, yaw; z stays the fix's). */
 export function placedFixtures(ivs: Intervention[], lay: Layout) {

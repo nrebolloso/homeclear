@@ -10,7 +10,7 @@ import numpy as np
 import yaml
 
 from .maps import Map
-from .models import Baseline, State, walker_legs, walker_pose, unit, left
+from .models import Baseline, State, TripNoise, walker_legs, walker_pose, unit, left
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -115,6 +115,7 @@ class Engine:
         action = lambda k: ext[[k + 25, k + 50, k + 100]]
         s.walker = walker_pose(s, s.heels[1], action(0), W)
         touched = set()
+        noise = TripNoise(self.cfg["step_corr"]) if self.cfg.get("step_corr") else None   # 0 / absent: independent draws
         for step in range(400):
             k = k + int(np.argmin(np.linalg.norm(ext[k:k + 120] - (s.heels[0] + s.heels[1]) / 2, axis=1)))
             if k >= len(route) - 16:
@@ -123,7 +124,7 @@ class Engine:
             hd = np.arctan2(s.com_v[1], s.com_v[0])
             s.obstacle_dist = m.ray_dist(s.com, np.stack([np.cos(hd + np.arange(8) * np.pi / 4), np.sin(hd + np.arange(8) * np.pi / 4)], 1))
             dist = self.model.predict(s, a)
-            raw = dist.sample(rng)
+            raw = dist.sample(rng, z=noise.next(rng) if noise else None)
             heel, tries = raw, 0
             while m.at(m.blocked, heel) and tries < 10:
                 heel, tries = dist.sample(rng), tries + 1
@@ -165,8 +166,10 @@ class Engine:
                       (heel + s.heels[0]) / 2, v, pose, s.obstacle_dist)
 
 
-def run(map_dir, out_dir, model_name=None, nights=None, remove=(), move=(), cfg=None, seed=None):
+def run(map_dir, out_dir, model_name=None, nights=None, remove=(), move=(), cfg=None, seed=None, step_corr=None):
     cfg = cfg or load_cfg()
+    if step_corr is not None:
+        cfg = {**cfg, "step_corr": step_corr}
     nights = nights or cfg["nights"]
     m = Map(map_dir).edited(remove, move) if (remove or move) else Map(map_dir)
     model_name = model_name or cfg["step_model"]
@@ -198,7 +201,7 @@ def run(map_dir, out_dir, model_name=None, nights=None, remove=(), move=(), cfg=
         w.writerows(out["events"])
     summ = summarize(out["events"], S, nights, cfg)
     summ.update({"map": str(map_dir), "model": model_name, "nights": nights, "trips": nights * cfg["risk"]["trips_per_night"],
-                 "remove": list(remove), "move": [list(x) for x in move], "route_length_m": round(len(route) * 0.01, 2),
+                 "step_corr": cfg.get("step_corr", 0.0), "remove": list(remove), "move": [list(x) for x in move], "route_length_m": round(len(route) * 0.01, 2),
                  "runtime_s": round(secs, 1), "assumed": cfg["extras"],
                  "labels": "contact_table is a PLACEHOLDER, NOT CALIBRATED; walker pose: " + ("learned walker head (Multi-Gait-Posture camera fit)" if model_name == "learned" else "geometric rule"),
                  "map_source": json.loads((Path(map_dir) / "grid.json").read_text()).get("source", "stage 6 (measured splat)")})
@@ -241,12 +244,13 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--model")
     ap.add_argument("--nights", type=int)
+    ap.add_argument("--step-corr", type=float, help="trip-level lag-1 correlation of the step noise (default config step_corr)")
     ap.add_argument("--remove", action="append", default=[])
     ap.add_argument("--move", nargs=3, action="append", default=[])
     ap.add_argument("--plot", action="store_true")
     a = ap.parse_args()
     move = [(n, float(dx), float(dy)) for n, dx, dy in a.move]
-    summ, out, route, m = run(a.map, a.out, a.model, a.nights, a.remove, move)
+    summ, out, route, m = run(a.map, a.out, a.model, a.nights, a.remove, move, step_corr=a.step_corr)
     if a.plot:
         from .plots import rollout_figure
         rollout_figure(m, route, a.out, summ)

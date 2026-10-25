@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { diffLayouts, undoChange, poseAt, stagger, hazardDiff } from '../src/reimagine.ts';
+import { diffLayouts, undoChange, poseAt, stagger, hazardDiff, deltaOf } from '../src/reimagine.ts';
 import { moveCost, removeCost, fixCost } from '../src/movecost.ts';
 import { actions, DEFAULTS } from '../src/optimize.ts';
 import { applyIntervention, type Layout, type XY } from '../src/grid.ts';
@@ -101,4 +101,12 @@ test('moveCost agrees with the optimizer (placeholder until the effort model lan
     assert.ok(Math.abs(c.effort - a.effort) < 1e-9, `${a.id}: effort`);
     assert.ok(xyt);
   }
+});
+
+test('deltaOf: the Compare strip counts cleared, remaining and new hazards, and needs changes and both scores', () => {
+  const bump = (x: number, y: number) => ({ type: 'floor_bump', position: [x, y] as XY });
+  const before = { per_month: 3, hazards: [bump(0, 0), bump(2, 0), { type: 'tight_clearance', position: [4, 0] as XY }] };
+  const after = { per_month: 1, hazards: [bump(2, 0), { type: 'tight_clearance', position: [6, 3] as XY }] };
+  assert.deepEqual(deltaOf(before, after, 2), { changes: 2, resolved: 2, remaining: 1, added: 1, before_pm: 3, after_pm: 1 });
+  assert.equal(deltaOf(before, after, 0), null); assert.equal(deltaOf(null, after, 1), null); assert.equal(deltaOf(before, null, 1), null);
 });

@@ -23,8 +23,9 @@ from torch import nn
 from worldmodel.learned import K, D_IN, Learned, features, targets
 from worldmodel.models import Baseline, State, unit, left
 from worldmodel.rollout import load_cfg
+from worldmodel.trip_corr import component_zscores, lag_corr
+from worldmodel.closed_loop import SPLIT, state, shift, fit_hand, frenet, walk
 
-SPLIT = {"train": list(range(10)), "val": [10, 11], "test": [12, 13]}
 HIDDEN, EPOCHS, SEED, TURN_DEG = 128, int(os.environ.get("EPOCHS", 400)), 0, 15
 
 
@@ -53,37 +54,10 @@ def nll(out, y):
     return heel, walk
 
 
-def state(z, i, walker=None):
-    h = z["heels"][i]
-    return State(h, h, z["sides"][i], h[:2].mean(0), np.zeros(2), z["walker0"][i] if walker is None else walker, np.full(8, 2.0))
-
-
-def shift(w, d):
-    """Walker point moved d metres along its heading (camera point <-> sim frame centre)."""
-    w = np.array(w, float)
-    w[..., :2] += d * np.stack([np.cos(w[..., 2]), np.sin(w[..., 2])], -1)
-    return w
-
-
 def coverage(dist, y, rng, n=4000):
     """Is y inside the 50% / 90% highest-density region of dist (Monte Carlo)."""
     frac = (dist.logpdf(dist.sample(rng, n)) > dist.logpdf(y)).mean()
     return frac < 0.5, frac < 0.9
-
-
-def fit_hand(z, m, persona):
-    """Hand-rule step length / width / spreads fit to the training participants (the fair baseline)."""
-    L, W = persona["stride_m"], persona["foot_sep_m"]
-    idx = np.flatnonzero(m)
-    for _ in range(5):
-        a, c = [], []
-        for i in idx:
-            h0, s0, tgt = z["heels"][i][0], z["sides"][i][0], z["action"][i][-1]
-            u = unit(tgt - h0); mid = h0 - s0 * W / 2 * left(u); u = unit(tgt - mid)
-            d = z["heel1"][i] - mid
-            a.append(d @ u); c.append(-s0 * (d @ left(u)))
-        L, W = float(np.mean(a)), float(2 * np.mean(c))
-    return {"stride_m": L, "foot_sep_m": W, "stride_cv": float(np.std(a) / L)}, float(np.std(c))
 
 
 def one_step(z, m, models, cfg, d_shift):
@@ -119,13 +93,20 @@ def one_step(z, m, models, cfg, d_shift):
     return out
 
 
-def frenet(route, p):
-    """Points (n, 2) -> arc length along the route and signed lateral offset (left +)."""
-    k = np.linalg.norm(route[None] - p[:, None], axis=2).argmin(1)
-    t = route[np.minimum(k + 5, len(route) - 1)] - route[np.maximum(k - 5, 0)]
-    t /= np.linalg.norm(t, axis=1, keepdims=True)
-    q = p - route[k]
-    return k * 0.01, t[:, 0] * q[:, 1] - t[:, 1] * q[:, 0]
+def step_autocorr(z, masks, models, cfg, d_shift):
+    """Within-trip persistence of each model's one-step residual (worldmodel/trip_corr.py): the value for rollout step_corr.
+    Scored on the held-out groups only (test = P12-P13; val+test = P10-P13, more pairs)."""
+    out = {}
+    for n, mod in models.items():
+        zs = np.full((len(z["pid"]), 2), np.nan)
+        for i in np.flatnonzero(masks["val+test"]):
+            zs[i] = component_zscores(mod.predict(state(z, i, shift(z["walker0"][i], d_shift)), z["action"][i]), z["heel1"][i])
+        out[n] = {}
+        for g, m in masks.items():
+            idx = np.flatnonzero(m)
+            out[n][g] = {"z_sd_along_across": np.round(zs[idx].std(0), 3).tolist(),
+                         **{f"lag{k}": lag_corr(zs[idx], z["trial"][idx], z["step"][idx], k) for k in (1, 2)}}
+    return out
 
 
 def closed_loop(z, routes, m, models, cfg, d_shift, n_roll=20):
@@ -135,7 +116,6 @@ def closed_loop(z, routes, m, models, cfg, d_shift, n_roll=20):
     for trial in dict.fromkeys(z["trial"][m]):
         idx = np.flatnonzero(z["trial"] == trial)
         route, i0 = routes[trial], idx[0]
-        end = len(route) - 200                                   # the last 2 m is the straight extension
         rs, rl = frenet(route, z["heel1"][idx])
         real_side, real_len = -z["sides"][idx, 0], np.linalg.norm(z["heel1"][idx] - z["heels"][idx, 0], axis=1).mean()
         real_w = shift(z["walker1"][idx], d_shift)
@@ -145,18 +125,7 @@ def closed_loop(z, routes, m, models, cfg, d_shift, n_roll=20):
             rng = np.random.default_rng(0)
             el, ew, ey, es = [], [], [], []
             for _ in range(n_roll):
-                s, k, H, S, P = state(z, i0, shift(z["walker0"][i0], d_shift)), 0, [], [], []
-                for _ in range(3 * len(idx) + 30):
-                    k += int(np.argmin(np.linalg.norm(route[k:k + 120] - s.heels[:2].mean(0), axis=1)))
-                    if k >= end - 16:
-                        break
-                    a = route[[k + 25, k + 50, k + 100]]
-                    heel = mod.predict(s, a).sample(rng)
-                    pose = mod.walker_pose(s, heel, a, cfg["walker"], s.walker)
-                    H.append(heel); S.append(-s.sides[0]); P.append(pose)
-                    s = State(np.r_[[heel], s.heels[:2]], np.r_[[heel], s.heels[:2]], np.r_[-s.sides[0], s.sides[:2]],
-                              (heel + s.heels[0]) / 2, np.zeros(2), pose, s.obstacle_dist)
-                H, S, P = np.array(H), np.array(S), np.array(P)
+                H, S, P = walk(mod, z, route, i0, 3 * len(idx) + 30, d_shift, cfg, rng)
                 hs, hl = frenet(route, H)
                 for side in (1, -1):
                     o = np.argsort(hs[S == side])
@@ -242,10 +211,12 @@ def main(npz, out):
     res = {"split_participants": SPLIT, "samples": log["samples"], "best_epoch": log["best_epoch"], "hand_rule_fit": {**hand, "sd_lat_m": sd_lat},
            "walker_gap_shift_m": round(d_shift, 3), "mean_user_to_camera_m": round(gap, 3),
            "one_step_test": one_step(z, sp["test"], {**models, "learned": Learned(cfg, out / "learned.npz", min_w=0)}, cfg, d_shift),   # full mixture density
-           "closed_loop_test": closed_loop(z, routes, sp["test"], models, cfg, d_shift)}
+           "closed_loop_test": closed_loop(z, routes, sp["test"], models, cfg, d_shift),
+           "step_noise_autocorr": step_autocorr(z, {"test": sp["test"], "val+test": sp["val"] | sp["test"]},
+                                                {"baseline_fit_to_train": models["baseline_fit_to_train"], "learned": Learned(cfg, out / "learned.npz", min_w=0)}, cfg, d_shift)}
     (out / "results.json").write_text(json.dumps(res, indent=1))
     (out / "train_log.json").write_text(json.dumps(log, indent=1))
-    print(json.dumps({k: res[k] for k in ("one_step_test", "closed_loop_test")}, indent=1))
+    print(json.dumps({k: res[k] for k in ("one_step_test", "closed_loop_test", "step_noise_autocorr")}, indent=1))
 
 
 if __name__ == "__main__":

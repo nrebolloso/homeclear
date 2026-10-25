@@ -58,16 +58,31 @@
    means a new B200 search.
    **Decided (Nicolas):** objective = expected toe catches/month; snags + brushes only break ties (TIE_BREAK 1e-5) and are
    shown as notes on each option. Done in job 47577852.
-16. **Merge `rug-calibration` into `wm-planner` (yours; its BLOCKERS 17).** Without it the round trip cannot fold the mat (the
-   Rapier flap: 0/8 inbound legs). A trial merge in a scratch worktree (discarded) worked with the recipe there plus the
-   fan hook `fold: () => live?.fold() ?? layout.folds?.[0] ?? null`: tsc clean, and with `?rugfold=1` the mat folded at the
-   end of the inbound leg in 4/4 runs and the outbound fan showed "folded corner". After the merge, re-record
-   `futures_fan.mp4` with `&rugfold=1` so the fold is in the video.
-   **Approved (Nicolas).** Another Claude session in `Homeclear-main` already merged wm-planner (as of f31f6d7) and
-   rug-calibration into local `main` (9853d36, not pushed) and is re-recording `futures_fan.mp4` / `backup_v6.mp4` there.
-17. **Who finishes `main` and moves demo-safe?** wm-planner has 5 commits since f31f6d7 (toe-catch objective, glide caps,
-   job 47577852 results, check_options, planner.mp4). A trial merge onto main 9853d36 (scratch worktree) is clean and passes
-   `npm test` 212/212, `npm run build` and `tests/run_py.sh`. `Homeclear-main` has the other session's uncommitted edits
-   (`STATUS.md`, `main.ts`, `futures_fan.mp4`), so this session did not merge there. Once that session commits:
-   `git -C ../Homeclear-main merge wm-planner`, re-run the three test commands, re-record `planner.mp4` and the backup on the
-   merged main, then move demo-safe. Tell one session to own it.
+16. **A real glide-cap / tennis-ball pass (rug-calibration).** Slit two tennis balls (or fit glide caps) onto the rear
+   legs and push off the same loose rug at normal speed, floor camera plus wide, 3 or more passes. The sim's caps value
+   (glide-rug friction 0.10-0.20, `CAPS_MU` in `physics/rug_calib.py`) is ASSUMED, and with it the sim says caps barely
+   help (P(fold or drag) ratio 0.98, against 0.02 for taping the edge). Only friction changes in the sim: a tennis ball's
+   ~6.7 cm diameter, which rides up over the edge, is not modeled, so the real pass may well disagree. Drop the floor clip
+   in `data/walker_rug/floor/`, add a row to `data/recording_notes.csv`, then
+   `MUJOCO_GL=egl python tools/rug_video.py --caps data/walker_rug/floor/<clip>.mp4` fills the empty slot in
+   `proof/demo/real_vs_sim_rug.mp4`. If the caps fold less, model the ball's geometry, not just its friction.
+17. **The rug count is 8, not 9 (rug-calibration).** `data/recording_notes.csv` has 8 passes over a flat loose rug (7 off,
+   1 onto), and all 8 disturbed it (6 folded, 2 dragged). 1000101386 started pre-folded (the wheel rolled over, the fold
+   stayed) and 1000101389 is bare floor (clean). If there is a ninth pass, add its row; `physics/rug_calib.py rewrite`
+   recomputes the real rates.
+18. **No wide view for 1000101380.** IMG_6800 was not uploaded; the pair stays floor-only.
+19. **"Maui's effort model" was not found.** No `effort.ts` (TM2's `moveEffort`) on any branch, so the glide-caps fix uses the
+   planner's existing scale: $8, 5 min, effort 1 (`configs/planner/kitchen4_lighter.json`, `options.walker.caps`). Swap in
+   the real numbers once `effort.ts` lands.
+20. **Lounge object removal: three leftovers need a call (branch merge-juan, 2026-10-24).** Removing each of the 17
+   lounge objects now takes the whole object (fix 71649ea). Exceptions:
+   - **sofa2:** a few long thin streak Gaussians (0.4-0.9 m) about 0.5 m off its back stay in the air. They are white,
+     and only look blue from some angles (view-dependent colour). Neither 6c's point vote nor the render lift
+     (`--lift render`) labels them. Two options: accept them, or retrain the lounge with a cap on Gaussian size.
+   - **stool2:** a small dark patch stays. It is most likely the unlabelled bench beside the stool, or floor the
+     stool hid from the camera.
+   - Furniture 6c never detected (the bench, the table by chair3, the sofa near the rug) can't be removed at all.
+   **Render lift, not adopted:** it finds 25 objects instead of 17. That includes a door, but also overlapping sofa
+   pieces (sofa4/5/6), and it doesn't fix the leftovers above. It is in `out/gator_lounge_lift` on HPG if you want it.
+   The new stage 12 rules apply to every `objects: auto` scene. Only the lounge has been re-exported: kitchen4_lighter
+   and the others keep their old export until rebuilt. Pushing commits d012fb8..71649ea to main waits for your OK.

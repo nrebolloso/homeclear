@@ -10,6 +10,8 @@ import type { Init } from './evaluate.ts';
 import type { WorldModel } from './worldmodel.ts';
 import type { Layout, Pose } from './grid.ts';
 
+const cfgs = import.meta.glob('../../configs/planner/*.json', { eager: true, import: 'default' });
+
 type Slim = { risk: number; lo: number; hi: number; contacts: number; snags: number; brushes: number; error?: string };
 interface Search {
   scene: string; cfg: PlannerCfg & { search: any }; stats: Record<string, any>;
@@ -49,11 +51,14 @@ export function createPlanFix(D: PlanFixDeps) {
     if (!workers[who]) {
       const w = workers[who] = new Worker(new URL('./planworker.ts', import.meta.url), { type: 'module' });
       w.onmessage = e => { waiting.get(e.data.id)?.(e.data); waiting.delete(e.data.id); };
-      w.postMessage({ type: 'init', init: wm ? { ...D.init(), worldModel: wm } : D.init(), cfg: data!.cfg, base: D.base, walker: D.walker(), critic });
+      w.postMessage({ type: 'init', init: wm ? { ...D.init(), worldModel: wm } : D.init(), cfg: cfg(), base: D.base, walker: D.walker(), critic });
     }
     return new Promise<any>(res => { const id = ++seq; waiting.set(id, res); workers[who].postMessage({ ...msg, id }); });
   }
-  const S = () => D.init(), cfg = () => data!.cfg;
+  // fix options from configs/planner/<scene>.json over the search's frozen copy: a fix added since the B200 search shows up
+  // in the live planner and the OT report without re-running it (the replayed search never proposes it)
+  const own = (cfgs[`../../configs/planner/${D.run}.json`] as { options?: PlannerCfg['options'] } | undefined)?.options;
+  const S = () => D.init(), cfg = (): PlannerCfg => (own ? { ...data!.cfg, options: { ...data!.cfg.options, ...own } } : data!.cfg);
   const keepMat = () => ($('pfkeepmat') as HTMLInputElement).checked && !!data?.options_keep_mat?.length;
   /** the options on show: the "Keep my mat" toggle swaps in the ones that keep it */
   const opts = () => (keepMat() ? data!.options_keep_mat! : data!.options);
@@ -232,14 +237,18 @@ export function createPlanFix(D: PlanFixDeps) {
       if (k in q.chairs) q.chairs[k] = goal.chairs[k];
       else if (k === 'mat') { q.mat = goal.mat; q.mat_at = goal.mat_at; }
       else if (k === 'cord') q.cord = goal.cord;
+      else if (k === 'caps') q.caps = goal.caps;
       else { q.nightlight = goal.nightlight; q.nightlight_at = goal.nightlight_at; }
       return q;
     };
-    const keys = changed(cfg(), cur, goal), { scores } = await ask({ type: 'score', pls: [cur, ...keys.map(one)] }), before = scores[0].contacts;
-    return keys.map((k, n) => ({ k, n })).filter(({ k, n }) => k !== 'nightlight' || scores[n + 1].check.length || before - scores[n + 1].contacts > 0)   // a nightlight change that saves nothing isn't a fix
-      .map(({ k, n }) => {
-      const it = cost(S(), cfg(), cur, one(k)).items[0], sc = scores[n + 1], cut = before - sc.contacts;
-      return { label: it?.label ?? k, error: sc.check.length ? sc.check.join('; ') : sc.error, reduction: Math.max(0, cut), share: before > 0 ? cut / before : 0,
+    const pls = changed(cfg(), cur, goal).map(one);
+    // taping the rug's edge always ranks next to the search's picks (glide caps stay hidden: their friction is ASSUMED)
+    if (cur.mat === 'present' && !pls.some(p => p.mat === 'taped')) pls.push({ ...cur, mat: 'taped' });
+    const { scores } = await ask({ type: 'score', pls: [cur, ...pls] }), before = scores[0].contacts;
+    return pls.map((pl, n) => ({ pl, n })).filter(({ pl, n }) => changed(cfg(), cur, pl)[0] !== 'nightlight' || scores[n + 1].check.length || before - scores[n + 1].contacts > 0)   // a nightlight change that saves nothing isn't a fix
+      .map(({ pl, n }) => {
+      const it = cost(S(), cfg(), cur, pl).items[0], sc = scores[n + 1], cut = before - sc.contacts;
+      return { label: it?.label ?? changed(cfg(), cur, pl)[0], error: sc.check.length ? sc.check.join('; ') : sc.error, reduction: Math.max(0, cut), share: before > 0 ? cut / before : 0,
         objective_cut: scores[0].risk - sc.risk, clearance_gain_m: 0, cost_usd: it?.usd, minutes: it?.minutes, effort: it?.effort };
     }).sort((a, b) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.objective_cut - a.objective_cut));
   }

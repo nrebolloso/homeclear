@@ -12,7 +12,7 @@ const check = (name: string, pass: boolean, detail: unknown) => {
 };
 const G = (p: Page, f: string) => p.evaluate(`(async () => { const game = window.game; ${f} })()`) as Promise<any>;
 const browser = await chromium.launch({ executablePath: CHROME, headless: true,
-  args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'] });
+  args: [`--use-angle=${process.platform === 'win32' ? 'd3d11' : process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 const errors: string[] = [];
 async function open(scene: string, xr = false) {
   const p = await browser.newPage({ viewport: { width: 1600, height: 900 } });

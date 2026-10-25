@@ -263,7 +263,7 @@ Every step: `cd viewer && npm test && npm run build`, then `npm run dev` + `node
 | 5. Bathroom package | partly | a grab bar beside each toilet in `game.fixtures` (`bathroom.ts`), side from the floor map's walls, weak side flagged. No config marks a toilet yet (only `game_synth`), so it shows nowhere real until one is added (MEASURING.md §5). Not done: tub transfer bench, handheld shower, toilet frame (needs a `tub` fixture kind) |
 | 6. Stroke persona | done | `stroke.ts`, left-side view loss in `vision.ts` |
 | 7. Lenses | partly | reach lens (wheelchair persona, `night.ts`). Not done: clearance x-ray, time-of-day slider, light colour temperature |
-| 7. Rigged mannequin | not done | needs a licensed rigged GLB (CC0 / CC-BY) chosen and added to the repo first |
+| 7. Rigged mannequin | done (`viewer/src/rig.ts`) | CesiumMan.glb (CC BY 4.0, credits in `viewer/public/models/mannequin/`), two-bone IK retarget; tests in `viewer/tests/rig.test.ts` |
 | 7. Depth occluders | not done | inner boxes from object proxies + wall cells; risk of hiding the object's own splat |
 | Also done | | partial-scan stair guard ("OT to verify" + MEASURING.md, not fail); Explore parks the walker, no collisions |
 | Also not done | | wheelchair threshold-ramp and modular-ramp fixes (the level check's note says it); Parkinson's doorway floor stripes |

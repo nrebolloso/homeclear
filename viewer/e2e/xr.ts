@@ -36,7 +36,7 @@ window.__xr = {
 };`;
 
 const browser = await chromium.launch({ executablePath: CHROME, headless: true,
-  args: [`--use-angle=${process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
+  args: [`--use-angle=${process.platform === 'win32' ? 'd3d11' : process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 try {
   const p = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   const errors: string[] = [];
@@ -251,6 +251,20 @@ try {
   await wait(500);
   const inv = await G(p, 'return game.inventory()');
   check('A removes the pointed-at object', inv.includes('bed'), `removed: ${inv.join(', ')}`);
+  const stripNow = await G(p, 'return game.debug.xrStrip()');
+  check('the off-hand strip card shows the current mode and keys', stripNow.visible && /Trigger|stick/i.test(stripNow.key), JSON.stringify(stripNow));
+  await G(p, "__xr.ctl('right').updateButtonValue('thumbstick', 1)");
+  await wait();
+  await G(p, "__xr.ctl('right').updateButtonValue('thumbstick', 0)");
+  await wait(700);
+  const inv2 = await G(p, 'return game.inventory()');
+  check('wand stick click undoes the removal', !inv2.includes('bed'), `removed: ${inv2.join(', ')}`);
+  await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 1); __xr.ctl('right').updateButtonValue('thumbstick', 1)");
+  await wait();
+  await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 0); __xr.ctl('right').updateButtonValue('thumbstick', 0)");
+  await wait(700);
+  const inv3 = await G(p, 'return game.inventory()');
+  check('wand stick click with the off-hand grip held redoes it', inv3.includes('bed'), `removed: ${inv3.join(', ')}`);
   await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 1); __xr.ctl('right').updateButtonValue('squeeze', 1)");
   await wait(1500);
   await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 0); __xr.ctl('right').updateButtonValue('squeeze', 0)");

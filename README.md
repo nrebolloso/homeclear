@@ -166,6 +166,7 @@ viewer above opens it (add `--host` to `vite` for phones on the Wi-Fi).
 | Heatmap, Room shell, Re-scan check, Third person | footsteps and contacts on the floor; the fitted walls; stage 14's verdicts; a mannequin on the simulated steps |
 | Imagined floor + backend | the tinted fill where moved furniture stood (median / telea / ns / lama) |
 | Cosmos clips | pre-rendered clips, "this layout" first (matched by layout key); Export for Cosmos (whole route or hero chunk) |
+| Where the device can go (reach map) | from the selected route's start, in every mode, the floor is painted green (reachable), amber (tight, OT to verify), striped red (cut off) or grey (not scanned). Each cut-off part names its cause: a marked doorway at its marked width, movable furniture (checked by moving it), a gap in the scan, or a wall. A wheelchair's dead ends are flagged (no ADA turning circle). Coverage ghosts leave the start together and stop where the device can't pass. The width slider repaints live, and a step chart shows what it costs to get through the doorway at each width (placeholder prices). Pick points to check (M then 3, or a click), copy them as `game.reach_points` |
 
 The Enter VR button is always there (see VR above). Pre-rendering a scene's
 scenarios: `python cosmos/prerender.py cosmos/prerender.yaml --scene <run>` (prints the B200 time; `--submit` runs them as

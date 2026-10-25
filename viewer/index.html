@@ -28,7 +28,7 @@
       <label title="autoplay from behind: a mannequin walks on the simulated footsteps"><input type="checkbox" id="third" /> Third person</label>
       <label title="fewer overlays, lower resolution, smaller splats: for the headset and slow laptops. Numbers and checks do not change; on by default in the headset"><input type="checkbox" id="perf" /> Performance mode</label>
     </div>
-    <p class="hint">Free walk: WASD / arrows, drag to look. Fly (F): WASD, Q/E down/up, Shift fast, no walls. H: demo mode. Click furniture to move it: drag the gizmo or use the arrow keys (5 cm steps), T move, R rotate, Esc deselect.</p>
+    <p class="hint">Free walk: WASD / arrows, drag (left or right button) to look, scroll or pinch to walk, L locks the mouse. Fly (F): WASD, Q/E down/up, Shift fast, no walls. Click furniture to move it: G grabs it (click drops), or drag the gizmo, or use the arrow keys (5 cm steps); T move, R rotate, X remove, Z put back, Ctrl+Z undo, Esc deselect. M then 1/2 marks stairs/doorway. H: demo mode. F1: all keys.</p>
     <label>Who <select id="persona"></select></label>
     <div id="personanote" class="hint"></div>
     <div id="verifyinfo" class="hint"></div>
@@ -58,6 +58,20 @@
       <span class="measured">measured</span> from the splat geometry and the simulation ·
       <span class="imagined">imagined, not measured</span> generated content, never used for numbers
     </div>
+    <h2>Where the device can go</h2>
+    <label title="the floor from the route's start: green reachable, amber tight (OT to verify), red cut off (striped), grey not scanned; computed from the floor map"><input type="checkbox" id="reach" /> Reach map</label>
+    <label title="the widest way from the route's start to each goal, picked point and room corner; it stops where the device can't pass (computed, not simulated)"><input type="checkbox" id="coverage" checked /> Coverage ghosts</label>
+    <label title="contact ghosts: only the simulated trips that touch something"><input type="checkbox" id="hitghosts" /> Only trips with a contact</label>
+    <label title="what if the device were this wide: the map repaints as you slide">Device width <input type="range" id="reachwidth" min="45" max="100" step="1" value="66" /> <output id="reachwidthout" for="reachwidth"></output></label>
+    <button id="reachplay" title="the wave from the route's start again">Play the wave</button>
+    <button id="markpoint" title="click a spot on the floor (M then 3): checked from the route's start">Pick a point to check</button>
+    <button id="clearpoints" title="forget the points picked in this browser">Clear points</button>
+    <button id="copypoints" title="keep them: paste into config.&lt;scene&gt;.yaml under game:">Copy points as config YAML</button>
+    <div id="reachstatus" class="status"></div>
+    <ul id="reachfindings"></ul>
+    <ul id="reachtargets"></ul>
+    <canvas id="reachcost" width="300" height="64" hidden></canvas>
+    <div id="reachcostinfo" class="hint"></div>
   </aside>
   <aside id="right" class="panel">
     <h2>Fixes</h2>
@@ -105,8 +119,8 @@
     <button id="cleardoors" title="forget the doorways marked in this browser">Clear marked</button>
     <button id="copydoors" title="keep them: paste into config.&lt;scene&gt;.yaml under game:">Copy as config YAML</button>
     <button id="editdoors">Edit marks</button>
-    <p class="hint">Click to mark, drag to look. Right click / Backspace: undo; Esc: cancel. Shift: no snapping; Space: aim at centre. After marking, drag a handle or click a rail side; Enter: done.</p>
-    <p class="hint">VR: off-hand X/A marks a doorway, Y/B marks stairs. Wand B/Y edits saved marks. Trigger places or drags; B/Y undoes; grip cancels or finishes. Off-hand grip disables snapping; off-hand X/A while editing changes the top device. Twist the parked walker to turn it.</p>
+    <p class="hint">Click to mark, drag to look. Right click / Backspace / Ctrl+Z: undo; Esc: cancel. Shift: no snapping; Space: aim at centre. After marking, drag a handle or click a rail side; Enter: done.</p>
+    <p class="hint">VR: wand stick click undoes the last object edit (off-hand grip too: redo). Off-hand X/A marks a doorway, Y/B marks stairs. Wand B/Y edits saved marks. Trigger places or drags; B/Y undoes; grip cancels or finishes. Off-hand grip disables snapping; off-hand X/A while editing changes the top device. Twist the parked walker to turn it.</p>
     <div id="doorstatus" class="status"></div>
     <h2>Cosmos clips <span class="imagined">imagined</span></h2>
     <ul id="clips"></ul>
@@ -171,6 +185,6 @@
     <div id="qrnote" class="hint"></div><button id="closeqr">Close</button></div>
   <div id="tourcap" hidden></div>
   <div id="hud"></div>
-  <script type="module" src="/src/main.ts"></script>
+  <script type="module" src="/src/app.ts"></script>
 </body>
 </html>
