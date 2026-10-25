@@ -161,28 +161,63 @@ def config_objects(gm, w):
         return gm["objects"]
     import yaml
     objs = [o for o in yaml.safe_load((Path(w) / "objects_proposed.yaml").read_text())["objects"] if o["kind"] != "door"]
+    if gm.get("outline_trim_pct"):
+        tighten_outlines(objs, w, gm["outline_trim_pct"])
     # a detection centred inside a bigger one with the same label is a piece of it: a chair's runner 6c split off as its own
     # chair, a round table's top and pedestal (gator_lounge: removing either left the other standing), one table seen twice.
     # Not rugs: a rug is cut by the bump patch in its own box (rug_outline), and a merged box finds some other patch
     area = lambda o: sum(abs(np.cross(*np.c_[np.array(q["poly_xy"])[1:3] - np.array(q["poly_xy"])[0], [0, 0]])[2]) for q in o["parts"])
     label = lambda o: o.get("detected_as", o["kind"])
     inside = lambda h, c: any(Path2d(q["poly_xy"]).contains_point(c) for q in h["parts"])
+    def absorb(host, o):
+        host["instances"] = host.get("instances", [host["instance"]]) + o.get("instances", [o["instance"]])
+        host["parts"] = host["parts"] + o["parts"]
+        b = np.array(host["box_xy"] + o["box_xy"], float)
+        host["box_xy"] = [b.min(0).round(3).tolist(), b.max(0).round(3).tolist()]
+        objs.remove(o)
     for o in sorted([o for o in objs if "instance" in o and o["kind"] != "rug"], key=area):
         c = np.mean([np.mean(q["poly_xy"], 0) for q in o["parts"]], 0)
         host = next((h for h in objs if h is not o and label(h) == label(o) and "instance" in h and area(h) >= area(o) and inside(h, c)), None)
         if host:
-            host["instances"] = host.get("instances", [host["instance"]]) + o.get("instances", [o["instance"]])
-            host["parts"] = host["parts"] + o["parts"]
-            b = np.array(host["box_xy"] + o["box_xy"], float)
-            host["box_xy"] = [b.min(0).round(3).tolist(), b.max(0).round(3).tolist()]
-            objs.remove(o)
+            absorb(host, o)
+    # game.merge_into {part: whole}: a piece 6c labelled as something else (aleroom: the bed's headboard as a bedside table)
+    for part, whole in gm.get("merge_into", {}).items():
+        o, host = (next((h for h in objs if h["name"] == n), None) for n in (part, whole))
+        if o and host:
+            absorb(host, o)
     for o in [o for o in objs if "instance" in o and o["kind"] == "rug"]:
         c = np.mean([np.mean(q["poly_xy"], 0) for q in o["parts"]], 0)
         host = next((h for h in objs if h is not o and h["kind"] == "rug" and "instance" in h and inside(h, c)), None)
         if host:
             host["instances"] = host.get("instances", [host["instance"]]) + [o["instance"]]
             objs.remove(o)
+    # game.rename {name: {name, kind}}: 6c can only pick words from its vocabulary (aleroom: the dresser came out "table",
+    # the desk "bedside_table3", the shoe rack "chair"). detected_as stays, so the standing / merge rules are unchanged
+    for o in objs:
+        o.update(gm.get("rename", {}).get(o["name"], {}))
     return objs
+
+
+def trimmed_rect(p, pct):
+    """Rotated rectangle around 2-D points p: their pct..100-pct extent along their minAreaRect's axes (corners, 4 x 2)."""
+    (cx, cy), _, a = cv2.minAreaRect(p.astype(np.float32))
+    t = np.deg2rad(a)
+    R = np.array([[np.cos(t), -np.sin(t)], [np.sin(t), np.cos(t)]])   # columns: the rectangle's axes
+    lo, hi = np.percentile((p - [cx, cy]) @ R, [pct, 100 - pct], 0)
+    return np.array([[lo[0], lo[1]], [hi[0], lo[1]], [hi[0], hi[1]], [lo[0], hi[1]]]) @ R.T + [cx, cy]
+
+
+def tighten_outlines(objs, w, pct):
+    """Each 6c outline = its labelled points' trimmed_rect. 6c's minAreaRect takes every label, mask spill too: aleroom's
+    bed came out 1.98 x 1.81 m (1.85 x 1.33 at 1%) and the zone rule then gave it the red bucket 30 cm past its side."""
+    z = np.load(Path(w) / "objects_points.npz")
+    for o in objs:
+        p = z["xyz"][z["instance"] == o.get("instance", -1), :2]
+        if len(p) < 50 or len(o["parts"]) != 1:
+            continue
+        poly = trimmed_rect(p, pct)
+        o["poly_xy"] = o["parts"][0]["poly_xy"] = poly.round(3).tolist()
+        o["box_xy"] = [poly.min(0).round(3).tolist(), poly.max(0).round(3).tolist()]
 
 
 _nearest = {}
@@ -232,6 +267,8 @@ def half_extent(v):
 def joined(xyz, seed, cand, vox=0.03):
     """cand points 26-connected (vox grid) through seed or cand points to a seed point."""
     m = seed | cand
+    if not m.any():   # an object whose detected parts left no Gaussians (kitchen5): nothing joins
+        return np.zeros(len(xyz), bool)
     q = np.floor((xyz[m] - xyz[m].min(0)) / vox).astype(int)
     grid = np.zeros(q.max(0) + 1, int)
     grid[tuple(q.T)] = 1
@@ -268,10 +305,14 @@ def object_parts(o, xyz, g, w, lo, cell, shape, v):
         # back, stool2's top, the sofa's seat edge; the rest got ~30% of its label's votes, under the 50% cut) and the rest
         # stayed as a dark half-object when it was removed. Unlabelled Gaussians nearest its labels (col: a neighbour's
         # armrest stays with the neighbour), within JOIN_M of them across the floor, above the floor and under its top
+        # Only for one that stands: what joins a box or basket is the counter or cabinet under it (kitchen4's basket took the
+        # sink counter, its boxes the cabinet tops)
         from scipy.spatial import cKDTree
         lab = z["xyz"][np.isin(z["instance"], ids)]
-        cand = ~sel & (inst == -1) & np.isin(col, ids) & (xyz[:, 2] > 0.02) & (xyz[:, 2] < lab[:, 2].max() + 0.05)
+        cand = ~sel & (inst == -1) & np.isin(col, ids) & (xyz[:, 2] > 0.02) & (xyz[:, 2] < lab[:, 2].max() + 0.05) & (z0 < 0)
         cand[cand] = cKDTree(lab[:, :2]).query(xyz[cand, :2], distance_upper_bound=JOIN_M)[0] <= JOIN_M
+        for fx in g.get("fixed") or []:   # nor furniture 6c never labelled (lounge stool2 took the bench it stands against)
+            cand[cand] = ~near_poly(xyz[cand, :2], np.array(fx["poly_xy"], float), 0.03)
         sel |= joined(xyz, sel, cand)
         # but never the wall it stands against: the trash can took the white wall behind and above its lid (6c's mask spilt
         # onto it, and the grow and on-top rules took the rest). A wall has the object on one side; a line with 3%+ of its
@@ -327,14 +368,19 @@ def main(cfg):
         (x0, y0), (x1, y1) = np.sort(np.array(o["box_xy"], float), 0)
         inbox = lambda m: (xyz[:, 0] >= x0 - m) & (xyz[:, 0] <= x1 + m) & (xyz[:, 1] >= y0 - m) & (xyz[:, 1] <= y1 + m)
         sel = ~taken & object_parts(o, xyz, g, w, lo, cell, shape, v)
-        assert (sel & solid).sum() > 10, f"object {o['name']}: no Gaussians in its box"
+        if (sel & solid).sum() <= 10:   # detected, then cleaned away (kitchen5 bedside_table): no movable object to export
+            print(f"WARN object {o['name']}: no Gaussians in its box, skipped")
+            continue
         taken |= sel
         pivot = np.array([(x0 + x1) / 2, (y0 + y1) / 2, 0.0])
         ov = v[sel].copy()
         ov["x"], ov["y"] = ov["x"] - pivot[0], ov["y"] - pivot[1]
         write_ply(out / "objects" / f"{o['name']}.ply", ov)
-        (cx, cy), (bw, bh), ang = cv2.minAreaRect((xyz[sel & solid, :2] - pivot[:2]).astype(np.float32))
-        foot = cv2.boxPoints(((cx, cy), (bw, bh), ang))
+        if gm.get("outline_trim_pct"):   # the collision footprint too: a few stray Gaussians made aleroom's bed 1.90 x 2.64 m
+            foot = trimmed_rect(xyz[sel & solid, :2] - pivot[:2], gm["outline_trim_pct"])
+        else:
+            (cx, cy), (bw, bh), ang = cv2.minAreaRect((xyz[sel & solid, :2] - pivot[:2]).astype(np.float32))
+            foot = cv2.boxPoints(((cx, cy), (bw, bh), ang))
         height = float(np.percentile(xyz[sel & solid, 2], 99))
         if np.percentile(xyz[sel & solid, 2], 2) > g["obstacle_z"][0]:
             raised.add(o["name"])
@@ -374,16 +420,19 @@ def main(cfg):
     occ.stamp_synthetic(g, lo, shape, floor, obstacles, bumps, bump_h)
     est = occ.classify_thin(g, bumps, bump_h)
     for o in objects:   # nobody filmed the floor under the furniture: assume the fitted plane (z=0) continues
-        if o["name"] in raised:   # a box on a cabinet: the cabinet under it stays an obstacle
-            continue
         poly = ((np.array(o["footprint"]) + o["pivot"][:2] - lo) / cell)[:, ::-1].astype(np.int32)  # (j, i) for cv2
         m = np.zeros(shape, np.uint8)
         cv2.fillPoly(m, [poly], 1)
+        # a bed's underside is never filmed, so its lowest Gaussians are high too: raised only if something is left under it
+        unsupported = gm.get("raised_needs_support") and obstacles[cv2.erode(m, np.ones((3, 3), np.uint8)) > 0].mean() < 0.05
+        if o["name"] in raised and not unsupported:   # a box on a cabinet: the cabinet under it stays an obstacle
+            continue
         floor |= m.astype(bool)
         # the cut leaves the object's outermost Gaussians (centres just outside its box) as a 1-cell outline in the
         # obstacle layer: a phantom box that traps anything placed inside its old spot. The object itself is stamped
         # back at its live pose, so clear one cell around its footprint (walls are further than that from a box)
         obstacles &= ~cv2.dilate(m, np.ones((3, 3), np.uint8)).astype(bool)
+    occ.stamp_fixed(g, lo, shape, obstacles)   # after the clearing above: a movable object's old spot may border one
     cov = coverage(w, lo, shape, cell, layers(xyz[solid], g, lo, shape)[1])
     if gm.get("fence_min_views"):   # walk (and replan) only where enough capture views saw the floor: no blur, no holes
         floor &= cov >= gm["fence_min_views"]
@@ -418,6 +467,8 @@ def main(cfg):
 
     path = json.loads((w / "path.json").read_text()) if (w / "path.json").exists() else {}
     route = {"start": cfg["plan"].get("start") or path.get("start_xy"), "goal": cfg["plan"].get("goal") or path.get("goal_xy")}
+    if cfg["plan"].get("via"):  # waypoints (stage 7): the viewer plans the same legs (route_via.ts)
+        route["via"] = cfg["plan"]["via"]
     assert route["start"] and route["goal"], "no start/goal: set plan.start/goal or run stage 7 first"
     # every route the patient walks, weighted by trips per night; night routes get the darkness multiplier.
     # Without game.routes: the one stage-7 route, at risk.trips_per_night, at night (as before)
@@ -435,7 +486,7 @@ def main(cfg):
              "splat": "main.ply", "removed_splat": "removed.ply" if (w / "removed.ply").exists() else None,
              "shell": "shell.json" if (w / "shell.json").exists() else None,
              "verification": "verification.json" if (w / "verification.json").exists() else None,
-             "synthetic": g.get("synthetic") or [], "scale_note": cfg["scale"].get("note"),
+             "synthetic": g.get("synthetic") or [], "scale_note": cfg["scale"].get("note"), "bump_note": g.get("no_bumps"),
              "grid": {"origin_xy": lo.round(4).tolist(), "cell_m": cell, "shape": list(shape),
                       "index": "flat i*ny + j; cell (i,j) spans origin + (i,j)*cell_m",
                       "floor": "floor.u8", "obstacles": "obstacles.u8", "bump_height_m": "bump.f32",
@@ -459,7 +510,9 @@ def main(cfg):
              "hazard_rules": {"clearance_margin_m": margin, "bump_min_m": g["bump_z"][0], "bump_link_cells": g.get("bump_link_cells", 1), "bump_limit_m": cfg["hazards"]["bump_limit_m"],
                               # stage 6b's measured map error: within it of a limit = borderline, OT to verify
                               "margin_m": {k: v or 0.0 for k, v in (json.loads((w / "accuracy.json").read_text())["margin_m"]
-                                                                    if (w / "accuracy.json").exists() else {"width": 0, "height": 0}).items()}}}
+                                                                    if (w / "accuracy.json").exists() else {"width": 0, "height": 0}).items()}},
+             # furniture left in the room splat (grid.fixed): solid in the obstacle layer, never offered to move or remove
+             "fixed": [{"name": f["name"], "kind": f.get("kind", "other"), "footprint": f["poly_xy"], "movable": False} for f in g.get("fixed") or []]}
     (out / "scene.json").write_text(json.dumps(scene, indent=1))
     m = {"out": str(out.relative_to(ROOT)), "objects": {o["name"]: o["height_m"] for o in objects},
          "main_gaussians": int((~taken).sum()), "coverage_good_pct": round(100 * float((cov[floor] >= COVERAGE_GOOD).mean()), 1)}

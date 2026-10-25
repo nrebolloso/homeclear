@@ -1,5 +1,19 @@
 # Status
 
+## While you were out (2026-10-25, branch merge-juan, pushed to origin/merge-juan only; main and demo-safe untouched)
+- **Done:** sofa2 streaks removed by hand (box drop, before/after renders); bench, conference table and booth fixed in the lounge floor map; merge-juan merged with main and pushed; kitchen4 rebuilt in separate folders and compared (BLOCKERS 22). The comparison found removal over-selecting things on counters and cabinets, fixed in b7c2484 (lounge unchanged).
+- **Lounge as the VR scene:** yes. 94 m² walkable after the fixed furniture, no invisible obstacles, 17 movable objects. Its scale is ASSUMED (camera height), and it has no floor hazards, so the kitchen stays the hazard demo.
+- **In progress:** bedbath_hall and night1 on HPG (SfM mapping); watchers build their unpolished montage demos when training finishes.
+- **Needs you:** BLOCKERS 22 (kitchen4 walker width and lama fills before any demo re-export); merging merge-juan into main (it now contains main with futures-fan and rug-calibration).
+- **Risks:** re-exporting kitchen4 changes its finding count (17 to 13) because of the walker spec, not the code; local rebuilds can't make lama fills.
+
+## While you were out (2026-10-24, branch merge-juan, nothing pushed, demo-safe tag untouched)
+- **Done:** lounge floor has no invisible obstacles left (97 m² walkable, open floor clear); removing an object now takes the whole object, including the parts 6c labelled too weakly (71649ea, self-check `tests/test_export_join.py`, all Python checks pass); `gator_lounge_lighter_v1.0.5.zip` is in the scratchpad; stage changes synced to HPG.
+- **Audit (remove each object, look from 3 angles):** sofa, chair3 and the other 14 come out clean with no regressions. sofa2 leaves thin floating streaks; stool2 leaves a small patch (probably the unlabelled bench).
+- **In progress:** bedbath_hall (nicoroom) on HPG (SfM map running, then densify and train); night1/turlington (GPU SfM running). Watchers build the demos when training finishes.
+- **Needs you:** BLOCKERS 10 (accept sofa2 streaks or retrain with a Gaussian-size cap; render lift not adopted); OK to push d012fb8..d129e81 to main.
+- **Risks:** the new stage 12 rules change every `objects: auto` scene on re-export (only the lounge rebuilt so far); viewer tests and e2e pass.
+
 ## Deterministic demo (seed 7), main + demo-safe at 782f15d
 - **Seed:** `configs/demo.json` kitchen4_lighter seed 7 (`?demo=1`, picked with `e2e/seed_search.ts`, shuffler + fan + round trip + `&rugfold=1`): the mat corner folds at 11.75 s (4.2 cm), the next fan is 30/30 over the mat at ~1.6 toe catches/month, no furniture pushed. Autoplay steps in fixed 1/60 s ticks that wait on the physics and fan workers (`viewer/src/demorun.ts`), so a slow machine plays the same walk slower. "Reset demo" (viewer toolbar) restores poses, tape, removals, folds, the fan and the replay. Free walk, VR and hand edits stay on the wall clock.
 - **Fixes on the way:** taping the mat drops a fan still in its worker (it was sampled untaped and showed up after, 0.98/month); game_synth checks run with `&nophys`.

@@ -39,6 +39,20 @@ After the freeze: fixes and polish only.
     the folder "Homeclear scene bundles" (https://drive.google.com/drive/folders/1sMKaR_2YbwhMRrhvPaULsURbEhZY0rlH) is
     empty. Drag in `kitchen4_lighter_v1.zip` (`~/Downloads/kitchen4_lighter_v1.zip` on the laptop, or /blue/dream_team/nrebolloso/scene_bundles/) and share
     the folder with the team. Teammates without HiPerGator access can then run `tools/get_scene.sh kitchen4_lighter <zip>`.
+22. **kitchen4 demo vs a rebuild (2026-10-25): nothing changed, two things need a call.** Rebuilding kitchen4_lighter
+   from demo-safe code reproduces the demo exactly (objects, splat, floor/obstacle/bump maps, route, hazards). With the
+   merge-juan code (after fix b7c2484) the movable boxes and basket are identical; standing chairs, the trash can and
+   bedside_table2 cut 1-4% more (bedside_table2 2x: its legs), floor +469 cells (0.19 m²), obstacles -67 cells; route,
+   hazards and 200-trip numbers (1.1 contacts/month) unchanged. The calls:
+   - The demo folder's `walker.json` is the old 0.66 m walker; the config (since a2fbd0f, before demo-safe) is the
+     0.61 m Drive Medical spec. Any re-export shows 13 findings / 4 cm per side instead of 17 / 1 cm.
+   - Removal fills in the demo are lama (HPG only). A local rebuild has ns fills, which show a magenta "imagined"
+     column above the counter. Re-run 12b with lama on HPG before replacing the demo folder.
+   Compare scenes: `kitchen4_oldexport_lighter`, `kitchen4_newexport_lighter` (viewer `?scene=`).
+   **Re-checked 2026-10-25 with the code after the main merge and the stool2 fix (ae6d976):** identical to the b7c2484
+   rebuild (objects, splat, all five grids, route, hazards, walker) apart from the new empty `reach_points` key; 200-trip
+   toe catches/month 1.1 (1.1-1.2) in both. Route renders differ only in the walker labels (0.66 vs 0.61 m) and the
+   standing chairs' cut. `kitchen4_lighter` was not touched. Compare scene: `kitchen4_headexport_lighter`.
 
 **Closed, won't do** (out of scope for the demo):
 - 1. Re-measure the kitchen table's width
