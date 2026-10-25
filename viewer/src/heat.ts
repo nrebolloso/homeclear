@@ -1,4 +1,4 @@
-// Where the simulated nights go wrong, at a glance: a floor heatmap of the rollouts (blue = where feet land, red =
+// Where the simulated nights go wrong, at a glance: a floor heatmap of the rollouts (cyan = where feet land, orange to red =
 // expected toe contacts) and a 30-night strip drawn from the current rate (one Poisson draw per night, fixed seed).
 import * as THREE from 'three';
 import type { GridMeta } from './grid.ts';
@@ -36,8 +36,9 @@ export function createHeatOverlay(g: GridMeta, scene: THREE.Scene) {
       for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
         const k = i * ny + j, p = ((ny - 1 - j) * nx + i) * 4;
         const a = ms ? Math.sqrt(st[k] / ms) : 0, r = mh ? Math.sqrt(hi[k] / mh) : 0;
-        if (r > 0.05) img.data.set([255, Math.round(200 * (1 - r)), 40, Math.round(90 + 165 * r)], p);
-        else if (a > 0.05) img.data.set([70, 150, 255, Math.round(150 * a)], p);
+        // the viewer's palette: contacts orange (bump rings) -> red (leg flash), footsteps cyan (ghosts)
+        if (r > 0.25) img.data.set([255, Math.round(138 - 90 * r), Math.round(31 + 17 * r), Math.round(255 * Math.min(1, 1.6 * (r - 0.25) + 0.35))], p);   // only the hot spots glow
+        else if (a > 0.05) img.data.set([76, 201, 240, Math.round(160 * a)], p);
       }
       ctx.putImageData(img, 0, 0);
       tex.needsUpdate = true;

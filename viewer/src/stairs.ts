@@ -28,6 +28,8 @@ export interface Stair {
   trips_per_day?: number;
   /** what waits at the top: a folding walker or a rollator (it has a seat: a rest after the climb) */
   top_device?: 'walker' | 'rollator';
+  /** the scan goes on above the last tread measured (measureStair's more_above_z): the flight was only partly seen */
+  scan_continues_above?: boolean;
 }
 export type Side = 'left' | 'right';
 /** The walking aid's frame (walker.ts WalkerCfg): x forward from the user's body, the frame from user_gap_m to +depth_m. */
@@ -189,21 +191,26 @@ export function stairChecks(st: Stair, c: StairCtx): CheckOut[] {
     out.push({ id: id(w), kind: 'stairs', label, verdict, note, position, ...extra });
   const mine = c.fixtures.filter(f => f.attach === st.name);
   const z = st.treads_z ?? [];
+  // A flight the scan only partly resolved (the landing well above the last tread found, or more scan above it) can't
+  // fail on riser or tread numbers: those come from a few steps of blur. Say so and send it to the tape (MEASURING.md).
+  const thin = st.measured === 'splat' && z.length > 0 && (!!st.scan_continues_above || (st.top_z != null && st.top_z - z[z.length - 1] > 0.3));
+  const scanOnly = (v: Verdict): Verdict => (thin && v !== 'ok' ? 'OT to verify' : v);
+  const thinNote = thin ? ` · the scan resolves only ${z.length} step${z.length === 1 ? '' : 's'} of this flight: tape-measure it (MEASURING.md)` : '';
   // 1-2. risers: each one, and how much they differ (uneven risers trip people who learned the first step)
   if (z.length) {
     const risers = z.map((v, k) => v - (k ? z[k - 1] : 0)), hi = Math.max(...risers), lo = Math.min(...risers);
     add('risers', `${st.name}: risers ${cm(lo)}–${cm(hi)} (code max ${(CODE.riser_max_m * 100).toFixed(1)} cm)`,
-      hi > CODE.riser_max_m + e ? 'fail' : hi > CODE.riser_max_m - e ? 'borderline, OT to verify' : 'ok',
-      `${z.length} tread${z.length === 1 ? '' : 's'} ${src}${st.measured === 'splat' ? ' (treads the scan missed are not counted)' : ''}`, { value_m: hi, limit_m: [0, CODE.riser_max_m] });
+      scanOnly(hi > CODE.riser_max_m + e ? 'fail' : hi > CODE.riser_max_m - e ? 'borderline, OT to verify' : 'ok'),
+      `${z.length} tread${z.length === 1 ? '' : 's'} ${src}${st.measured === 'splat' ? ' (treads the scan missed are not counted)' : ''}${thinNote}`, { value_m: hi, limit_m: [0, CODE.riser_max_m] });
     if (risers.length >= 2)
       add('riser_var', `${st.name}: risers differ by ${((hi - lo) * 100).toFixed(1)} cm (code max ${(CODE.riser_var_m * 100).toFixed(2)} cm)`,
-        hi - lo > CODE.riser_var_m + e ? 'fail' : hi - lo > CODE.riser_var_m - e ? 'borderline, OT to verify' : 'ok',
-        'an uneven step catches a foot that expects the same height', { value_m: hi - lo, limit_m: [0, CODE.riser_var_m] });
+        scanOnly(hi - lo > CODE.riser_var_m + e ? 'fail' : hi - lo > CODE.riser_var_m - e ? 'borderline, OT to verify' : 'ok'),
+        `an uneven step catches a foot that expects the same height${thinNote}`, { value_m: hi - lo, limit_m: [0, CODE.riser_var_m] });
   } else add('risers', `${st.name}: steps not captured`, 'OT to verify', 'the scan saw no treads: film the stairs from the bottom, or tape-measure them');
   // 3-4. tread depth and width
   if (st.tread_depth_m) add('tread', `${st.name}: treads ${cm(st.tread_depth_m)} deep (code min ${(CODE.tread_min_m * 100).toFixed(1)} cm)`,
-    st.tread_depth_m < CODE.tread_min_m - e ? 'fail' : st.tread_depth_m < CODE.tread_min_m + e ? 'borderline, OT to verify' : 'ok',
-    'a short tread leaves the heel hanging, worse coming down', { value_m: st.tread_depth_m, limit_m: [CODE.tread_min_m, 1] });
+    scanOnly(st.tread_depth_m < CODE.tread_min_m - e ? 'fail' : st.tread_depth_m < CODE.tread_min_m + e ? 'borderline, OT to verify' : 'ok'),
+    `a short tread leaves the heel hanging, worse coming down${thinNote}`, { value_m: st.tread_depth_m, limit_m: [CODE.tread_min_m, 1] });
   const w = st.width_m ?? F.width, ew = Math.max(c.margin.width, 0.03);   // marked by clicks: a few cm
   add('width', `${st.name}: ${cm(w)} wide (code min ${cm(CODE.width_min_m)})`, w < CODE.width_min_m - ew ? 'fail' : w < CODE.width_min_m + ew ? 'borderline, OT to verify' : 'ok',
     'room for a person and a rail on each side', { value_m: w, limit_m: [CODE.width_min_m, 9] });

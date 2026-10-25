@@ -24,6 +24,8 @@ def main(cfg):
                     f"fps={fps},scale='if(gt(iw,ih),min({s},iw),-2)':'if(gt(iw,ih),-2,min({s},ih))'",
                     "-q:v", "2", str(cand / "%05d.jpg")], check=True)
     files = sorted(cand.glob("*.jpg"))
+    ex = fc.get("exclude_s", [])  # [[start, end], ...] seconds of footage to skip (a hand or person in frame)
+    files = [f for n, f in enumerate(files) if not any(a <= n / fps <= b for a, b in ex)]
     sharp = np.array([cv2.Laplacian(cv2.imread(str(f), cv2.IMREAD_GRAYSCALE), cv2.CV_64F).var() for f in files])
     keep = [w[np.argmax(sharp[w])] for w in np.array_split(np.arange(len(files)), min(fc["target"], len(files)))]
     for i in keep:

@@ -1,15 +1,17 @@
 import * as THREE from 'three';
 import type { FrontendAdapter, mountFrontend } from './frontend.ts';
 import { summarizeChanges } from './frontend-model.ts';
+import { pulse, MENU_HOLD_S } from './controls.ts';
 
 // Scene meshes, not DOM: the same frontend actions remain available in WebXR.
-// Left stick click is unused by renovation marking; consume trigger gestures while the menu is open.
+// Holding the left stick click opens the menu (a tap is too easy to hit by accident; clicking while it is open closes it).
+// Renovation marking doesn't use it; trigger gestures are consumed while the menu is open.
 export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.Camera; adapter: FrontendAdapter; frontend: ReturnType<typeof mountFrontend> }) {
   const root = new THREE.Group(); root.name = 'frontend-xr-menu'; root.visible = false; D.scene.add(root);
   const ray = new THREE.Raycaster(), v = new THREE.Vector3(), dir = new THREE.Vector3();
   const controllers = [D.renderer.xr.getController(0), D.renderer.xr.getController(1)];
   const sources = new Map<THREE.Object3D, XRInputSource>(); const consumed = new Set<THREE.Object3D>();
-  let stickWas = false, page: 'main' | 'filters' | 'costs' = 'main', fingerprint = '';
+  let stickWas = false, stickSince = 0, stickFired = false, page: 'main' | 'filters' | 'costs' = 'main', fingerprint = '';
   const hitTargets: THREE.Mesh[] = []; const disposable: { dispose(): void }[] = [];
   const inspectionRoot = new THREE.Group(); inspectionRoot.name = 'frontend-xr-inspection'; inspectionRoot.visible = false; D.scene.add(inspectionRoot);
   const inspectionResources: { dispose(): void }[] = []; let inspectionKey = '';
@@ -99,14 +101,16 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
           inspectionKey = key; inspectionRoot.clear(); inspectionResources.splice(0).forEach(r => r.dispose());
           const title = item.title.match(/.{1,42}(?:\s|$)|.{1,42}/g)?.map(s => s.trim()).join('\n') ?? item.title;
           const cost = item.change ? item.change.cost.source === 'placeholder' ? 'Cost & installation: pending estimate' : `$${item.change.cost.usd} · ${item.change.cost.minutes} min · ${item.change.cost.helpers} helper(s)` : 'Finding for occupational therapist review';
-          tile(`${title}\n${cost}\nLeft stick click: previous / next controls`, 0, 0, .7, .25, undefined, false, inspectionRoot);
+          tile(`${title}\n${cost}\nHold left stick click: previous / next controls`, 0, 0, .7, .25, undefined, false, inspectionRoot);
           inspectionRoot.position.set(item.at[0], item.at[1], 1.15);
         }
         inspectionRoot.quaternion.copy(D.camera.getWorldQuaternion(new THREE.Quaternion()));
       }
       const left = [...D.renderer.xr.getSession()?.inputSources ?? []].find(s => s.handedness === 'left');
       const pressed = !!left?.gamepad?.buttons[3]?.pressed;
-      if (pressed && !stickWas) root.visible ? close() : open(); stickWas = pressed;
+      if (pressed && !stickWas) { stickSince = performance.now(); stickFired = false; }
+      if (pressed && !stickFired && (root.visible || performance.now() - stickSince >= MENU_HOLD_S * 1000)) { stickFired = true; root.visible ? close() : open(); pulse(left?.gamepad, 0.4, 40); }
+      stickWas = pressed;
       if (!root.visible) return;
       const s = D.adapter.snapshot(), next = JSON.stringify([page, s.paused, s.comparison === 0, s.changes.length, ...['night', 'particle-path', 'spot', 'improvement-highlights', 'reimghosts'].map(id => box(id).checked)]);
       if (fingerprint !== next) { fingerprint = next; draw(); }

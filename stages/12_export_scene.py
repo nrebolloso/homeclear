@@ -10,6 +10,8 @@ import importlib, json, sys
 from pathlib import Path
 sys.path[:0] = [str(Path(__file__).resolve().parents[1]), str(Path(__file__).resolve().parent)]
 from common import run_stage, read_ply, write_ply, ply_xyz, solid_mask, ROOT
+from hazards_spec import add_spec_fields, validate as validate_hazards
+from maps_export import export_maps
 
 import cv2
 from matplotlib.path import Path as Path2d
@@ -27,6 +29,7 @@ POINT_KINDS = {"switch", "phone", "outlet", "grab_bar_wall"}
 MEMBER_M = 0.03   # auto objects: a Gaussian belongs to the object of its nearest labelled point, if that is this close
 GROW_M = 0.10     # ... or this close when it is also inside that object's footprint and height band (faint Gaussians 6c never labelled)
 ON_TOP_M = 0.3    # unlabelled things in its footprint up to this far above it go with it (a cup on a removed table must not float)
+REACH_M = 0.05    # ... but none whose splat reaches this far past its box (a wall sheet centred inside it)
 STANDS_M = 0.3    # an object labelled from below this stands on the floor: its legs 6c missed go with it down to the floor
 
 
@@ -135,11 +138,14 @@ def coverage(w, lo, shape, cell, walls):
     return np.minimum(n, 255).reshape(shape).astype(np.uint8)
 
 
-def rug_outline(w, lo, cell, shape, box_xy, grow=0.03):
-    """Rotated rectangle (floor frame) around the largest stage 6 bump patch inside box_xy, grown for the blurry edge."""
-    (i0, j0), (i1, j1) = np.clip(np.round((np.sort(np.array(box_xy, float), 0) - lo) / cell).astype(int), 0, shape)
+def rug_outline(w, lo, cell, shape, o, grow=0.03):
+    """Rotated rectangle (floor frame) around the largest stage 6 bump patch inside the rug's box_xy, grown for the blurry
+    edge. No bump there (a thin mat on a textureless floor): a stage 6c rug's own outline, from its labelled points."""
+    (i0, j0), (i1, j1) = np.clip(np.round((np.sort(np.array(o["box_xy"], float), 0) - lo) / cell).astype(int), 0, shape)
     lab, n = ndimage.label(np.load(w / "bumps.npy")[i0:i1, j0:j1])
-    assert n, "rug: no measured bump cells in its box"
+    if not n:
+        assert "poly_xy" in o, f"{o['name']}: no measured bump cells in its box"   # a hand box would take bare floor
+        return o["poly_xy"]
     i, j = np.nonzero(lab == 1 + np.argmax(ndimage.sum(lab > 0, lab, range(1, n + 1))))
     xy = (np.stack([i + i0, j + j0], 1) + 0.5) * cell + lo
     (cx, cy), (bw, bh), ang = cv2.minAreaRect(xy.astype(np.float32))
@@ -174,35 +180,95 @@ def nearest_instance(xyz, w):
     if key not in _nearest:
         z = np.load(Path(w) / "objects_points.npz")
         d, j = cKDTree(z["xyz"]).query(xyz, distance_upper_bound=GROW_M)
+        # and whose labels are nearest with height at 30%: a leg is a column under its own seat or back
+        col = z["instance"][cKDTree(z["xyz"] * [1, 1, 0.3]).query(xyz * [1, 1, 0.3])[1]]
         _nearest.clear()
-        _nearest[key] = np.where(d <= GROW_M, z["instance"][np.minimum(j, len(z["instance"]) - 1)], -1), d
+        _nearest[key] = np.where(d <= GROW_M, z["instance"][np.minimum(j, len(z["instance"]) - 1)], -1), d, col
     return _nearest[key]
 
 
-def object_parts(o, xyz, g, w, lo, cell, shape):
+_walls = {}
+
+
+def room_walls(w, g):
+    """Stage 5c's walls (its shell.json, or fitted here from the splat when the run has none). Tall vertical surfaces:
+    room walls and cabinet sides, some of them noise lines through furniture, so object_parts only trusts the ones an
+    object stands wholly on one side of."""
+    if str(w) not in _walls:
+        if (Path(w) / "shell.json").exists():
+            _walls[str(w)] = json.loads((Path(w) / "shell.json").read_text())["walls"]
+        else:
+            sh = importlib.import_module("05c_shell")
+            v = read_ply(Path(w) / "splat_aligned.ply")
+            _walls[str(w)] = sh.fit_shell(ply_xyz(v), solid_mask(v, min_opacity=g.get("min_opacity", 0.3)), sh.normals(v))["walls"]
+    return _walls[str(w)]
+
+
+def half_extent(v):
+    """Each Gaussian's 2-sigma reach from its centre along the world axes."""
+    from scipy.spatial.transform import Rotation
+    q = np.stack([v["rot_1"], v["rot_2"], v["rot_3"], v["rot_0"]], 1)
+    R = Rotation.from_quat(q / (np.linalg.norm(q, axis=1, keepdims=True) + 1e-12)).as_matrix()
+    s = np.exp(np.stack([v["scale_0"], v["scale_1"], v["scale_2"]], 1))
+    return 2 * np.sqrt(((R * s[:, None, :]) ** 2).sum(2))
+
+
+def object_parts(o, xyz, g, w, lo, cell, shape, v):
     """Gaussians that belong to config object o (its height-limited parts, with a cut margin). tools/lighter_clean.py reuses it."""
     in_xy = lambda q, cm: (near_poly(xyz[:, :2], np.array(q["poly_xy"], float), cm) if "poly_xy" in q else
                            (xyz[:, :2] >= np.min(q["box_xy"], 0) - cm).all(1) & (xyz[:, :2] <= np.max(q["box_xy"], 0) + cm).all(1))
     in_parts = lambda parts, cm: np.any([in_xy(q, cm) & (xyz[:, 2] >= q["z"][0]) & (xyz[:, 2] <= q["z"][1]) for q in parts], 0)
     if "instance" in o and o.get("kind") != "rug":   # stage 6c detection: its labelled points decide, above the floor band
-        inst, d = nearest_instance(xyz, w)
+        inst, d, col = nearest_instance(xyz, w)
         # inside its footprint, from its lowest labelled point (a box on a cabinet keeps off the cabinet) to ON_TOP_M above
         # its band, it also takes what is nearest to it or to nobody: legs 6c missed and what stood on it
         z = np.load(Path(w) / "objects_points.npz")
         ids = o.get("instances", [o["instance"]])
         z0 = z["xyz"][np.isin(z["instance"], ids), 2].min() - 0.02
-        z0 = g["bump_z"][0] if z0 < STANDS_M else z0
+        # one that stands takes its outline down through the floor: chair7's runners lie flat at 0-3 mm, under the floor
+        # band, 14+ cm from any label, and stayed as two yellow bars on its fill (the fill replaces that floor anyway)
+        z0 = -0.03 if z0 < STANDS_M else z0
         zone = in_parts([{**q, "z": [z0, q["z"][1] + ON_TOP_M]} for q in o["parts"]], 0.02)
         own = np.isin(inst, ids)
         # what is nearest to its own points also goes up to GROW_M past its outline, above the floor: a chair back's
         # far side 6c never labelled sits 5-12 cm behind the outline and stayed against the wall as a pale chair back
         near = in_parts([{**q, "z": [max(z0, STANDS_M), q["z"][1] + ON_TOP_M]} for q in o["parts"]], GROW_M)
-        # its own labelled points go even below the floor band: a chair's runners lie flat on the floor
-        return (own & (d <= MEMBER_M)) | (near & own) | (zone & (own | (inst == -1)) & (xyz[:, 2] >= g["bump_z"][0]))
+        # what is nearest to nobody goes to the one whose labels it stands under, not whichever outline came first: chair7's
+        # leg bottoms (labelled from 22 cm) went to chair4 and the table, whose outlines overlap it, and stayed in its fill
+        sel = (own & (d <= MEMBER_M)) | (near & own) | (zone & (own | ((inst == -1) & np.isin(col, ids))))
+        # but never the wall it stands against: the trash can took the white wall behind and above its lid (6c's mask spilt
+        # onto it, and the grow and on-top rules took the rest). A wall has the object on one side; a line with 3%+ of its
+        # labels on or past it runs through it (a noise line, or a cabinet face it straddles). Up to its top the wall's
+        # points sit within 2 cm of the line (its back can be 2 cm off); above it nothing of it is within GROW_M of a wall
+        mem = own & (d <= MEMBER_M)
+        z1 = xyz[mem, 2].max() if mem.any() else z0
+        walled = False
+        for wl in room_walls(w, g):
+            a, b = np.array(wl["a"]), np.array(wl["b"])
+            e = (b - a) / np.linalg.norm(b - a)
+            t, sd = (xyz[:, :2] - a) @ e, (xyz[:, :2] - a) @ [-e[1], e[0]]
+            on = (t >= 0) & (t <= np.linalg.norm(b - a))
+            if (mem & on).sum() < 50:
+                continue
+            sd *= np.sign(np.median(sd[mem & on]))   # > 0: the object's side
+            if (sd[mem & on] < 0.02).mean() > 0.03:
+                continue
+            sel &= ~(on & (sd < np.where(xyz[:, 2] > z1, GROW_M, 0.02)))
+            walled |= (sd[mem & on] < GROW_M).sum() >= 50   # it stands against this one
+        if not walled:
+            return sel
+        # nor a big wall splat centred inside it: the moved trash can kept white sheets beside its lid, Gaussians whose
+        # 2-sigma ellipsoid reaches REACH_M past its own box (1-99%). They stay in the room, where they were drawn. Only
+        # against a wall: a table's own blurry edge splats would stay as a halo where it stood
+        k = np.flatnonzero(sel)
+        box = np.percentile(xyz[k], [1, 99], 0)
+        h = half_extent(v[k])
+        sel[k[(np.maximum(box[0] - (xyz[k] - h), 0) + np.maximum(xyz[k] + h - box[1], 0)).max(1) > REACH_M]] = False
+        return sel
     # parts: the object is only these height-limited boxes (a table = top slab + legs; chairs pushed in under it stay put)
     parts = o.get("parts") or [{"box_xy": o["box_xy"], "z": [g["bump_z"][0], o.get("z_max", 2.0)]}]
     if o.get("kind") == "rug":   # a rug lies at an angle: its box takes bare floor too, so cut the measured bump patch instead
-        parts = [{**q, "poly_xy": rug_outline(w, lo, cell, shape, o["box_xy"])} for q in parts]
+        parts = [{**q, "poly_xy": rug_outline(w, lo, cell, shape, o)} for q in parts]
     # a part is a box_xy or a poly_xy outline (a table turned off the axes: its bounding box would take the chair backs),
     # taken with a margin: an object's sides sit on or just past its outline (a bed's sides 1-3 cm out stayed in the
     # room when it was moved). A rug has none: its edge Gaussians are floor-height, the margin would take floor.
@@ -223,7 +289,7 @@ def main(cfg):
     for o in config_objects(gm, w):
         (x0, y0), (x1, y1) = np.sort(np.array(o["box_xy"], float), 0)
         inbox = lambda m: (xyz[:, 0] >= x0 - m) & (xyz[:, 0] <= x1 + m) & (xyz[:, 1] >= y0 - m) & (xyz[:, 1] <= y1 + m)
-        sel = ~taken & object_parts(o, xyz, g, w, lo, cell, shape)
+        sel = ~taken & object_parts(o, xyz, g, w, lo, cell, shape, v)
         assert (sel & solid).sum() > 10, f"object {o['name']}: no Gaussians in its box"
         taken |= sel
         pivot = np.array([(x0 + x1) / 2, (y0 + y1) / 2, 0.0])
@@ -250,7 +316,7 @@ def main(cfg):
             fv[f"f_dc_{k}"], fv[f"scale_{k}"] = dc[k], np.log(0.012 if k < 2 else 0.002)
         fv["opacity"], fv["rot_0"] = 4.0, 1.0
         if o.get("kind") == "rug":   # only where the rug was cut out
-            fv = fv[Path2d(rug_outline(w, lo, cell, shape, o["box_xy"])).contains_points(np.stack([fv["x"], fv["y"]], 1))]
+            fv = fv[Path2d(rug_outline(w, lo, cell, shape, o)).contains_points(np.stack([fv["x"], fv["y"]], 1))]
         write_ply(out / "objects" / f"fill_{o['name']}.ply", fv)
         surface = surface_height(xyz[sel & solid, 2], o.get("surface_z") or SURFACE_Z[o.get("kind")]) if o.get("kind") in SURFACE_Z else None
         objects.append({"name": o["name"], "kind": o.get("kind", "other"), "splat": f"objects/{o['name']}.ply",
@@ -289,6 +355,7 @@ def main(cfg):
     bump_h.astype(np.float32).tofile(out / "bump.f32")
     est.astype(np.uint8).tofile(out / "bump_estimated.u8")
     cov.tofile(out / "coverage.u8")
+    maps = export_maps(out, lo, cell, floor, obstacles, bump_h, cov, COVERAGE_GOOD)   # the same grids as PNG + JSON for people and other tools
 
     margin = cfg["hazards"]["clearance_margin_m"]
     hz = json.loads((w / "hazards.json").read_text())["hazards"] if (w / "hazards.json").exists() else []
@@ -305,7 +372,11 @@ def main(cfg):
         for r in json.loads((w / "reason.json").read_text())["hazards"]:
             hz.append({"id": len(hz), "type": r["kind"], "source": "cosmos_reason", "position_m": r["position_m"],
                        "verdict": r["verdict"], "measured": r.get("measured"), "frames": len(r["frames"]),
-                       "note": r["note"] or r["why"], "ot_check": r["verdict"] != "dismissed"})
+                       "note": r["note"] or r["why"] or f"Cosmos Reason: {r['kind']}", "ot_check": r["verdict"] != "dismissed", "height_m": r.get("height_m")})
+    for h in hz:
+        add_spec_fields(h)   # SPEC section 5's fields next to stage 8's own, which the viewer and the report read
+    bad = validate_hazards({"hazards": hz})
+    assert not bad, f"hazards.json is not in the SPEC shape: {bad}"
     (out / "hazards.json").write_text(json.dumps({"frame": "floor frame, metres, z up", "hazards": hz}, indent=1))
 
     path = json.loads((w / "path.json").read_text()) if (w / "path.json").exists() else {}
@@ -333,6 +404,7 @@ def main(cfg):
                       "floor": "floor.u8", "obstacles": "obstacles.u8", "bump_height_m": "bump.f32",
                       "bump_estimated": "bump_estimated.u8",
                       "coverage": "coverage.u8", "coverage_good": COVERAGE_GOOD},
+             "maps": maps,   # occupancy / bumps / coverage as PNG + JSON (additive: the viewer reads the raw grids above)
              "objects": objects, "fixtures": fixtures(gm, xyz, solid),
              # transfer / reach / emergency-access rules (checks.ts); persona carries knee height and reach
              "transfer": {"min_above_knee_m": 0.05, "max_above_knee_m": 0.20, "reach_height_m": [0.3, 1.3], **gm.get("transfer", {})},
@@ -356,4 +428,7 @@ def main(cfg):
 
 
 if __name__ == "__main__":
+    _v = np.zeros(1, [(k, "f4") for k in ("rot_0", "rot_1", "rot_2", "rot_3", "scale_0", "scale_1", "scale_2")])
+    _v["rot_0"], _v["rot_3"], _v["scale_0"], _v["scale_1"], _v["scale_2"] = np.cos(np.pi / 4), np.sin(np.pi / 4), np.log(0.1), np.log(0.01), np.log(0.01)
+    assert np.allclose(half_extent(_v), [[0.02, 0.2, 0.02]], atol=1e-6)   # self-check: a 10 cm x-splat turned 90 deg reaches along y
     run_stage("12_export_scene", main)

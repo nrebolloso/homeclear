@@ -107,7 +107,7 @@ def build():
     write_splat(work / "splat_aligned.ply", *scene())
     (work / "cameras.json").write_text(json.dumps(cameras()))
     (work / "align.json").write_text(json.dumps({"T_colmap_to_floor": np.eye(4).tolist(), "normal": [0, 0, 1]}))
-    cfg = yaml.safe_load((ROOT / "config.yaml").read_text())
+    cfg = yaml.safe_load((ROOT / "configs" / "home.yaml").read_text())
     cfg.update(run_name=RUN, work_dir=f"out/{RUN}")
     cfg["plan"].update(start=[2.25, 2.7], goal=[5.4, 1.5])
     cfg["game"].update(objects=OBJECTS, interventions=INTERVENTIONS, routes=ROUTES, fixtures=FIXTURES, entry=[0.6, 0.6])

@@ -4,7 +4,7 @@
 // rules that are judgement calls (grab bars, the phone after a fall, the stretcher) are always marked for the OT.
 import { plan, worldFootprint, type GridMeta, type Layers, type Pose, type XY, type Footprinted, type PlanParams } from './grid.ts';
 
-export interface Fixture { name: string; kind: string; xyz?: number[] | null; surface_m?: number | null; measured: boolean; attach?: string; poly_xy?: XY[]; note?: string; side?: 'left' | 'right'; yaw?: number }
+export interface Fixture { name: string; kind: string; xyz?: number[] | null; surface_m?: number | null; measured: boolean; attach?: string; poly_xy?: XY[]; note?: string; side?: 'left' | 'right'; yaw?: number; light_r?: number }
 export interface TransferRules { min_above_knee_m: number; max_above_knee_m: number; reach_height_m: [number, number] }
 export interface EmsRules { stretcher_width_m: number; phone_reach_m: number; entry?: XY | null }
 export interface BodyFacts { knee_height_m?: number; reach_m?: number; hip_precautions?: boolean }
@@ -92,6 +92,12 @@ export function runChecks(c: CheckInput): CheckOut[] {
   // 3. grab bars next to each toilet: the splat can't tell a towel rail from a grab bar
   for (const t of c.fixtures.filter(f => f.kind === 'toilet' && f.xyz)) {
     const bar = c.fixtures.find(f => f.kind === 'grab_bar_wall' && f.xyz && Math.hypot(f.xyz[0] - t.xyz![0], f.xyz[1] - t.xyz![1]) < 1.0);
+    const designed = c.fixtures.find(f => f.kind === 'grab_bar' && f.attach === t.name);   // the bathroom package's (bathroom.ts)
+    if (designed) {
+      out.push({ id: `grab_bar:${t.name}`, kind: 'grab_bar', position: [t.xyz![0], t.xyz![1]], verdict: 'ok',
+        label: `grab bar beside the ${t.name} (${designed.side}, designed)`, note: 'designed, not built: 107 cm into the studs, top 84-91 cm (ADA 604.5); OT to confirm the side' });
+      continue;
+    }
     out.push({ id: `grab_bar:${t.name}`, kind: 'grab_bar', position: [t.xyz![0], t.xyz![1]], verdict: 'OT to verify',
       label: bar ? `grab bar wall marked next to the ${t.name}` : `no grab bar marked next to the ${t.name}`,
       note: bar ? 'check it is a real, anchored grab bar' : 'a wall within 1 m could take one; not measurable from video' });

@@ -7,7 +7,7 @@
 #SBATCH --time=01:00:00
 #SBATCH --output=logs/%x-%j.log
 # One stage that wants a GPU but has no job of its own, e.g. the LaMa fills:
-#   sbatch slurm/gpu_stage.sbatch 12b_fills config.bedroom.yaml --backends telea,ns,lama
+#   sbatch slurm/gpu_stage.sbatch 12b_fills configs/bedroom.yaml --backends telea,ns,lama
 set -uo pipefail
 S=$1; shift
 cd $HPG_ROOT/Homeclear && source slurm/env.sh

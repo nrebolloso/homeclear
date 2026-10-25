@@ -13,7 +13,7 @@ tinted and labelled "imagined, not measured".
 stages/00_env.py ... 12_export_scene.py   one stage each: python stages/NN_x.py <config.yaml>
 common.py                                 config, results/<stage>.json records, PLY I/O, floor RANSAC
 run_all.sh                                whole pipeline from the laptop
-config.*.yaml                             one per scene
+configs/                                  one YAML per scene (home.yaml = the default)
 slurm/                                    HiPerGator jobs (env build, SfM, splats, GLOMAP, motion model, renders, rug fill)
 tools/table_scale.py                      scale from the tape-measured table, with width/height checks
 motion/                                   learned next-footstep model (PhysioNet Multi-Gait-Posture), world-model tests
@@ -112,7 +112,7 @@ See SPEC.md §4.1. **Marker:** `python marker/make_marker.py --print` (`--a4` fo
 print it at 100% ("Actual size"): the black square is 150 mm, and a bank card covers the box on the sheet exactly if the
 printer didn't rescale (then `marker_size_m: 0.150`). No tape yet? Put estimates in `scale.ground_truth` /
 `accuracy.ground_truth` with `estimated: true`: they are reported, but stage 4 says SKIP (unverified) instead of PASS, only a
-gross error (> 15 %) fails it, and they never set stage 8's borderline margins (`config.myhome.yaml` is set up this way).
+gross error (> 15 %) fails it, and they never set stage 8's borderline margins (`configs/myhome.yaml` is set up this way).
 In short: 4K30 on the main lens, focus and exposure locked, slow walking, three heights (chest, waist
 angled down, knee/floor), close orbits around floor hazards, every light on, nothing moved between clips. Tape-measure
 the table (length, width, height) plus one gap and the doorway, into `data/measurements.yaml`.
@@ -120,8 +120,8 @@ the table (length, width, height) plus one gap and the doorway, into `data/measu
 ## Run
 
 ```bash
-./run_all.sh config.public.yaml            # public data first
-./run_all.sh config.kitchen2_nofar.yaml    # a real kitchen
+./run_all.sh configs/public.yaml            # public data first
+./run_all.sh configs/kitchen2_nofar.yaml    # a real kitchen
 SKIP_CLUSTER=1 ./run_all.sh <config>       # only redo the laptop stages (e.g. after changing start/goal)
 ```
 

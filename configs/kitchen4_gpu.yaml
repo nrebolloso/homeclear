@@ -1,9 +1,11 @@
+# BENCHMARK copy of configs/kitchen4.yaml: same video and settings, stages 1-2 through slurm/sfm_gpu.sbatch (GPU SIFT +
+# matching) to compare with kitchen4's CPU run (99.7% registered, 0.587 px, 02_poses 4118 s). Own work_dir: out/kitchen4 untouched.
 # Kitchen (REAL, daylight): ONE continuous 361 s 4K video in data/kitchen4_clips,
 # a loop that ends where it starts. ~2.2 frames/s as kitchen1/3 -> 790 frames.
 # Scale: tape-measured table (data/measurements.yaml), set once the corners are picked after COLMAP.
-run_name: kitchen4
+run_name: kitchen4_gpu
 video: data/kitchen4_4k.mkv
-work_dir: out/kitchen4
+work_dir: out/kitchen4_gpu
 frames:
   target: 790
   min: 600

@@ -154,6 +154,8 @@ export function plan(g: GridMeta, L: Layers, start: XY, goal: XY, pp: PlanParams
   const empty = { cells: [], xy: [], side: [], length_m: 0, dist_m: dist };
   const s = snap(start), t = snap(goal);
   if (s < 0) return { ...empty, error: `no cell has ${half} m clearance; walker cannot fit anywhere` };
+  // both ends in the same one-cell pocket: a 1-point "route" is not a route (and breaks the viewer's route interpolation)
+  if (s === t) return { ...empty, error: 'no path: start and goal snap to the same spot for this walker width' };
   const narrowW = pp.narrow_weight ?? 0, narrowM = pp.narrow_m ?? 0.15;
   const stepCost = (n: number, len: number) => {
     const sd = dist[n] - half;
@@ -298,7 +300,9 @@ export interface Intervention {
   /** raise: a seat/bed/toilet surface (object or fixture name) goes up by by_m (raised toilet seat, bed risers) */
   target?: string; by_m?: number;
   /** add: a new fixture (a touch lamp on the nightstand = a switch within reach); checks treat it like a marked one */
-  fixture?: { name: string; kind: string; attach?: string; xyz?: number[]; side?: 'left' | 'right'; yaw?: number; surface_m?: number };
+  fixture?: { name: string; kind: string; attach?: string; xyz?: number[]; side?: 'left' | 'right'; yaw?: number; surface_m?: number;
+    /** a light source: the simulation counts floor within this radius as lit (lights.ts) */
+    light_r?: number };
   /** what it takes (fix card, optimizer effort): dollars, minutes, 1 (anyone) .. 5 (two people, heavy furniture) */
   cost_usd?: number; minutes?: number; effort?: number; product?: string;
 }

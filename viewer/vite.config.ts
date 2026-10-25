@@ -10,6 +10,7 @@ export default defineConfig({
   worker: { format: 'es' },
   server: {
     port: 5179, strictPort: true,   // README, e2e/ and scripts/ all use 5179
+    hmr: process.env.NO_HMR ? false : undefined,   // e2e/shot.ts records on its own server: an edit elsewhere must not reload the page mid-clip
     fs: { allow: ['.', '../physics_ranges.json', '../physics/batch_results.json'] },   // object-physics ranges + offline batch results; nothing else outside viewer/
   },
   build: { rollupOptions: { input: { main: 'index.html', report: 'report.html', fixcard: 'fixcard.html' } } },

@@ -32,9 +32,10 @@ class StepDist:
     def mean(self):
         return self.w @ self.mu
 
-    def sample(self, rng, n=None):
+    def sample(self, rng, n=None, z=None):
+        """z (2,): the standard-normal (along, across) draw to use instead of a fresh one (n=None only), see TripNoise."""
         k = rng.choice(len(self.w), size=n, p=self.w)
-        z = rng.standard_normal((1 if n is None else n, 2)) * self.sd[k].reshape(-1, 2)
+        z = (rng.standard_normal((1 if n is None else n, 2)) if z is None else np.asarray(z, float).reshape(1, 2)) * self.sd[k].reshape(-1, 2)
         x = self.mu[k].reshape(-1, 2) + np.einsum("nij,nj->ni", self.R[k].reshape(-1, 2, 2), z)
         return x[0] if n is None else x
 
@@ -44,6 +45,21 @@ class StepDist:
         z = np.einsum("kji,nkj->nki", self.R, x.reshape(-1, 1, 2) - self.mu) / self.sd   # R^T (x - mu)
         lp = np.log(np.sum(self.w * np.exp(-0.5 * (z ** 2).sum(2)) / (2 * np.pi * self.sd.prod(1)), 1) + 1e-300)
         return float(lp[0]) if x.ndim == 1 else lp
+
+
+class TripNoise:
+    """One trip's step-to-step persistence: the standard-normal (along, across) draw behind each heel is an AR(1) chain,
+    z_t = rho z_{t-1} + sqrt(1 - rho^2) e_t. Every z_t is still N(0, I), so the one-step distribution is unchanged; only
+    a walker who landed long / wide keeps doing so. rho = 0 is independent draws (the engine then skips this class)."""
+
+    def __init__(self, rho):
+        assert -1 < rho < 1, rho
+        self.rho, self.z = rho, None
+
+    def next(self, rng):
+        e = rng.standard_normal(2)
+        self.z = e if self.z is None else self.rho * self.z + np.sqrt(1 - self.rho ** 2) * e
+        return self.z
 
 
 class Baseline:

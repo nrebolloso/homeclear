@@ -19,6 +19,7 @@
       <button id="fly">Fly (noclip)</button>
       <label><input type="checkbox" id="night" /> Night</label>
       <label><input type="checkbox" id="ghosts" checked /> Ghosts</label>
+      <label title="the same trips stepped by the hand rule (white), when a learned model walks"><input type="checkbox" id="handghosts" /> Hand-rule ghosts</label>
       <label><input type="checkbox" id="imagfill" checked /> Imagined floor</label> <select id="fillsel" title="how the hidden floor is imagined"></select>
       <label><input type="checkbox" id="imagceil" checked /> Imagined ceiling</label>
       <label><input type="checkbox" id="heat" /> Heatmap</label>
@@ -27,7 +28,7 @@
       <label title="autoplay from behind: a mannequin walks on the simulated footsteps"><input type="checkbox" id="third" /> Third person</label>
       <label title="fewer overlays, lower resolution, smaller splats: for the headset and slow laptops. Numbers and checks do not change; on by default in the headset"><input type="checkbox" id="perf" /> Performance mode</label>
     </div>
-    <p class="hint">Free walk: WASD / arrows, drag to look. Fly (F): WASD, Q/E down/up, Shift fast, no walls. Click furniture to move it: drag the gizmo or use the arrow keys (5 cm steps), T move, R rotate, Esc deselect.</p>
+    <p class="hint">Free walk: WASD / arrows, drag (left or right button) to look, scroll or pinch to walk, L locks the mouse. Fly (F): WASD, Q/E down/up, Shift fast, no walls. Click furniture to move it: G grabs it (click drops), or drag the gizmo, or use the arrow keys (5 cm steps); T move, R rotate, X remove, Z put back, Ctrl+Z undo, Esc deselect. M then 1/2 marks stairs/doorway. H: demo mode. F1: all keys.</p>
     <label>Who <select id="persona"></select></label>
     <div id="personanote" class="hint"></div>
     <div id="verifyinfo" class="hint"></div>
@@ -104,8 +105,8 @@
     <button id="cleardoors" title="forget the doorways marked in this browser">Clear marked</button>
     <button id="copydoors" title="keep them: paste into config.&lt;scene&gt;.yaml under game:">Copy as config YAML</button>
     <button id="editdoors">Edit marks</button>
-    <p class="hint">Click to mark, drag to look. Right click / Backspace: undo; Esc: cancel. Shift: no snapping; Space: aim at centre. After marking, drag a handle or click a rail side; Enter: done.</p>
-    <p class="hint">VR: off-hand X/A marks a doorway, Y/B marks stairs. Wand B/Y edits saved marks. Trigger places or drags; B/Y undoes; grip cancels or finishes. Off-hand grip disables snapping; off-hand X/A while editing changes the top device. Twist the parked walker to turn it.</p>
+    <p class="hint">Click to mark, drag to look. Right click / Backspace / Ctrl+Z: undo; Esc: cancel. Shift: no snapping; Space: aim at centre. After marking, drag a handle or click a rail side; Enter: done.</p>
+    <p class="hint">VR: wand stick click undoes the last object edit (off-hand grip too: redo). Off-hand X/A marks a doorway, Y/B marks stairs. Wand B/Y edits saved marks. Trigger places or drags; B/Y undoes; grip cancels or finishes. Off-hand grip disables snapping; off-hand X/A while editing changes the top device. Twist the parked walker to turn it.</p>
     <div id="doorstatus" class="status"></div>
     <h2>Cosmos clips <span class="imagined">imagined</span></h2>
     <ul id="clips"></ul>
