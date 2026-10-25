@@ -1,7 +1,8 @@
 // Move effort v1 (solid, one-piece objects): monotone in mass, distance and turn, never NaN, on the optimizer's scale.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { moveEffort, estimateMass, objectEffort, DEFAULT_MASS_KG, KIND_MASS, NEVER_MOVE, TWO_PERSON_KG, type MoveInput } from '../src/effort.ts';
+import { moveEffort, estimateMass, objectEffort, DEFAULT_MASS_KG, KIND_MASS, NEVER_MOVE, TWO_PERSON_KG, NOT_CARRIED, ACTION_EFFORT, interventionEffort, effortKind, type MoveInput } from '../src/effort.ts';
+import { existsSync, readFileSync } from 'node:fs';
 
 const ns = (o: Partial<MoveInput> = {}) => moveEffort({ kind: 'nightstand', distance_m: 1, turn_deg: 0, ...o });
 
@@ -27,7 +28,7 @@ test('two people above the mass threshold, with the minutes floor', () => {
 });
 
 test('zero distance and turn is the base cost; bad input never gives NaN or negatives', () => {
-  for (const [kind, kg] of Object.entries(DEFAULT_MASS_KG)) assert.equal(moveEffort({ kind, distance_m: 0, turn_deg: 0 }).effort, 1 + kg / 20);
+  for (const [kind, kg] of Object.entries(DEFAULT_MASS_KG)) if (!NOT_CARRIED.has(kind) && kind !== 'trash_can') assert.equal(moveEffort({ kind, distance_m: 0, turn_deg: 0 }).effort, 1 + kg / 20);
   for (const m of [{ distance_m: -2, turn_deg: -90 }, { distance_m: NaN, turn_deg: NaN }, { distance_m: 0, turn_deg: 720, mass_kg: -5 }]) {
     const r = moveEffort({ kind: 'bed', ...m });
     assert.ok(Number.isFinite(r.effort) && r.effort > 0 && Number.isFinite(r.minutes) && r.minutes > 0, JSON.stringify(m));
@@ -61,4 +62,29 @@ test('object tags: chair Easy, nightstand Moderate, bed stays put, rug mass only
   assert.equal(objectEffort({ kind: 'rug' }).tag, `≈ ${DEFAULT_MASS_KG.rug} kg (guess)`);
   assert.equal(objectEffort({ kind: 'table', mass_kg: 30 }).people, 2);
   assert.ok(objectEffort({ kind: 'table', footprint: [[0, 0], [3, 0], [3, 3], [0, 3]], height_m: 1 }).tag.endsWith('check in person'));
+});
+
+// review: mat/cord fixes are actions, hollow things are light, and the order is mat/cord < chair < trash can < table
+const carry = (o: { kind: string; name?: string; mass_kg?: number }) => moveEffort({ ...o, distance_m: 1, turn_deg: 0 }).effort;
+test('effort order by default mass: mat/cord < chair < trash can < table', () => {
+  const mat = carry({ kind: 'rug', name: 'mat' }), cord = interventionEffort({ kind: 'flatten', effort: 1 });
+  assert.equal(mat, ACTION_EFFORT); assert.equal(cord, ACTION_EFFORT);
+  assert.ok(Math.max(mat, cord) < carry({ kind: 'chair' }) && carry({ kind: 'chair' }) < carry({ kind: 'other', name: 'trash_can' })
+    && carry({ kind: 'other', name: 'trash_can' }) < carry({ kind: 'other', name: 'table' }));
+});
+test("an 'other' label takes its kind from the name only when the name is a known kind", () => {
+  assert.equal(effortKind({ kind: 'other', name: 'chair2' }), 'chair'); assert.equal(effortKind({ kind: 'other', name: 'box3' }), 'other');
+  assert.equal(effortKind({ kind: 'nightstand', name: 'table' }), 'nightstand');
+});
+test('hollow things stay light whatever their box', () => {
+  const big = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  assert.ok(estimateMass({ kind: 'other', name: 'basket', footprint: big, height_m: 1.3 }).mass_kg <= 3);
+  assert.ok(estimateMass({ kind: 'chair', footprint: big, height_m: 1 }).mass_kg <= 7);
+});
+const K4 = 'public/scene/kitchen4_lighter/scene.json';
+test('kitchen4_lighter: mat < chair < trash can < table from the measured boxes', { skip: !existsSync(K4) }, () => {
+  const objs: any[] = JSON.parse(readFileSync(K4, 'utf8')).objects, by = (n: string) => objs.find(o => o.name === n);
+  const e = (n: string) => carry({ ...by(n), mass_kg: objectEffort(by(n)).mass_kg });
+  const chairs = objs.filter(o => effortKind(o) === 'chair').map(o => e(o.name));
+  assert.ok(e('mat') < Math.min(...chairs) && Math.max(...chairs) < e('trash_can') && e('trash_can') < e('table'));
 });

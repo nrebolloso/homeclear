@@ -5,7 +5,7 @@ import { applyIntervention, polyCells, worldFootprint, toCell, type GridMeta, ty
 import { evaluate, availableInterventions, routeStart, type Init, type Eval } from './evaluate.ts';
 import { bedExit } from './checks.ts';
 import { rng } from './sim.ts';
-import { moveEffort } from './effort.ts';
+import { effortKind, interventionEffort, moveEffort } from './effort.ts';
 
 export interface OptimizerCfg {
   /** contacts/month-equivalents: how much each thing costs next to one expected toe contact per month */
@@ -143,7 +143,7 @@ export function score(S: Init, cfg: OptimizerCfg, r: Eval, lay: Layout, effort: 
 export function actions(S: Init, cfg: OptimizerCfg, start: Layout): Action[] {
   const A: Action[] = availableInterventions(S, evaluate(S, start, { ghosts: false })).map((iv: Intervention) => ({
     id: iv.id, key: iv.kind === 'raise' ? `raise:${iv.target}` : iv.kind === 'carve' ? `carve:${iv.target}` : iv.kind === 'add' ? `add:${iv.id}` : iv.kind === 'flatten' ? `flat:${iv.id}` : `obj:${iv.object}`,
-    label: iv.label, effort: iv.effort ?? 1, cost_usd: iv.cost_usd ?? 0, minutes: iv.minutes ?? 10, product: iv.product,
+    label: iv.label, effort: interventionEffort(iv, ((o?: { kind: string; name: string }) => o && effortKind(o))(S.objects.find(o => o.name === iv.object))), cost_usd: iv.cost_usd ?? 0, minutes: iv.minutes ?? 10, product: iv.product,
     apply: (l: Layout) => applyIntervention(S.objects, l, iv),
   }));
   (S.objects as Obj[]).forEach((o, k) => {
@@ -154,7 +154,7 @@ export function actions(S: Init, cfg: OptimizerCfg, start: Layout): Action[] {
       const turn = Math.round(((((p.yaw - start.poses[k].yaw) * 180) / Math.PI) % 360 + 360) % 360);
       A.push({ id: `move:${o.name}:${p.x.toFixed(1)},${p.y.toFixed(1)},${turn}`, key: `obj:${o.name}`,
         label: `Move the ${o.name} ${d.toFixed(1)} m${turn ? `, turned ${turn}°` : ''} (${p.beside_bed ? 'beside the bed' : 'against a wall'})`,
-        ...(({ effort, minutes }) => ({ effort, minutes }))(moveEffort({ kind: o.kind, mass_kg: o.mass_kg, distance_m: d, turn_deg: turn })), cost_usd: 0,
+        ...(({ effort, minutes }) => ({ effort, minutes }))(moveEffort({ kind: o.kind, name: o.name, mass_kg: o.mass_kg, distance_m: d, turn_deg: turn })), cost_usd: 0,
         apply: (l: Layout) => ({ ...l, poses: l.poses.map((q, n) => (n === k ? { x: p.x, y: p.y, yaw: p.yaw } : q)) }) });
     }
   });

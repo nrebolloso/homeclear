@@ -2,7 +2,7 @@
 // (reimagine.ts, fix card, OT report) and the move-effort / insurance model: the signatures stay, the numbers come
 // from TM2's effort.ts (moveEffort), the same call optimize.ts actions() makes; tests/reimagine.test.ts checks the
 // two agree.
-import { moveEffort } from './effort.ts';
+import { interventionEffort, moveEffort } from './effort.ts';
 import type { OptimizerCfg } from './optimize.ts';
 import type { Intervention, Pose } from './grid.ts';
 
@@ -18,20 +18,21 @@ const turnDeg = (from: Pose, to: Pose) => Math.round(((((to.yaw - from.yaw) * 18
 
 /** Moving (or turning) an object by hand: free, labour only. Same effort, minutes and helpers as an optimizer move.
  *  The last argument is unused since the effort model landed; kept so the signature stays (AGENTS.md). */
-export function moveCost(o: { kind: string; mass_kg?: number }, from: Pose, to: Pose, _cfg: Partial<OptimizerCfg> = {}): MoveCost {
-  const m = moveEffort({ kind: o.kind, mass_kg: o.mass_kg, distance_m: Math.hypot(to.x - from.x, to.y - from.y), turn_deg: turnDeg(from, to) });
+export function moveCost(o: { kind: string; name?: string; mass_kg?: number }, from: Pose, to: Pose, _cfg: Partial<OptimizerCfg> = {}): MoveCost {
+  const m = moveEffort({ kind: o.kind, name: o.name, mass_kg: o.mass_kg, distance_m: Math.hypot(to.x - from.x, to.y - from.y), turn_deg: turnDeg(from, to) });
   return { usd: 0, minutes: m.minutes, helpers: m.people, effort: m.effort, funding: 'self_pay', source: 'effort.ts v1' };
 }
 
 /** Taking an object out of the room. */
-export function removeCost(o: { kind: string; mass_kg?: number }, cfgIn: Partial<OptimizerCfg> = {}): MoveCost {
+export function removeCost(o: { kind: string; name?: string; mass_kg?: number }, cfgIn: Partial<OptimizerCfg> = {}): MoveCost {
   const at: Pose = { x: 0, y: 0, yaw: 0 };
   return moveCost(o, at, { ...at, x: REMOVE_CARRY_M }, cfgIn);
 }
 
-/** A configured fix (stage 12 interventions): its own dollars, minutes and effort; a product's funding is not classified yet. */
-export function fixCost(iv: Intervention): MoveCost {
-  const effort = iv.effort ?? 1;
+/** A configured fix (stage 12 interventions): its own dollars, minutes and effort; a product's funding is not classified yet.
+ *  Taping or removing a mat or cord is an action, not a carry (effort.ts interventionEffort); kind: the fix's object's. */
+export function fixCost(iv: Intervention, kind?: string): MoveCost {
+  const effort = interventionEffort(iv, kind);
   return { usd: iv.cost_usd ?? 0, minutes: iv.minutes ?? 10, helpers: helpersFor(effort), effort,
     funding: iv.product ? 'unclassified' : 'self_pay', source: 'placeholder' };
 }

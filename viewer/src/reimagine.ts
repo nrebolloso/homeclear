@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import type { Intervention, Layout, Pose, XY } from './grid.ts';
 import { fixCost, moveCost, removeCost, sumCosts, type MoveCost } from './movecost.ts';
+import { effortKind } from './effort.ts';
 import { difficulty } from './effort.ts';
 
 export interface Change {
@@ -28,7 +29,7 @@ export function diffLayouts(objs: Obj[], from: Layout, to: Layout, interventions
   const ivs = interventions.filter(iv => applied.includes(iv.id)), out: Change[] = [];
   objs.forEach((o, k) => {
     const a = from.poses[k], b = to.poses[k], iv = ivs.find(i => i.object === o.name);
-    const via = iv ? { label: iv.label, cost: fixCost(iv), iv: iv.id } : null;
+    const via = iv ? { label: iv.label, cost: fixCost(iv, effortKind(o)), iv: iv.id } : null;
     if (b.removed && !a.removed) {
       out.push({ k, name: o.name, kind: 'remove', label: via?.label ?? `Take the ${o.name} out of the room`, from: a, dist_m: 0, turn_deg: 0,
         at: [a.x, a.y], cost: via?.cost ?? removeCost(o), iv: via?.iv });
