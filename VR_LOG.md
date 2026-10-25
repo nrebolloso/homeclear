@@ -235,6 +235,11 @@ gap everywhere means the floor (fix with `?floor=`), a gap only at one object me
    `kitchen4_lighter` is not staged (on purpose for now: the staged hazards aren't in the real kitchen); the test used a
    staged copy in a scratch worktree. In the headset: the month label is big and sits overhead in the middle of the route,
    and it lists raw object names (`trash_can`, `chair8 moved`). Still to check on the Quest: fps with 60 ghosts.
+12. **Walker tracking (2026-10-25):** with `?mount=`, the virtual walker now takes its **position** from the strapped
+   controller too, not just its heading (line-up records where the controller sits in the walker's frame, with you centred
+   behind it). Any mount angle works (it tracks the controller's most level axis), so a handle-down cup holder is fine.
+   Snap-turn spins the walker about its centre (`centreOffset`, 0.5 m ahead of the body for the kitchen walker); a turn or
+   step that puts a leg into furniture or off filmed floor is refused (turn: buzz). `e2e:xr` 34/34. Needs a real-walker try.
 10. Tell Juan (security review of `viewer/session-plugin.ts`, the companion relay): a device is known only by the
    `client` name in its URL, and those names are sent to every device, so anyone who can reach the dev server can post
    as another device (even the headset host). Fine on `127.0.0.1` and over adb; not with `--host` on a shared network.

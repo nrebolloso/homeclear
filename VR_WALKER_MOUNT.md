@@ -3,7 +3,8 @@
 The patient stands at their own walker, hands on the grips, in the scanned home in VR. There is usually no room to walk
 the home for real, so the **left controller is strapped next to the left grip** and its thumbstick moves them: up/down
 walks along the walker's heading, left/right snap-turns 30 deg. Because it is fixed to the walker, the virtual walker (and
-its leg checks over rugs and cords) points wherever the real one does. The right controller is a wand they lift out of a
+its leg checks over rugs and cords) **stands and points wherever the real one does**: push the real walker ahead or turn it
+and the virtual one follows, even if you step away from it. The right controller is a wand they lift out of a
 cup holder to edit the room and press the card buttons.
 
 Walker: **Drive Medical 10210-1** (two-button folding walker, 5 in wheels). From the manufacturer's spec sheet (in every
@@ -20,6 +21,14 @@ caps, 7.5 lb, handles 32-39 in, 17 in between the grips, base depth 17.5 in (0.4
 **Keep the grey front bar clear**: it carries the two red fold buttons and the hinge.
 
 Left-handed patient: swap them (`?mount=right&wand=left`, strap the right controller by the right grip).
+
+## Or: a second cup holder
+
+The controller can also stand **handle-down in a second cup holder** on the left upper side bar (a cup holder's silicone
+grips hold it firmly; a wrap of grip tape inside helps). The app doesn't need to know where or at what angle it sits: the
+line-up records that. Conditions: it must not wobble or turn in the holder, it goes back the same way after you lift it out
+(then press **Line up the walker**), the ring stays uncovered, and the thumb reaches the stick without letting go of the
+grip.
 
 ## Parts (ordered 2026-10-24)
 
@@ -55,10 +64,13 @@ Left-handed patient: swap them (`?mount=right&wand=left`, strap the right contro
 
 Open the viewer with **`?mount=left`** (e.g. `http://localhost:5179/?scene=k4_150k&hz=90&mount=left`).
 
-1. **Stand behind the walker, facing the way it points, and press ENTER VR.** The app takes that moment to line the
-   controller up with the walker: the strap never holds it exactly straight.
+1. **Stand centred behind the walker, hands on the grips, facing the way it points, and press ENTER VR.** The app takes
+   that moment to line the controller up with the walker: which way it points (the strap or holder never holds it exactly
+   straight) and where on the walker it sits.
 2. Left stick **up/down** walks forward/back along the walker's heading (you can look around while you push); **left/right**
-   snap-turns 30 deg once per flick. You can also turn the real walker: the virtual one turns with it.
+   snap-turns 30 deg once per flick, spinning the walker about its own centre like turning a real walker in place (you
+   swing round behind it). A turn or a step that would put a walker leg into furniture or off the filmed floor is refused
+   (the turn with a short buzz). You can also push or turn the real walker: the virtual one moves with it.
 3. If the virtual walker ever points off from the real one (the controller shifted on the bar), stand behind it facing
    its way and press the card's **Line up the walker** button with the wand.
 
@@ -67,6 +79,7 @@ Open the viewer with **`?mount=left`** (e.g. `http://localhost:5179/?scene=k4_15
 | Piece | Status |
 |---|---|
 | `?mount=left`: stick walks along the walker, snap-turns; virtual walker follows the real one; line-up at entry and on the card; mounted trigger ignored | Built, `viewer/src/xr.ts` (`npm run e2e:xr`, emulated) |
+| Full walker tracking (2026-10-25): position as well as heading from the controller; any mount angle (cup holder, handle down); snap-turn about the walker's centre; steps and turns that would put a leg into furniture are refused | Built, `e2e:xr` checks (emulated); the refused turn has no emulated check yet |
 | Wand: point, drag, twist, hold-to-delete, teleport; card buttons (dangers tour, night walk, safer room, compare) | Built |
 | Hand pinch as a stand-in for the trigger | Built |
 | Juan's planning menu opens on a **held** left-stick click (0.4 s, short buzz); a click closes it | A tap no longer opens it, so an accidental press on the mounted stick does nothing |

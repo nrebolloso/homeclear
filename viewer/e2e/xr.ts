@@ -318,7 +318,44 @@ try {
   const h1 = await M('return game.xrPose().head');
   check('mounted: stick sideways snap-turns 30 deg; its trigger does not glide', Math.abs(yawOf(r1 - r0) + Math.PI / 6) < 0.01 && Math.hypot(h1[0] - h0[0], h1[1] - h0[1]) < 0.01 && mErrors.length === 0,
     `turned ${(yawOf(r1 - r0) * 180 / Math.PI).toFixed(0)} deg; trigger moved ${Math.hypot(h1[0] - h0[0], h1[1] - h0[1]).toFixed(3)} m; errors ${mErrors.length}`);
+  // the real walker is tracked, not just its heading: push it 0.5 m ahead (your head stays) and the virtual one goes with it
+  const ahead0 = await M('return { body: { ...game.body }, head: game.xrPose().head }');
+  await M(`const c = __xr.ctl('left'), rig = game.debug.rig, V = rig.position.constructor; rig.updateWorldMatrix(true, false);
+    const w = rig.localToWorld(new V(c.position.x, c.position.y, c.position.z)).add(new V(Math.cos(game.body.yaw) * 0.5, Math.sin(game.body.yaw) * 0.5, 0));
+    const l = rig.worldToLocal(w); c.position.set(l.x, l.y, l.z)`);
+  await m.waitForTimeout(400);
+  const ahead1 = await M('return { body: { ...game.body }, head: game.xrPose().head }');
+  const pushed = Math.hypot(ahead1.body.x - ahead0.body.x, ahead1.body.y - ahead0.body.y), along2 = yawOf(Math.atan2(ahead1.body.y - ahead0.body.y, ahead1.body.x - ahead0.body.x) - ahead0.body.yaw);
+  check('mounted: pushing the real walker ahead moves the virtual one, not you', Math.abs(pushed - 0.5) < 0.02 && Math.abs(along2) < 0.05 && Math.hypot(ahead1.head[0] - ahead0.head[0], ahead1.head[1] - ahead0.head[1]) < 0.01,
+    `walker moved ${pushed.toFixed(3)} m, ${(along2 * 180 / Math.PI).toFixed(1)} deg off its heading; head moved ${Math.hypot(ahead1.head[0] - ahead0.head[0], ahead1.head[1] - ahead0.head[1]).toFixed(3)} m`);
+  // a snap-turn spins the walker about its own centre (like turning a real walker in place): solve for the fixed point
+  const sp0 = await M('return { ...game.body }');
+  await M("__xr.ctl('left').updateAxes('thumbstick', -1, 0)"); await m.waitForTimeout(400); await M("__xr.ctl('left').updateAxes('thumbstick', 0, 0)"); await m.waitForTimeout(300);
+  const sp1 = await M('return { ...game.body }');
+  const dc = [Math.cos(sp0.yaw) - Math.cos(sp1.yaw), Math.sin(sp0.yaw) - Math.sin(sp1.yaw)], cx = ((sp1.x - sp0.x) * dc[0] + (sp1.y - sp0.y) * dc[1]) / (dc[0] ** 2 + dc[1] ** 2);
+  const resid = Math.hypot(sp0.x + Math.cos(sp0.yaw) * cx - sp1.x - Math.cos(sp1.yaw) * cx, sp0.y + Math.sin(sp0.yaw) * cx - sp1.y - Math.sin(sp1.yaw) * cx);
+  check('mounted: a snap-turn spins the walker about its own centre', Math.abs(yawOf(sp1.yaw - sp0.yaw) - Math.PI / 6) < 0.02 && resid < 0.01 && cx > 0.3 && cx < 0.8 && mErrors.length === 0,
+    `turned ${(yawOf(sp1.yaw - sp0.yaw) * 180 / Math.PI).toFixed(0)} deg about a point ${cx.toFixed(2)} m ahead of the body (moved ${resid.toFixed(3)} m)`);
   await m.close();
+
+  // 10b. In a cup holder the controller stands handle down, its ray pointing up: the heading comes from its most level axis
+  const h = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  await h.goto(`${BASE}/?scene=game_synth&emulate=quest2&mount=left`);
+  await h.waitForFunction(() => (window as any).game?.ready, null, { timeout: 60000 });
+  await h.evaluate(HELPERS);
+  const H = (q: string) => G(h, q);
+  const tilt = (yawDeg: number) => `{ const a = ${80 * Math.PI / 180}, b = ${yawDeg * Math.PI / 180}, Q = game.debug.rig.quaternion.constructor, V = game.debug.rig.position.constructor;
+    const q = new Q().setFromAxisAngle(new V(0, 1, 0), b).multiply(new Q().setFromAxisAngle(new V(1, 0, 0), a)); __xr.ctl('left').quaternion.set(q.x, q.y, q.z, q.w); }`;
+  await H(tilt(0));
+  await h.getByText('ENTER VR', { exact: true }).click();
+  await h.waitForFunction(() => (window as any).game.xr, null, { timeout: 10000 });
+  await h.waitForTimeout(600);
+  const c0 = await H('return { yaw: game.body.yaw, mount: game.debug.xrMount() }');
+  await H(tilt(45)); await h.waitForTimeout(400);
+  const c1 = await H('return { yaw: game.body.yaw }');
+  check('cup holder: a controller standing handle-down still turns the walker', Math.abs(yawOf(c1.yaw - c0.yaw) - Math.PI / 4) < 0.05,
+    `axis ${JSON.stringify(c0.mount.axis)}, walker turned ${(yawOf(c1.yaw - c0.yaw) * 180 / Math.PI).toFixed(1)} deg for 45`);
+  await h.close();
 
   // 11. ?floor=5 lifts the scan's floor 5 cm against the real one (you stand 5 cm lower in it); ?measure=1 puts the wand's
   // height above the real floor on a card on the wand.
