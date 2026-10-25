@@ -44,3 +44,18 @@
    pieces (sofa4/5/6), and it doesn't fix the leftovers above. It is in `out/gator_lounge_lift` on HPG if you want it.
    The new stage 12 rules apply to every `objects: auto` scene. Only the lounge has been re-exported: kitchen4_lighter
    and the others keep their old export until rebuilt. Pushing commits d012fb8..71649ea to main waits for your OK.
+   **Resolved 2026-10-25 (your decisions):** sofa2 streaks removed by hand: a viewer-only box drop in
+   `configs/gator_lounge.yaml` (`lighter_drop_boxes`, 384 Gaussians) with before/after renders from the same 4 angles. The
+   blur past the railing is the drop the camera never filmed, not sofa2: keep demo camera paths off it. The bench, the
+   table by chair3 and the booth are now `grid.fixed` (solid in the floor map, never offered to move or drop). Render
+   lift stays on HPG. merge-juan is pushed to its own branch; main and demo-safe are untouched.
+11. **kitchen4 demo vs a rebuild (2026-10-25): nothing changed, two things need a call.** Rebuilding kitchen4_lighter
+   from demo-safe code reproduces the demo exactly (objects, splat, floor/obstacle/bump maps, route, hazards). With the
+   merge-juan code (after fix b7c2484) the movable boxes and basket are identical; standing chairs, the trash can and
+   bedside_table2 cut 1-4% more (bedside_table2 2x: its legs), floor +469 cells (0.19 m²), obstacles -67 cells; route,
+   hazards and 200-trip numbers (1.1 contacts/month) unchanged. The calls:
+   - The demo folder's `walker.json` is the old 0.66 m walker; the config (since a2fbd0f, before demo-safe) is the
+     0.61 m Drive Medical spec. Any re-export shows 13 findings / 4 cm per side instead of 17 / 1 cm.
+   - Removal fills in the demo are lama (HPG only). A local rebuild has ns fills, which show a magenta "imagined"
+     column above the counter. Re-run 12b with lama on HPG before replacing the demo folder.
+   Compare scenes: `kitchen4_oldexport_lighter`, `kitchen4_newexport_lighter` (viewer `?scene=`).
