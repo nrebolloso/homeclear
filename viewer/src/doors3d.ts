@@ -7,7 +7,8 @@ import { SplatEdit, SplatEditSdf, SplatEditSdfType, SplatEditRgbaBlendMode, type
 import { doorFrame, doorEditBoxes, openingSpan, type Door, type EditBox, type Grow } from './doors.ts';
 import { card } from './reimagine.ts';
 
-const DESIGNED = new THREE.Color(1, 1, 1);   // the moved jamb is real scan: no tint (multiply by white); the card and the outline say "designed"
+// the moved jamb is real scan: teal while the widening is only a proposal (x-ray), its own colour once committed (multiply by white)
+const PROPOSED = new THREE.Color(0.55, 1, 0.95), COMMITTED = new THREE.Color(1, 1, 1);
 const cm = (m: number) => `${(m * 100).toFixed(0)} cm`;
 
 function sdfBox(b: EditBox, o: { opacity: number; color: THREE.Color; displace?: [number, number] }) {
@@ -32,7 +33,7 @@ export function createDoors3d(scene: THREE.Scene, room: SplatMesh) {
     for (const c of [...marks.children]) { marks.remove(c); c.traverse(x => { (x as THREE.Mesh).geometry?.dispose(); ((x as THREE.Mesh).material as THREE.Material)?.dispose(); }); }
   }
   /** `change`: how much wider each door is in the layout on screen, and on which side; `ok`: whether its check passes. */
-  function build(doors: Door[], change: Record<string, { gain: number; grow: Grow }>, ok: Record<string, boolean>) {
+  function build(doors: Door[], change: Record<string, { gain: number; grow: Grow }>, ok: Record<string, boolean>, phase: 'proposed' | 'committed' = 'committed') {
     clearMarks();
     for (const d of doors) {
       const F = doorFrame(d), { gain: g, grow } = change[d.name] ?? { gain: 0, grow: 'both' as Grow }, w = F.width + g, h = F.height;
@@ -42,26 +43,26 @@ export function createDoors3d(scene: THREE.Scene, room: SplatMesh) {
       const span = new THREE.Line(new THREE.BufferGeometry().setFromPoints([P(s0, 0.04), P(s1, 0.04)]),
         new THREE.LineBasicMaterial({ color: col, depthTest: false, transparent: true }));
       marks.add(span);
-      const tag = card([`${d.name}: ${cm(w)} clear`, g ? `designed, not built (was ${cm(F.width)})` : 'between the marked jambs'],
+      const tag = card([`${d.name}: ${cm(w)} clear`, g ? `${phase === 'proposed' ? 'proposed' : 'designed'}, not built (was ${cm(F.width)})` : 'between the marked jambs'],
         ok[d.name] ? '#7dffa8' : '#ff9a9a', 'rgba(14,20,28,0.78)', 0.045);
       tag.position.copy(P((s0 + s1) / 2, 1.15));
       marks.add(tag);
       if (g > 0) {   // the new opening's outline, in the designed tint
         const pts = [P(s0, 0), P(s0, h), P(s1, h), P(s1, 0)];
-        marks.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x2fd6c8, depthTest: false, transparent: true, opacity: 0.4 })));   // a thin hint, the scan itself shows the opening
+        marks.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x2fd6c8, depthTest: false, transparent: true, opacity: phase === 'proposed' ? 0.95 : 0.4 })));   // bold while proposed; a thin hint once the scan itself shows the opening
       }
     }
     marks.traverse(o => { o.renderOrder = 3; });   // after the splats: they don't write depth
 
     // the scan edits only change when a door or its gain changes (each change regenerates the room splat)
-    const k = JSON.stringify(doors.map(d => [d.name, d.a, d.b, change[d.name] ?? null]));
+    const k = JSON.stringify([phase, doors.map(d => [d.name, d.a, d.b, change[d.name] ?? null])]);
     if (k === key) return;
     key = k;
     for (const e of edits) room.remove(e);
     edits = [];
     const widened = doors.filter(d => (change[d.name]?.gain ?? 0) > 0).map(d => doorEditBoxes(d, change[d.name].gain, change[d.name].grow));
     for (const { hide } of widened) for (const b of hide) edits.push(edit(sdfBox(b, { opacity: 0, color: new THREE.Color(1, 1, 1) })));   // hide first:
-    for (const { shift } of widened) for (const b of shift) edits.push(edit(sdfBox(b, { opacity: 1, color: DESIGNED, displace: b.displace })));   // later edits see moved points
+    for (const { shift } of widened) for (const b of shift) edits.push(edit(sdfBox(b, { opacity: 1, color: phase === 'proposed' ? PROPOSED : COMMITTED, displace: b.displace })));   // later edits see moved points
     if (edits.length) room.add(...edits);
   }
   return { build, marks, edits: () => edits };

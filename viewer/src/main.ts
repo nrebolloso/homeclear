@@ -31,12 +31,16 @@ import { isMoved, movedText, resetPose } from './resets.ts';
 import { twistAngle, snapQuarter } from './wand.ts';
 import { createObjLabel } from './objlabel.ts';
 import { measureStair, stairFixes, stairFrame, stairYaml, mirrorRail, inRailBand, stepLights, withRails, pitchAt, parkedPose, walkerPlacement, SPLAT_STRIDE, type Stair, type Side } from './stairs.ts';
-import { createStairs3d } from './stairs3d.ts';
+import { createStairs3d, type Phase } from './stairs3d.ts';
+import { reducedMotion } from './designed.ts';
 import { railSplats, toneOf, fitRail, NEUTRAL_RAIL, type RGB } from './railsplat.ts';
-import { doorFixes, doorYaml, needWidth, hingeSide, growOf, type Door } from './doors.ts';
+import { doorFixes, doorYaml, needWidth, hingeSide, growOf, doorGain, type Door } from './doors.ts';
 import { createDoors3d } from './doors3d.ts';
+import { paintClasses, thresholds, costToReach, causeText, type ReachReport, type ReachTarget } from './reach.ts';
+import { createReach3d, statusLine, drawCostChart, costRuns, costAt } from './reach3d.ts';
+import { routeStart } from './evaluate.ts';
 import { startMarking, place, undo as undoMark, isComplete, prompt as markPrompt, placeError, preview, buildLevels, snapZ, checkAll,
-  stairHandles, moveStairHandle, stairPoints, doorHandles, moveDoorHandle, type Marking, type MarkKind, type P3, type Levels } from './marker.ts';
+  stairHandles, moveStairHandle, stairPoints, doorHandles, moveDoorHandle, MARK_STEPS, type Marking, type MarkKind, type P3, type Levels } from './marker.ts';
 import { createMarker3d } from './marker3d.ts';
 import { MAX_EXTRA_LIGHTS, type PointLight } from './night.ts';
 import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } from './perf.ts';
@@ -298,7 +302,7 @@ let L = stamp(g, base, objs, layout.poses);
 let current: Eval | null = null, baselinePerMonth: number | null = null;
 let routeS: number[] = [];
 const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
-let init: Init = { g, base, est, objects: objs, routes, persona, risk, interventions, stepModel, worldModel, fixtures: sc.fixtures, transfer: sc.transfer, ems: sc.ems,
+let init: Init = { g, base, est, objects: objs, routes, persona, risk, interventions, stepModel, worldModel, fixtures: sc.fixtures, transfer: sc.transfer, ems: sc.ems, coverage, coverage_good: sc.grid.coverage_good,
   plan: { walker_width_m: walkerCfg.width_m, ...sc.plan }, rules: sc.hazard_rules };
 worker.postMessage({ type: 'init', init });
 let seq = 0, latestEval = 0;
@@ -340,6 +344,7 @@ async function replan(): Promise<number> {
   $('status').textContent = r.error ? `No route: ${r.error}` : `route ${r.length_m.toFixed(2)} m · replanned in ${ms.toFixed(0)} ms (worker ${r.ms.toFixed(0)} ms)`;
   $('status').style.color = r.error ? 'var(--red)' : '';
   refreshReimagine();
+  refreshReach();   // the reach map follows the layout (off: returns at once)
   return ms;
 }
 
@@ -357,7 +362,7 @@ function drawPlan(r: Eval) {
     pts.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     pts.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   };
-  dots(ghostDots, r.ghosts, [0.3, 0.79, 0.94]);
+  dots(ghostDots, $<HTMLInputElement>('hitghosts').checked ? r.ghosts.filter(gh => gh.hit.some(Boolean)) : r.ghosts, [0.3, 0.79, 0.94]);   // only trips with a contact
   dots(handDots, r.hand?.ghosts ?? [], [0.92, 0.92, 0.96]);
   for (const c of [...hazardGroup.children]) {
     hazardGroup.remove(c);
@@ -655,6 +660,7 @@ $('planfixes').onclick = async () => {
   game.fixes = fixes;
 };
 function applyFix(id: string) {
+  commitProposal(false);   // a fix applied by hand is not a proposal: solid from the start
   layout = applyIntervention(objs, layout, interventions.find(i => i.id === id)!);
   applied.push(id);
   syncObjects();
@@ -788,9 +794,10 @@ function applyOption(n: number) {
 $('suggest').onclick = () => suggest();
 
 // ---------- reimagined room (reimagine.ts): the room morphing into the layout on screen, with what each change takes ----------
+let stairsSetT: ((t: number) => void) | null = null;   // stairs3d.ts, made below: its additions build up with the morph
 const reim = createReimagine({ scene, items, objs, original, interventions, sync: syncObjects,
   centre: [g.origin_xy[0] + (nx * g.cell_m) / 2, g.origin_xy[1] + (ny * g.cell_m) / 2],
-  camera, fillsOn: () => $<HTMLInputElement>('imagfill').checked, onT: t => { $<HTMLInputElement>('reimt').value = String(Math.round(t * 100)); } });
+  camera, fillsOn: () => $<HTMLInputElement>('imagfill').checked, onT: t => { $<HTMLInputElement>('reimt').value = String(Math.round(t * 100)); stairsSetT?.(t); } });
 let baseEvals: (Eval | undefined)[] = [];   // the room as filmed, per route: what the reimagined one is compared with
 /** after every re-plan: changes since the room as filmed, overlays, receipt */
 function refreshReimagine() {
@@ -816,6 +823,7 @@ function refreshReimagine() {
   drawStairs();   // added rails / lights / walker follow the layout
 }
 function undoReimagined(c: Change) {
+  commitProposal(false);
   layout = undoChange(layout, original, c, interventions);
   applied = applied.filter(id => id !== c.iv && !(id.startsWith('move:') && id.split(':')[1] === c.name));
   syncObjects();
@@ -899,8 +907,31 @@ function railTone(st: Stair): RGB {
   }
   return NEUTRAL_RAIL;
 }
+// committed fixtures (rail, brackets, grab bar, edge strips) baked into the scan (bake.ts): one splat mesh per distinct set, cached
+const bakeCache = new Map<string, SplatMesh>();
+function bakeFixtures(key: string, data: Float32Array): SplatMesh | null {
+  const hit = bakeCache.get(key);
+  if (hit) return hit;
+  if (!data.length) return null;
+  const c = new THREE.Vector3(), sc3 = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color();
+  const mesh = new SplatMesh({ worldModifier: night.modifier, constructSplats: ps => {
+    for (let i = 0; i < data.length; i += SPLAT_STRIDE)
+      ps.pushSplat(c.set(data[i], data[i + 1], data[i + 2]), sc3.set(data[i + 3], data[i + 4], data[i + 5]), q.set(data[i + 6], data[i + 7], data[i + 8], data[i + 9]), data[i + 10], col.setRGB(data[i + 11], data[i + 12], data[i + 13]));
+  } });
+  splats.push(mesh); bakeCache.set(key, mesh);
+  for (const [k, old] of bakeCache) {   // the newest few stay: a layout flipped back and forth re-bakes nothing
+    if (bakeCache.size <= 6) break;
+    bakeCache.delete(k); old.removeFromParent(); splats.splice(splats.indexOf(old), 1); old.dispose();
+  }
+  return mesh;
+}
 const parkedWalkerCfg = { ...personas.patient.walker, device: 'walker' as const };
-const stairs3d = createStairs3d(scene, () => buildDevice(parkedWalkerCfg).group, scanRail, () => buildDevice(WHEELCHAIR).group, { bars: splatBars, tone: railTone });
+const stairs3d = createStairs3d(scene, () => buildDevice(parkedWalkerCfg).group, scanRail, () => buildDevice(WHEELCHAIR).group, bakeFixtures, railTone);
+stairsSetT = stairs3d.setT;
+// A previewed proposal shows its additions as a see-through hologram; accepting it (Use this layout), inspecting it, or any
+// further change solidifies them into the scan (stairs3d.ts). Nothing else in the room waits on this: it is only how they look.
+let stairPhase: Phase = 'committed';
+function commitProposal(redraw = true) { if (stairPhase === 'proposed') { stairPhase = 'committed'; if (redraw) drawStairs(); } }
 const lights3d = createLights3d(scene), bath3d = createBathroom3d(scene);
 let pathLightKey = '';
 const doors3d = createDoors3d(scene, mainSplat);
@@ -963,10 +994,10 @@ function setupStairs() {
   markRefresh();
 }
 function drawStairs(lay = layout) {
-  stairs3d.build(stairs, lay.added ?? [], lay.placed ?? {});
+  stairs3d.build(stairs, lay.added ?? [], lay.placed ?? {}, stairPhase);
   const verdict = (d: Door) => current?.checks.find(c => c.id === `door:${d.name}`)?.verdict === 'ok';
   const change = (d: Door) => { const c = lay.carved?.find(x => x.target === d.name); return c ? { gain: c.by_m, grow: growOf(d, c.id.split(':')[0].slice('door_'.length)) } : { gain: 0, grow: 'both' as const }; };
-  doors3d.build(doors, Object.fromEntries(doors.map(d => [d.name, change(d)])), Object.fromEntries(doors.map(d => [d.name, verdict(d)])));
+  doors3d.build(doors, Object.fromEntries(doors.map(d => [d.name, change(d)])), Object.fromEntries(doors.map(d => [d.name, verdict(d)])), stairPhase);   // a previewed proposal: x-ray until accepted
   // motion step lights light the scan itself at night (night.ts); only re-light when they change: it regenerates every splat
   // added nightlights (lights.ts): a bulb, and at night a point light and a halo; they light the scan like the step lights
   const pl = placedFixtures(interventions, lay).filter(f => f.light_r && f.xyz), plKey = JSON.stringify(pl);
@@ -1074,6 +1105,156 @@ game.doors = { mark: markDoor, list: () => doors, clear: () => $('cleardoors').c
   /** apply one option by key: 'offset' | 'remove' | 'widen' (same path as Plan fixes' Apply) */
   apply: (name: string, key: 'offset' | 'remove' | 'widen') => applyFix(`door_${key}:${name}`) };
 
+// ---------- reach map (reach.ts, reach3d.ts): where this device can go from the route's start, and what cuts parts off ----------
+// The same start and goal in every mode (Follow route, Walk, Look around): the selected route's, never the walker's or
+// the camera's spot. Picked points are targets checked from that start, kept per scene in this browser or in config
+// game.reach_points. The worker works out the widest way in once per layout. The width slider repaints here as it moves,
+// then asks for the report (cut-off parts, dead ends, targets) when it settles.
+const REACH_KEY = `homeclear:reach:${RUN}`;
+const cfgPoints: { name: string; at: XY }[] = sc.reach_points ?? [];
+let pickedPoints: { name: string; at: XY }[] = [];
+try { pickedPoints = JSON.parse(localStorage.getItem(REACH_KEY) ?? '[]'); } catch { pickedPoints = []; }
+const reach3d = createReach3d(g, scene);
+let reachField: { id: number; dist: Float32Array; need: Float32Array; len: Float32Array; grey: Uint8Array; hatch: Uint8Array } | null = null;
+let reachReport: ReachReport | null = null, reachSeq = 0, reachWidth: number | null = null, reachPersona = '', reachPlayed = false;
+const reachOn = () => $<HTMLInputElement>('reach').checked;
+const calm = () => reducedMotion() || document.body.dataset.motion === 'reduce';
+const rcm = (m: number) => `${Math.round(m * 100)} cm`;
+const reachPoints = () => [...cfgPoints.filter(c => !pickedPoints.some(p => p.name === c.name)), ...pickedPoints];
+const reachOpts = () => ({ width_m: reachWidth ?? walkerCfg.width_m, clearance_m: init.rules.clearance_margin_m, margin_m: init.rules.margin_m.width, wheelchair: walkerCfg.device === 'wheelchair' });
+const reachStart = (): XY => routeStart(routes[selRoute], objs, layout.poses);
+/** the selected route's goal first, the other routes' goals, then the picked points */
+function reachTargets(): ReachTarget[] {
+  const order = [selRoute, ...routes.map((_, k) => k).filter(k => k !== selRoute)];
+  return [...order.map(k => ({ name: `${routes[k].name}: goal`, at: routes[k].goal, kind: 'goal' as const })),
+    ...reachPoints().map(p => ({ name: p.name, at: p.at, kind: 'point' as const }))];
+}
+function reachRepaint() {
+  if (!reachField) return null;
+  const cls = paintClasses({ g, ...reachField }, thresholds(reachOpts()));
+  reach3d.setCells(cls, reachField.len, reachField.hatch);
+  return cls;
+}
+function syncReachWidth() {
+  const w = reachOpts().width_m;
+  $<HTMLInputElement>('reachwidth').value = String(Math.round(w * 100));
+  $('reachwidthout').textContent = `${rcm(w)}${reachWidth === null ? ` (this ${walkerCfg.device ?? 'walker'})` : ' (what if)'}`;
+}
+/** the wheelchair's seated-reach lens (night.ts) paints the scan green / red too: off while the reach map shows */
+function reachLens() { night.setReach(walkerCfg.device === 'wheelchair' && !reachOn()); for (const s of splats) s.updateVersion(); }
+async function refreshReach() {
+  if (!reachOn()) return;
+  if (personaKey !== reachPersona) { reachPersona = personaKey; reachWidth = null; reachLens(); }   // a new device: its own width again
+  syncReachWidth();
+  const id = ++reachSeq;
+  game.reach.asks++;
+  $('reachstatus').textContent = 'working out where the device can go…';
+  const r = await ask({ type: 'reach', layout, start: reachStart(), opts: reachOpts(), targets: reachTargets(), have: reachField?.id ?? 0 });
+  if (id !== reachSeq || !reachOn()) return;   // a newer layout or width is already on its way
+  if (r.field) reachField = { id: r.fieldId, ...r.field };
+  reachReport = r.report;
+  reachRepaint(); reach3d.setReport(r.report);
+  if (!reachPlayed) { reachPlayed = true; reach3d.play(4, calm()); }   // the wave once when shown, then on Play
+  renderReach();
+}
+async function showReach(on: boolean) {
+  $<HTMLInputElement>('reach').checked = on;
+  reach3d.root.visible = on;
+  reachLens();
+  if (on) { reachPlayed = false; await refreshReach(); } else { reachSeq++; $('reachstatus').textContent = ''; }
+}
+/** the doorway to price: the first target the device doesn't reach well whose way is held by a marked doorway (or `name`'s) */
+function reachCosts(name?: string) {
+  const t = (reachReport?.targets ?? []).find(x => (name ? x.name === name : x.status !== 'ok') && x.cause?.kind === 'door' && doors.some(d => d.name === x.cause!.name));
+  const door = t && doors.find(d => d.name === t.cause!.name);
+  if (!t || !door) return null;
+  const widths = Array.from({ length: 56 }, (_, n) => +(0.45 + n * 0.01).toFixed(2));
+  return { door: door.name, target: t.name, steps: costToReach(door, widths, { ...reachOpts(), gain_m: doorGain(layout, door.name),
+    leafObject: !interventions.some(i => i.id === `door_offset:${door.name}`) }) };
+}
+function renderReach() {
+  const r = reachReport;
+  if (!r) return;
+  const m2 = (x: number) => `${x.toFixed(1)} m²`, li = (text: string, cls = '') => Object.assign(document.createElement('li'), { textContent: text, className: cls });
+  $('reachstatus').textContent = `${rcm(r.width_m)} ${walkerCfg.device ?? 'walker'}, needs ${rcm(r.need_w_m)} to pass with clearance: ${m2(r.areas.ok)} reachable · ${m2(r.areas.tight)} tight · ${m2(r.areas.cut)} cut off` +
+    (r.areas.grey ? ` · ${m2(r.areas.grey)} not scanned` : '') + (r.pockets ? '' : ' · dead ends are checked for a wheelchair (ADA turning space)');
+  $('reachfindings').replaceChildren(
+    ...r.regions.map(x => li(`Cut off: ${m2(x.area_m2)} by ${causeText(x.cause)}${x.pinch ? `, ${rcm(x.pinch.width_m)} at the narrowest` : ''}${x.opens_if_moved ? '; moving it opens this part' : ''}`, 'reach-cut')),
+    ...(r.pockets ?? []).map(p => li(`Dead end: reverse ${p.reverse_m < Infinity ? `${p.reverse_m.toFixed(1)} m` : 'all the way'} to turn round${p.closed_by ? `; the far end is closed by ${causeText(p.closed_by)}` : ''}`, 'reach-tight')));
+  const corners = r.targets.filter(t => t.kind === 'corner'), items = r.targets.filter(t => t.kind === 'goal' || t.kind === 'point').map(t => {
+    const e = li(`${t.name}: ${statusLine(t)}${t.cause ? ` · by ${causeText(t.cause)}` : ''}`, `reach-${t.status}`);
+    if (pickedPoints.some(p => p.name === t.name)) e.append(' ', Object.assign(document.createElement('button'), { textContent: 'Remove', onclick: () => removeReachPoint(t.name) }));
+    return e;
+  });
+  if (corners.length) items.push(li(`Room corners: ${corners.filter(t => t.status === 'ok').length} of ${corners.length} reachable` +
+    `${corners.some(t => t.status === 'tight') ? `, ${corners.filter(t => t.status === 'tight').length} tight` : ''}${corners.some(t => t.status === 'cut') ? `, ${corners.filter(t => t.status === 'cut').length} cut off` : ''}`));
+  $('reachtargets').replaceChildren(...items);
+  // what it costs to get through the doorway that holds the way, at every device width (placeholder prices: movecost.ts)
+  const c = reachCosts(), cv = $<HTMLCanvasElement>('reachcost');
+  cv.hidden = !c;
+  if (!c) { $('reachcostinfo').textContent = ''; return; }
+  drawCostChart(cv, c.steps, r.width_m);
+  cv.setAttribute('aria-label', `Cost to get through the ${c.door} at each device width`);
+  cv.onmousemove = e => { const s = costAt(cv, c.steps, e.offsetX * (cv.width / cv.clientWidth)); cv.title = s ? `${rcm(s.width_m)}: ${s.usd === null ? 'no configured fix' : `$${s.usd.toLocaleString()} · ${s.label}`}` : ''; };
+  const runs = costRuns(c.steps);
+  $('reachcostinfo').textContent = `To reach ${c.target} through the ${c.door}, by device width: ` +
+    runs.map(x => `${Math.round(x.a * 100)}${x.b > x.a ? `–${Math.round(x.b * 100)}` : ''} cm ${x.usd === null ? 'no configured fix' : x.usd ? `$${x.usd.toLocaleString()} (${x.label})` : '$0'}`).join(' · ') +
+    (runs.some(x => x.source === 'placeholder') ? ' · placeholder prices until the effort model lands' : '');
+}
+function savePoints() { try { localStorage.setItem(REACH_KEY, JSON.stringify(pickedPoints)); } catch { /* private window: kept for this visit only */ } }
+/** a spot to check from the route's start (picked by a click, the wand, or game.reach.pick([x, y])) */
+async function addReachPoint(at: XY, name?: string) {
+  let n = reachPoints().length + 1;
+  while (!name && reachPoints().some(p => p.name === `point ${n}`)) n++;
+  const p = { name: name ?? `point ${n}`, at: [+at[0].toFixed(3), +at[1].toFixed(3)] as XY };
+  pickedPoints = [...pickedPoints.filter(q => q.name !== p.name), p];
+  savePoints();
+  await (reachOn() ? refreshReach() : showReach(true));
+  return p.name;
+}
+async function removeReachPoint(name: string) { pickedPoints = pickedPoints.filter(p => p.name !== name); savePoints(); await refreshReach(); }
+async function clearReachPoints() { pickedPoints = []; savePoints(); await refreshReach(); }
+async function copyReachYaml() {
+  const yaml = `  reach_points:\n${reachPoints().map(p => `  - {name: ${JSON.stringify(p.name)}, at: [${p.at[0].toFixed(3)}, ${p.at[1].toFixed(3)}]}`).join('\n')}\n`;
+  try { await navigator.clipboard.writeText(yaml); $('reachstatus').textContent = 'copied: paste under game: in config.<scene>.yaml'; }
+  catch { $('reachstatus').textContent = yaml; }
+  return yaml;
+}
+/** coverage ghosts (the widest way to each target, computed) and contact ghosts (simulated trips): off, either or both */
+function setGhostMode(mode: 'off' | 'coverage' | 'contacts' | 'both') {
+  setBox('coverage', mode === 'coverage' || mode === 'both'); setBox('ghosts', mode === 'contacts' || mode === 'both');
+}
+$('reach').onchange = () => showReach($<HTMLInputElement>('reach').checked);
+$('coverage').onchange = () => { reach3d.ghosts.visible = $<HTMLInputElement>('coverage').checked; };
+$('hitghosts').onchange = () => { if (current) drawPlan(current); };
+$('reachwidth').oninput = () => { reachWidth = +$<HTMLInputElement>('reachwidth').value / 100; syncReachWidth(); reachRepaint(); };   // the field doesn't depend on the width
+$('reachwidth').onchange = () => refreshReach();
+$('reachplay').onclick = () => (reachOn() ? reach3d.play(4, calm()) : showReach(true));
+$('markpoint').onclick = () => beginMark('point');
+$('clearpoints').onclick = () => clearReachPoints();
+$('copypoints').onclick = () => copyReachYaml();
+const areasOf = (cls: Uint8Array | null) => {
+  const a = { ok: 0, tight: 0, cut: 0, grey: 0 }, c2 = g.cell_m ** 2;
+  for (const c of cls ?? []) if (c === 1) a.ok += c2; else if (c === 2) a.tight += c2; else if (c === 3) a.cut += c2; else if (c === 4) a.grey += c2;
+  return a;
+};
+game.reach = { asks: 0,
+  show: (on = true) => showReach(on), refresh: () => refreshReach(),
+  state: () => {
+    const r = reachReport;
+    return { on: reachOn(), start: reachStart(), width_m: reachOpts().width_m, field: !!reachField, t: reach3d.t(), dots: reach3d.dots(), drawn: reach3d.drawn(),
+      coverage: reach3d.root.visible && reach3d.ghosts.visible, contacts: ghostDots.visible, mesh: reach3d.paint.type, inScene: reach3d.root.parent === scene, asks: game.reach.asks,
+      report: r && { width_m: r.width_m, need_w_m: r.need_w_m, areas: r.areas, regions: r.regions, pockets: r.pockets, targets: r.targets.map(({ path, ...t }) => ({ ...t, dots: path.length })) } };
+  },
+  /** what the slider does while it moves: repaint for this width, no worker round-trip; the areas by class (m²) */
+  preview: (w: number) => { reachWidth = w; syncReachWidth(); return areasOf(reachRepaint()); },
+  /** the slider let go at this width (null: the device's own): the full report */
+  setWidth: (w: number | null) => { reachWidth = w; return refreshReach(); },
+  ghosts: setGhostMode, play: (s = 4) => reach3d.play(s, calm()),
+  /** a point to check: at [x, y] directly, or start picking it with a click / the wand */
+  pick: (at?: XY, name?: string) => (at ? addReachPoint(at, name) : beginMark('point')),
+  points: reachPoints, removePoint: removeReachPoint, clearPoints: clearReachPoints, copyYaml: copyReachYaml, costs: reachCosts };
+
 // ---------- marking tool (marker.ts, marker3d.ts): point at the scan to mark stairs and doorways; handles fix them ----------
 // Desktop: a pointer rides the splat under the mouse (green: snapped to a flat level; red: a point there would be refused,
 // and the status says why). A click places a point (a drag still looks around), right click or Backspace takes the last
@@ -1122,7 +1303,7 @@ function say(msg = markMsg || (mk && markHover ? placeError(mk, markHover.p) ?? 
   hud.replaceChildren(Object.assign(document.createElement('b'), { textContent: text }), document.createElement('br'),
     Object.assign(document.createElement('small'), { textContent: msg && msg !== text ? `${msg} · ${help}` : help }));
   hud.classList.toggle('bad', !!msg && !parkDrag);
-  if (text) $(mk?.kind === 'door' ? 'doorstatus' : 'stairstatus').textContent = msg && msg !== text ? `${text} — ${msg}` : text;
+  if (text) $(mk?.kind === 'door' ? 'doorstatus' : mk?.kind === 'point' ? 'reachstatus' : 'stairstatus').textContent = msg && msg !== text ? `${text} — ${msg}` : text;
   $('markcross').hidden = !mk || xr;
   const ahead = camera.getWorldPosition(new THREE.Vector3()).add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(1));
   mk3d.setPrompt(xr && text ? `${text}${msg && msg !== text ? ` — ${msg}` : ''}\n${help}` : null,
@@ -1171,6 +1352,7 @@ function markPlace(p: P3 | null): Promise<unknown> | void {
 async function finishMark() {
   const m = mk!, xy = (p: P3): XY => [p[0], p[1]];
   mk = null; markMsg = ''; mk3d.setPoints([]); mk3d.setPreview({ lines: [], tags: [] });
+  if (m.kind === 'point') { say(); markDraw(); await addReachPoint(xy(m.pts[0])); return; }   // a spot to check (reach map): nothing to edit
   $(m.kind === 'door' ? 'doorstatus' : 'stairstatus').textContent = 'measuring from the splat…';
   if (m.kind === 'stairs') await markStair(xy(m.pts[0]), xy(m.pts[1]), xy(m.pts[2]), m.pts[2][2]);
   else await markDoor(xy(m.pts[0]), xy(m.pts[1]));
@@ -1301,6 +1483,8 @@ function markStep() {
   lastAim = aim;
   markRay.setFromCamera(mouseAt, camera);
   if (parkDrag) return moveParked(markRay.ray);
+  const under = editing && !mk && !handleDrag ? markRay.intersectObjects(mk3d.pickables(), false)[0]?.object.userData.handle : null;
+  mk3d.setHover(under ? `${under.owner}:${under.key}` : null);   // the handle under the mouse brightens and says what dragging it does
   const h = markHit(markRay.ray, !shiftHeld);
   if (h) markHover = h; else if (!handleDrag) markHover = null;
   if (handleDrag && h) handleDrag.at = h.p;
@@ -1709,7 +1893,7 @@ applyPerf(perfOn, false);
 game.perf = { set: (on: boolean) => applyPerf(on), on: () => perfOn, tier };   // for the VR team: bind a controller button to it
 
 // ---------- desktop hotkeys (controls.ts) ----------
-// M then 1/2 starts marking, G grabs the picked object (it follows the mouse), X removes it, L locks the mouse to look,
+// M then 1/2/3 starts marking (stairs, doorway, a point to check), G grabs the picked object (it follows the mouse), X removes it, L locks the mouse to look,
 // Ctrl+Z / Ctrl+Shift+Z undo and redo object edits, F1 lists them. Registered before the general key handler below, which
 // they pre-empt (R while grabbing turns the object instead of switching the gizmo).
 const keyHelp = createKeyOverlay();
@@ -1788,8 +1972,9 @@ addEventListener('keydown', e => {
   if (it === 'help') keyHelp.toggle();
   else if (it === 'undo') { if (grabbing) cancelGrab(); else if (mk) undoPoint(); else stepHistory('undo'); }
   else if (it === 'redo') { if (!mk && !grabbing) stepHistory('redo'); }
-  else if (it === 'mark') { if (mk) { cancelMark(); keyHelp.toast('Marking cancelled'); } else { choosing = true; keyHelp.toast('Mark: 1 stairs · 2 doorway', 4000); } }
+  else if (it === 'mark') { if (mk) { cancelMark(); keyHelp.toast('Marking cancelled'); } else { choosing = true; keyHelp.toast('Mark: 1 stairs · 2 doorway · 3 a point to check', 4000); } }
   else if (it === 'mark-stairs') beginMark('stairs');
+  else if (it === 'mark-point') beginMark('point');
   else if (it === 'mark-door') beginMark('door');
   else if (it === 'remove') { if (selected >= 0 && !mk) { const n = nameOf(selected); removeObject(selected); keyHelp.toast(`Removed ${n} · Ctrl+Z puts it back`); } }
   else if (it === 'grab') startGrab();
@@ -2168,6 +2353,7 @@ function frame(now: number) {
 }
 function step(dt: number, t: number) {
   frontendVR?.update();
+  reach3d.tick(dt);   // the reach map's wave (desktop and headset)
   if (xr.presenting()) return xrFrame(dt, t);
   if (mode === 'auto') autoStep(dt); else if (mode === 'fly') flyStep(dt); else freeStep(dt);
   tourStep(dt);
@@ -2178,6 +2364,8 @@ function step(dt: number, t: number) {
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
   if (mode !== 'fly') live?.frame(dt, wb, mode === 'free' && !explore.on, walker.group);
   labelStep(); movementVisuals();
+  camTweenStep(dt);
+  mk3d.update(camera, t);
   if (mode === 'fly') {
     const c = Math.cos(body.pitch);
     camera.position.set(fly.x, fly.y, fly.z);
@@ -2219,7 +2407,7 @@ const comparison = createXRComparison({
   preview(from, to, t) {
     if (!previewVisibility) {
       reim.setT(1);   // stop an automatic morph before drawing this independent comparison
-      previewVisibility = [routeLine, ghostDots, hazardGroup, spotGroup, reim.root].map(o => [o, o.visible]);
+      previewVisibility = [routeLine, ghostDots, hazardGroup, spotGroup, reim.root, reach3d.root].map(o => [o, o.visible]);
       for (const [o] of previewVisibility) o.visible = false;
       objLabel.set(null, [], false);
     }
@@ -2387,11 +2575,27 @@ Object.assign(game, {
   exportForCosmos: (opts?: ExportOpts) => exportForCosmos(ctx, opts), layoutKey: () => layoutKey(objs, layout),
 });
 
+// Inspect glides to each change instead of jumping (under reduced motion it still jumps). Runs in step() while flying.
+type CamPose = { x: number; y: number; z: number; yaw: number; pitch: number };
+let camTween: { from: CamPose; to: CamPose; k: number; dur: number } | null = null;
+function tweenFly(to: CamPose) {
+  const from = { x: fly.x, y: fly.y, z: fly.z, yaw: body.yaw, pitch: body.pitch };
+  if (reducedMotion() || Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z) < 0.05) { camTween = null; Object.assign(fly, { x: to.x, y: to.y, z: to.z }); body.yaw = to.yaw; body.pitch = to.pitch; return; }
+  camTween = { from, to, k: 0, dur: 0.8 + Math.min(0.7, Math.hypot(to.x - from.x, to.y - from.y) * 0.12) };
+}
+function camTweenStep(dt: number) {
+  if (!camTween || mode !== 'fly') { camTween = null; return; }
+  camTween.k = Math.min(1, camTween.k + dt / camTween.dur);
+  const { from, to } = camTween, s = camTween.k * camTween.k * (3 - 2 * camTween.k), L = (a: number, b: number) => a + (b - a) * s;
+  fly.x = L(from.x, to.x); fly.y = L(from.y, to.y); fly.z = L(from.z, to.z); body.pitch = L(from.pitch, to.pitch);
+  body.yaw = from.yaw + Math.atan2(Math.sin(to.yaw - from.yaw), Math.cos(to.yaw - from.yaw)) * s;   // the short way round
+  if (camTween.k >= 1) camTween = null;
+}
 // ---------- frontend shell: existing data/actions, independent of backend and optimizer ownership ----------
 let inspectReturn: { body: typeof body; fly: typeof fly; mode: 'auto' | 'free' | 'fly'; rig: ReturnType<typeof xr.rigState> } | null = null;
 /** What the viewer is doing, for hints.ts: the desktop strip and pills, and the VR strip card. */
 function hintBase(device: 'desktop' | 'vr'): Omit<HintCtx, 'inspect'> {
-  const w = device === 'vr' ? xr.wand() : null, total = mk?.kind === 'stairs' ? 3 : 2;
+  const w = device === 'vr' ? xr.wand() : null, total = mk ? MARK_STEPS[mk.kind].length : 2;
   return { device, persona: personaKey, nav: mode, marking: mk ? { kind: mk.kind, step: Math.min(mk.pts.length + 1, total), total } : null, editingMarks: editing && !mk,
     grabbing: device === 'vr' ? !!w?.grab : !!grabbing, selected: device === 'vr' ? w?.hover != null : selected >= 0,
     locked: document.pointerLockElement === renderer.domElement, mounted: device === 'vr' && !!xr.mount().hand,
@@ -2403,7 +2607,7 @@ const frontendAdapter: FrontendAdapter = {
     changes: reim.changes(), spots: spotList, options: suggestions, selected, selectedName: objs[selected]?.name, mode, explore: explore.on, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
   navigate(m) {
     endTour(); select(-1);
-    if (m === 'inspect') { inspectReturn ??= { body: { ...body }, fly: { ...fly }, mode, rig: xr.rigState() }; setWalk(renderer.xr.isPresenting ? 'free' : 'fly'); }
+    if (m === 'inspect') { commitProposal(); inspectReturn ??= { body: { ...body }, fly: { ...fly }, mode, rig: xr.rigState() }; setWalk(renderer.xr.isPresenting ? 'free' : 'fly'); }   // inspecting a proposal shows it solid
     else if (m === 'route') { xrFollowRoute = renderer.xr.isPresenting; const at = mode === 'free' && !explore.on ? resumeS() : 0; if (mode !== 'auto') { setWalk('auto'); autoS = at; } routePaused = false; }
     else if (m === 'walk' || (m === 'fly' && renderer.xr.isPresenting)) { xrFollowRoute = false; goWalk(); routePaused = false; }
     else if (m === 'fly') { xrFollowRoute = false; setWalk('fly'); routePaused = false; }
@@ -2412,13 +2616,14 @@ const frontendAdapter: FrontendAdapter = {
   focus(item) {
     const p = vantage(item.at, current?.xy ?? [item.at], 1.2, 1.1);
     if (renderer.xr.isPresenting) { if (standable(p.x, p.y)) frontendVR?.transition(() => xr.moveHead(p.x, p.y)); }
-    else { setWalk('fly'); Object.assign(fly, p); body.yaw = p.yaw; body.pitch = p.pitch; }
+    else { setWalk('fly'); tweenFly(p); }
     reim.selectChange(item.object, item.change?.iv);
   },
   leaveInspect() { if (inspectReturn) { const back = inspectReturn; Object.assign(body, back.body); Object.assign(fly, back.fly); if (renderer.xr.isPresenting) frontendVR?.transition(() => xr.restoreRig(back.rig)); setWalk(back.mode); inspectReturn = null; } },
   pause() { routePaused = !routePaused; }, restart() { autoS = 0; autoPause = 0; routePaused = false; }, speed(v) { routeSpeed = v; },
   compare(t) { reim.setT(t); }, animate() { reim.play(); },
-  suggest, async apply(index) { await applyOption(index); setWalk('free'); reim.setT(1); },
+  suggest, async apply(index) { stairPhase = 'proposed'; await applyOption(index); setWalk('free'); reim.setT(1); },   // a previewed proposal: x-ray until accepted or inspected
+  commit() { commitProposal(); },
   undo: undoReimagined, select,
   path(on) { routeLine.visible = on; },
   async lightPath() { const r = await lightPath(); game.setNight(true); return r; },
