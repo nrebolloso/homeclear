@@ -1,4 +1,4 @@
-# Viewer export of the myhome_bedroom_a run as juan_bedroom_bathroom (same settings as config.myhome_bedroom_a.yaml).
+# Viewer export of the myhome_bedroom_a run as juan_bedroom_bathroom (same settings as configs/myhome_bedroom_a.yaml; this one adds the picked start/goal).
 # Juan's own home, bedroom, bathroom door closed (REAL, filmed by Juan). Paths are relative to the repo root unless absolute.
 # Placeholders: until something is tape-measured, every dimension below is marked estimated: true. Stage 4 then reports
 # SKIP (unverified) instead of PASS, and estimates never set stage 8's borderline margins (stage 6b).

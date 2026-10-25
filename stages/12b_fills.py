@@ -39,6 +39,7 @@ MIN_RING = 200       # real-floor pixels around a patch needed to calibrate its 
 SMOOTH_PX = 12       # blur of the painted floor, in 1 cm pixels (see smooth_context): the DC colours around a chair are white and
                      # dark-brown blotches 10-20 cm wide that render as one even grey, so the fill takes that local average
 SMOOTH_SEEN = 0.25   # share of the blur window that must be seen floor for a pixel to count as seen
+FLAT_LOGIT = 4.0     # stored opacity of stage 12's flat patch (its `fv["opacity"] = 4.0`); change both together
 CONTRAST = 0.35      # how much of the inpainted patch's own light/dark variation survives (see match_ring)
 
 
@@ -140,7 +141,7 @@ def gaussians(dtype, pts, rgb, normal_axis, alpha=None):
     for k in range(3):
         fv[f"f_dc_{k}"] = dc[:, k]
         fv[f"scale_{k}"] = np.log(0.001 if k == normal_axis else 0.007)
-    top = 1 / (1 + np.exp(-4.0))                                         # the old flat opacity, 0.982
+    top = 1 / (1 + np.exp(-FLAT_LOGIT))                                  # the old flat opacity, 0.982
     a = np.clip((np.ones(len(pts)) if alpha is None else alpha) * top, 0.02, top)
     fv["opacity"], fv["rot_0"] = np.log(a / (1 - a)), 1.0               # stored as a logit, like the scan's
     return fv
