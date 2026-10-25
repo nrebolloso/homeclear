@@ -50,7 +50,8 @@ const tg = Date.now();
 await p.goto(url);
 await p.waitForFunction(() => (window as any).game?.ready, null, { timeout: 120000 });
 await p.evaluate(`(async () => { const game = window.game; game.setFly(0.4, 0.1, 5.2, -90, -89); await game.planfix.ready;
-  document.getElementById('${S.panel}').scrollIntoView(); })()`);   // top-down over the kitchen, the panel in view
+  const panel = document.getElementById('${S.panel}'); panel.closest('aside').hidden = false; document.getElementById('planning-panel')?.setAttribute('hidden', '');
+  panel.scrollIntoView(); })()`);   // top-down over the kitchen, the panel in view (frontend.ts hides the legacy asides; show this one in place of the drawer)
 await p.waitForTimeout(1500);
 const t0 = Date.now();
 await p.evaluate(`(async () => { const game = window.game; ${S.run} })()`);
