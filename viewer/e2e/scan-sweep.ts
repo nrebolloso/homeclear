@@ -3,7 +3,7 @@ import { CHROME } from './env.ts';
 import assert from 'node:assert/strict';
 const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: [`--use-angle=${process.platform === 'win32' ? 'd3d11' : process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
-const errors: string[] = []; page.on('pageerror', e => errors.push(String(e)));
+const errors: string[] = []; page.on('pageerror', e => errors.push(String(e))); page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 try {
   await page.goto(`${process.argv[2] ?? 'http://127.0.0.1:5183'}/?scene=game_synth&noground&nophys`);
   await page.waitForFunction(() => (window as any).game?.scanLibrary, null, { timeout: 60000 });

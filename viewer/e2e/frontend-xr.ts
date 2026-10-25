@@ -1,7 +1,7 @@
 import { chromium } from 'playwright-core';
 import { CHROME } from './env.ts';
 import assert from 'node:assert/strict';
-const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--use-angle=gl', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: [`--use-angle=${process.platform === 'win32' ? 'd3d11' : process.platform === 'darwin' ? 'metal' : 'gl'}`, '--enable-gpu', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const errors: string[] = []; page.on('pageerror', e => errors.push(String(e)));
 const G = (code: string) => page.evaluate(`(async () => { const game = window.game; ${code} })()`);

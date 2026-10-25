@@ -9,6 +9,7 @@ import { networkInterfaces } from 'node:os';
 const PUB = join(import.meta.dirname, 'public');
 
 export default defineConfig({
+  cacheDir: '.vite-cache',   // worktrees may share dependencies, but never their optimizer cache
   worker: { format: 'es' },
   server: {
     port: 5179, strictPort: true,   // README, e2e/ and scripts/ all use 5179

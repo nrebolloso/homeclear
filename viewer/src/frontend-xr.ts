@@ -5,6 +5,7 @@ import { summarizeChanges } from './frontend-model.ts';
 import { pulse, MENU_HOLD_S } from './controls.ts';
 import { LAYERS, PRESETS } from './layers.ts';
 import { PROFILES } from './vision.ts';
+import { groupScans } from './scan-catalog.ts';
 
 // Scene meshes, not DOM: the same frontend actions remain available in WebXR.
 // Holding the left stick click opens the menu (a tap is too easy to hit by accident; clicking while it is open closes it).
@@ -97,7 +98,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
       }), 'presets');
     } else if (page === 'scans') {
       const entries = library()?.entries() ?? [];
-      rows([...new Set<string>(entries.map((e: any) => e.room))].map((room): Row => [room, () => go('room:' + room)]).concat([['Restart current demo', () => { close(); return library().restart(); }]]));
+      rows(groupScans(entries).map(({ room }): Row => [room, () => go('room:' + room)]).concat([['Restart current demo', () => { close(); return library().restart(); }]]));
     } else if (page.startsWith('room:')) {
       rows((library()?.entries() ?? []).filter((e: any) => e.room === page.slice(5)).map((e: any) => [`${e.version}\n${e.objects ? e.objects + ' objects' : 'Explore · no object edits'}`, () => { close(); return library().switch(e.id); }, e.id === library().current()]), 'scans');
     } else if (page === 'findings') {
@@ -147,7 +148,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
         if (elapsed >= 1 && transition.task) { transition.task(); D.camera.getWorldPosition(fade.position); transition.task = null; }
         if (elapsed >= 2) { transition = null; fade.visible = false; }
       }
-      const item = D.frontend.inspection();
+      const item = game().xrInspection ? D.frontend.inspection() : null;
       inspectionRoot.visible = !!item && !root.visible;
       if (item) {
         const key = JSON.stringify([item.id, item.detail, item.change?.cost]);

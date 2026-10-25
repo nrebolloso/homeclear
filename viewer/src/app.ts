@@ -90,7 +90,7 @@ async function mount(id: string, resume: boolean) {
   if (resume && saved.has(id)) await game.restoreSession(saved.get(id));
   if (renderer.xr.isPresenting) document.body.classList.add('xr-active');
   game.scanLibrary = library; sessionLink.attach(game);
-  current = id; drawCatalog();
+  current = id; game.startLoop(); drawCatalog();
   // Save a real rendered thumbnail, never a generated room image.
   requestAnimationFrame(() => { if (!renderer.xr.isPresenting && current === id) { try { const thumb = document.createElement('canvas'); thumb.width = 240; thumb.height = 150; thumb.getContext('2d')!.drawImage(renderer.domElement, 0, 0, 240, 150); thumbnails.set(id, thumb.toDataURL()); } catch { /* preview is optional */ } } });
 }

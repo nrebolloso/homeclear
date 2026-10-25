@@ -7,5 +7,4 @@ export function bindXR(options: SparkXrOptions) {
   enter = options.onEnterXr; exit = options.onExitXr;
   session ??= new SparkXr({ ...options, onEnterXr: () => enter?.(), onExitXr: () => exit?.() });
   queueMicrotask(() => session?.element?.setAttribute('data-xr-persistent', 'true'));
-  if (options.renderer.xr.isPresenting) enter?.();
 }

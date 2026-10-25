@@ -90,7 +90,7 @@ export async function setupXR(host: XrHost) {
 
   const rig = new THREE.Group();
   scene.add(rig);
-  const xrRig = { x: 0, y: 0, yaw: 0 };
+  const xrRig = { x: 0, y: 0, yaw: 0 }; let lastSpawn = { ...xrRig }, pendingSpawn: { x: number; y: number; yaw: number } | null = null;
   const TILT = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2), UP = new THREE.Vector3(0, 0, 1);
   const placeRig = () => {
     rig.position.set(xrRig.x, xrRig.y, host.eyeHeight?.() == null ? 0 : Math.max(0, host.eyeHeight()! - camera.position.y));
@@ -338,6 +338,12 @@ export async function setupXR(host: XrHost) {
 
   // ---------- per frame ----------
   function step(dt: number) {
+    if (pendingSpawn) {
+      const reference = renderer.xr.getReferenceSpace(), pose = reference && renderer.xr.getFrame()?.getViewerPose(reference);
+      if (!pose) return;
+      const { position: p, orientation: q } = pose.transform; camera.position.set(p.x, p.y, p.z); camera.quaternion.set(q.x, q.y, q.z, q.w);
+      const destination = pendingSpawn; pendingSpawn = null; place(destination.x, destination.y, destination.yaw);
+    }
     if (host.shell?.open()) { dash.visible = false; return; }
     const yaw = readHead();
     if (host.shell?.follow(dt)) { xrRig.x += body.x - head.x; xrRig.y += body.y - head.y; placeRig(); wandStep(); return; }   // the route drives the body
@@ -380,6 +386,7 @@ export async function setupXR(host: XrHost) {
   }
   /** Put the head at floor-frame (x, y) looking along yaw by moving the rig: scripted viewpoints on a headset nobody wears. */
   function place(x: number, y: number, yaw: number) {
+    lastSpawn = { x, y, yaw }; if (pendingSpawn) pendingSpawn = { x, y, yaw };
     const a = yaw - readHead(), c = Math.cos(a), s = Math.sin(a), rx = xrRig.x - head.x, ry = xrRig.y - head.y;
     Object.assign(xrRig, { x: x + c * rx - s * ry, y: y + s * rx + c * ry, yaw: xrRig.yaw + a });   // turn about the head, then move it
     placeRig();
@@ -391,17 +398,21 @@ export async function setupXR(host: XrHost) {
   const rigState = () => ({ ...xrRig });
   function restoreRig(r: { x: number; y: number; yaw: number }) { Object.assign(xrRig, r); placeRig(); }
 
-  bindXR({   // adds the Enter VR button; "VR not supported" where WebXR isn't available
-    renderer, mode: 'vr', referenceSpaceType: 'local-floor', enableHands: true,
-    frameBufferScaleFactor: cfg.scale, fixedFoveation: cfg.foveation,
-    onEnterXr: () => {
+  function enterRoom() {
       { const p = host.startPose(); if (p) Object.assign(body, p); }   // null: stay where the walker user is
       Object.assign(xrRig, { x: body.x, y: body.y, yaw: body.yaw }); placeRig(); rig.add(camera);
+      lastSpawn = { x: body.x, y: body.y, yaw: body.yaw };
+      pendingSpawn = { ...lastSpawn }; camera.position.set(0, 0, 0); camera.quaternion.identity();
       anchor.set = false; dash.visible = btns.length > 0; mountOffset = null;
       host.enter(tier);
       // a lower refresh gives each frame more time (90 Hz = 11.1 ms, 72 Hz = 13.9 ms); the Quest 2 offers 60-120
       if (cfg.hz) renderer.xr.getSession()?.updateTargetFrameRate?.(cfg.hz).catch(() => {});
-    },
+  }
+
+  bindXR({   // adds the Enter VR button; "VR not supported" where WebXR isn't available
+    renderer, mode: 'vr', referenceSpaceType: 'local-floor', enableHands: true,
+    frameBufferScaleFactor: cfg.scale, fixedFoveation: cfg.foveation,
+    onEnterXr: enterRoom,
     onExitXr: () => {
       camera.removeFromParent(); pinching.clear(); dropWand(); hover = -1; btnHover = -1; dash.visible = false;
       ringCard?.removeFromParent(); ringCard?.material.dispose(); ringCard = null; ringN = 0; bothHeld = 0; gripWas = false; aWas = false; clickWas = false;
@@ -413,7 +424,7 @@ export async function setupXR(host: XrHost) {
 
   const w = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3));
   return {
-    tier, device, rig, place, step, moveHead, rigState, restoreRig, mount: () => ({ hand: MOUNT, offset: mountOffset }),
+    tier, device, rig, place, step, resume: enterRoom, spawn: () => ({ ...lastSpawn }), moveHead, rigState, restoreRig, mount: () => ({ hand: MOUNT, offset: mountOffset }),
     presenting: () => renderer.xr.isPresenting,
     /** where the XR camera and the user camera in its rig are (floor frame), and what is tracked */
     pose: () => ({ xr: renderer.xr.isPresenting, head: w(renderer.xr.getCamera()), userCam: w(camera), rig: { ...xrRig },

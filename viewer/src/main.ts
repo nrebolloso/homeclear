@@ -2326,7 +2326,8 @@ function xrFrame(dt: number, t: number) {
   stairs3d.update(t, $<HTMLInputElement>('night').checked);
   if (!comparison.previewing()) labelStep();
   liveChecks(t);
-  vision.renderXR();
+  const helper = tc.getHelper(), helperVisible = helper.visible; helper.visible = false;
+  vision.renderXR(); helper.visible = helperVisible;
   companion?.frame(t * 1000);
 }
 // ---------- start ----------
@@ -2334,6 +2335,7 @@ setWalk('auto');
 await replan();
 if ((current as Eval | null)?.error === undefined && current) Object.assign(body, routePose(0, 0, Infinity));
 else { const [sx, sy] = routes[selRoute].start; Object.assign(body, { x: sx - centreOffset, y: sy, yaw: 0 }); }
+if (renderer.xr.isPresenting) xr.resume();
 // ---------- room light on the meshes (ground.ts) ----------
 // the splat rendered into an env map from the room's middle, 1 m up, before the loop (it sorts the splats for the cube
 // camera; the loop would re-sort them for the main one mid-capture). Capped wait: a slow load keeps the old flat light.
@@ -2344,7 +2346,7 @@ if (GROUND && !renderer.xr.isPresenting) {
     updateNight();
   }
 }
-renderer.setAnimationLoop(frame);   // not requestAnimationFrame: in a headset session only the XR frame loop runs
+game.startLoop = () => renderer.setAnimationLoop(frame);   // app starts after saved room state has been restored
 
 const ctx = { RUN, sc, objs, layout: () => layout, applied: () => applied, current: () => current, routePose, routeS: () => routeS,
   get walker() { return walkerCfg; }, get persona() { return persona; }, body, renderer, scene, get walkerGroup() { return walker.group; },
@@ -2361,7 +2363,7 @@ Object.assign(game, {
   autoS: () => autoS, setAuto: () => setWalk('auto'),
   /** Live profiling from DevTools (e.g. hide splats in a headset session and watch game.fps). */
   debug: { renderer, scene, camera, marker: mk3d.root, stairs: stairs3d.root, spark: sparkR, splats, main: splats[0], items, overlays: [routeLine, ghostDots, hazardGroup, tapeGroup],
-    vision, rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
+    vision, rig: xr.rig, xrDevice: xr.device, xrPlace: xr.place, wand: xr.wand, xrStrip: xr.strip, xrTier: xr.tier, xrSpawn: xr.spawn, xrButtons: xr.buttons, xrComparison: comparison.state, xrPress: xr.press, xrMount: xr.mount },
   /** In a headset session: where the XR camera, the user camera in its rig, and the walker actually are (floor frame). */
   xrPose: () => ({ ...xr.pose(), body: { ...body }, walker: walker.group.getWorldPosition(new THREE.Vector3()).toArray().map(v => +v.toFixed(3)) }),
   setFree(x: number, y: number, yaw: number) { setWalk('free'); setExplore(false); headTurn.yaw = 0; chairVel.v = chairVel.w = 0; Object.assign(body, { x, y, yaw }); },
@@ -2411,6 +2413,7 @@ const frontendAdapter: FrontendAdapter = {
   snapshot: () => ({ room: RUN, patient: personaKey, route: routes[selRoute].name, current, baseline: baseEvals[selRoute] ?? null,
     changes: reim.changes(), spots: spotList, options: game.remoteOptions ?? suggestions, selected, selectedName: objs[selected]?.name, mode, explore: explore.on, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
   navigate(m) {
+    if (game.xrUIAction) game.xrInspection = m === 'inspect';
     if (renderer.xr.isPresenting && !game.xrUIAction || game.remoteSession) { companion?.setMode('companion'); return; }
     endTour(); select(-1);
     if (m === 'inspect') { inspectReturn ??= { body: { ...body }, fly: { ...fly }, mode, rig: xr.rigState() }; setWalk(renderer.xr.isPresenting ? 'free' : 'fly'); }

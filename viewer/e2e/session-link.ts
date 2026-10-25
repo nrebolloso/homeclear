@@ -21,6 +21,12 @@ try {
   await companion.waitForFunction(() => (window as any).scanLibrary.current() === 'game_synth_narrow');
   assert.equal(await host.evaluate(() => (window as any).scanLibrary.current()), 'game_synth_narrow');
   console.log('PASS remote undo and scan changes stay synchronized');
+  await companion.evaluate(() => (window as any).game.setPersona('parkinsons'));
+  await host.waitForFunction(() => (window as any).game.persona() === 'parkinsons');
+  await companion.waitForFunction(() => (window as any).game.persona() === 'parkinsons');
+  await host.evaluate(() => (window as any).game.setFly(1, 1, 1.2, 90, 0));
+  await companion.waitForFunction(() => { const h = (window as any).game.remoteHead; return h?.position && Math.abs(h.position[2] - 1.2) < .01 && h.quaternion.length === 4; });
+  console.log('PASS patient selection and full head pose synchronize across devices');
   await companion.evaluate(() => (window as any).sessionLink.disconnect());
   assert.equal(await companion.evaluate(() => (window as any).game.remoteSession), false);
   assert.deepEqual(errors, []);
