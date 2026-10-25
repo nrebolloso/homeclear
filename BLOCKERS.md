@@ -43,3 +43,31 @@
    (`game.wmghosts`: two gait styles, futures fan, predicted self, month replay) are scene objects, so they should render in
    WebXR, but nobody has looked at them on a Quest 2. Labels are sprites sized for a desktop camera, and the month replay
    draws 3 instanced meshes of 60. Check legibility and fps in the headset, and bind `twoStyles()` / `month()` from `xr.ts`.
+13. **A real glide-cap / tennis-ball pass (rug-calibration).** Slit two tennis balls (or fit glide caps) onto the rear
+   legs and push off the same loose rug at normal speed, floor camera plus wide, 3 or more passes. The sim's caps value
+   (glide-rug friction 0.10-0.20, `CAPS_MU` in `physics/rug_calib.py`) is ASSUMED, and with it the sim says caps barely
+   help (P(fold or drag) ratio 0.98, against 0.02 for taping the edge). Only friction changes in the sim: a tennis ball's
+   ~6.7 cm diameter, which rides up over the edge, is not modeled, so the real pass may well disagree. Drop the floor clip
+   in `data/walker_rug/floor/`, add a row to `data/recording_notes.csv`, then
+   `MUJOCO_GL=egl python tools/rug_video.py --caps data/walker_rug/floor/<clip>.mp4` fills the empty slot in
+   `proof/demo/real_vs_sim_rug.mp4`. If the caps fold less, model the ball's geometry, not just its friction.
+14. **The rug count is 8, not 9 (rug-calibration).** `data/recording_notes.csv` has 8 passes over a flat loose rug (7 off,
+   1 onto), and all 8 disturbed it (6 folded, 2 dragged). 1000101386 started pre-folded (the wheel rolled over, the fold
+   stayed) and 1000101389 is bare floor (clean). If there is a ninth pass, add its row; `physics/rug_calib.py rewrite`
+   recomputes the real rates.
+15. **No wide view for 1000101380.** IMG_6800 was not uploaded; the pair stays floor-only.
+16. **"Maui's effort model" was not found.** No `effort.ts` (TM2's `moveEffort`) on any branch, so the glide-caps fix uses the
+   planner's existing scale: $8, 5 min, effort 1 (`configs/planner/kitchen4_lighter.json`, `options.walker.caps`). Swap in
+   the real numbers once `effort.ts` lands.
+17. **Merging rug-calibration with wm-planner.** Both edit `viewer/src/main.ts` and `viewer/src/planfix.ts` (git
+   conflicts); `grid.ts`, `planner.ts`, `planner/engine.py` and `configs/planner/kitchen4_lighter.json` auto-merge. A
+   trial merge resolved as below passes tsc, 172/172 tests and the build:
+   - `main.ts` imports: keep both lines (`createFuturesFan` and `createRugCascade, P_FOLD`).
+   - `main.ts` futures-fan hook: `fold: () => live?.fold() ?? layout.folds?.[0] ?? null,` so the fan sees the autoplay fold.
+   - `planfix.ts` ranked fixes: keep rug-calibration's candidate list (tape and caps always shown when the mat is present)
+     with wm-planner's toe-catch measure (`before = scores[0].contacts`, `cut = before - sc.contacts`, `objective_cut`, and
+     the three-key sort).
+   - wm-planner's STATUS planned to add the glide-caps fix: it is already here (config option, `engine.py` CAPS_FACTOR,
+     planner cost item), so skip that. Rerunning the B200 search with caps is optional; the viewer merges the config's
+     options over `search.json`.
+   - The ranking by toe catches puts caps at about 0 (caps only change snags in the planner); they show in `objective_cut`.
