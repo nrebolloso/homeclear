@@ -401,8 +401,8 @@ try {
     await F(`game.fan.setModel('hand'); ${sim(1.5)}`);
     const h = await F('return game.fan.state()');
     const mat = (s: any) => (s.fan.crossed.mat ?? 0) > 0;
-    const hit = before.find(s => mat(s) && s.fan.red > 0 && / cross the mat /.test(s.label)) ?? before.find(s => mat(s) && s.fan.red > 0);   // near the cord the cord leads the label
-    check('futures fan: 30 imagined futures from the current state, red at the mat, labelled', !!hit && hit.fan.n === 30 && /^World model: 30 futures · \d+ cross the mat · ≈[\d.]+ toe catches\/month here/.test(hit.label), hit ? `${hit.label}; ${hit.fan.red} likely catches, ${hit.fan.catches_month.toFixed(2)}/month` : `never red at the mat: ${before.map(s => s.label.split('· ')[1]).join(', ')}`);
+    const hit = before.find(s => mat(s) && s.fan.red > 0 && / cross the mat( |$)/.test(s.label)) ?? before.find(s => mat(s) && s.fan.red > 0);   // near the cord the cord leads the label
+    check('futures fan: 30 imagined futures from the current state, red at the mat, labelled', !!hit && hit.fan.n === 30 && /^World model: 30 futures · \d+ cross the mat( ·|$)/.test(hit.label), hit ? `${hit.label}; ${hit.fan.red} likely catches, ${hit.fan.catches_month.toFixed(2)}/month` : `never red at the mat: ${before.map(s => s.label.split('· ')[1]).join(', ')}`);
     check('futures fan: no future hits the mat once it is taped flat', after.length > 10 && !after.some(mat), `${after.length} fans, mat crossings ${after.filter(mat).length}, max ${Math.max(...after.map(s => s.fan.catches_month)).toFixed(2)} catches/month`);
     check('futures fan: hand rule toggle', h.model === 'hand' && /^Hand rule:/.test(h.label), h.label);
     // a fixed seed keeps all 30 futures (demorun.ts: the numbers match the recordings), so the adaptive count is measured unseeded

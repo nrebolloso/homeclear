@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { loadScene } from './scene.ts';
 import { evaluate } from '../src/evaluate.ts';
-import { prepare, fan, fanLabel, leadHazard, stickyLead, routeOptions, routeLabel, type Fan, type FanScene } from '../src/futures.ts';
+import { prepare, fan, fanLabel, spotRate, leadHazard, stickyLead, routeOptions, routeLabel, type Fan, type FanScene } from '../src/futures.ts';
 import { toWorldModel } from '../src/gaitfit.ts';
 import { worldFootprint, type XY } from '../src/grid.ts';
 import { frame, predict, smoothRoute, toLocal, toWorld } from '../src/worldmodel.ts';
@@ -30,7 +30,7 @@ test('futures fan: likely catches at the mat (sim.ts p), none once the mat is ta
     assert.equal(F.futures.length, 30);
     // 1.1/month on the whole route (evaluate), almost all of it the mat: the fan over the mat says ~1
     assert.ok(F.crossed.mat >= 20 && F.catches_month > 0.5 && F.catches_month < 2, JSON.stringify([F.crossed, F.catches_month]));
-    assert.match(fanLabel(F, 'World model'), /^World model: 30 futures · \d+ cross the mat · ≈[\d.]+ toe catches\/month here/);
+    assert.match(fanLabel(F, 'World model'), /^World model: 30 futures · \d+ cross the mat( ·|$)/); assert.match(spotRate(F), /^≈[\d.]+ toe catches\/month at the mat /);
     for (const L of [taped, tapedPose, removed]) {
       const G = fan(S, prepare(S, L, null), m, at(0.7), xy, 30, 3);
       assert.ok(!G.crossed.mat && G.catches_month < 0.1 * F.catches_month, JSON.stringify([G.crossed, G.catches_month]));
@@ -103,7 +103,7 @@ test('the label leads with the most expected catches and holds it ~1.5 s', () =>
     counts: {}, crossed: { cord, mat }, spread_m: 0, path: 'route', routes: [], ahead_s: 4, lift: 'average', catches_month: 1 }) as unknown as Fan;
   const matLeads = mk(19, 11, 0.02), cordLeads = mk(19, 11, 0.0001);
   assert.equal(leadHazard(matLeads), 'mat');
-  assert.match(fanLabel(matLeads, 'World model'), /· 11 cross the mat ·/);
+  assert.match(fanLabel(matLeads, 'World model'), /· 11 cross the mat( ·|$)/);
   const L = stickyLead(1.5);
   assert.equal(L(matLeads, 0), 'mat');
   assert.equal(L(cordLeads, 0.5), 'mat');     // the cord leads for 1 s: no switch

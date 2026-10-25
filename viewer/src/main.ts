@@ -423,8 +423,9 @@ function renderPanels() {
     (r.hand ? `<div class="range">hand-rule baseline on the same route: ${fmt(r.hand.per_month)}</div>` : '') +
     `<ul class="routes">${perRoute}</ul>` +
     `original layout: ${fmt(baselinePerMonth!)} → now ${fmt(r.per_month)} <span class="${d <= 0 ? 'delta-good' : 'delta-bad'}">(${d <= 0 ? '' : '+'}${fmt(d)})</span>`;
+  // no per-hazard rate here: the headline is the one toe-catch number on screen (the OT report breaks it down)
   const geo = r.hazards.map(h => `<li><span class="measured">${h.type === 'floor_bump' ? (h.estimated ? `${h.name}: thin cable/cord, ~${(h.height_m! * 100).toFixed(1)} cm ESTIMATED (classified, not measured)` : `${h.name}: ${(h.height_m! * 100).toFixed(1)} cm bump`) : `tight passage: ${(h.min_side_clearance_m! * 100).toFixed(0)} cm each side`}</span>` +
-    ` over ${h.length_m.toFixed(2)} m${h.type === 'floor_bump' ? ` · ${fmt(h.per_month)}/month` : ''}${h.ot_check ? ' · <span class="ot">OT should check</span>' : ''}</li>`);
+    ` over ${h.length_m.toFixed(2)} m${h.ot_check ? ' · <span class="ot">OT should check</span>' : ''}</li>`);
   // Cosmos Reason: proposals already checked against the grids (cosmos/reason.py); the dismissed ones are not listed
   const reason = hzFile.hazards.filter(h => h.source === 'cosmos_reason' && h.verdict !== 'dismissed').map(h =>
     `<li><span class="imagined">${esc(h.note)}</span> · proposed by Cosmos Reason${h.verdict === 'confirmed' ? `, <span class="measured">geometry agrees: ${esc(h.measured)}</span>` : ', not measurable from the scan · <span class="ot">OT should check</span>'}</li>`);
@@ -2850,7 +2851,8 @@ function hintBase(device: 'desktop' | 'vr'): Omit<HintCtx, 'inspect'> {
 const frontendAdapter: FrontendAdapter = {
   hintContext: () => ({ ...hintBase('desktop'), thirdPerson: view.third, personaLabel: personas[personaKey]?.label ?? personaKey }),   // the controls strip and status pills (hints.ts)
   snapshot: () => ({ room: RUN, patient: personaKey, route: routes[selRoute].name, current, baseline: baseEvals[selRoute] ?? null,
-    changes: reim.changes(), spots: spotList, options: game.remoteOptions ?? suggestions, selected, selectedName: objs[selected]?.name, mode, explore: explore.on, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
+    changes: reim.changes(), spots: spotList, options: game.remoteOptions ?? suggestions, selected, selectedName: objs[selected]?.name, mode, explore: explore.on, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout),
+    stage: reim.changes().length ? 'With fix' : layout.folds?.length || live?.fold() ? 'After the fold' : rugOn ? 'Before the fold' : undefined }),
   navigate(m) {
     if (game.xrUIAction) game.xrInspection = m === 'inspect';
     if (renderer.xr.isPresenting && !game.xrUIAction || game.remoteSession) { companion?.setMode('companion'); return; }

@@ -289,13 +289,17 @@ export function stickyLead(hold_s = 1.5) {
     return held;
   };
 }
-/** the label: "World model: 30 futures · 30 cross the mat · ≈1.0 toe catches/month here", then the brushes ("4 brush the chair") */
+/** the label: "World model: 30 futures · 30 cross the mat", then the brushes ("4 brush the chair"). No rate: the panel
+ *  headline is the one toe-catch number on screen; the fan's own rate is spotRate() */
 export function fanLabel(F: Fan, model: string, lead_hazard = leadHazard(F)): string {
   const n = F.futures.length, edge = lead_hazard && F.crossed[lead_hazard] ? [lead_hazard, F.crossed[lead_hazard]] : null;
   const brush = Object.entries(F.counts).sort((a, b) => b[1] - a[1]).map(([k, c]) => `${c} brush the ${k}`);
-  const lead = edge ? `${edge[1]} cross the ${edge[0]} · ≈${catches(F.catches_month)} toe catches/month here` : brush.length ? '' : 'all clear';
+  const lead = edge ? `${edge[1]} cross the ${edge[0]}` : brush.length ? '' : 'all clear';
   return [`${model}: ${n} futures`, ...(lead ? [lead] : []), ...brush].join(' · ');
 }
+/** the fan's rate, said for what it measures: "≈0.14 toe catches/month at the mat (if every trip passed here like these)" */
+export const spotRate = (F: Fan, lead_hazard = leadHazard(F)) =>
+  `≈${catches(F.catches_month)} toe catches/month ${lead_hazard ? `at the ${lead_hazard}` : 'here'} (if every trip passed here like these)`;
 const catches = (c: number) => (c >= 0.095 ? c.toFixed(1) : c >= 0.001 ? c.toFixed(2) : '0');
 /** "18 over the mat · 12 around the mat" (only when the way ahead forks) */
 export function routeLabel(F: Fan): string {

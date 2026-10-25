@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { card } from './reimagine.ts';
 import { toWorldModel, type Persona } from './gaitfit.ts';
-import { fanLabel, stickyLead, routeLabel, LIFTS, type Fan, type FanScene, type Fold, type Lift } from './futures.ts';
+import { fanLabel, spotRate, stickyLead, routeLabel, LIFTS, type Fan, type FanScene, type Fold, type Lift } from './futures.ts';
 import type { Layout, XY } from './grid.ts';
 import type { WalkerCfg } from './walker.ts';
 import type { WorldModel } from './worldmodel.ts';
@@ -94,7 +94,7 @@ export function createFuturesFan(D: FanDeps) {
     });
     trail.count = t; frame.count = F.futures.length; body.count = head.count = Math.ceil(F.futures.length / PERSON_EVERY);
     for (const im of [trail, body, head, frame]) { im.instanceMatrix.needsUpdate = true; im.instanceColor!.needsUpdate = true; }
-    const lines = [fanLabel(F, modelName(), lead(F, performance.now() / 1000)), ...(routeLabel(F) ? [routeLabel(F)] : []),
+    const held = lead(F, performance.now() / 1000), lines = [fanLabel(F, modelName(), held), ...(routeLabel(F) ? [routeLabel(F)] : []),
       `imagined, ${model === 'hand' ? 'hand-rule steps' : `learned gait · ${style === 'mean' ? 'average person' : style}`} · ${LIFTS[F.lift].label}, ${F.ahead_s.toFixed(1)} s ahead`,
       `colour = chance of a toe catch (1 in 578 strides at 1 cm) · full red ${P_RED * 100}%+`];
     if (lines.join('|') !== text) {
@@ -108,8 +108,8 @@ export function createFuturesFan(D: FanDeps) {
         c.position.set(r.tip[0], r.tip[1], 0.5); c.renderOrder = 6; root.add(c); return [c];
       }) : [];
       label = card(lines, F.catches_month >= 0.1 ? '#ffd0d0' : '#c8ffd8', 'rgba(14,20,28,0.78)', 0.07); label.renderOrder = 6; root.add(label);
-      const s = $('fanstatus'); if (s) s.textContent = `${lines.slice(0, -2).join(' · ')} (${n} sampled, ${ms.toFixed(0)} ms in the worker${F.path === 'heading' ? ', off the route: straight ahead' : ''}; route odds: ASSUMPTION, from path length)`;
     }
+    const s = $('fanstatus'); if (s) s.textContent = `${lines.slice(0, -2).join(' · ')} · ${spotRate(F, held)} (${n} sampled, ${ms.toFixed(0)} ms in the worker${F.path === 'heading' ? ', off the route: straight ahead' : ''}; route odds: ASSUMPTION, from path length)`;
   }
 
   /** per frame (desktop step() and xrFrame()) */
