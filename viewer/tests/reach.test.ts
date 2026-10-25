@@ -167,3 +167,13 @@ test('reach: the field and the report fit the replan budget on the synthetic hom
   const ms = performance.now() - t;
   assert.ok(ms < 300, `${ms.toFixed(0)} ms`);
 });
+
+test('reach: an enclosed no-floor patch the cameras saw (old export) is filled in and hatched; no scan hole elsewhere', () => {
+  const { S, lay, start, init } = scene('kitchen4_raw');
+  const f = reachField(S, lay, start(), init.plan.walker_width_m / 2), [nx, ny] = S.g.shape;
+  const k = (i: number, j: number) => i * ny + j;
+  assert.ok(f.dist[k(100, 150)] > 0.1, 'the middle of the room is open floor, not blocked');   // 0.26 m² hole, rows 86-117 cols 134-170
+  assert.equal(f.hatch[k(100, 150)], 1, 'assumed floor, not measured');
+  assert.equal(f.need[k(100, 150)] > 0, true, 'and the way in reaches it');
+  assert.ok(nx > 0);
+});

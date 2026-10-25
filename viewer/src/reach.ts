@@ -24,6 +24,7 @@ export const REACH = {
   pocket_m: 1.0,        // a wheelchair reversing further than this to find turning room is a dead end
   pocket_min_m2: 0.04,  // of chair-centre positions: in a 90 cm corridor that's a strip 24 cm wide, so 0.04 m² is ~17 cm of it
   jamb_ext_m: 0.4,      // a marked doorway's jambs run this far into the wall: the scan's gap may be wider than marked
+  fill_hole_max_m2: 1.0, // same cap as stage 06's fill_holes_max_m2: a bigger enclosed no-floor patch is left blocked
   ghost_step_m: 0.05, corner_min_m2: 1, target_snap_m: 0.6,
 };
 const SQ2 = Math.SQRT2;
@@ -145,6 +146,8 @@ export interface ReachField {
 export function reachField(S: ReachInit, lay: Layout, start: XY, snapHalf = 0): ReachField {
   const { g } = S, [nx, ny] = g.shape, N = nx * ny, cell = g.cell_m;
   const carved = carvedPolys(lay), L = stamp(g, S.base, S.objects, lay.poses, lay.flattened, carved);
+  const holes = enclosedFloorHoles(g, L, S.coverage, S.coverage_good ?? 1);
+  for (let k = 0; k < N; k++) if (holes[k]) L.floor[k] = 1;
   const owner = new Int32Array(N).fill(OWN_FREE), blocked = new Uint8Array(N);
   for (let k = 0; k < N; k++) if (L.obst[k] || !L.floor[k]) { blocked[k] = 1; owner[k] = L.obst[k] ? OWN_WALL : OWN_UNSEEN; }
   S.objects.forEach((o, k) => {
@@ -154,7 +157,7 @@ export function reachField(S: ReachInit, lay: Layout, start: XY, snapHalf = 0): 
   // with movable furniture out of the way (what moving it would open): the same layers minus those objects
   const away = stamp(g, S.base, S.objects, lay.poses.map((p, k) => (isMovable(S.objects[k]) ? { ...p, removed: true } : p)), lay.flattened, carved);
   const blockedFree = new Uint8Array(N);
-  for (let k = 0; k < N; k++) blockedFree[k] = away.obst[k] || !away.floor[k] ? 1 : 0;
+  for (let k = 0; k < N; k++) blockedFree[k] = away.obst[k] || !(away.floor[k] || holes[k]) ? 1 : 0;
   // a marked doorway counts at its marked width, even where the scan's gap is wider (jamb stops, a hinge side)
   (S.doors ?? []).forEach((d, n) => {
     const { jamb, band } = doorCells(g, d, lay);
@@ -174,6 +177,7 @@ export function reachField(S: ReachInit, lay: Layout, start: XY, snapHalf = 0): 
     for (const c of polyCells(g, worldFootprint(o, { x: o.pivot[0], y: o.pivot[1], yaw: 0 }))) if (!blocked[c]) hatch[c] = 1;
   });
   for (const poly of carved) for (const c of polyCells(g, poly)) hatch[c] = 1;   // designed, not built
+  for (let k = 0; k < N; k++) if (holes[k]) hatch[k] = 1;   // floor the export missed, filled in: assumed, not measured
   return { g, start, zone, dist, need: W.need, len: W.len, parent: W.parent, free: F.need, freeParent: F.parent, owner, grey: greyCells(g, L, cov, good), hatch };
 }
 
@@ -198,6 +202,34 @@ function startZone(g: GridMeta, dist: Float32Array, start: XY, snapHalf: number)
   });
   if (snap >= 0 && !seen.has(snap)) zone.push(snap);
   return zone;
+}
+
+/** Floor the export left out: a patch with no floor and nothing standing in it, ringed by floor, that cameras saw (so not a
+ *  scan hole), at most fill_hole_max_m2. Same rule as stage 06 (an older export lacks it); it would be an invisible wall
+ *  in the open otherwise. Shown hatched (assumed floor, not measured). */
+export function enclosedFloorHoles(g: GridMeta, L: Layers, cov: Uint8Array | undefined, good: number): Uint8Array {
+  const [nx, ny] = g.shape, N = nx * ny, out = new Uint8Array(N);
+  if (!cov) return out;   // nobody says the cameras saw it: an unscanned patch is a hole (grey), not floor
+  const seen = new Uint8Array(N), maxCells = REACH.fill_hole_max_m2 / g.cell_m ** 2;
+  const flood = (seed: number[], keep: (k: number) => boolean) => {   // 4-connected, like ndimage's default structure
+    const q = seed;
+    for (let h = 0; h < q.length; h++) {
+      const k = q[h], i = (k / ny) | 0, j = k - i * ny;
+      for (const n of [i > 0 ? k - ny : -1, i < nx - 1 ? k + ny : -1, j > 0 ? k - 1 : -1, j < ny - 1 ? k + 1 : -1])
+        if (n >= 0 && !seen[n] && !L.floor[n] && keep(n)) { seen[n] = 1; q.push(n); }
+    }
+    return q;
+  };
+  const edge: number[] = [];   // no floor reaching the grid's edge is outside the home
+  for (let k = 0; k < N; k++) { const i = (k / ny) | 0, j = k - i * ny; if (!L.floor[k] && (i === 0 || j === 0 || i === nx - 1 || j === ny - 1)) { seen[k] = 1; edge.push(k); } }
+  flood(edge, () => true);
+  for (let k = 0; k < N; k++) {
+    if (L.floor[k] || seen[k]) continue;
+    seen[k] = 1;
+    const comp = flood([k], () => true);
+    if (comp.length <= maxCells && comp.every(c => !L.obst[c] && cov[c] >= good)) for (const c of comp) out[c] = 1;
+  }
+  return out;
 }
 
 /** Holes in the scan: unscanned patches (no floor, no obstacle, too few cameras) of at least grey_min_m2 with scanned
