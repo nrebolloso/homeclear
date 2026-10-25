@@ -34,6 +34,28 @@ def neighbours(p):
     return n
 
 
+def in_box(p, b):
+    """Points inside box b = {center: [x,y,z], size: [lx,ly,lz], yaw_deg} (floor frame, size along its own yawed axes)."""
+    c, s, a = np.array(b["center"], float), np.array(b["size"], float), np.radians(b.get("yaw_deg", 0))
+    d = p - c
+    loc = np.c_[d[:, 0] * np.cos(a) + d[:, 1] * np.sin(a), -d[:, 0] * np.sin(a) + d[:, 1] * np.cos(a), d[:, 2]]
+    return (np.abs(loc) <= s / 2).all(1)
+
+
+def crop_air_drop(v, p, clean, grid):
+    """Gaussians that show as blobs from above: past the floor grid + lighter_crop_m (background seen through doors), and
+    faint/large haze above the floor band (lighter_air: {min_opacity, max_scale_m})."""
+    drop = np.zeros(len(v), bool)
+    crop, air = clean.get("lighter_crop_m"), clean.get("lighter_air")
+    if crop is not None:
+        lo = np.array(grid["origin_xy"]); hi = lo + np.array(grid["shape"]) * grid["cell_m"]
+        drop |= ((p[:, :2] < lo - crop) | (p[:, :2] > hi + crop)).any(1)
+    if air:
+        op, big_s = 1 / (1 + np.exp(-v["opacity"])), np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)).max(1)
+        drop |= (p[:, 2] > FLOOR_BAND_M) & ((op < air["min_opacity"]) | (big_s > air["max_scale_m"]))
+    return drop
+
+
 def main():
     cfg = yaml.safe_load(open(sys.argv[1]))
     raw = "--raw" in sys.argv
@@ -46,15 +68,21 @@ def main():
     big = cfg["clean"].get("lighter_big_above")   # {z, scale_m}: streaks in air the capture never filmed (an upper floor's ceiling)
     if not raw and big:
         drop |= (p[:, 2] > big["z"]) & (np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)).max(1) > big["scale_m"])
+    grid = json.loads((Path(cfg["work_dir"]) / "grid.json").read_text())
+    if not raw:
+        drop |= crop_air_drop(v, p, cfg["clean"], grid)
+    mid = np.sort(np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)), 1)[:, 1]
+    for b in [] if raw else cfg["clean"].get("lighter_drop_boxes", []):   # hand-placed boxes of haze no rule catches
+        drop |= in_box(p, b) & (mid >= b.get("min_mid_scale_m", 0))   # discs only: keeps thin real parts (rails) in the box
     name = f"{run}_{'raw' if raw else 'lighter'}"
     src, dst = Path("viewer/public/scene") / run, Path("viewer/public/scene") / name
     shutil.rmtree(dst, ignore_errors=True)
     shutil.copytree(src, dst)
     (dst / "removed.ply").unlink(missing_ok=True)
     s = json.loads((dst / "scene.json").read_text())
-    grid = json.loads((Path(cfg["work_dir"]) / "grid.json").read_text())
     taken = np.zeros(len(v), bool)
-    for o, so in zip(export.config_objects(cfg["game"], cfg["work_dir"]), s["objects"]):   # same order as stage 12 wrote them
+    exported = {so["name"]: so for so in s["objects"]}   # stage 12 skips objects it found no Gaussians for
+    for o, so in [(o, exported[o["name"]]) for o in export.config_objects(cfg["game"], cfg["work_dir"]) if o["name"] in exported]:
         sel = ~drop & ~taken & export.object_parts(o, p, cfg["grid"], Path(cfg["work_dir"]), np.array(grid["origin_xy"]), grid["cell_m"], tuple(grid["shape"]), v)
         taken |= sel
         ov = v[sel].copy()
@@ -68,4 +96,5 @@ def main():
 
 if __name__ == "__main__":
     assert (neighbours(np.array([[0, 0, 0], [0.01, 0, 0], [5, 5, 5.]])) == [2, 2, 1]).all()   # self-check
+    assert (in_box(np.array([[0.9, 0.9, 0], [0, 1.4, 0], [1.4, 0, 0.]]), {"center": [0, 0, 0], "size": [3, 0.4, 1], "yaw_deg": 45}) == [1, 0, 0]).all()
     main()

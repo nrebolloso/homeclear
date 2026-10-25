@@ -5,19 +5,18 @@ import { applyIntervention, polyCells, worldFootprint, toCell, type GridMeta, ty
 import { evaluate, availableInterventions, routeStart, type Init, type Eval } from './evaluate.ts';
 import { bedExit } from './checks.ts';
 import { rng } from './sim.ts';
+import { effortKind, interventionEffort, moveEffort } from './effort.ts';
 
 export interface OptimizerCfg {
   /** contacts/month-equivalents: how much each thing costs next to one expected toe contact per month */
   length_per_m: number; squeeze: number; check_fail: number; check_borderline: number;
   /** effort weights for the three options: quick (effort expensive) .. full (effort free) */
   lambdas: [number, number, number];
-  /** effort of moving an object by kind (an intervention carries its own), and per metre moved */
-  move_effort: Record<string, number>; effort_per_m: number;
+  /** moving an object: effort.ts moveEffort (mass, distance, turn); a configured intervention carries its own effort */
   slots_per_object: number; anneal_steps: number;
 }
 export const DEFAULTS: OptimizerCfg = {
   length_per_m: 0.02, squeeze: 3.0, check_fail: 0.6, check_borderline: 0.2, lambdas: [0.3, 0.1, 0.02],
-  move_effort: { bed: 5, nightstand: 2, chair: 2, nightlight: 1, rug: 1, other: 3, door: 99 }, effort_per_m: 0.3,
   slots_per_object: 24, anneal_steps: 60,
 };
 
@@ -27,7 +26,7 @@ export interface OptionOut { name: string; lambda: number; actions: { id: string
   layout: Layout; per_month: number; per_month_lo: number; per_month_hi: number; effort: number; cost_usd: number; minutes: number; score: number;
   checks_failed: number; min_side_m: number }
 
-type Obj = Init['objects'][number] & { movable?: boolean };
+type Obj = Init['objects'][number] & { movable?: boolean; mass_kg?: number };
 
 /** Cells an object may stand on: static floor, no wall, and not under another (unmoved) obstacle. Its own original
  *  spot counts as floor (nobody filmed under it, but it stands there now), as in main.ts placeBase. */
@@ -144,7 +143,7 @@ export function score(S: Init, cfg: OptimizerCfg, r: Eval, lay: Layout, effort: 
 export function actions(S: Init, cfg: OptimizerCfg, start: Layout): Action[] {
   const A: Action[] = availableInterventions(S, evaluate(S, start, { ghosts: false })).map((iv: Intervention) => ({
     id: iv.id, key: iv.kind === 'raise' ? `raise:${iv.target}` : iv.kind === 'carve' ? `carve:${iv.target}` : iv.kind === 'add' ? `add:${iv.id}` : iv.kind === 'flatten' ? `flat:${iv.id}` : `obj:${iv.object}`,
-    label: iv.label, effort: iv.effort ?? 1, cost_usd: iv.cost_usd ?? 0, minutes: iv.minutes ?? 10, product: iv.product,
+    label: iv.label, effort: interventionEffort(iv, ((o?: { kind: string; name: string }) => o && effortKind(o))(S.objects.find(o => o.name === iv.object))), cost_usd: iv.cost_usd ?? 0, minutes: iv.minutes ?? 10, product: iv.product,
     apply: (l: Layout) => applyIntervention(S.objects, l, iv),
   }));
   (S.objects as Obj[]).forEach((o, k) => {
@@ -155,8 +154,7 @@ export function actions(S: Init, cfg: OptimizerCfg, start: Layout): Action[] {
       const turn = Math.round(((((p.yaw - start.poses[k].yaw) * 180) / Math.PI) % 360 + 360) % 360);
       A.push({ id: `move:${o.name}:${p.x.toFixed(1)},${p.y.toFixed(1)},${turn}`, key: `obj:${o.name}`,
         label: `Move the ${o.name} ${d.toFixed(1)} m${turn ? `, turned ${turn}°` : ''} (${p.beside_bed ? 'beside the bed' : 'against a wall'})`,
-        effort: (cfg.move_effort[o.kind] ?? cfg.move_effort.other) * (1 + cfg.effort_per_m * d), cost_usd: 0,
-        minutes: Math.round(10 + 10 * (cfg.move_effort[o.kind] ?? 3) * (1 + d / 2)),
+        ...(({ effort, minutes }) => ({ effort, minutes }))(moveEffort({ kind: o.kind, name: o.name, mass_kg: o.mass_kg, distance_m: d, turn_deg: turn })), cost_usd: 0,
         apply: (l: Layout) => ({ ...l, poses: l.poses.map((q, n) => (n === k ? { x: p.x, y: p.y, yaw: p.yaw } : q)) }) });
     }
   });

@@ -48,6 +48,8 @@ import { createMarker3d } from './marker3d.ts';
 import { MAX_EXTRA_LIGHTS, type PointLight } from './night.ts';
 import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } from './perf.ts';
 import QRCode from 'qrcode';
+import { objectEffort, moveEffort, difficulty } from './effort.ts';
+import { logEvent, parseLog, retrieve, toJSONL, type Entry } from './ledger.ts';
 import { mountFrontend, type FrontendAdapter } from './frontend.ts';
 import { mountLayers } from './layers.ts';
 import './layers.css';
@@ -106,6 +108,19 @@ const coverage = new Uint8Array(await bin(sc.grid.coverage));
 // cables and other thin bumps: classified, height is a typical value from config, never measured
 const est = sc.grid.bump_estimated ? new Uint8Array(await bin(sc.grid.bump_estimated)) : new Uint8Array(nx * ny);
 const objs: any[] = sc.objects;
+// ---------- move effort (effort.ts) and the run's log (ledger.ts) ----------
+// mass from each object's measured box, movable by kind unless the config says; logged, and set before the worker sees them
+const ledger: Entry[] = await fetch(BASE + 'log.jsonl').then(r => (r.ok ? r.text() : '')).then(parseLog).catch(() => []);
+const effortOf = new Map<string, ReturnType<typeof objectEffort>>();
+for (const o of objs) {
+  const e = objectEffort(o);
+  effortOf.set(o.name, e);
+  if (e.from_size) o.mass_kg ??= e.mass_kg;   // a guess stays unset, so moveEffort says "(guess)"
+  o.movable ??= e.movable;
+  logEvent(ledger, 'viewer', 'mass', { name: o.name, kind: o.kind, mass_kg: e.mass_kg, flagged: e.flagged, difficulty: e.difficulty, people: e.people, explain: e.explain },
+    e.from_size ? 'computed' : 'guess', o.name);
+  if (!o.movable) logEvent(ledger, 'viewer', 'not_suggested', { name: o.name, kind: o.kind, reason: e.movable ? 'config' : 'never-move kind' }, 'computed', o.name);
+}
 const interventions: Intervention[] = sc.interventions;
 let pathLightIvs: Intervention[] = [];   // "Light the path" (lights.ts): kept in the fix list like the stair and door fixes
 const risk = sc.risk;
@@ -334,7 +349,7 @@ worker.onmessage = e => {
 const ask = (msg: object) => new Promise<any>(res => { const id = ++seq; waiting.set(id, res); worker.postMessage({ ...msg, id }); });
 
 const editLocks = createEditLocks();
-const game: any = { ready: false, fps: 0, evals: 0, pending: () => waiting.size };
+const game: any = { ready: false, fps: 0, evals: 0, pending: () => waiting.size, ledger };
 runtime.scope.own(() => { worker.terminate(); renderer.setAnimationLoop(null); });
 (window as any).game = game;
 
@@ -421,11 +436,12 @@ function renderPanels() {
     `<div class="big measured">${fmt(r.per_month)}</div><div class="range dbg">likely ${fmt(r.per_month_lo)}–${fmt(r.per_month_hi)}</div>` +
     `expected toe catches / month, all routes (${risk.rollouts} simulated trips per route; steps: ${persona.step_model === 'world' ? 'world model (heels + walker)' : persona.step_model === 'learned' ? 'learned model' : 'hand rule'})` +
     `<span class="dbg"> range = measured height error ±${(100 * sc.hazard_rules.margin_m.height).toFixed(1)} cm + simulation noise</span>` +
-    (r.hand ? `<div class="range">hand-rule baseline on the same route: ${fmt(r.hand.per_month)}</div>` : '') +
+    (r.hand && !document.body.classList.contains('demo') ? `<div class="range">hand-rule baseline on the same route: ${fmt(r.hand.per_month)}</div>` : '') +
     `<ul class="routes">${perRoute}</ul>` +
     `original layout: ${fmt(baselinePerMonth!)} → now ${fmt(r.per_month)} <span class="${d <= 0 ? 'delta-good' : 'delta-bad'}">(${d <= 0 ? '' : '+'}${fmt(d)})</span>`;
+  // no per-hazard rate here: the headline is the one toe-catch number on screen (the OT report breaks it down)
   const geo = r.hazards.map(h => `<li><span class="measured">${h.type === 'floor_bump' ? (h.estimated ? `${h.name}: thin cable/cord, ~${(h.height_m! * 100).toFixed(1)} cm ESTIMATED (classified, not measured)` : `${h.name}: ${(h.height_m! * 100).toFixed(1)} cm bump`) : `tight passage: ${(h.min_side_clearance_m! * 100).toFixed(0)} cm each side`}</span>` +
-    ` over ${h.length_m.toFixed(2)} m${h.type === 'floor_bump' ? ` · ${fmt(h.per_month)}/month` : ''}${h.ot_check ? ' · <span class="ot">OT should check</span>' : ''}</li>`);
+    ` over ${h.length_m.toFixed(2)} m${h.ot_check ? ' · <span class="ot">OT should check</span>' : ''}</li>`);
   // Cosmos Reason: proposals already checked against the grids (cosmos/reason.py); the dismissed ones are not listed
   const reason = hzFile.hazards.filter(h => h.source === 'cosmos_reason' && h.verdict !== 'dismissed').map(h =>
     `<li><span class="imagined">${esc(h.note)}</span> · proposed by Cosmos Reason${h.verdict === 'confirmed' ? `, <span class="measured">geometry agrees: ${esc(h.measured)}</span>` : ', not measurable from the scan · <span class="ot">OT should check</span>'}</li>`);
@@ -812,7 +828,7 @@ async function suggest() {
     const li = document.createElement('li');
     li.className = 'option';
     li.innerHTML = `<b>${o.name}</b>: <span class="measured">${fmt(o.per_month)}</span>/month (${fmt(o.per_month_lo)}–${fmt(o.per_month_hi)}), ` +
-      `${o.checks_failed} failed checks · $${o.cost_usd} · ${o.minutes} min<ol>${o.actions.map((a: any) => `<li>${a.label}</li>`).join('')}</ol>`;
+      `${o.checks_failed} failed checks · $${o.cost_usd} · ${difficulty(o.effort)} effort<ol>${o.actions.map((a: any) => `<li>${a.label}</li>`).join('')}</ol>`;
     const b = document.createElement('button');
     b.textContent = 'Apply and walk it';
     b.onclick = () => applyOption(n);
@@ -820,6 +836,7 @@ async function suggest() {
     $('options').appendChild(li);
   }
   game.suggestions = suggestions;
+  suggestions.forEach(o => logEvent(ledger, 'optimizer', 'option', { ...o, layout: undefined }, 'simulated', o.name));
   return suggestions;
 }
 function applyOption(n: number) {
@@ -829,6 +846,7 @@ function applyOption(n: number) {
   layout = o.layout;
   applied = o.actions.map((a: any) => a.id);
   editHist.record('applied proposed layout', was, snap());
+  logEvent(ledger, 'viewer', 'apply_option', { name: o.name, actions: applied }, 'simulated');
   syncObjects();
   return replan().then(ms => { if (!renderer.xr.isPresenting && !current?.error) { Object.assign(body, routePose(0, 0, Infinity)); setWalk('auto'); } reim.play(); return ms; });
 }
@@ -874,7 +892,7 @@ function undoReimagined(c: Change) {
 async function reimagineRoom() {
   const why = (msg: string) => { $('reimtotal').textContent = msg; return []; };   // say why nothing moved instead of doing nothing
   if (!objs.length && !interventions.length)
-    return why('Nothing to rearrange: this scene exported no movable objects and no fixes (furniture is still part of the room splat). Try ?scene=game_synth.');
+    return why('Nothing to rearrange: this scene exported no movable objects and no fixes (furniture is still part of the room splat). Pick a scan with objects from the Scans menu.');
   if (!suggestions.length) {
     $('reimtotal').textContent = `searching layouts: every move of ${objs.length} objects and each fix, re-run in full (10–30 s)…`;
     await suggest();
@@ -1659,7 +1677,7 @@ $('fanon').onchange = e => fanFan.set((e.target as HTMLInputElement).checked);
 $('fanmodel').onchange = e => fanFan.setModel((e.target as HTMLSelectElement).value as 'learned' | 'hand');
 $('fanstyle').onchange = e => fanFan.setStyle((e.target as HTMLSelectElement).value);
 $('fanlift').onchange = e => fanFan.setLift((e.target as HTMLSelectElement).value as 'average' | 'shuffler');
-game.fan = { ...fanFan, tapeMat: () => tapeObject('mat') };   // VR: bind a button to game.fan.set(!game.fan.on())
+game.fan = { ...fanFan, tapeMat: () => { const r = tapeObject('mat'); fanFan.refresh(); return r; } };   // VR: bind a button to game.fan.set(!game.fan.on())
 // ---------- walking gait ghosts (gaitghosts.ts; gaitplan.ts in fanworker.ts): one ghost per gait, each its own way round the mat ----------
 let gaitFor: unknown = null, gaitSc: any = null;
 const gaitGhosts = createGaitGhosts({ scene, walker: () => walkerCfg, worldModel,
@@ -1752,6 +1770,17 @@ async function openReport() {
       cost_usd: iv?.cost_usd, minutes: iv?.minutes, effort: iv?.effort, product: iv?.product };
   }).sort((a: any, b: any) => (+!!a.error - +!!b.error) || (b.reduction - a.reduction) || (b.clearance_gain_m - a.clearance_gain_m) || ((a.cost_usd ?? 0) - (b.cost_usd ?? 0)));
   const planned = await planfix.rankedFixes();   // kitchen planner scenes: its layout's changes, ranked by real risk removed (planfix.ts)
+  // log what goes on paper, then build the payload from the log (newest entry per thing wins)
+  const changes = reim.changes().map(ch => {
+    const iv = interventions.find(i => i.id === ch.iv), priced = !iv?.product || iv.cost_usd !== undefined;
+    return { label: ch.label, effort: ch.cost.effort, helpers: ch.cost.helpers, cost_usd: priced ? ch.cost.usd : undefined, product: iv?.product };
+  });
+  logEvent(ledger, 'viewer', 'changes', changes, 'simulated', 'report');
+  logEvent(ledger, 'viewer', 'actions', describeChanges(), 'simulated', 'report');
+  logEvent(ledger, 'viewer', 'ranked_fixes', ranked_fixes, 'simulated', 'report');
+  logEvent(ledger, 'viewer', 'reason', hzFile.hazards.filter(h => h.source === 'cosmos_reason'), 'imagined', 'report');
+  const latest = (kind: string) => retrieve(ledger, { kind, latest: true }), one = (kind: string) => latest(kind)[0]?.values;
+  const optNames = new Set(suggestions.map(o => o.name));
   const payload: ReportPayload = {
     scene: RUN, created: new Date().toISOString(), synthetic: (sc.synthetic ?? []).length > 0 || /synth/.test(RUN), scale_note: sc.scale_note,
     route: routes[selRoute].name,
@@ -1759,11 +1788,14 @@ async function openReport() {
     current: { ...c, dist_m: undefined as any, heat: undefined, ghosts: [] }, baseline: baselinePerMonth ?? c.per_month,
     rollouts: risk.rollouts, gait: persona.gait_profile, dark_multiplier: risk.dark_contact_multiplier,
     calibration: 'MTC 14.1 ± 8.3 mm lognormal shape; ~1 in 578 strides contact a 1 cm obstacle (Frontiers 2014)',
-    margins: sc.hazard_rules.margin_m, actions: describeChanges(), suggestions,
-    reason: hzFile.hazards.filter(h => h.source === 'cosmos_reason'),
+    margins: sc.hazard_rules.margin_m, actions: one('actions'), suggestions: latest('option').filter(e => optNames.has(e.key!)).map(e => e.values),
+    reason: one('reason'),
     clips: (game.clips ?? []).filter((k: any) => k.layout_key === layoutKey(objs, layout)).map((k: any) => k.title ?? k.file),
-    topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85), ranked_fixes: planned ?? ranked_fixes,
+    topdown: topdownURL(), view: renderer.domElement.toDataURL('image/jpeg', 0.85), ranked_fixes: planned ?? one('ranked_fixes'), planner_options: planfix.optionsOut() ?? undefined,
     ranked_by: planned ? 'kitchen planner (B200 layout search + critic): each change alone on this layout, by toe catches/month saved (the same calculation as above), ties broken by the search objective (toe catches + simulated snags + brushes)' : undefined,
+    changes: one('changes'), masses: latest('mass').map(e => ({ ...e.values, provenance: e.provenance })), not_suggested: latest('not_suggested').map(e => e.values),
+    provenance: Object.entries(ledger.reduce((n: Record<string, number>, e) => (n[e.provenance] = (n[e.provenance] ?? 0) + 1, n), {})).map(([k, v]) => ({ provenance: k, n: v })),
+    log_entries: ledger.length,
   };
   sessionStorage.setItem(`report:${RUN}`, JSON.stringify(payload));
   if (!w) return window.open(`report.html?scene=${encodeURIComponent(RUN)}`, '_blank');
@@ -1771,23 +1803,28 @@ async function openReport() {
   w.location.href = `report.html?scene=${encodeURIComponent(RUN)}`;
   return w;
 }
-const LOCAL = /^(localhost|127\.)/;
+// the QR is the OT report PDF on Google Drive, so any phone opens it (not the laptop's LAN address); fill in the share link
+const OT_REPORT_URL = 'https://drive.google.com/file/d/REPLACE_WITH_OT_REPORT_FILE_ID/view?usp=sharing';
 async function openFixCard() {
   const acts = describeChanges();
-  const hash = encodeCard(cardState(RUN, objs, layout, acts));
-  // a phone can't open "localhost": use the laptop's LAN address (vite --host) when there is one
-  const lan: string[] = await fetch('/api/lan').then(r => r.json()).catch(() => []);
-  const host = LOCAL.test(location.hostname) && lan.length ? `${location.protocol}//${lan[0]}:${location.port}` : location.origin;
-  const url = `${host}/fixcard.html#${hash}`;
-  ($('qrimg') as HTMLImageElement).src = await QRCode.toDataURL(url, { margin: 1, width: 260 });
+  const url = `${location.origin}/fixcard.html#${encodeCard(cardState(RUN, objs, layout, acts))}`;
+  ($('qrimg') as HTMLImageElement).src = await QRCode.toDataURL(OT_REPORT_URL, { margin: 1, width: 260 });
   ($('qrlink') as HTMLAnchorElement).href = url;
-  $('qrlink').textContent = `${acts.length} change${acts.length === 1 ? '' : 's'} · open on this computer`;
-  $('qrnote').textContent = LOCAL.test(new URL(host).hostname)
-    ? 'Start the viewer with "npx vite --host" so a phone on the same Wi-Fi can open this.' : `Phone on the same Wi-Fi: ${host}`;
+  $('qrlink').textContent = `${acts.length} change${acts.length === 1 ? '' : 's'} · open the fix card on this computer`;
+  $('qrnote').textContent = 'Scan for the OT report (PDF, Google Drive).';
   $('qr').hidden = false;
   return url;
 }
 $('report').onclick = () => openReport();
+/** This session's log as JSON lines, to keep next to the run (out/<run>/log.jsonl). */
+function downloadLog() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([toJSONL(ledger)], { type: 'application/x-ndjson' }));
+  a.download = `${RUN}_log.jsonl`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+$('downloadlog').onclick = () => downloadLog();
 $('fixcard').onclick = () => openFixCard();
 $('closeqr').onclick = () => { $('qr').hidden = true; };
 
@@ -1832,7 +1869,12 @@ function labelStep() {
   if (resetBtn.disabled === canReset) resetBtn.disabled = !canReset;
   if (k < 0 || layout.poses[k].removed) { labelLines = []; return objLabel.set(null, [], false); }
   const name = objs[k].name.replace(/_/g, ' '), moved = movedText(poseOf(k), original[k]);
-  labelLines = [name[0].toUpperCase() + name.slice(1), moved ? `${moved} · ${inHeadset ? 'grip' : 'Z'} resets` : ''].filter(Boolean);
+  // line 2: mass from the measured box, difficulty of a 1 m carry, helpers (effort.ts); line 3: the effort of this actual drag
+  const eff = effortOf.get(objs[k].name), p = poseOf(k), q = original[k];
+  const dragged = moved && eff?.carried ? moveEffort({ kind: objs[k].kind, mass_kg: objs[k].mass_kg, distance_m: Math.hypot(p.x - q.x, p.y - q.y),
+    turn_deg: ((p.yaw - q.yaw) * 180) / Math.PI }).effort : 0;
+  labelLines = [name[0].toUpperCase() + name.slice(1), eff?.tag ?? '',
+    moved ? `${moved}${dragged ? ` · effort ${dragged.toFixed(1)}` : ''} · ${inHeadset ? 'grip' : 'Z'} resets` : ''].filter(Boolean);
   objLabel.set(items[k].proxy, labelLines, !inHeadset || !!wand?.grab);
   objLabel.update(camera);
 }
@@ -2455,8 +2497,9 @@ let mannequin: Mannequin = buildMannequin(persona.eye_height_m / 0.94);
 mannequin.group.visible = false;
 scene.add(mannequin.group);
 let manShadows = GROUND ? footShadows(mannequin.group) : null, manPose: unknown = null;   // manPose: the rigged mannequin's last pose report (ankle / hand errors)
-// the skinned model (rig.ts, CesiumMan CC BY 4.0) replaces the plain one once it has loaded; ?mannequin=basic or a failed load keeps the plain one
-if (PARAMS.get('mannequin') !== 'basic') loadRigged('models/mannequin/CesiumMan.glb', persona.eye_height_m / 0.94).then(rigged => {
+// the skinned model (rig.ts, CesiumMan CC BY 4.0) replaces the plain one once it has loaded; ?mannequin=basic or a failed load keeps the plain one,
+// ?mannequin=textured keeps the model's own Cesium texture instead of the default matte grey
+if (PARAMS.get('mannequin') !== 'basic') loadRigged('models/mannequin/CesiumMan.glb', persona.eye_height_m / 0.94, PARAMS.get('mannequin') === 'textured').then(rigged => {
   renderer.localClippingEnabled = true;   // first person clips the head off at the neck
   rigged.group.visible = mannequin.group.visible;
   scene.remove(mannequin.group); scene.add(rigged.group);
@@ -2869,7 +2912,8 @@ function hintBase(device: 'desktop' | 'vr'): Omit<HintCtx, 'inspect'> {
 const frontendAdapter: FrontendAdapter = {
   hintContext: () => ({ ...hintBase('desktop'), thirdPerson: view.third, personaLabel: personas[personaKey]?.label ?? personaKey }),   // the controls strip and status pills (hints.ts)
   snapshot: () => ({ room: RUN, patient: personaKey, route: routes[selRoute].name, current, baseline: baseEvals[selRoute] ?? null,
-    changes: reim.changes(), spots: spotList, options: game.remoteOptions ?? suggestions, selected, selectedName: objs[selected]?.name, mode, explore: explore.on, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout) }),
+    changes: reim.changes(), spots: spotList, options: game.remoteOptions ?? suggestions, selected, selectedName: objs[selected]?.name, mode, explore: explore.on, paused: routePaused, speed: routeSpeed, comparison: reim.t(), planKey: layoutKey(objs, layout),
+    stage: reim.changes().length ? 'With fix' : layout.folds?.length || live?.fold() ? 'After the fold' : rugOn ? 'Before the fold' : undefined }),
   navigate(m) {
     if (game.xrUIAction) game.xrInspection = m === 'inspect';
     if (renderer.xr.isPresenting && !game.xrUIAction || game.remoteSession) { companion?.setMode('companion'); return; }

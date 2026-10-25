@@ -38,6 +38,11 @@ export type Side = 'left' | 'right';
 export interface WalkerDims { width_m: number; depth_m: number; user_gap_m: number }
 export interface ParkPose { x: number; y: number; yaw: number }
 
+/** A flight the scan only partly resolved: the landing well above the last tread found, or more scan above it. Its riser
+ *  numbers come from a few steps of blur (a gap between two treads seen may hide several missed ones). */
+export const thinFlight = (st: Stair): boolean => { const z = st.treads_z ?? [];
+  return st.measured === 'splat' && z.length > 0 && (!!st.scan_continues_above || (st.top_z != null && st.top_z - z[z.length - 1] > 0.3)); };
+
 /** IRC R311.7 (riser max 7 3/4 in, variation 3/8 in, tread min 10 in, width 36 in, rail 34-38 in); check local code */
 export const CODE = { riser_max_m: 0.197, riser_var_m: 0.0095, tread_min_m: 0.254, width_min_m: 0.91, rail_m: [0.86, 0.97] as [number, number] };
 const DEFAULT_PITCH = 0.18 / 0.27;
@@ -195,7 +200,7 @@ export function stairChecks(st: Stair, c: StairCtx): CheckOut[] {
   const z = st.treads_z ?? [];
   // A flight the scan only partly resolved (the landing well above the last tread found, or more scan above it) can't
   // fail on riser or tread numbers: those come from a few steps of blur. Say so and send it to the tape (MEASURING.md).
-  const thin = st.measured === 'splat' && z.length > 0 && (!!st.scan_continues_above || (st.top_z != null && st.top_z - z[z.length - 1] > 0.3));
+  const thin = thinFlight(st);
   const scanOnly = (v: Verdict): Verdict => (thin && v !== 'ok' ? 'OT to verify' : v);
   const thinNote = thin ? ` · the scan resolves only ${z.length} step${z.length === 1 ? '' : 's'} of this flight: tape-measure it (MEASURING.md)` : '';
   // 1-2. risers: each one, and how much they differ (uneven risers trip people who learned the first step)
@@ -264,7 +269,7 @@ export function stairChecks(st: Stair, c: StairCtx): CheckOut[] {
   if (lights) add('light', `${st.name}: motion lights on every step`, 'ok', 'they come on before the first step, at either end');
   else if (near(F.o) && near(st.top)) add('light', `${st.name}: light switch at the top and the bottom`, 'ok', 'switch positions placed by hand');
   else add('light', `${st.name}: no light switch marked at ${near(F.o) ? 'the top' : near(st.top) ? 'the bottom' : 'either end'}`, switches ? 'fail' : 'borderline, OT to verify',
-    switches ? 'climbing to reach a switch in the dark is the classic night fall' : 'no switches are marked in this home: check both ends (a stair at night without one is the classic fall)');
+    switches ? 'climbing to reach a switch in the dark is the classic night trip' : 'no switches are marked in this home: check both ends (a stair at night without one is the classic night trip)');
   // 8. the walker can't climb: with only one, the patient is unaided at the top; a second one only helps within reach
   if (c.device === 'walker') {
     const parked = mine.find(f => f.kind === 'walker_parked');

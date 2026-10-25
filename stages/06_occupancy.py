@@ -31,7 +31,10 @@ def layers(p, g, lo, shape, pf=None, walked=None):
         lab, n = ndimage.label(obstacles, np.ones((3, 3)))
         L, idx = lab[tuple(ij[osel].T)], np.arange(1, n + 1)
         zlo, zhi = ndimage.minimum(p[osel, 2], L, idx), ndimage.maximum(p[osel, 2], L, idx)
-        speck = (np.bincount(lab.ravel(), minlength=n + 1)[1:] <= sp["max_cells"]) & (zhi - zlo < sp["min_span_m"]) & (zlo > sp["floor_gap_m"])
+        small = np.bincount(lab.ravel(), minlength=n + 1)[1:] <= sp["max_cells"]
+        speck = small & (zhi - zlo < sp["min_span_m"]) & (zlo > sp["floor_gap_m"])
+        if sp.get("min_points"):   # opt-in: a few Gaussians "spanning" a metre are a floor-noise point under an air floater, not a body
+            speck |= small & (np.bincount(L, minlength=n + 1)[1:] < sp["min_points"])
         obstacles &= ~np.r_[False, speck][lab]
     # bump heights are measured from the LOCAL floor, not z=0: a gently tilted or warped floor is not a bump
     p = p.copy()
@@ -60,6 +63,8 @@ def layers(p, g, lo, shape, pf=None, walked=None):
     ok = (ndimage.sum(np.ones(shape), lab, idx) * cell ** 2 <= g.get("fill_holes_max_m2", 1.0)) & (ndimage.maximum(obstacles, lab, idx) == 0)
     filled = np.r_[False, ok][lab]
     floor |= filled
+    if g.get("no_bumps"):   # the config says why: a floor noisier than the bump band; every "bump" there is noise, none is reported
+        bumps = np.zeros_like(bumps)
     bump_h = np.nan_to_num(cell_median(ij[bsel], p[bsel, 2], shape))   # median, not max: one noisy Gaussian isn't the top
     bump_h[~bumps] = 0
     return floor, obstacles, bumps, bump_h, filled
@@ -133,6 +138,15 @@ def stamp_synthetic(g, lo, shape, floor, obstacles, bumps, bump_h):
             obstacles[i0:i1, j0:j1] = True
 
 
+def stamp_fixed(g, lo, shape, obstacles):
+    """grid.fixed: real furniture the scan saw but 6c never detected, outlined by hand ({name, kind, poly_xy}). Its splat
+    stays in the room (not movable), but only its outline came out solid, so its inside read as open floor: stamp it whole."""
+    for f in g.get("fixed") or []:
+        m = np.zeros(shape, np.uint8)
+        cv2.fillPoly(m, [np.round((np.array(f["poly_xy"], float) - lo) / g["cell_m"])[:, ::-1].astype(np.int32)], 1)   # (j, i) for cv2
+        obstacles |= m.astype(bool)
+
+
 def floor_evidence(w, g, lo, shape):
     """Floor seen other than as solid Gaussians in the band (layers() pf, walked); both opt-in per config. Stage 12 rebuilds
     the grid with the same evidence, else its export walls the walker in again."""
@@ -167,6 +181,7 @@ def main(cfg):
     pf, walked = floor_evidence(w, g, lo, shape)
     floor, obstacles, bumps, bump_h, filled = layers(p, g, lo, shape, pf, walked)
     stamp_synthetic(g, lo, shape, floor, obstacles, bumps, bump_h)
+    stamp_fixed(g, lo, shape, obstacles)
     est = classify_thin(g, bumps, bump_h)
 
     for name, a in [("floor", floor), ("obstacles", obstacles), ("bumps", bumps), ("bump_height_m", bump_h), ("bump_estimated", est)]:

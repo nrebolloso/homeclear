@@ -69,9 +69,9 @@ test('gait ghosts: the way back over a corner folded on the way out is never saf
   assert.ok(s.folded_month > a.folded_month, JSON.stringify([a, s]));
 });
 
-test('gait ghosts: without the new options the fan is the one it was (no per-swing record, 30-step cap)', () => {
+test('gait ghosts: without the new options the fan is the one it was (a step record per heel, no fold, 30-step cap)', () => {
   const F = fan(S, prepare(S, lay, null), wm, startState(xy, off0), xy, 10, 1);
-  assert.ok(F.futures.every(f => f.swings === undefined && !f.fold));
+  assert.ok(F.futures.every(f => f.steps.length === f.heels.length && !f.fold));
   assert.ok(F.futures.every(f => f.heels.length <= 30));
 });
 

@@ -1,4 +1,4 @@
-# Cleared: a discharge dress rehearsal
+# Homeclear: a discharge dress rehearsal
 
 Someone films the home with a phone before the patient is discharged. From that video we build a measured Gaussian
 splat, find the floor, make occupancy and floor-bump maps, plan the patient's walker route, simulate hundreds of trips

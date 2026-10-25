@@ -15,6 +15,7 @@ export interface FrontendSnapshot {
   room: string; patient: string; route: string; current: Eval | null; baseline: Eval | null;
   changes: Change[]; spots: Spot[]; options: OptionOut[]; selected: number; selectedName?: string;
   mode: 'auto' | 'free' | 'fly'; explore: boolean; paused: boolean; speed: number; comparison: number; planKey: string;
+  stage?: string;   // the headline's label in the rug-fold demo: Before the fold / After the fold / With fix
 }
 export interface InspectItem { id: string; title: string; detail: string; at: [number, number]; object: number; change?: Change }
 export interface FrontendAdapter {
@@ -33,14 +34,14 @@ export interface FrontendAdapter {
 }
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const money = (x: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(x);
-const number = (x?: number) => x === undefined || !Number.isFinite(x) ? 'Pending' : x.toFixed(x > 0 && x < .05 ? 2 : 1);
+const number = (x?: number) => x === undefined || !Number.isFinite(x) ? 'Pending' : x.toFixed(1);   // one place, as the planner's cards show it
 
 export function mountFrontend(api: FrontendAdapter) {
   document.body.classList.add('frontend');
   const root = document.createElement('div'); root.id = 'frontend';
   root.innerHTML = `
     <a class="skip-link" id="skip-panel" href="#planning-panel">Skip to planning panel</a><a class="skip-link" id="skip-toolbar" href="#viewer-toolbar">Skip to viewer controls</a>
-    <div id="brand-bar" class="floating"><button id="workspace-toggle" class="brand" aria-expanded="false" aria-controls="workspace-menu"><span class="brand-mark" aria-hidden="true">C</span><span>Cleared<small id="room-name"></small></span><span class="chevron" aria-hidden="true">⌄</span></button><span id="scan-slot"></span></div>
+    <div id="brand-bar" class="floating"><button id="workspace-toggle" class="brand" aria-expanded="false" aria-controls="workspace-menu"><span class="brand-mark" aria-hidden="true">H</span><span>Homeclear<small id="room-name"></small></span><span class="chevron" aria-hidden="true">⌄</span></button><span id="scan-slot"></span></div>
     <div id="status-pills" role="group" aria-label="Current view"><span id="pills"></span><div id="active-filters" class="status-pill" role="status" hidden></div></div>
     <section id="workspace-menu" class="floating popover" aria-label="Room and patient settings" hidden>
       <div class="eyebrow">WORKSPACE</div><h2>Room & patient</h2><div id="context-controls"></div>
@@ -257,7 +258,7 @@ export function mountFrontend(api: FrontendAdapter) {
   $('cost-summary').onclick = () => { costDetail = false; refresh(); }; $('cost-breakdown').onclick = () => { costDetail = true; refresh(); };
   function renderAssessment(s: FrontendSnapshot) {
     const e = s.current, route = e?.routes[e.sel], concerns = (e?.hazards.length ?? 0) + (e?.checks.filter(c => c.verdict !== 'ok').length ?? 0);
-    $('assessment-summary').innerHTML = `<div class="finding-banner"><span class="badge amber">For review</span><h2>${e ? e.error ? 'Route unavailable' : `${concerns} finding${concerns === 1 ? '' : 's'} to review` : 'Evaluating the route…'}</h2><p class="muted">Geometry and simulation support occupational therapist review.</p></div><div class="metric-grid"><div><small>Min. clearance / side</small><strong>${route?.min_side_m === undefined ? 'Pending' : `${(route.min_side_m * 100).toFixed(0)} cm`}</strong></div><div><small>Selected route</small><strong>${e?.error ? 'Blocked' : route ? 'Available' : 'Pending'}</strong></div><div class="wide"><small>Toe catches / month · ${e?.ghosts?.length ?? 0} simulated trips</small><strong>${number(e?.per_month)}</strong>${e?.hand ? `<small>hand-rule baseline ${number(e.hand.per_month)}</small>` : ''}</div></div>`;
+    $('assessment-summary').innerHTML = `<div class="finding-banner"><span class="badge amber">For review</span><h2>${e ? e.error ? 'Route unavailable' : `${concerns} finding${concerns === 1 ? '' : 's'} to review` : 'Evaluating the route…'}</h2><p class="muted">Geometry and simulation support occupational therapist review.</p></div><div class="metric-grid"><div><small>Min. clearance / side</small><strong>${route?.min_side_m === undefined ? 'Pending' : `${(route.min_side_m * 100).toFixed(0)} cm`}</strong></div><div><small>Selected route</small><strong>${e?.error ? 'Blocked' : route ? 'Available' : 'Pending'}</strong></div><div class="wide"><small>${s.stage ? `${s.stage} · ` : ''}Toe catches / month · ${e?.ghosts?.length ?? 0} simulated trips</small><strong>${number(e?.per_month)}</strong>${e?.hand && !document.body.classList.contains('demo') ? `<small>hand-rule baseline ${number(e.hand.per_month)}</small>` : ''}</div></div>`;
     const b = s.baseline;
     $('comparison-metrics').innerHTML = s.changes.length ? `<h2>Evaluated comparison</h2><p class="muted">All routes · selected patient. Results describe the proposed endpoint, including while the visual preview shows Original.</p><table><thead><tr><th>Metric</th><th>Original</th><th>Proposed</th></tr></thead><tbody><tr><td>Toe catches / month</td><td>${number(b?.per_month)}</td><td>${number(e?.per_month)}</td></tr><tr><td>Likely range</td><td>${number(b?.per_month_lo)}–${number(b?.per_month_hi)}</td><td>${number(e?.per_month_lo)}–${number(e?.per_month_hi)}</td></tr><tr><td>Clearance / side<small>Selected route</small></td><td>${b?.routes[b.sel]?.min_side_m === undefined ? 'Pending' : `${(b.routes[b.sel].min_side_m! * 100).toFixed(0)} cm`}</td><td>${route?.min_side_m === undefined ? 'Pending' : `${(route.min_side_m * 100).toFixed(0)} cm`}</td></tr></tbody></table>` : '';
   }

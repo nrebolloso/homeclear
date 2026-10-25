@@ -36,6 +36,7 @@ floor:
   inlier_m: 0.02
   min_opacity: 0.1
   near_cameras_m: 2.0
+  fit: walked   # RANSAC took a raised inner patch; the walked loop round the tower sits a level 0.3-0.45 m below it with almost no floor mapped (2026-10-25)
 grid:
   cell_m: 0.02
   min_opacity: 0.1
@@ -55,8 +56,13 @@ grid:
   min_count: 2
   speck: {max_cells: 6, min_span_m: 0.10, floor_gap_m: 0.15}   # mid-air floaters of ~3 Gaussians each would block the walker
   bump_link_cells: 3
+  floor_walked_m: 0.6   # the paved loop is barely filmed as floor (dark, uneven); the capture walked all of it
 plan:
-  # start/goal unset: stage 7 picks two far-apart cells of the largest walker-reachable region (no bed or bathroom in this scene)
+  # one full circle round the tower: start == goal, via = the walked loop every 45 deg (camera positions with most clearance)
+  name: loop round the tower
+  start: [9.37, 1.31]
+  via: [[6.8, -8.71], [0.34, -8.27], [-4.5, -6.25], [-7.48, -1.19], [-5.51, 6.1], [-0.56, 8.89], [8.14, 4.46]]   # walked the other way round (user pick)
+  goal: [9.37, 1.31]
   walker_width_m: 0.61
   preferred_clearance_m: 0.3
   clearance_weight: 5.0

@@ -71,7 +71,7 @@ export function planGhosts(S: FanScene, lay: Layout, wm: WorldModel | null, rout
       const rev = [...options[pick].xy].reverse(), sb = startState(rev, off0), o = { full_route: true, max_steps: 80, lift: gt.lift, night: opts.night };
       back = { flat_month: fan(S, st, wm, sb, rev, n, opts.seed + 500 + gi, o).catches_month, folded_month: fan(S, prepare(S, lay, trip.fold), wm, sb, rev, n, opts.seed + 500 + gi, o).catches_month };
     }
-    return { gait: gt.id, back, lift: gt.lift, pick, n, trip, poses: posesOf(trip, first.yaw), swings: trip.swings ?? [], catches_month: per[pick],
+    return { gait: gt.id, back, lift: gt.lift, pick, n, trip, poses: posesOf(trip, first.yaw), swings: trip.steps.map(x => x.p), catches_month: per[pick],
       expected_month: per.reduce((a, c, i) => a + c * odds[i], 0), folds: F[pick].futures.filter(f => f.fold).length,
       routes: options.map((o, i) => ({ label: o.label, length_m: o.length_m, risk: risks[i], odds: odds[i], catches_month: per[i] })) };
   });

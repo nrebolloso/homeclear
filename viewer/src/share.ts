@@ -11,7 +11,13 @@ export interface ReportPayload {
   margins: { width: number; height: number }; actions: ActionOut[]; suggestions: any[];
   reason: { note: string }[]; clips: string[]; topdown: string; view: string;
   ranked_fixes?: { label: string; error?: string; reduction: number; share: number; clearance_gain_m: number; cost_usd?: number; minutes?: number; effort?: number; product?: string }[];
+  planner_options?: { name: string; per_month: number; cost_usd: number; minutes: number; effort: number; changes: string[] }[];   // planfix.ts optionsOut()
   ranked_by?: string;   // set when the ranking comes from the kitchen planner (planfix.ts): ranked by toe catches saved, objective as tiebreak
+  /** from the log (ledger.ts): every change on screen with its effort, helpers and cost (undefined: not priced yet) */
+  changes?: { label: string; effort: number; helpers: number; cost_usd?: number; product?: string }[];
+  masses?: { name: string; kind: string; mass_kg: number; flagged?: boolean; difficulty?: string; people: number; explain: string; provenance: string }[];
+  not_suggested?: { name: string; kind: string; reason: string }[];
+  provenance?: { provenance: string; n: number }[]; log_entries?: number;
 }
 
 /** The card's state, small enough for a QR code: the layout delta and the numbered actions. */

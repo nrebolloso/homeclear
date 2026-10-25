@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { loadScene } from './scene.ts';
 import { evaluate } from '../src/evaluate.ts';
-import { prepare, fan, fanLabel, leadHazard, stickyLead, routeOptions, routeLabel, type Fan, type FanScene } from '../src/futures.ts';
+import { prepare, fan, fanLabel, spotRate, leadHazard, stickyLead, routeOptions, routeLabel, type Fan, type FanScene } from '../src/futures.ts';
 import { toWorldModel } from '../src/gaitfit.ts';
 import { worldFootprint, type XY } from '../src/grid.ts';
 import { frame, predict, smoothRoute, toLocal, toWorld } from '../src/worldmodel.ts';
@@ -30,7 +30,7 @@ test('futures fan: likely catches at the mat (sim.ts p), none once the mat is ta
     assert.equal(F.futures.length, 30);
     // 1.1/month on the whole route (evaluate), almost all of it the mat: the fan over the mat says ~1
     assert.ok(F.crossed.mat >= 20 && F.catches_month > 0.5 && F.catches_month < 2, JSON.stringify([F.crossed, F.catches_month]));
-    assert.match(fanLabel(F, 'World model'), /^World model: 30 futures · \d+ cross the mat · ≈[\d.]+ toe catches\/month here/);
+    assert.match(fanLabel(F, 'World model'), /^World model: 30 futures · \d+ cross the mat( ·|$)/); assert.match(spotRate(F), /^≈[\d.]+ toe catches\/month at the mat /);
     for (const L of [taped, tapedPose, removed]) {
       const G = fan(S, prepare(S, L, null), m, at(0.7), xy, 30, 3);
       assert.ok(!G.crossed.mat && G.catches_month < 0.1 * F.catches_month, JSON.stringify([G.crossed, G.catches_month]));
@@ -103,7 +103,7 @@ test('the label leads with the most expected catches and holds it ~1.5 s', () =>
     counts: {}, crossed: { cord, mat }, spread_m: 0, path: 'route', routes: [], ahead_s: 4, lift: 'average', catches_month: 1 }) as unknown as Fan;
   const matLeads = mk(19, 11, 0.02), cordLeads = mk(19, 11, 0.0001);
   assert.equal(leadHazard(matLeads), 'mat');
-  assert.match(fanLabel(matLeads, 'World model'), /· 11 cross the mat ·/);
+  assert.match(fanLabel(matLeads, 'World model'), /· 11 cross the mat( ·|$)/);
   const L = stickyLead(1.5);
   assert.equal(L(matLeads, 0), 'mat');
   assert.equal(L(cordLeads, 0.5), 'mat');     // the cord leads for 1 s: no switch
@@ -121,4 +121,19 @@ test('futures fan: a taped mat the walker pushed onto the cord leaves the cord n
   const owners = (t: boolean) => { const st = prepare(S, pushed(t), null), on = new Set<number>(); st.L.bump.forEach((h, c) => { if (h >= init.rules.bump_min_m) on.add(st.owner[c]); }); return on; };
   assert.ok(owners(false).has(mat + 1), 'untaped: the mat owns its own 15 mm edge');
   assert.ok(!owners(true).has(mat + 1) && owners(true).has(-1), `taped: only the cord stands above bump_min_m (${[...owners(true)]})`);
+});
+
+test('futures fan steps (the footprints): one per heel, sides alternate, top-of-scale steps at the mat, under a tenth of it once taped', () => {
+  const tapedPose = { ...lay, poses: lay.poses.map((p, k) => (k === mat ? { ...p, taped: true } : p)) };
+  for (const m of [wm, null]) {
+    const F = fan(S, prepare(S, lay, null), m, at(0.3), xy, 30, 7, { lift: 'shuffler' }), G = fan(S, prepare(S, tapedPose, null), m, at(0.3), xy, 30, 7, { lift: 'shuffler' });
+    for (const f of F.futures) { assert.equal(f.steps.length, f.heels.length); assert.ok(f.steps.every((s, k) => k === 0 || s.left !== f.steps[k - 1].left)); }
+    const mx = (H: Fan, e: string | null) => Math.max(0, ...H.futures.flatMap(f => f.steps.filter(s => e === null || s.edge === e).map(s => s.p)));
+    assert.ok(F.step_top > 0 && mx(F, 'mat') >= 0.5 * F.step_top, JSON.stringify([F.step_top, mx(F, 'mat')]));
+    // taped: the scale stays this room's (the untaped mat), so steps on/off the mat drop to grey instead of the scale shrinking to fit them
+    // (the cord further on is still a real lump: not checked here)
+    const fp = worldFootprint(init.objects[mat] as any, lay.poses[mat]), near = (h: XY) => h[0] > Math.min(...fp.map(p => p[0])) - 0.1 && h[0] < Math.max(...fp.map(p => p[0])) + 0.1 && h[1] > Math.min(...fp.map(p => p[1])) - 0.1 && h[1] < Math.max(...fp.map(p => p[1])) + 0.1;
+    const onMat = G.futures.flatMap(f => f.steps.filter((s, k) => near(f.heels[k])).map(s => s.p));
+    assert.ok(G.step_top === F.step_top && onMat.length > 20 && Math.max(...onMat) < F.step_top / 10 && G.futures.every(f => f.steps.every(s => s.edge !== 'mat')), JSON.stringify([G.step_top, onMat.length, Math.max(...onMat)]));
+  }
 });
