@@ -1,19 +1,22 @@
 /* Layers dock (layers.ts): presets, the all-layers popover and Hide UI. Colours come from frontend.css's tokens, with fallbacks for ?classic. */
-#layers { position: fixed; left: 0; right: var(--scene-right, 0px); bottom: 14px; z-index: 25;   /* no transform: the info strip inside is fixed to the viewport */
-  display: flex; flex-direction: column-reverse; align-items: center; gap: 8px; pointer-events: none; }   /* the popovers open upward from the dock */
+/* a thin rail down the left edge (presets, Ghosts, Layers, Review, Hide UI); its popovers open to the right */
+#layers { position: fixed; left: 20px; top: 150px; z-index: 25; width: 138px; max-height: calc(100vh - 300px); pointer-events: none; }
 #layers > * { pointer-events: auto; }
-#layers .lay-full { display: flex; align-items: center; gap: 8px; padding: 5px; background: var(--floating, rgba(20, 28, 35, .97)); border: 1px solid var(--line, #34424d); border-radius: 14px; color: var(--text, #eef4f7); box-shadow: 0 8px 35px #0003; }
+#layers .lay-full { display: flex; flex-direction: column; gap: 6px; padding: 8px; max-height: inherit; overflow-y: auto; background: var(--floating, rgba(20, 28, 35, .97)); border: 1px solid var(--line, #34424d); border-radius: 14px; color: var(--text, #eef4f7); box-shadow: 0 8px 35px #0003; }
 #layers .lay-full[hidden], #layers [hidden] { display: none !important; }
-#layers button { font: inherit; font-size: 13px; padding: 6px 11px; border-radius: 9px; border: 1px solid var(--line, #34424d); background: var(--btn, #22303a); color: inherit; cursor: pointer; white-space: nowrap; }
+#layers button { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 9px; border: 1px solid var(--line, #34424d); background: var(--btn, #22303a); color: inherit; cursor: pointer; white-space: nowrap; text-align: left; }
 #layers button:hover { background: var(--btn-hover, #30424e); border-color: var(--btn-hover-line, #72838f); }
 #layers button:focus-visible { outline: 2px solid var(--focus, #49d4c7); outline-offset: 2px; }
-#layers .lay-presets { display: flex; gap: 3px; padding: 3px; background: var(--well, #0d151c); border-radius: 10px; align-items: center; }
-#layers .lay-presets button { border-color: transparent; background: transparent; color: var(--soft, #acbdc9); }
-#layers .lay-presets button[aria-pressed="true"] { color: var(--pressed-fg, #d1fff9); background: var(--pressed-bg, #25433f); border-color: var(--pressed-line, #437a70); }
-#layers .lay-presets button[aria-pressed="true"]::before { content: "✓ "; }
+#layers .lay-title { margin: 4px 2px 0; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #a7b5c0); } #layers .lay-title:first-child { margin-top: 0; }
+#layers .lay-presets, #layers .lay-ghosts { display: flex; flex-direction: column; gap: 3px; padding: 3px; background: var(--well, #0d151c); border-radius: 10px; }
+#layers .lay-presets button, #layers .lay-ghosts button { border-color: transparent; background: transparent; color: var(--soft, #acbdc9); }
+#layers .lay-presets button:hover, #layers .lay-ghosts button:hover { background: var(--btn, #22303a); }
+#layers .lay-presets button[aria-pressed="true"], #layers .lay-ghosts button[aria-pressed="true"] { color: var(--pressed-fg, #d1fff9); background: var(--pressed-bg, #25433f); border-color: var(--pressed-line, #437a70); }
+#layers .lay-presets button[aria-pressed="true"]::before, #layers .lay-ghosts button[aria-pressed="true"]::before { content: "✓ "; }
+#layers .lay-ghosts button[data-ghost-act]::before { content: "▷ "; opacity: .7; }
 #layers .lay-custom { font-size: 12px; color: var(--muted, #a7b5c0); padding: 0 8px; }
 #layers kbd { font: inherit; font-size: 11px; opacity: .7; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; margin-left: 4px; }
-#layers #lay-pop { width: min(560px, calc(100vw - 32px)); max-height: 46vh; overflow: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 6px 18px; padding: 12px 14px; background: var(--floating, rgba(20, 28, 35, .97)); border: 1px solid var(--line, #34424d); border-radius: 14px; color: var(--text, #eef4f7); box-shadow: 0 8px 35px #0004; }
+#layers #lay-pop { position: fixed; left: 170px; top: 150px; width: min(560px, calc(100vw - var(--scene-right, 0px) - 200px)); max-height: calc(100vh - 200px); overflow: auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 6px 18px; padding: 12px 14px; background: var(--floating, rgba(20, 28, 35, .97)); border: 1px solid var(--line, #34424d); border-radius: 14px; color: var(--text, #eef4f7); box-shadow: 0 8px 35px #0004; }
 #layers .lay-group h3 { margin: 0 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #a7b5c0); }
 #layers .lay-group label { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 13px; }
 #layers .lay-group select { margin-left: auto; font: inherit; font-size: 12px; background: var(--field, #1c2932); color: inherit; border: 1px solid var(--line, #34424d); border-radius: 6px; padding: 2px 4px; }
@@ -22,7 +25,7 @@
 #layers .lay-info small { color: var(--muted, #a7b5c0); }
 #layers .lay-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 #layers .lay-good { color: var(--ok, #7dff9b); } #layers .lay-bad { color: var(--red, #ff8a80); font-weight: 600; }
-#layers .lay-chip { opacity: .55; }
+#layers .lay-chip { position: fixed; left: 20px; bottom: 14px; opacity: .55; }
 #layers .lay-chip:hover, #layers .lay-chip:focus-visible { opacity: 1; }
 #layers .lay-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
@@ -30,12 +33,15 @@
 body.clean #frontend, body.clean #left, body.clean #right, body.clean #hud { display: none !important; }
 
 @media (max-width: 760px) {
-  #layers { right: 0; bottom: 8px; padding: 0 8px; }
-  #layers .lay-full { flex-wrap: wrap; justify-content: center; }
+  #layers { left: 8px; right: 8px; top: auto; bottom: 70px; width: auto; }
+  #layers .lay-full { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  #layers .lay-presets, #layers .lay-ghosts { flex-direction: row; flex-wrap: wrap; }
+  #layers .lay-title { display: none; }
+  #layers #lay-pop, #layers #rev-panel { left: 8px; right: 8px; top: auto; bottom: 130px; width: auto; }
 }
 
 /* Cost card (costcard.ts): the picked object's change in plain words, beside the planning panel */
-#costcard { position: fixed; left: 20px; top: 138px; z-index: 24; width: 300px; max-height: calc(100vh - 330px); overflow: auto; padding: 12px 14px; background: var(--floating, rgba(20, 28, 35, .97)); border: 1px solid var(--line, #34424d); border-radius: 14px; color: var(--text, #eef4f7); box-shadow: 0 8px 35px #0004; font-size: 13px; }
+#costcard { position: fixed; left: 170px; top: 138px; z-index: 24; width: 300px; max-height: calc(100vh - 330px); overflow: auto; padding: 12px 14px; background: var(--floating, rgba(20, 28, 35, .97)); border: 1px solid var(--line, #34424d); border-radius: 14px; color: var(--text, #eef4f7); box-shadow: 0 8px 35px #0004; font-size: 13px; }
 #costcard[hidden] { display: none; }
 #costcard h2 { margin: 2px 0 8px; font-size: 15px; line-height: 1.3; }
 #costcard .cc-head { display: flex; justify-content: space-between; align-items: center; }
@@ -50,7 +56,7 @@ body.clean #frontend, body.clean #left, body.clean #right, body.clean #hud { dis
 body.clean #costcard { display: none !important; }
 
 /* Review panel (hazardreview.ts) */
-#layers #rev-panel { width: min(560px, calc(100vw - 32px)); max-height: 52vh; overflow: auto; padding: 12px 14px; background: var(--floating, rgba(20, 28, 35, .97)); border: 1px solid var(--line, #34424d); border-radius: 14px; color: var(--text, #eef4f7); box-shadow: 0 8px 35px #0004; font-size: 13px; }
+#layers #rev-panel { position: fixed; left: 170px; top: 150px; width: min(560px, calc(100vw - var(--scene-right, 0px) - 200px)); max-height: calc(100vh - 200px); overflow: auto; padding: 12px 14px; background: var(--floating, rgba(20, 28, 35, .97)); border: 1px solid var(--line, #34424d); border-radius: 14px; color: var(--text, #eef4f7); box-shadow: 0 8px 35px #0004; font-size: 13px; }
 #layers #rev-panel .rev-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } #layers #rev-panel .rev-head button { margin-left: auto; }
 #layers #rev-panel .rev-note { margin: 6px 0 8px; font-size: 12px; color: var(--muted, #a7b5c0); }
 #layers #rev-panel ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
