@@ -31,7 +31,10 @@ def layers(p, g, lo, shape, pf=None, walked=None):
         lab, n = ndimage.label(obstacles, np.ones((3, 3)))
         L, idx = lab[tuple(ij[osel].T)], np.arange(1, n + 1)
         zlo, zhi = ndimage.minimum(p[osel, 2], L, idx), ndimage.maximum(p[osel, 2], L, idx)
-        speck = (np.bincount(lab.ravel(), minlength=n + 1)[1:] <= sp["max_cells"]) & (zhi - zlo < sp["min_span_m"]) & (zlo > sp["floor_gap_m"])
+        small = np.bincount(lab.ravel(), minlength=n + 1)[1:] <= sp["max_cells"]
+        speck = small & (zhi - zlo < sp["min_span_m"]) & (zlo > sp["floor_gap_m"])
+        if sp.get("min_points"):   # opt-in: a few Gaussians "spanning" a metre are a floor-noise point under an air floater, not a body
+            speck |= small & (np.bincount(L, minlength=n + 1)[1:] < sp["min_points"])
         obstacles &= ~np.r_[False, speck][lab]
     # bump heights are measured from the LOCAL floor, not z=0: a gently tilted or warped floor is not a bump
     p = p.copy()
@@ -60,6 +63,8 @@ def layers(p, g, lo, shape, pf=None, walked=None):
     ok = (ndimage.sum(np.ones(shape), lab, idx) * cell ** 2 <= g.get("fill_holes_max_m2", 1.0)) & (ndimage.maximum(obstacles, lab, idx) == 0)
     filled = np.r_[False, ok][lab]
     floor |= filled
+    if g.get("no_bumps"):   # the config says why: a floor noisier than the bump band; every "bump" there is noise, none is reported
+        bumps = np.zeros_like(bumps)
     bump_h = np.nan_to_num(cell_median(ij[bsel], p[bsel, 2], shape))   # median, not max: one noisy Gaussian isn't the top
     bump_h[~bumps] = 0
     return floor, obstacles, bumps, bump_h, filled

@@ -440,7 +440,7 @@ def main(cfg):
              "splat": "main.ply", "removed_splat": "removed.ply" if (w / "removed.ply").exists() else None,
              "shell": "shell.json" if (w / "shell.json").exists() else None,
              "verification": "verification.json" if (w / "verification.json").exists() else None,
-             "synthetic": g.get("synthetic") or [], "scale_note": cfg["scale"].get("note"),
+             "synthetic": g.get("synthetic") or [], "scale_note": cfg["scale"].get("note"), "bump_note": g.get("no_bumps"),
              "grid": {"origin_xy": lo.round(4).tolist(), "cell_m": cell, "shape": list(shape),
                       "index": "flat i*ny + j; cell (i,j) spans origin + (i,j)*cell_m",
                       "floor": "floor.u8", "obstacles": "obstacles.u8", "bump_height_m": "bump.f32",
