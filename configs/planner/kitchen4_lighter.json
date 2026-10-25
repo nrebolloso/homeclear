@@ -38,6 +38,6 @@
     }
   },
   "brush_m": 0.03,
-  "search": { "steps": 800, "chains_per_weight": 16, "t0": 20, "t1": 0.3, "effort_weight": [0, 1, 2, 4, 8, 16, 32, 64], "live_effort_weight": 2,
-    "note": "simulated annealing on risk + effort_weight * effort (risk is per month, ~70-220 here; effort ~1-3 per change), one weight per group of chains so the chains together trace the risk-vs-effort front" }
+  "search": { "steps": 800, "chains_per_weight": 16, "t0": 0.5, "t1": 0.003, "effort_weight": [0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1], "live_effort_weight": 0.05,
+    "note": "simulated annealing on risk + effort_weight * effort; risk = toe catches / month (~0.05-1.2 here) + 1e-5 x (snags + brushes) as a tie-break (engine.py TIE_BREAK); effort ~1-3 per change; one weight per group of chains so the chains together trace the toe-catches-vs-effort front" }
 }
