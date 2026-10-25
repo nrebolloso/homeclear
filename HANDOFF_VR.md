@@ -1,5 +1,7 @@
 # VR handoff (2026-10-24)
 
+> Out of date: describes the old `vr-mode` branch. See `VR_LOG.md` for the current VR state (`xr.ts` is the VR code).
+
 Branch: `vr-mode`. Latest commit: `e40be2b` (merge of `origin/main`). It is local only, **not pushed**.
 
 ## 1. State of the merge

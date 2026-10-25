@@ -35,7 +35,7 @@ or VR is slow or Chrome can't find the headset:
 ```powershell
 git clone https://github.com/nrebolloso/homeclear
 cd homeclear
-git switch vr-mode
+git switch main
 cd viewer
 npm ci
 ```
