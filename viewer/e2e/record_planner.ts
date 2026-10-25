@@ -23,16 +23,18 @@ const SHOTS: Record<string, { panel: string; run: string }> = {
     await W.month('before'); await wait(21000); await W.month('after'); await wait(21000); W.stop(); await game.planfix.goto(game.planfix.layouts().scan)` },
   // the live futures fan (demo mode), standing at the fridge before the walker moves: the fork over / around the mat with
   // the average foot lift, then the low-clearance shuffler (more red at the mat edge), then the mat taped (grid.ts
-  // TAPED_EDGE_M: a ~1.5 mm edge, below bump_min) and the fan goes green; then a walk on toward the mat
+  // TAPED_EDGE_M: a ~1.5 mm edge, below bump_min) and the mat footprints go grey; then a walk on toward the mat
   futures_fan_fridge: { panel: 'fanpanel', run: `const wait = ms => new Promise(r => setTimeout(r, ms)), key = (t, code) => dispatchEvent(new KeyboardEvent(t, { code }));
-    game.setFree(-0.7, 2.2, -0.91); game.setThird(true, 0.9, 1.1); game.fan.setLift('average'); game.fan.set(true); await wait(5000);
+    game.setFree(-0.7, 2.2, -0.91); game.setThird(true, 1.4, 1.2); game.fan.setLift('average'); game.fan.set(true); await wait(5000);
     game.fan.setLift('shuffler'); await wait(5000);
     await game.fan.tapeMat(); await wait(5000);
     key('keydown', 'KeyW'); await wait(2500); key('keyup', 'KeyW'); await wait(3000)` },
   // the scripted demo (roundtrip.ts): at the fridge, average vs shuffler lift; then the shuffler's round trip, entrance ->
-  // fridge -> entrance under live physics with the fan following each leg; then the mat taped and the fan goes green
+  // fridge -> entrance under live physics with the fan following each leg; then the mat taped and its footprints go grey.
+  // Camera a little higher and further back than walking (1.4 m back, 1.2 m up) so the fork at the mat and the turn at the
+  // fridge show the footprints spreading; higher than ~1.5 m looks through the scan's ceiling haze
   futures_fan: { panel: 'fanpanel', run: `const wait = ms => new Promise(r => setTimeout(r, ms));
-    game.setFree(-0.7, 2.2, -0.91); game.setThird(true, 0.9, 1.1); game.fan.setLift('average'); game.fan.set(true); await wait(8000);
+    game.setFree(-0.7, 2.2, -0.91); game.setThird(true, 1.4, 1.2); game.fan.setLift('average'); game.fan.set(true); await wait(8000);
     game.fan.setLift('shuffler'); await wait(8000);   // 8 s each: a lift's first fan or two can still be the previous lift's
     await game.roundTrip.set(true); game.setAuto(); const legs = [game.roundTrip.leg()];
     for (let i = 0; i < 300 && legs.length < 3; i++) { await wait(250); if (game.roundTrip.leg() !== legs.at(-1)) legs.push(game.roundTrip.leg()); }
