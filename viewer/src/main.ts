@@ -873,7 +873,7 @@ function undoReimagined(c: Change) {
 async function reimagineRoom() {
   const why = (msg: string) => { $('reimtotal').textContent = msg; return []; };   // say why nothing moved instead of doing nothing
   if (!objs.length && !interventions.length)
-    return why('Nothing to rearrange: this scene exported no movable objects and no fixes (furniture is still part of the room splat). Try ?scene=game_synth.');
+    return why('Nothing to rearrange: this scene exported no movable objects and no fixes (furniture is still part of the room splat). Pick a scan with objects from the Scans menu.');
   if (!suggestions.length) {
     $('reimtotal').textContent = `searching layouts: every move of ${objs.length} objects and each fix, re-run in full (10–30 s)…`;
     await suggest();
@@ -2441,8 +2441,9 @@ let mannequin: Mannequin = buildMannequin(persona.eye_height_m / 0.94);
 mannequin.group.visible = false;
 scene.add(mannequin.group);
 let manShadows = GROUND ? footShadows(mannequin.group) : null, manPose: unknown = null;   // manPose: the rigged mannequin's last pose report (ankle / hand errors)
-// the skinned model (rig.ts, CesiumMan CC BY 4.0) replaces the plain one once it has loaded; ?mannequin=basic or a failed load keeps the plain one
-if (PARAMS.get('mannequin') !== 'basic') loadRigged('models/mannequin/CesiumMan.glb', persona.eye_height_m / 0.94).then(rigged => {
+// the skinned model (rig.ts, CesiumMan CC BY 4.0) replaces the plain one once it has loaded; ?mannequin=basic or a failed load keeps the plain one,
+// ?mannequin=textured keeps the model's own Cesium texture instead of the default matte grey
+if (PARAMS.get('mannequin') !== 'basic') loadRigged('models/mannequin/CesiumMan.glb', persona.eye_height_m / 0.94, PARAMS.get('mannequin') === 'textured').then(rigged => {
   renderer.localClippingEnabled = true;   // first person clips the head off at the neck
   rigged.group.visible = mannequin.group.visible;
   scene.remove(mannequin.group); scene.add(rigged.group);
