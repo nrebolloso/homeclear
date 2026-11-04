@@ -1,0 +1,474 @@
+{
+ "data": "PhysioNet Multi-Gait-Posture 1.0.0 (CC BY 4.0), 14 participants",
+ "embedding_dims": 8,
+ "cv": "leave-two-participants-out, 7 folds; each held-out person's first 30 s fitted from walker + head only, every later step scored",
+ "device": "cpu",
+ "train_s": 74.0,
+ "epochs": 300,
+ "summary": {
+  "heel_cm": {
+   "mean_embedding": 4.03,
+   "fitted": 4.13,
+   "people_improved": "3 / 14"
+  },
+  "walker_cm": {
+   "mean_embedding": 12.42,
+   "fitted": 11.67,
+   "people_improved": "10 / 14"
+  },
+  "head_cm": {
+   "mean_embedding": 9.84,
+   "fitted": 5.22,
+   "people_improved": "12 / 14"
+  },
+  "nll": {
+   "mean_embedding": 786.33,
+   "fitted": 465.81,
+   "people_improved": "14 / 14"
+  }
+ },
+ "closed_loop": {
+  "mean_emb": {
+   "heel_lateral_err_cm": 2.8,
+   "walker_pos_err_cm": 9.35,
+   "walker_yaw_err_deg": 5.16,
+   "step_len_err_cm": 4.12
+  },
+  "fitted": {
+   "heel_lateral_err_cm": 2.94,
+   "walker_pos_err_cm": 9.56,
+   "walker_yaw_err_deg": 5.35,
+   "step_len_err_cm": 4.23
+  }
+ },
+ "closed_loop_people_improved": {
+  "heel_lateral_err_cm": "4 / 14",
+  "walker_pos_err_cm": "7 / 14",
+  "walker_yaw_err_deg": "5 / 14",
+  "step_len_err_cm": "6 / 14"
+ },
+ "convergence_heel_cm": [
+  {
+   "fit_s": 0,
+   "heel_cm": 4.06
+  },
+  {
+   "fit_s": 2.5,
+   "heel_cm": 4.14
+  },
+  {
+   "fit_s": 5,
+   "heel_cm": 4.14
+  },
+  {
+   "fit_s": 10,
+   "heel_cm": 4.14
+  },
+  {
+   "fit_s": 15,
+   "heel_cm": 4.16
+  },
+  {
+   "fit_s": 20,
+   "heel_cm": 4.17
+  },
+  {
+   "fit_s": 30,
+   "heel_cm": 4.16
+  }
+ ],
+ "per_person": [
+  {
+   "pid": 0,
+   "fold": 0,
+   "fit_steps": 23,
+   "eval_steps": 351,
+   "closed_loop": {
+    "mean_emb": {
+     "heel_lateral_err_cm": 3.46,
+     "walker_pos_err_cm": 8.86,
+     "walker_yaw_err_deg": 4.46,
+     "step_len_err_cm": 3.6
+    },
+    "fitted": {
+     "heel_lateral_err_cm": 3.01,
+     "walker_pos_err_cm": 8.4,
+     "walker_yaw_err_deg": 4.36,
+     "step_len_err_cm": 3.91
+    }
+   },
+   "heel_cm_mean_emb": 4.27,
+   "walker_cm_mean_emb": 11.28,
+   "head_cm_mean_emb": 10.26,
+   "nll_mean_emb": 77.61,
+   "heel_cm_fitted": 3.85,
+   "walker_cm_fitted": 10.03,
+   "head_cm_fitted": 5.15,
+   "nll_fitted": -14.24
+  },
+  {
+   "pid": 1,
+   "fold": 0,
+   "fit_steps": 31,
+   "eval_steps": 308,
+   "closed_loop": {
+    "mean_emb": {
+     "heel_lateral_err_cm": 3.07,
+     "walker_pos_err_cm": 11.37,
+     "walker_yaw_err_deg": 4.67,
+     "step_len_err_cm": 3.25
+    },
+    "fitted": {
+     "heel_lateral_err_cm": 4.07,
+     "walker_pos_err_cm": 13.24,
+     "walker_yaw_err_deg": 6.45,
+     "step_len_err_cm": 4.31
+    }
+   },
+   "heel_cm_mean_emb": 3.88,
+   "walker_cm_mean_emb": 14.85,
+   "head_cm_mean_emb": 21.27,
+   "nll_mean_emb": 580.74,
+   "heel_cm_fitted": 4.39,
+   "walker_cm_fitted": 19.17,
+   "head_cm_fitted": 4.98,
+   "nll_fitted": -12.62
+  },
+  {
+   "pid": 2,
+   "fold": 1,
+   "fit_steps": 36,
+   "eval_steps": 387,
+   "closed_loop": {
+    "mean_emb": {
+     "heel_lateral_err_cm": 2.5,
+     "walker_pos_err_cm": 10.96,
+     "walker_yaw_err_deg": 4.21,
+     "step_len_err_cm": 4.17
+    },
+    "fitted": {
+     "heel_lateral_err_cm": 3.17,
+     "walker_pos_err_cm": 11.72,
+     "walker_yaw_err_deg": 4.86,
+     "step_len_err_cm": 4.27
+    }
+   },
+   "heel_cm_mean_emb": 4.48,
+   "walker_cm_mean_emb": 20.28,
+   "head_cm_mean_emb": 15.13,
+   "nll_mean_emb": 266.2,
+   "heel_cm_fitted": 4.83,
+   "walker_cm_fitted": 15.41,
+   "head_cm_fitted": 5.73,
+   "nll_fitted": -11.58
+  },
+  {
+   "pid": 3,
+   "fold": 1,
+   "fit_steps": 30,
+   "eval_steps": 263,
+   "closed_loop": {
+    "mean_emb": {
+     "heel_lateral_err_cm": 3.47,
+     "walker_pos_err_cm": 11.07,
+     "walker_yaw_err_deg": 5.75,
+     "step_len_err_cm": 3.37
+    },
+    "fitted": {
+     "heel_lateral_err_cm": 3.67,
+     "walker_pos_err_cm": 10.69,
+     "walker_yaw_err_deg": 5.7,
+     "step_len_err_cm": 3.42
+    }
+   },
+   "heel_cm_mean_emb": 5.55,
+   "walker_cm_mean_emb": 11.67,
+   "head_cm_mean_emb": 11.58,
+   "nll_mean_emb": 118.32,
+   "heel_cm_fitted": 5.59,
+   "walker_cm_fitted": 11.25,
+   "head_cm_fitted": 6.87,
+   "nll_fitted": -9.71
+  },
+  {
+   "pid": 4,
+   "fold": 2,
+   "fit_steps": 25,
+   "eval_steps": 343,
+   "closed_loop": {
+    "mean_emb": {
+     "heel_lateral_err_cm": 2.57,
+     "walker_pos_err_cm": 6.99,
+     "walker_yaw_err_deg": 3.75,
+     "step_len_err_cm": 2.6
+    },
+    "fitted": {
+     "heel_lateral_err_cm": 2.71,
+     "walker_pos_err_cm": 7.41,
+     "walker_yaw_err_deg": 3.69,
+     "step_len_err_cm": 2.8
+    }
+   },
+   "heel_cm_mean_emb": 3.41,
+   "walker_cm_mean_emb": 13.62,
+   "head_cm_mean_emb": 14.46,
+   "nll_mean_emb": 255.04,
+   "heel_cm_fitted": 3.68,
+   "walker_cm_fitted": 10.89,
+   "head_cm_fitted": 3.36,
+   "nll_fitted": -15.29
+  },
+  {
+   "pid": 5,
+   "fold": 2,
+   "fit_steps": 27,
+   "eval_steps": 220,
+   "closed_loop": {
+    "mean_emb": {
+     "heel_lateral_err_cm": 3.53,
+     "walker_pos_err_cm": 26.59,
+     "walker_yaw_err_deg": 20.0,
+     "step_len_err_cm": 3.88
+    },
+    "fitted": {
+     "heel_lateral_err_cm": 3.73,
+     "walker_pos_err_cm": 26.23,
+     "walker_yaw_err_deg": 20.1,
+     "step_len_err_cm": 5.03
+    }
+   },
+   "heel_cm_mean_emb": 5.66,
+   "walker_cm_mean_emb": 23.5,
+   "head_cm_mean_emb": 5.85,
+   "nll_mean_emb": 13477.04,
+   "heel_cm_fitted": 6.01,
+   "walker_cm_fitted": 23.42,
+   "head_cm_fitted": 5.94,
+   "nll_fitted": 9562.44
+  },
+  {
+   "pid": 6,
+   "fold": 3,
+   "fit_steps": 24,
+   "eval_steps": 288,
+   "closed_loop": {
+    "mean_emb": {
+     "heel_lateral_err_cm": 2.47,
+     "walker_pos_err_cm": 8.67,
+     "walker_yaw_err_deg": 3.56,
+     "step_len_err_cm": 4.03
+    },
+    "fitted": {
+     "heel_lateral_err_cm": 2.51,
+     "walker_pos_err_cm": 9.02,
+     "walker_yaw_err_deg": 3.66,
+     "step_len_err_cm": 3.66
+    }
+   },
+   "heel_cm_mean_emb": 3.07,
+   "walker_cm_mean_emb": 8.98,
+   "head_cm_mean_emb": 12.77,
+   "nll_mean_emb": 174.87,
+   "heel_cm_fitted": 3.24,
+   "walker_cm_fitted": 9.34,
+   "head_cm_fitted": 6.04,
+   "nll_fitted": -15.49
+  },
+  {
+   "pid": 7,
+   "fold": 3,
+   "fit_steps": 38,
+   "eval_steps": 332,
+   "closed_loop": {
+    "mean_emb": {
+     "heel_lateral_err_cm": 2.76,
+     "walker_pos_err_cm": 7.34,
+     "walker_yaw_err_deg": 4.31,
+     "step_len_err_cm": 3.73
+    },
+    "fitted": {
+     "heel_lateral_err_cm": 2.66,
+     "walker_pos_err_cm": 7.33,
+     "walker_yaw_err_deg": 4.32,
+     "step_len_err_cm": 3.45
+    }
+   },
+   "heel_cm_mean_emb": 3.23,
+   "walker_cm_mean_emb": 9.88,
+   "head_cm_mean_emb": 7.91,
+   "nll_mean_emb": -6.9,
+   "heel_cm_fitted": 3.13,
+   "walker_cm_fitted": 8.8,
+   "head_cm_fitted": 6.82,
+   "nll_fitted": -14.52
+  },
+  {
+   "pid": 8,
+   "fold": 4,
+   "fit_steps": 29,
+   "eval_steps": 282,
+   "closed_loop": {
+    "mean_emb": {
+     "heel_lateral_err_cm": 3.05,
+     "walker_pos_err_cm": 7.35,
+     "walker_yaw_err_deg": 3.9,
+     "step_len_err_cm": 5.32
+    },
+    "fitted": {
+     "heel_lateral_err_cm": 3.06,
+     "walker_pos_err_cm": 7.3,
+     "walker_yaw_err_deg": 3.95,
+     "step_len_err_cm": 4.99
+    }
+   },
+   "heel_cm_mean_emb": 5.06,
+   "walker_cm_mean_emb": 9.7,
+   "head_cm_mean_emb": 7.33,
+   "nll_mean_emb": 24.68,
+   "heel_cm_fitted": 5.2,
+   "walker_cm_fitted": 9.32,
+   "head_cm_fitted": 5.14,
+   "nll_fitted": -13.19
+  },
+  {
+   "pid": 9,
+   "fold": 4,
+   "fit_steps": 23,
+   "eval_steps": 234,
+   "closed_loop": {
+    "mean_emb": {
+     "heel_lateral_err_cm": 2.73,
+     "walker_pos_err_cm": 7.97,
+     "walker_yaw_err_deg": 4.1,
+     "step_len_err_cm": 3.53
+    },
+    "fitted": {
+     "heel_lateral_err_cm": 2.62,
+     "walker_pos_err_cm": 8.19,
+     "walker_yaw_err_deg": 4.05,
+     "step_len_err_cm": 3.51
+    }
+   },
+   "heel_cm_mean_emb": 3.31,
+   "walker_cm_mean_emb": 8.74,
+   "head_cm_mean_emb": 8.45,
+   "nll_mean_emb": 26.11,
+   "heel_cm_fitted": 3.31,
+   "walker_cm_fitted": 9.1,
+   "head_cm_fitted": 5.46,
+   "nll_fitted": -15.39
+  },
+  {
+   "pid": 10,
+   "fold": 5,
+   "fit_steps": 27,
+   "eval_steps": 370,
+   "closed_loop": {
+    "mean_emb": {
+     "heel_lateral_err_cm": 2.56,
+     "walker_pos_err_cm": 10.82,
+     "walker_yaw_err_deg": 6.43,
+     "step_len_err_cm": 8.78
+    },
+    "fitted": {
+     "heel_lateral_err_cm": 2.66,
+     "walker_pos_err_cm": 11.04,
+     "walker_yaw_err_deg": 6.54,
+     "step_len_err_cm": 8.27
+    }
+   },
+   "heel_cm_mean_emb": 4.83,
+   "walker_cm_mean_emb": 13.32,
+   "head_cm_mean_emb": 5.14,
+   "nll_mean_emb": -8.52,
+   "heel_cm_fitted": 4.88,
+   "walker_cm_fitted": 13.93,
+   "head_cm_fitted": 5.2,
+   "nll_fitted": -11.0
+  },
+  {
+   "pid": 11,
+   "fold": 5,
+   "fit_steps": 23,
+   "eval_steps": 329,
+   "closed_loop": {
+    "mean_emb": {
+     "heel_lateral_err_cm": 3.12,
+     "walker_pos_err_cm": 7.54,
+     "walker_yaw_err_deg": 4.48,
+     "step_len_err_cm": 3.21
+    },
+    "fitted": {
+     "heel_lateral_err_cm": 3.09,
+     "walker_pos_err_cm": 7.4,
+     "walker_yaw_err_deg": 4.43,
+     "step_len_err_cm": 3.43
+    }
+   },
+   "heel_cm_mean_emb": 3.52,
+   "walker_cm_mean_emb": 12.16,
+   "head_cm_mean_emb": 3.84,
+   "nll_mean_emb": -14.4,
+   "heel_cm_fitted": 3.39,
+   "walker_cm_fitted": 8.81,
+   "head_cm_fitted": 3.76,
+   "nll_fitted": -15.85
+  },
+  {
+   "pid": 12,
+   "fold": 6,
+   "fit_steps": 36,
+   "eval_steps": 303,
+   "closed_loop": {
+    "mean_emb": {
+     "heel_lateral_err_cm": 1.94,
+     "walker_pos_err_cm": 5.0,
+     "walker_yaw_err_deg": 3.18,
+     "step_len_err_cm": 3.77
+    },
+    "fitted": {
+     "heel_lateral_err_cm": 2.07,
+     "walker_pos_err_cm": 5.21,
+     "walker_yaw_err_deg": 3.25,
+     "step_len_err_cm": 4.21
+    }
+   },
+   "heel_cm_mean_emb": 2.85,
+   "walker_cm_mean_emb": 8.61,
+   "head_cm_mean_emb": 8.37,
+   "nll_mean_emb": 37.08,
+   "heel_cm_fitted": 2.96,
+   "walker_cm_fitted": 8.3,
+   "head_cm_fitted": 5.01,
+   "nll_fitted": -15.63
+  },
+  {
+   "pid": 13,
+   "fold": 6,
+   "fit_steps": 30,
+   "eval_steps": 382,
+   "closed_loop": {
+    "mean_emb": {
+     "heel_lateral_err_cm": 2.44,
+     "walker_pos_err_cm": 5.77,
+     "walker_yaw_err_deg": 3.89,
+     "step_len_err_cm": 3.72
+    },
+    "fitted": {
+     "heel_lateral_err_cm": 2.46,
+     "walker_pos_err_cm": 5.75,
+     "walker_yaw_err_deg": 3.94,
+     "step_len_err_cm": 3.6
+    }
+   },
+   "heel_cm_mean_emb": 3.76,
+   "walker_cm_mean_emb": 8.07,
+   "head_cm_mean_emb": 4.84,
+   "nll_mean_emb": -9.37,
+   "heel_cm_fitted": 3.82,
+   "walker_cm_fitted": 8.05,
+   "head_cm_fitted": 4.41,
+   "nll_fitted": -15.95
+  }
+ ]
+}
