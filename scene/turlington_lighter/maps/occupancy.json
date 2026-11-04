@@ -1,0 +1,17 @@
+{
+ "origin_xy": [
+  -39.70379993438721,
+  -40.283450565338136
+ ],
+ "cell_m": 0.05,
+ "shape": [
+  965,
+  1301
+ ],
+ "image": "column = i (x right), row = ny - 1 - j (y up); cell (i, j) spans origin + (i, j) * cell_m",
+ "values": {
+  "0": "no floor seen (or not walkable)",
+  "128": "floor",
+  "255": "obstacle"
+ }
+}

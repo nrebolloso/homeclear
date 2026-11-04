@@ -1,0 +1,15 @@
+{
+ "origin_xy": [
+  -9.293366847038268,
+  -3.266316605806351
+ ],
+ "cell_m": 0.02,
+ "shape": [
+  589,
+  228
+ ],
+ "image": "column = i (x right), row = ny - 1 - j (y up); cell (i, j) spans origin + (i, j) * cell_m",
+ "dtype": "uint16",
+ "unit_m": 0.001,
+ "note": "height above the locally fitted floor plane, millimetres; 0 = none"
+}

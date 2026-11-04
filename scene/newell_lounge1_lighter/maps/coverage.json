@@ -1,0 +1,15 @@
+{
+ "origin_xy": [
+  -6.826648926734925,
+  -4.9728126096725465
+ ],
+ "cell_m": 0.02,
+ "shape": [
+  823,
+  546
+ ],
+ "image": "column = i (x right), row = ny - 1 - j (y up); cell (i, j) spans origin + (i, j) * cell_m",
+ "dtype": "uint8",
+ "note": "capture cameras that had the cell in view (255 when the capture has no camera list)",
+ "good_min_views": 3
+}

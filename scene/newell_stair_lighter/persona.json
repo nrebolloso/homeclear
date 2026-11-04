@@ -1,0 +1,8 @@
+{
+ "eye_height_m": 1.55,
+ "gait_profile": "older_adult_walker",
+ "stride_m": 0.35,
+ "stride_cv": 0.1,
+ "foot_sep_m": 0.2,
+ "toe_clearance_cv": 0.25
+}

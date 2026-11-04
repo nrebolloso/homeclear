@@ -1,0 +1,15 @@
+[
+ {
+  "name": "main route",
+  "start": [
+   5.9,
+   7.5
+  ],
+  "goal": [
+   -21.0,
+   1.4
+  ],
+  "trips_per_night": 2,
+  "night": true
+ }
+]

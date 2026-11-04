@@ -1,0 +1,53 @@
+{
+ "frame": "floor frame, metres, z up",
+ "hazards": [
+  {
+   "id": 0,
+   "type": "floor_bump",
+   "path_index": [
+    2,
+    16
+   ],
+   "length_m": 0.33,
+   "heading_xy": [
+    -0.928,
+    0.371
+   ],
+   "max_bump_height_cm": 2.3,
+   "position_m": [
+    8.6,
+    -8.226,
+    0.023
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "2.3 cm floor bump over 0.33 m of the route (measured from the splat)"
+  },
+  {
+   "id": 1,
+   "type": "floor_bump",
+   "path_index": [
+    44,
+    49
+   ],
+   "length_m": 0.14,
+   "heading_xy": [
+    -0.707,
+    0.707
+   ],
+   "max_bump_height_cm": 0.8,
+   "position_m": [
+    7.86,
+    -7.566,
+    0.008
+   ],
+   "estimated": false,
+   "verdict": "minor",
+   "source": "geometry",
+   "ot_check": false,
+   "note": "0.8 cm floor bump over 0.14 m of the route (measured from the splat)"
+  }
+ ]
+}

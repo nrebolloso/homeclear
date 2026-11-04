@@ -1,0 +1,189 @@
+{
+ "bedside_table": {
+  "pixels": 8295,
+  "seen_around_pct": 16.4,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "sofa": {
+  "pixels": 24763,
+  "seen_around_pct": 16.1,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "rug2": {
+  "pixels": 5230,
+  "seen_around_pct": 92.5,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "stool": {
+  "pixels": 5358,
+  "seen_around_pct": 76.5,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "sofa2": {
+  "pixels": 56212,
+  "seen_around_pct": 38.2,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "chair": {
+  "pixels": 6200,
+  "seen_around_pct": 94.3,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "bedside_table3": {
+  "pixels": 7987,
+  "seen_around_pct": 38.9,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "stool2": {
+  "pixels": 5142,
+  "seen_around_pct": 55.7,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "chair2": {
+  "pixels": 6137,
+  "seen_around_pct": 100.0,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "chair3": {
+  "pixels": 3876,
+  "seen_around_pct": 9.4,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "sofa3": {
+  "pixels": 26263,
+  "seen_around_pct": 54.9,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "chair4": {
+  "pixels": 4926,
+  "seen_around_pct": 42.7,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "bedside_table6": {
+  "pixels": 7522,
+  "seen_around_pct": 32.0,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": true,
+  "default": "ns"
+ },
+ "chair5": {
+  "pixels": 8028,
+  "seen_around_pct": 27.3,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": true,
+  "default": "ns"
+ },
+ "bedside_table7": {
+  "pixels": 8427,
+  "seen_around_pct": 18.8,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "chair6": {
+  "pixels": 5384,
+  "seen_around_pct": 39.7,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ },
+ "chair7": {
+  "pixels": 4799,
+  "seen_around_pct": 30.5,
+  "backends": [
+   "median",
+   "ns",
+   "telea"
+  ],
+  "wall_patch": false,
+  "default": "ns"
+ }
+}
