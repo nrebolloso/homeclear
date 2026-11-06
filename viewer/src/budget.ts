@@ -36,7 +36,7 @@ let last: BudgetPlan | undefined;
 export const currentBudget = () => last;
 
 const STYLE = `
-#budget-tile { position: fixed; left: 20px; bottom: 84px; z-index: 5; width: 48px; height: 32px; padding: 0; background: #c0c0c0; color: #000;
+#budget-tile { pointer-events: auto; width: 48px; height: 32px; padding: 0; background: #c0c0c0; color: #000;
   font: bold 13px/1 monospace; border: 3px outset #eee; border-radius: 0; cursor: pointer; box-shadow: none; }
 #budget-tile:active, #budget-tile[aria-expanded="true"] { border-style: inset; }
 #budget-dialog { width: min(440px, calc(100vw - 32px)); max-height: 80vh; padding: 16px; border: 1px solid #888; border-radius: 12px; background: #1b1d22; color: #eee; font: 14px system-ui, sans-serif; }
@@ -66,7 +66,8 @@ export function mountBudget(api: BudgetAdapter, onCommit: () => void) {
     <div id="budget-bar"><div></div></div><small id="budget-left"></small>
     <ul id="budget-list"><li>rolling out each fix…</li></ul>
     <footer><span id="budget-total"></span><span><button id="budget-close">Close</button> <button id="budget-apply" class="primary">Apply plan</button></span></footer>`;
-  (document.getElementById('frontend') ?? document.body).append(tile, dlg);
+  (document.getElementById('dock-status') ?? document.body).prepend(tile);   // in the left column's flow, so it never covers the controls card
+  (document.getElementById('frontend') ?? document.body).append(dlg);
   const $ = (id: string) => dlg.querySelector<HTMLElement>('#' + id)!;
   const slider = $('budget-slider') as HTMLInputElement;
   let items: BudgetItem[] = [], checked: string[] = [];

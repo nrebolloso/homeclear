@@ -119,7 +119,7 @@ body:has(#workspace-toggle[aria-expanded="true"]) #layers { z-index: 3; }
 #change-count, #filter-count { color: var(--accent-text); font-weight: 700; }
 .pane { padding: 24px 20px 12px; flex: 1; overflow-y: auto; min-height: 0; scrollbar-width: thin; scrollbar-color: var(--scrollbar) transparent; }
 /* the pane's next step stays in reach however long the findings run */
-.pane > .primary.full { position: sticky; bottom: 12px; z-index: 2; box-shadow: 0 24px 0 var(--floating), 0 -14px 14px var(--floating); }
+.pane > .primary.full:not(#generate-proposals) { position: sticky; bottom: 12px; z-index: 2; box-shadow: 0 24px 0 var(--floating), 0 -14px 14px var(--floating); }
 .panel-footer { flex: none; padding: 10px 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: calc(0.8125rem * var(--fs)); line-height: 1.5; }
 .panel-footer .imagined { color: var(--imag-text); border: 0; }
 #panel-open { position: absolute; right: 12px; top: 12px; display: inline-flex; align-items: center; gap: 6px; z-index: 26; }
