@@ -1,4 +1,4 @@
-# Cleared: a discharge dress rehearsal
+# Homeclear: a discharge dress rehearsal
 
 > Working name. Alternatives considered: Ghostwalk, D/C Ready, Discharge Orders, Threshold.
 

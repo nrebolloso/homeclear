@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { distinctOptions, summarizeChanges, escapeHTML } from '../src/frontend-model.ts';
+import { distinctOptions, summarizeChanges, escapeHTML, groupChecks } from '../src/frontend-model.ts';
 import type { Change } from '../src/reimagine.ts';
 
 const change = (source: string, usd: number, minutes = 10): Change => ({ k: -1, name: 'light', kind: 'fix', label: 'Add light', at: [0, 0], dist_m: 0, turn_deg: 0,
@@ -23,3 +23,7 @@ test('identical proposal outcomes collapse and retain their original Apply index
   assert.deepEqual(distinctOptions(options).map(x => x.index), [2, 1]);
 });
 test('scene labels cannot inject markup into the planning shell', () => assert.equal(escapeHTML('<img src=x onerror="x">'), '&lt;img src=x onerror=&quot;x&quot;&gt;'));
+test('checks sharing a verdict and note collapse to one row with every label listed', () => {
+  const g = groupChecks([{ verdict: 'fail', note: 'n', label: 'a' }, { verdict: 'ok', note: 'n', label: 'b' }, { verdict: 'fail', note: 'n', label: 'c' }, { verdict: 'fail', note: 'm', label: 'd' }]);
+  assert.deepEqual(g.map(x => x.items.map(i => i.label)), [['a', 'c'], ['b'], ['d']]);
+});

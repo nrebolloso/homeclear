@@ -78,6 +78,7 @@ export function createPlanFix(D: PlanFixDeps) {
   function draw() {
     const cv = $('pfchart') as HTMLCanvasElement, c = cv.getContext('2d')!, W = cv.width, H = cv.height, P = 26;
     c.clearRect(0, 0, W, H);
+    cv.hidden = !data || frame < 0;   // empty axes say nothing before a replay
     if (!data) return;
     const step = frame < 0 ? -1 : playing ? data.replay[frame].step : Infinity;
     const ds = data.dots, rmax = Math.max(...ds.map(d => d[0])), emax = Math.max(...ds.map(d => d[1]), 1);

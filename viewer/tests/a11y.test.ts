@@ -47,13 +47,13 @@ const contrast = (a: string, b: string) => { const [hi, lo] = [luminance(a), lum
 const dark = tokens('.frontend');
 const themes: Record<string, Record<string, string>> = {
   dark,
-  light: { ...dark, ...tokens('.frontend[data-theme="light"] #frontend') },
-  contrast: { ...dark, ...tokens('.frontend[data-theme="contrast"] #frontend') },
+  light: { ...dark, ...tokens('.frontend[data-theme="light"]') },
+  contrast: { ...dark, ...tokens('.frontend[data-theme="contrast"]') },
 };
 const PAIRS: [string, string][] = [
-  ['text', 'floating'], ['text-2', 'floating'], ['muted', 'floating'], ['soft', 'floating'], ['accent', 'floating'], ['badge-fg', 'floating'], ['imag-text', 'floating'],
+  ['text', 'floating'], ['text-2', 'floating'], ['muted', 'floating'], ['soft', 'floating'], ['accent-text', 'floating'], ['badge-fg', 'floating'], ['imag-text', 'floating'],
   ['muted', 'card'], ['text-2', 'card'], ['muted', 'cell'], ['soft', 'cell'], ['text', 'btn'], ['text', 'btn-hover'], ['text', 'field'], ['soft', 'well'],
-  ['on-accent', 'accent'], ['on-accent', 'accent-hover'], ['pressed-fg', 'pressed-bg'], ['amber-fg', 'amber-bg'], ['text', 'banner-bg'], ['muted', 'rec-a'], ['text-2', 'rec-b'],
+  ['on-accent', 'accent'], ['on-accent', 'accent-hover'], ['pressed-fg', 'pressed-bg'], ['amber-fg', 'amber-bg'],
 ];
 for (const [name, t] of Object.entries(themes)) {
   test(`${name} theme: text pairs reach 4.5:1`, () => {

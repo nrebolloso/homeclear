@@ -89,11 +89,11 @@ export function hintLines(h: Hints): string[] {
 }
 
 /** Status pills: persona, view and mode, plus the marking step first; the same words on desktop and in the headset. */
-export interface Pill { text: string; tone: Tone; go?: 'view' | 'compare' }   // go: what clicking the pill jumps to
+export interface Pill { text: string; tone: Tone; go?: 'view' | 'compare'; nav?: true }   // go: what clicking the pill jumps to
 export function statusPills(x: HintCtx & { thirdPerson: boolean; personaLabel: string; proposed: boolean | null }): Pill[] {
   const mode = hintMode(x);
   const pills: Pill[] = [{ text: x.personaLabel, tone: 'view', go: 'view' }, { text: x.thirdPerson ? 'Third person' : 'First person', tone: 'view', go: 'view' }];
-  pills.push({ text: x.nav === 'auto' ? 'Route' : x.nav === 'fly' ? 'Fly · noclip' : x.parked && x.device === 'desktop' ? 'Look around' : 'Walk', tone: x.nav === 'fly' ? 'spectate' : x.parked && x.device === 'desktop' ? 'view' : 'move' });
+  pills.push({ nav: true, text: x.nav === 'auto' ? 'Route' : x.nav === 'fly' ? 'Fly · noclip' : x.parked && x.device === 'desktop' ? 'Look around' : 'Walk', tone: x.nav === 'fly' ? 'spectate' : x.parked && x.device === 'desktop' ? 'view' : 'move' });
   if (x.proposed !== null) pills.push({ text: x.proposed ? 'Proposed' : 'Original', tone: 'view', go: 'compare' });
   if (mode === 'marking' || mode === 'editing') pills.unshift({ text: controlHints(x).label, tone: 'mark' });
   return pills;

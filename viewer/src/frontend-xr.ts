@@ -55,8 +55,8 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
   function toggle(id: string) { const el = box(id); el.checked = !el.checked; el.dispatchEvent(new Event('change', { bubbles: true })); fingerprint = ''; }
   function draw() {
     clear(); const s = D.adapter.snapshot(), costs = summarizeChanges(s.changes);
-    const titles: Record<string, string> = { main: 'Room controls', filters: 'View filters', costs: 'Changes & effort', scans: 'Scan library', experience: 'Experience', vision: 'Vision simulation', findings: 'Findings', changes: 'Changes', layers: 'Display layers', presets: 'Display presets', comfort: 'Comfort', bookmarks: 'Saved viewpoints', patients: 'Patient / device', routes: 'Routes' };
-    tile('Cleared · ' + (titles[page] ?? page.replace('room:', '')), 0, .43, .96, .09);
+    const titles: Record<string, string> = { main: 'Room controls', filters: 'View filters', costs: 'Changes & effort', scans: 'Maps', experience: 'Experience', vision: 'Vision simulation', findings: 'Findings', changes: 'Changes', layers: 'Display layers', presets: 'Display presets', comfort: 'Comfort', bookmarks: 'Saved viewpoints', patients: 'Patient / device', routes: 'Routes' };
+    tile('Homeclear · ' + (titles[page] ?? page.replace('room:', '')), 0, .43, .96, .09);
     type Row = [string, () => unknown, boolean?];
     const back = () => go('main');
     const rows = (entries: Row[], parent = 'main') => {
@@ -70,7 +70,7 @@ export function createFrontendXR(D: { renderer: THREE.WebGLRenderer; scene: THRE
       const entries: Row[] = [
         ['Explore', () => { D.frontend.setNavigation('explore'); close(); }],
         ['Follow route\nContinuous movement', () => { D.frontend.setNavigation('route'); close(); }],
-        ['Inspect items', () => { D.frontend.setNavigation('inspect'); close(); }], ['Scans', () => go('scans')],
+        ['Inspect items', () => { D.frontend.setNavigation('inspect'); close(); }], ['Maps', () => go('scans')],
         ['Experience', () => go('experience')], ['Findings', () => go('findings')],
         ['Changes', () => go('changes')], ['View filters', () => go('filters')],
         ['Changes & cost', () => go('costs')], ['Comfort', () => go('comfort')],

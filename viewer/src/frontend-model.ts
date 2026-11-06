@@ -29,3 +29,10 @@ export function distinctOptions<T extends { layout: unknown; score: number; acti
     .filter(({ option }) => { const key = JSON.stringify(option.layout); if (seen.has(key)) return false; seen.add(key); return true; });
 }
 export const escapeHTML = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
+/** Checks with the same verdict and note read as one row; every label stays listed in the row. */
+export function groupChecks<T extends { verdict: string; note: string }>(checks: T[]): { verdict: string; note: string; items: T[] }[] {
+  const groups = new Map<string, { verdict: string; note: string; items: T[] }>();
+  for (const c of checks) { const k = `${c.verdict}\n${c.note}`; const g = groups.get(k); if (g) g.items.push(c); else groups.set(k, { verdict: c.verdict, note: c.note, items: [c] }); }
+  return [...groups.values()];
+}

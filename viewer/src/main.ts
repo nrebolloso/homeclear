@@ -48,6 +48,7 @@ import { PERF, FULL, tierAtLoad, perfAtLoad, splatCfg, xrCfg, clusterHazards } f
 import QRCode from 'qrcode';
 import { mountFrontend, type FrontendAdapter } from './frontend.ts';
 import { mountLayers } from './layers.ts';
+import { groupChecks } from './frontend-model.ts';
 import './layers.css';
 import { provenanceTexels, provenanceShare } from './provenance.ts';
 import { mountCostCard } from './costcard.ts';
@@ -427,7 +428,7 @@ function renderPanels() {
     `<li><span class="imagined">${esc(h.note)}</span> · proposed by Cosmos Reason${h.verdict === 'confirmed' ? `, <span class="measured">geometry agrees: ${esc(h.measured)}</span>` : ', not measurable from the scan · <span class="ot">OT should check</span>'}</li>`);
   $('hazards').innerHTML = [...geo, ...reason].join('') || '<li>none on this route</li>';
   const vcls = (v: string) => (v === 'ok' ? 'delta-good' : v === 'fail' ? 'delta-bad' : 'ot');
-  $('checks').innerHTML = r.checks.map(c => `<li><span class="${vcls(c.verdict)}">${c.verdict}</span> ${c.label}<br><small>${c.note}</small></li>`).join('')
+  $('checks').innerHTML = groupChecks(r.checks).map(g => `<li><span class="${vcls(g.verdict)}">${g.verdict}</span> ${g.items[0].label}${g.items.length > 1 ? ` and ${g.items.length - 1} more` : ''}<br><small>${g.note}</small>${g.items.length > 1 ? `<details class="check-more"><summary>Show all ${g.items.length}</summary><ul>${g.items.map(c => `<li>${c.label}</li>`).join('')}</ul></details>` : ''}</li>`).join('')
     || '<li>no fixtures marked for this home</li>';
 }
 
@@ -2671,7 +2672,7 @@ const xr = await setupXR({
     say();
   },
   exit() { comparison.endPreview(); inXR = false; game.xr = false; dangerVR.k = -1; tourSpot = -1; applyPerf(perfBeforeXR, false); if (current) drawPlan(current); say(); },
-  buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton, wmButton, { text: () => ['Room menu', 'Scans, experience, findings and controls'], press: () => frontendVR?.open() }],   // the story for a family: what's risky, how night feels, the fix
+  buttons: [dangersButton, nightButton, comparison.button, comparison.previewButton, wmButton, { text: () => ['Room menu', 'Maps, experience, findings and controls'], press: () => frontendVR?.open() }],   // the story for a family: what's risky, how night feels, the fix
   shell: {   // the planning shell (frontend.ts) over the wand; frontendVR is created after the first frame, so look it up lazily
     activate: c => !!frontendVR?.activate(c), release: c => !!frontendVR?.release(c), open: () => !!frontendVR?.isOpen(),
     follow(dt) { if (!xrFollowRoute || mode !== 'auto') return false; autoStep(dt); return true; },
@@ -2835,11 +2836,11 @@ game.setDemo = (on: boolean) => document.body.classList.toggle('demo', on);
 Promise.all([json('version.json'), json('bundle.json')].map(p => p.catch(() => null))).then(([v, b]) => {
   if (!v) return;
   const el = Object.assign(document.createElement('div'), { id: 'sceneversion', className: 'dbg' });
-  el.textContent = b?.version === v.version ? v.version : `${v.version} (installed bundle ${b?.version ?? 'unknown'}: run tools/get_scene.sh)`;
+  el.classList.toggle('stale', b?.version !== v.version); el.textContent = b?.version === v.version ? v.version : `${v.version} (installed bundle ${b?.version ?? 'unknown'}: run tools/get_scene.sh)`;
   el.style.cssText = 'position:fixed;left:6px;bottom:4px;font:11px monospace;opacity:.6;pointer-events:none;z-index:5';
   document.body.append(el);
 });
-if (PARAMS.has('classic')) { for (const [n, p, s] of homes) p.insertBefore(n, s); document.body.classList.remove('frontend'); document.getElementById('frontend')!.hidden = true; document.getElementById('left')!.hidden = document.getElementById('right')!.hidden = false; }
+if (PARAMS.has('classic')) { for (const [n, p, s] of homes) p.insertBefore(n, s); document.body.classList.remove('frontend'); document.getElementById('frontend')!.hidden = true; for (const id of ['left', 'right']) { const panel = document.getElementById(id)!; panel.hidden = false; panel.style.visibility = 'visible'; } }
 frontendVR = createFrontendXR({ renderer, scene, camera, adapter: frontendAdapter, frontend });
 game.frontend = frontend;
 game.frontendXR = frontendVR;
