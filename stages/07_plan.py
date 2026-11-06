@@ -63,7 +63,15 @@ def main(cfg):
     to_xy = lambda c: (origin + (np.array(c) + 0.5) * cell).tolist()
     m = {"start_xy": [round(x, 2) for x in to_xy(start)], "goal_xy": [round(x, 2) for x in to_xy(goal)],
          "walker_width_m": pc["walker_width_m"]}
-    path = astar(cost, start, goal) if lab[start] == lab[goal] else None
+    # plan.via: waypoints walked in order (a loop is start == goal with via points round it); A* leg by leg, joined
+    ends = [start, *[to_cell(v) for v in pc.get("via") or []], goal]
+    path = []
+    for a, b in zip(ends, ends[1:]):
+        leg = astar(cost, a, b) if lab[a] == lab[b] else None
+        if leg is None:
+            path = None
+            break
+        path += leg[1:] if path else leg
     if path is None:
         m["error"] = "no path: start and goal not connected for this walker width"
         return False, m

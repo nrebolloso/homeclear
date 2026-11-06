@@ -88,7 +88,7 @@ test('moveCost: grows with distance and weight; removal and fixes costed', () =>
   assert.equal(fixCost({ id: 'x', label: 'x', kind: 'add', cost_usd: 15, minutes: 5, product: 'lamp' }).funding, 'unclassified');
 });
 
-test('moveCost agrees with the optimizer (placeholder until the effort model lands)', () => {
+test('moveCost agrees with the optimizer (both call effort.ts moveEffort)', () => {
   const { sc, init, poses } = loadScene('game_synth');
   const start = { poses, flattened: [] };
   const moves = actions(init, DEFAULTS, start).filter(a => a.id.startsWith('move:'));

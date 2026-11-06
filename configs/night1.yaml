@@ -31,18 +31,21 @@ clean:
   ceiling_m: 4.0
   floater_voxel_m: 0.05
   floater_min_neighbours: 8
+  lighter_crop_m: 1.0   # viewer-only: debris far past the floor grid ringed the plaza from above
+  lighter_air: {min_opacity: 0.1, max_scale_m: 0.3}   # viewer-only: faint/large haze above the floor band; looser than indoors (trees are large Gaussians)
 floor:
   ransac_iters: 2000
   inlier_m: 0.02
   min_opacity: 0.1
   near_cameras_m: 2.0
+  fit: walked   # 85 x 65 m plaza reconstructed 1.9 deg tilted: RANSAC took the flat west end (2.5% inliers), the east end sat 0.7-1.4 m under z=0 with no floor; bike check (wheelbase 1.77 m) said scale ~1.6x too big (2026-10-25)
 grid:
-  cell_m: 0.02
+  cell_m: 0.05   # outdoor plaza ~85 x 65 m: at 2 cm the 13.6M-cell grid x 1200 cameras stalls stage 12 coverage for hours (2026-10-25)
   min_opacity: 0.1
-  floor_band_m: 0.015
-  floor_close_cells: 10   # textureless vinyl floor, seen sparsely (fills gaps up to 40 cm in observed floor)
-  obstacle_z:
-  - 0.05
+  floor_band_m: 0.15   # plaza ground after the walked fit still wanders +-10-15 cm over metres (by the bike +0.07..+0.13): a 1.5 cm band saw no floor there and 5 cm called it obstacle
+  floor_close_cells: 4   # textureless floor, seen sparsely (fills gaps up to 40 cm at 5 cm cells)
+  obstacle_z:   # from 20 cm (above the ground noise): kerbs and objects under 20 cm are NOT mapped in this scene
+  - 0.2
   - 1.8
   bump_z:
   - 0.004
@@ -53,10 +56,14 @@ grid:
     min_length_m: 0.3
     typical_height_m: 0.006
   min_count: 2
-  speck: {max_cells: 6, min_span_m: 0.10, floor_gap_m: 0.15}   # mid-air floaters of ~3 Gaussians each would block the walker
-  bump_link_cells: 3
+  speck: {max_cells: 1, min_span_m: 0.10, floor_gap_m: 0.15}   # mid-air floaters of ~3 Gaussians each would block the walker
+  bump_link_cells: 1
+  no_bumps: "outdoor plaza ground is +-10-15 cm noise after levelling, so 0.4-5 cm bumps can't be measured here"
+  floor_walked_m: 0.25      # the floor under the walk is rarely filmed: the operator stood there (half a shoulder width)
+  floor_min_opacity: 0.1   # 5b drops 57% of this night splat (faint, isolated): stage 12 rebuilt the grid with half the floor (241 vs 490 m2) and cut the route
 plan:
-  # start/goal unset: stage 7 picks two far-apart cells of the largest walker-reachable region (no bed or bathroom in this scene)
+  start: [5.9, 7.5]   # past the blue bike (triangulated hubs ~(5.9, 2.5), leaning on the planter's west side): walk the path beside it, north to south
+  goal: [-21.0, 1.4]   # just short of the two yellow "DO NOT REMOVE" bollards (splat yellow columns at (-22.7, 1.2) and (-21.6, 2.0), confirmed in a render)
   walker_width_m: 0.61
   preferred_clearance_m: 0.3
   clearance_weight: 5.0

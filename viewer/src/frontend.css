@@ -142,6 +142,8 @@ body:has(#workspace-toggle[aria-expanded="true"]) #layers { z-index: 3; }
 .proposal-card.recommended { border-color: var(--pressed-line); }
 .proposal-card h2 { margin: 10px 0 6px; }
 .proposal-card ol { font-size: calc(0.875rem * var(--fs)); color: var(--text-2); padding-left: 18px; }
+.proposal-card .stepper { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.proposal-card .stepper button { min-width: 44px; min-height: 44px; font-size: 1.3em; }
 .proposal-metrics { display: flex; gap: 18px; padding: 12px 0; border-top: 1px solid var(--line); }
 .proposal-metrics > span { font-weight: 700; }
 .proposal-metrics small { display: block; font-size: calc(0.8125rem * var(--fs)); font-weight: 400; color: var(--muted); }

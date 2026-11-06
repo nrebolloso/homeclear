@@ -190,4 +190,8 @@ def fit_floor(pts, centers, cams, fc):
         inl2 = np.abs(pts @ n2 + d2) < fc["inlier_m"]
         if 1.0 <= np.median(centers @ n2 + d2) <= 2.0 and inl2.sum() > 0.2 * inl.sum():
             n, d, inl = n2, d2, inl2
+    if fc.get("fit") == "walked":  # large tilted scenes: plane through the floor under the cameras (tools/floor_walked.py)
+        from tools.floor_walked import walked_plane
+        n, d = walked_plane(pts, centers, n, d)
+        inl = np.abs(pts @ n + d) < fc["inlier_m"]
     return n, d, inl, pts

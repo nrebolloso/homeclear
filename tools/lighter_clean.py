@@ -34,6 +34,50 @@ def neighbours(p):
     return n
 
 
+def in_box(p, b):
+    """Points inside box b = {center: [x,y,z], size: [lx,ly,lz], yaw_deg, pitch_deg} (floor frame, size along its own
+    axes: yawed about z, then pitched so +x climbs; pitch fits a box to a stair flight)."""
+    c, s, a, t = (np.array(b["center"], float), np.array(b["size"], float), np.radians(b.get("yaw_deg", 0)),
+                  np.radians(b.get("pitch_deg", 0)))
+    d = p - c
+    x, y = d[:, 0] * np.cos(a) + d[:, 1] * np.sin(a), -d[:, 0] * np.sin(a) + d[:, 1] * np.cos(a)
+    loc = np.c_[x * np.cos(t) + d[:, 2] * np.sin(t), y, -x * np.sin(t) + d[:, 2] * np.cos(t)]
+    return (np.abs(loc) <= s / 2).all(1)
+
+
+def crop_air_drop(v, p, clean, grid):
+    """Gaussians that show as blobs from above: past the floor grid + lighter_crop_m (background seen through doors), and
+    faint/large haze above the floor band (lighter_air: {min_opacity, max_scale_m}), and unsupported haze
+    (lighter_support, below)."""
+    drop = np.zeros(len(v), bool)
+    crop, air, sup = clean.get("lighter_crop_m"), clean.get("lighter_air"), clean.get("lighter_support")
+    if crop is not None:
+        lo = np.array(grid["origin_xy"]); hi = lo + np.array(grid["shape"]) * grid["cell_m"]
+        drop |= ((p[:, :2] < lo - crop) | (p[:, :2] > hi + crop)).any(1)
+    if air:
+        op, big_s = 1 / (1 + np.exp(-v["opacity"])), np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)).max(1)
+        drop |= (p[:, 2] > FLOOR_BAND_M) & ((op < air["min_opacity"]) | (big_s > air["max_scale_m"]))
+    if sup:
+        # {radius_m, min_solid, max_scale_m, keep_max_scale_m, keep_boxes}: above the floor band and outside keep_boxes,
+        # drop Gaussians with < min_solid small opaque ones within radius_m, or larger than max_scale_m. Plain faint
+        # surfaces (treads, landings) fail that test, so keep_boxes around them only drop > keep_max_scale_m streaks.
+        op, big_s = 1 / (1 + np.exp(-v["opacity"])), np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)).max(1)
+        solid = p[(op > 0.5) & (big_s < 0.03)]
+        n = cKDTree(solid).query_ball_point(p, sup["radius_m"], return_length=True) if len(solid) else np.zeros(len(p))
+        keep = np.zeros(len(p), bool)
+        for b in sup.get("keep_boxes", []):
+            keep |= in_box(p, b)
+        air_m = (p[:, 2] > FLOOR_BAND_M) & ~keep
+        drop |= np.where(air_m, (n < sup["min_solid"]) | (big_s > sup["max_scale_m"]), big_s > sup["keep_max_scale_m"])
+        # haze_boxes (air around thin rails, inside keep_boxes): unsupported discs drop there, thin lines stay
+        haze = np.zeros(len(p), bool)
+        for b in sup.get("haze_boxes", []):
+            haze |= in_box(p, b)
+        mid = np.sort(np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)), 1)[:, 1]
+        drop |= haze & (n < sup["min_solid"]) & (mid > sup.get("haze_disc_m", 0))
+    return drop
+
+
 def main():
     cfg = yaml.safe_load(open(sys.argv[1]))
     raw = "--raw" in sys.argv
@@ -43,18 +87,26 @@ def main():
     drop = np.zeros(len(v), bool) if raw else ((neighbours(p) < MIN_NEIGHBOURS) & (p[:, 2] > FLOOR_BAND_M)) | (p[:, 2] > ceiling)
     if not raw and cfg["clean"].get("lighter_camera_clear_m"):   # fog in the air the phone moved through (freespace.py)
         drop |= cKDTree(freespace.camera_path(Path(cfg["work_dir"]))).query(p)[0] < cfg["clean"]["lighter_camera_clear_m"]
+    if not raw and cfg["clean"].get("lighter_carve") is not None:   # haze the cameras looked through (freespace.carve)
+        drop |= freespace.carve(Path(cfg["work_dir"]), p, p[freespace.solid(v)], **cfg["clean"]["lighter_carve"])
     big = cfg["clean"].get("lighter_big_above")   # {z, scale_m}: streaks in air the capture never filmed (an upper floor's ceiling)
     if not raw and big:
         drop |= (p[:, 2] > big["z"]) & (np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)).max(1) > big["scale_m"])
+    grid = json.loads((Path(cfg["work_dir"]) / "grid.json").read_text())
+    if not raw:
+        drop |= crop_air_drop(v, p, cfg["clean"], grid)
+    mid = np.sort(np.exp(np.stack([v[f"scale_{i}"] for i in range(3)], 1)), 1)[:, 1]
+    for b in [] if raw else cfg["clean"].get("lighter_drop_boxes", []):   # hand-placed boxes of haze no rule catches
+        drop |= in_box(p, b) & (mid >= b.get("min_mid_scale_m", 0))   # discs only: keeps thin real parts (rails) in the box
     name = f"{run}_{'raw' if raw else 'lighter'}"
     src, dst = Path("viewer/public/scene") / run, Path("viewer/public/scene") / name
     shutil.rmtree(dst, ignore_errors=True)
     shutil.copytree(src, dst)
     (dst / "removed.ply").unlink(missing_ok=True)
     s = json.loads((dst / "scene.json").read_text())
-    grid = json.loads((Path(cfg["work_dir"]) / "grid.json").read_text())
     taken = np.zeros(len(v), bool)
-    for o, so in zip(export.config_objects(cfg["game"], cfg["work_dir"]), s["objects"]):   # same order as stage 12 wrote them
+    exported = {so["name"]: so for so in s["objects"]}   # stage 12 skips objects it found no Gaussians for
+    for o, so in [(o, exported[o["name"]]) for o in export.config_objects(cfg["game"], cfg["work_dir"]) if o["name"] in exported]:
         sel = ~drop & ~taken & export.object_parts(o, p, cfg["grid"], Path(cfg["work_dir"]), np.array(grid["origin_xy"]), grid["cell_m"], tuple(grid["shape"]), v)
         taken |= sel
         ov = v[sel].copy()
@@ -68,4 +120,6 @@ def main():
 
 if __name__ == "__main__":
     assert (neighbours(np.array([[0, 0, 0], [0.01, 0, 0], [5, 5, 5.]])) == [2, 2, 1]).all()   # self-check
+    assert (in_box(np.array([[0.9, 0.9, 0], [0, 1.4, 0], [1.4, 0, 0.]]), {"center": [0, 0, 0], "size": [3, 0.4, 1], "yaw_deg": 45}) == [1, 0, 0]).all()
+    assert (in_box(np.array([[1, 0, 1.], [1, 0, 0]]), {"center": [0, 0, 0], "size": [4, 1, 0.2], "pitch_deg": 45}) == [1, 0]).all()
     main()

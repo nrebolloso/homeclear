@@ -19,7 +19,7 @@ assert rep["bed"]["wall_patch"], "the bed's head stands against the north wall: 
 for b in ("telea", "ns"):
     v = read_ply(ROOT / "viewer/public/scene/game_synth" / bed["fills"][b])
     xyz, rgb = ply_xyz(v), fills.rgb_of(v)
-    floor = xyz[:, 2] < 0.01
+    floor = np.isclose(xyz[:, 2], fills.FILL_Z)
     assert abs(floor.sum() - 1.6 * 2.05 / 1e-4) / (1.6 * 2.05 / 1e-4) < 0.15, floor.sum()    # one Gaussian per cm² of footprint
     assert np.abs(np.median(rgb[floor], 0) - COLORS["floor"]).max() < 0.08, np.median(rgb[floor], 0)
     wall = xyz[:, 2] > 0.05

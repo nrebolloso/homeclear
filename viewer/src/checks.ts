@@ -128,7 +128,7 @@ export function runChecks(c: CheckInput): CheckOut[] {
     const d = phones.length ? Math.min(...phones.map(p => Math.hypot(p[0] - h.position[0], p[1] - h.position[1]))) : Infinity;
     if (d <= c.ems.phone_reach_m) continue;
     out.push({ id: `phone:${h.name}:${h.position.map(x => x.toFixed(1)).join(',')}`, kind: 'phone', position: h.position, verdict: 'OT to verify',
-      label: `fall at the ${h.name}: ${Number.isFinite(d) ? `phone ${d.toFixed(1)} m away` : 'no phone marked'}`,
+      label: `on the floor at the ${h.name}: ${Number.isFinite(d) ? `phone ${d.toFixed(1)} m away` : 'no phone marked'}`,
       note: `farther than ${c.ems.phone_reach_m} m to crawl; consider a wearable alert` });
   }
   return out;

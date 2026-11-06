@@ -30,7 +30,7 @@ Room switches preserve the page, renderer and XR session. Working layouts and po
 
 ## Headset and desktop controls
 
-Hold the left stick click to summon the spatial workspace, or point at the Room menu story button. Pages include Scans, Experience, Findings, Changes, View filters, Changes & cost, Comfort, and Saved viewpoints. Longer lists have Previous/More controls. Vision profiles are named choices. The room is filtered separately for each eye; spatial controls and notifications render afterward for readability. Illustrative filters do not change measurements or simulation inputs.
+Hold the left stick click to summon the spatial workspace: one panel with World, Vision, Device, Tour and More tabs. More holds navigation, Findings, Changes, Changes & cost, Comfort and Saved viewpoints. Longer lists have Previous/Next controls. Vision profiles are named choices. The room is filtered separately for each eye; spatial controls and notifications render afterward for readability. Illustrative filters do not change measurements or simulation inputs.
 
 During VR the desktop defaults to an independent orbit camera. Choose Headset perspective, Workspace + headset preview, or Goggles presentation in the companion panel. Desktop inspection does not relocate the wearer. Desktop vision and overlays can be local; the original room-experience controls remain shared. The companion output is rendered to a separate target/canvas, capped at 20 updates/s and 1280 pixels wide so the XR compositor cannot overwrite it. The headset render loop retains its own cadence.
 

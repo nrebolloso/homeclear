@@ -12,7 +12,7 @@ points scene.json at the best fill made. Everything here is IMAGINED: the viewer
      telea   cv2.inpaint TELEA: fast, CPU, smooth continuation of the floor's colours
      ns      cv2.inpaint Navier-Stokes: CPU, follows edges (board seams, tile lines) a little further
      lama    Big-LaMa (simple-lama-inpainting, GPU): continues texture, the best looking; only where installed
-3. Every masked pixel becomes one flat Gaussian at z = 2 mm with the inpainted colour; the outer FEATHER of the patch fades
+3. Every masked pixel becomes one flat Gaussian at z = FILL_Z with the inpainted colour; the outer FEATHER of the patch fades
    out (lower opacity) so its rim blends into the real floor.
 4. Tall objects (> 0.5 m) standing against a wall of the room shell (stage 5c) hid part of that wall too: the same, on
    the wall plane (along-wall x height image), from the Gaussians within 4 cm of it.
@@ -41,6 +41,8 @@ SMOOTH_PX = 12       # blur of the painted floor, in 1 cm pixels (see smooth_con
 SMOOTH_SEEN = 0.25   # share of the blur window that must be seen floor for a pixel to count as seen
 FLAT_LOGIT = 4.0     # stored opacity of stage 12's flat patch (its `fv["opacity"] = 4.0`); change both together
 SKIRT = 0.08         # floor this close to a shell wall is the wall's foot (baseboard, plaster), not floor: it does not colour the context
+FILL_Z = 0.025       # the patch floats this high: the unseen floor splats under the object stay in main.ply, and 99% of them sit below
+                     # 2 cm (aleroom bed, kitchen5 rug); at 2 mm their dark blotches showed through the fill
 CONTRAST = 0.35      # how much of the inpainted patch's own light/dark variation survives (see match_ring)
 
 
@@ -182,7 +184,7 @@ def floor_fill(v, xyz, floor_band, foot_world, backends, shell=None):
         except ImportError as e:
             print(f"  fill backend {b}: not installed here ({e.name}); skipped")
             continue
-        pts = np.stack([gx[under], gy[under], np.full(under.sum(), 0.002)], 1)
+        pts = np.stack([gx[under], gy[under], np.full(under.sum(), FILL_Z)], 1)
         out[b] = (pts, res[under], rim[under])
     return out, {"pixels": int(under.sum()), "seen_around_pct": round(100 * float(hit[~under].mean()), 1)}
 

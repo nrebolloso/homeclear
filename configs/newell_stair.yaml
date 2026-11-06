@@ -1,7 +1,7 @@
 # Newell Hall stairwell (REAL): ONE continuous 448 s take, Samsung 4K 60 fps HLG, same phone/format as kitchen4
 # (data/newell_stair.mp4). ~2.2 frames/s as kitchen4 -> 990 frames. Several near-identical floors, so SEQUENTIAL matching
 # (exhaustive would match floor 2 to floor 3). Scale: tape-measured sign plate 22 x 10 in (data/measurements.yaml).
-run_name: newell_stair
+run_name: newell_stair_old   # superseded: configs/newell_stair2.yaml now exports as newell_stair
 video: data/newell_stair.mp4
 work_dir: out/newell_stair
 frames:

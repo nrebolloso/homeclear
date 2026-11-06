@@ -61,3 +61,5 @@ select { max-width: 100%; background: #1b1f24; color: var(--fg); border: 1px sol
 .demo #reachcost, .demo #reachcostinfo { display: none !important; }
 /* out of sight until the UI mounts: loading a room shows the loading message, not the raw controls */
 #left, #right { visibility: hidden; }
+/* Reset demo (demorun.ts) only in demo mode: outside it the wall clock and a random physics seed run anyway */
+body:not(.demo) #resetdemo { display: none !important; }

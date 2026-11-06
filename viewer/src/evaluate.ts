@@ -1,6 +1,6 @@
 // One layout -> every route planned, rolled out and checked. Pure (no Worker globals): the worker, the optimizer and the
 // tests all call it.
-import { stamp, stampFolds, carvedPolys, placedFixtures, plan, routeHazards, bumpComponents, polyCells, worldFootprint, applyIntervention,
+import { stamp, stampFolds, carvedPolys, placedFixtures, routeHazards, bumpComponents, polyCells, worldFootprint, applyIntervention,
   type GridMeta, type Layers, type Footprinted, type Layout, type Intervention, type XY, type RouteHazard } from './grid.ts';
 import { rollouts, type Persona, type Risk, type Heat, type Ghost } from './sim.ts';
 import type { StepModel } from './stepmodel.ts';
@@ -10,13 +10,14 @@ import { objectRisk, type BatchResults, type ObjEvent } from './objrisk.ts';
 // shortcut: one batch, run on kitchen4_lighter's chairs and mat, serves every scene; rerun the batch per scene when it matters
 import batch from '../../physics/batch_results.json' with { type: 'json' };
 import { CAPS_FACTOR } from './rugcascade.ts';
+import { planVia } from './route_via.ts';
 import { stairChecks, type Stair, type Side, type WalkerDims } from './stairs.ts';
 import { doorChecks, doorFixes, doorGain, doorOnRoute, needWidth, type Door } from './doors.ts';
 import { wheelchairChecks, ADA } from './wheelchair.ts';
 
 /** One walk the patient makes: night trips get the darkness multiplier, daytime ones don't. start_with: the start
  *  rides on that object (the bed): move the bed and the patient gets up from the same spot beside it. */
-export interface RouteDef { name: string; start: XY; goal: XY; trips_per_night: number; night: boolean; start_with?: string }
+export interface RouteDef { name: string; start: XY; goal: XY; trips_per_night: number; night: boolean; start_with?: string; via?: XY[] }
 
 /** Tightest side clearance along a route away from its ends (more than 0.5 m from start and goal): getting up beside
  *  the bed or arriving at the toilet is close quarters by design, not a squeeze to fix. */
@@ -88,7 +89,7 @@ export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: nu
   const out = { per_month: 0, per_month_lo: 0, per_month_hi: 0, routes: [], sel, hazards: [], ghosts: [], steps: [], objects: [] } as unknown as Eval;
   const paths: XY[][] = [];
   S.routes.forEach((rd, k) => {
-    const P = plan(g, L, routeStart(rd, O, lay.poses), rd.goal, S.plan);
+    const P = planVia(g, L, routeStart(rd, O, lay.poses), rd.via, rd.goal, S.plan);
     paths.push(P.xy);
     const summary: RouteSummary = { name: rd.name, night: rd.night, trips_per_night: rd.trips_per_night, per_month: 0, lo: 0, hi: 0,
       length_m: P.length_m, error: P.error, min_side_m: midClearance(P.xy, P.side) };
@@ -134,7 +135,7 @@ export function evaluate(S: Init, lay: Layout, opts: { ghosts: boolean; sel?: nu
         const test = applyIntervention(O, lay, iv), opened = stamp(g, S.base, O, test.poses, test.flattened, carvedPolys(test));
         on = S.routes.some((rd, k) => {
           if (!out.routes[k].error) return false;
-          const P = plan(g, opened, routeStart(rd, O, test.poses), rd.goal, S.plan);
+          const P = planVia(g, opened, routeStart(rd, O, test.poses), rd.via, rd.goal, S.plan);
           return !P.error && doorOnRoute(d, [P.xy], false, iv.by_m);
         });
       }

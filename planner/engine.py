@@ -11,12 +11,12 @@ import numpy as np
 import torch
 from scipy.ndimage import distance_transform_edt
 
+from planner.effort import effort_kind, intervention_effort, move_effort, object_mass
+
 ROOT = Path(__file__).resolve().parents[1]
 _rc = json.loads((ROOT / "physics" / "rug_calib.json").read_text())["arms"]
 _pool = lambda a: sum(r["disturbed"] * r["n"] for r in a.values()) / sum(r["n"] for r in a.values())
 CAPS_FACTOR = _pool(_rc["glide_caps"]) / _pool(_rc["fitted"])   # rugcascade.ts CAPS_FACTOR
-MOVE_EFFORT = {"bed": 5, "nightstand": 2, "chair": 2, "nightlight": 1, "rug": 1, "other": 3, "door": 99}   # optimize.ts DEFAULTS
-EFFORT_PER_M = 0.3
 TIE_BREAK = 1e-5   # planner.ts TIE_BREAK: the objective is toe catches / month; snags + brushes only break ties
 TAPED_EDGE_M = 0.0015   # grid.ts TAPED_EDGE_M (ASSUMPTION: edge left under carpet tape, not measured)
 
@@ -406,10 +406,12 @@ def check(S, pl):
     return out
 
 
-def move_cost(kind, a, b):
-    """movecost.ts moveCost (placeholder: optimize.ts DEFAULTS)"""
-    d, e = math.hypot(b[0] - a[0], b[1] - a[1]), MOVE_EFFORT.get(kind, MOVE_EFFORT["other"])
-    return {"usd": 0, "minutes": jround(10 + 10 * e * (1 + d / 2)), "effort": e * (1 + EFFORT_PER_M * d)}
+def move_cost(o, a, b):
+    """movecost.ts moveCost: effort.ts moveEffort for object `o` from pose a to b ([x, y, yaw_deg]), mass as main.ts sets it."""
+    d = math.hypot(b[0] - a[0], b[1] - a[1])
+    turn = jround(math.fmod(math.fmod((math.radians(b[2]) - math.radians(a[2])) * 180 / math.pi, 360) + 360, 360))   # movecost.ts turnDeg
+    m = move_effort(o["kind"], d, turn, object_mass(o), o.get("name"))
+    return {"usd": 0, "minutes": m["minutes"], "effort": m["effort"]}
 
 
 def cost(S, frm, pl):
@@ -419,18 +421,19 @@ def cost(S, frm, pl):
     def opt(key, o):
         if "from_fix" in o:
             iv = S.interventions[o["from_fix"]]
-            return key, iv.get("cost_usd") or 0, iv.get("minutes") or 10, iv.get("effort") or 1
+            on = S.objects[S.idx[iv["object"]]] if iv.get("object") in S.idx else None
+            return key, iv.get("cost_usd") or 0, iv.get("minutes") or 10, intervention_effort(iv, on and effort_kind(on["kind"], on.get("name")))
         return key, o["cost_usd"], o["minutes"], o["effort"]
 
     for n in cfg["chairs"]:
         a, b = frm["chairs"][n], pl["chairs"][n]
         if math.hypot(a[0] - b[0], a[1] - b[1]) > 0.01 or a[2] != b[2]:
-            c = move_cost(S.objects[S.idx[n]]["kind"], a, b)
+            c = move_cost(S.objects[S.idx[n]], a, b)
             items.append((n, c["usd"], c["minutes"], c["effort"]))
     if pl["mat"] != frm["mat"] or (pl["mat"] == "moved" and pl.get("mat_at") != frm.get("mat_at")):
         if pl["mat"] == "moved":
             m = S.objects[S.idx[cfg["mat"]]]
-            c = move_cost(m["kind"], frm.get("mat_at") or [*m["pivot"][:2], 0], pl["mat_at"])
+            c = move_cost(m, frm.get("mat_at") or [*m["pivot"][:2], 0], pl["mat_at"])
             items.append(("mat", c["usd"], c["minutes"], c["effort"]))
         elif pl["mat"] != "present":
             items.append(opt("mat", cfg["options"]["mat"][pl["mat"]]))

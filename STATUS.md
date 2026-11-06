@@ -1,5 +1,33 @@
 # Status
 
+## While you were out (2026-10-25, branch merge-juan, pushed to origin/merge-juan only; main and demo-safe untouched)
+- **Done:** sofa2 streaks removed by hand (box drop, before/after renders); bench, conference table and booth fixed in the lounge floor map; merge-juan merged with main and pushed; kitchen4 rebuilt in separate folders and compared (BLOCKERS 22). The comparison found removal over-selecting things on counters and cabinets, fixed in b7c2484 (lounge unchanged).
+- **Lounge as the VR scene:** yes. 94 m² walkable after the fixed furniture, no invisible obstacles, 17 movable objects. Its scale is ASSUMED (camera height), and it has no floor hazards, so the kitchen stays the hazard demo.
+- **In progress:** bedbath_hall and night1 on HPG (SfM mapping); watchers build their unpolished montage demos when training finishes.
+- **Needs you:** BLOCKERS 22 (kitchen4 walker width and lama fills before any demo re-export); merging merge-juan into main (it now contains main with futures-fan and rug-calibration).
+- **Risks:** re-exporting kitchen4 changes its finding count (17 to 13) because of the walker spec, not the code; local rebuilds can't make lama fills.
+
+## While you were out (2026-10-24, branch merge-juan, nothing pushed, demo-safe tag untouched)
+- **Done:** lounge floor has no invisible obstacles left (97 m² walkable, open floor clear); removing an object now takes the whole object, including the parts 6c labelled too weakly (71649ea, self-check `tests/test_export_join.py`, all Python checks pass); `gator_lounge_lighter_v1.0.5.zip` is in the scratchpad; stage changes synced to HPG.
+- **Audit (remove each object, look from 3 angles):** sofa, chair3 and the other 14 come out clean with no regressions. sofa2 leaves thin floating streaks; stool2 leaves a small patch (probably the unlabelled bench).
+- **In progress:** bedbath_hall (nicoroom) on HPG (SfM map running, then densify and train); night1/turlington (GPU SfM running). Watchers build the demos when training finishes.
+- **Needs you:** BLOCKERS 10 (accept sofa2 streaks or retrain with a Gaussian-size cap; render lift not adopted); OK to push d012fb8..d129e81 to main.
+- **Risks:** the new stage 12 rules change every `objects: auto` scene on re-export (only the lounge rebuilt so far); viewer tests and e2e pass.
+
+## Deterministic demo (seed 7), main + demo-safe at 782f15d
+- **Seed:** `configs/demo.json` kitchen4_lighter seed 7 (`?demo=1`, picked with `e2e/seed_search.ts`, shuffler + fan + round trip + `&rugfold=1`): the mat corner folds at 11.75 s (4.2 cm), the next fan is 30/30 over the mat at ~1.6 toe catches/month, no furniture pushed. Autoplay steps in fixed 1/60 s ticks that wait on the physics and fan workers (`viewer/src/demorun.ts`), so a slow machine plays the same walk slower. "Reset demo" (viewer toolbar) restores poses, tape, removals, folds, the fan and the replay. Free walk, VR and hand edits stay on the wall clock.
+- **Fixes on the way:** taping the mat drops a fan still in its worker (it was sampled untaped and showed up after, 0.98/month); game_synth checks run with `&nophys`.
+- **e2e on 782f15d, 3 runs:** all functional checks pass every run (88/89, 88/89, 89/89); the misses are perf checks under load (autoplay 25.6 fps right after another worktree's suite; fan-on vs fan-off 12.2 -> 8.8 fps).
+- **Proof:** `proof/demo/planner.mp4` (39 s, 1.14 -> 0.07/month, Easiest / Keep my mat / Safest) and `proof/demo/backup_v9.mp4` (30 s seed-7 round trip: fold at ~12 s, then 30 futures over the mat ≈1.6/month), both recorded on 782f15d.
+- **Risks:** the fold needs `&rugfold=1` (off by default so e2e numbers stay fixed); fps checks are load-sensitive; mat-displacement is not in 782f15d (hackathons-e0 is merging it as 5d1075a), so the videos may drift from a later demo-safe.
+
+## Demo walker: 0.61 m Drive Medical (kitchen4_lighter_v1)
+- **Walker:** stage 12 re-export with config `game.walker` (0.61 x 0.445 m, 12.7 mm legs); only `walker.json`, `personas.json` and `personas_scan.json` were installed, so grids, fills and footprints are unchanged. Probe (0.66 -> 0.61): findings 17 -> 13, hazards 5 -> 3 (tight spot 4 cm / 0.70 m, mat 1.1/month, cable 0.1/month), route and hazards.json identical. The 0.66 export is kept as `viewer/public/scene/kitchen4_lighter_066` (local, not in git).
+- **One width:** viewer, VR, physics batch scene, planner (`engine.py` reads walker.json), futures fan, OT report and stairs all read `walker.json` / `personas.json`. Own values left alone: `wheelchair.ts` 0.66 (the wheelchair), `world_model_check.json` 0.66 (TS/Python parity fixture), a comment in `worldmodel/test_worldmodel.py`, `VR_LOG.md` (VR team's doc); worldmodel/ and cosmos/ read config `game.walker` (the same 0.61).
+- **Planner rerun** (B200 job 47599784, critic 47599785): 52,510 layouts (50,013 valid), 102,528 evaluations, 10.04 M imagined trips, 1,072 s (43.6 s GPU). Scanned 1.14 toe catches/month; Easiest remove the mat -> 0.07 (effort 1, $0); Keep my mat tape it -> 0.07 (effort 1, $10); Safest chair8 + mat removed + cord taped -> 0.00 (effort 5, $8). Critic held-out (n = 10,002) R² 0.999, Spearman 0.90.
+- **Scene sharing:** the scene's small JSON is in git (`.gitignore` exception); splats, maps and object plys are `kitchen4_lighter_v1.zip` (375 MB, sha256 in `version.json`), installed by `tools/get_scene.sh` (README "Demo scene without running the pipeline"). The viewer shows the scene version bottom left outside demo mode. `test_planner.py` snags parity tolerance is relative 1e-5 (float difference between TS and Python, ~2.8e-6 on layout 3).
+- **Proof:** `proof/demo/futures_fan.mp4` (86 s round trip, red fan at the fold), `planner.mp4`, `backup_v8.mp4`, all at 0.61 m.
+
 ## Main: wm-planner + rug-calibration + PR #9 (VR / wheelchair / scan library) merged
 - **Merged:** wm-planner (toe-catch objective, B200 job 47577852, critic 47577853), rug-calibration (calibrated rug, fold cascade, cluster batch 47577456) and origin/main's PR #9. main.ts keeps both sides' hooks; the fan's fold is `live?.fold() ?? layout.folds?.[0] ?? null`; planfix.ts ranks "tape the mat edge" next to the search's picks; glide caps stay hidden in the viewer (friction ASSUMED).
 - **Proof:** `proof/demo/futures_fan.mp4` (49 s round trip, the mat folds on the way out and the fan turns red at the fold on the return; taping flattens it), `proof/demo/planner.mp4` (re-recorded on merged main, 43 s: B200 replay, 53,019 layouts, 1.14 -> 0.07/month, 3 options) and `proof/demo/backup_v7.mp4` (30 s, new Room planning UI). PR #9's frontend hides the legacy asides and its drawer has no planner/gait panel, so `record_planner.ts` unhides the panel's aside for the recording; in the live UI the B200 options are not reachable yet.
@@ -80,7 +108,7 @@ Glide caps / tennis balls on the rear legs = glide-rug friction **μ 0.10-0.20, 
 
 ## Demo push (2026-10-24)
 - **Done:** steps 1-6, 9, 10 (OT report with ranked fixes). Then: the classic two-panel UI is the default again (`?planning` keeps the drawer); demo mode (`?demo=1` or H) hides debug rows, ranges, the "measured height error" line and the fps HUD, and `e2e/shot.ts` records in it on its own server with hot reload off; the fps HUD shows outside demo mode; one palette for ghosts, heatmap and hazards (cyan footsteps, orange to red contacts, white hand rule); the night shot with the nightlight (`proof/demo/shot7_night.mp4`); the optimize test timeout raised to 60 s.
-- **Next:** feature freeze at [TIME - 3h], then record `proof/demo/final.mp4` in demo mode at [TIME - 2h] following the storyboard. Judging is at [TIME]; the actual time is still needed (BLOCKERS.md). Step 8 VR with the VR team.
+- **Next:** feature freeze at 12:30 PM, then record `proof/demo/final.mp4` in demo mode at ~2:30 PM following the storyboard. Judging is at ~4:30 PM. Step 8 VR with the VR team.
 - **Risks:** on battery with power-saver, e2e measures about 20 fps and fails the fps check (BLOCKERS 8: plug in). Storyboard clips 1-6 were recorded in the old drawer UI with debug text, so re-record them in demo mode before final.mp4. Cosmos clip still lists as "other scenario".
 
 Each result counts once it is reproduced here, with proof in `proof/`.

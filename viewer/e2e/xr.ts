@@ -121,19 +121,38 @@ try {
   await G(p, "__xr.ctl('right').updateButtonValue('trigger', 1)");
   await wait();
   const grabbed = await G(p, 'return game.debug.wand()');
-  // the grab keeps the offset between the bed and where the ray met the floor: move that floor point by the same delta
+  // the grab keeps the offset between the bed and where the ray met the plane through the point it first hit (planeZ): move that point by the same delta
+  const pz = grabbed.planeZ ?? 0;
   const fh = await G(p, `const r = game.debug.rig, V = r.position.constructor, h = game.xrPose().head, o = new V(h[0], h[1], h[2] - 0.45),
-    t = new V(...${JSON.stringify(bedBox)}), d = t.clone().sub(o).normalize(), k = -o.z / d.z; return [o.x + d.x * k, o.y + d.y * k, 0]`);
-  const goal = [fh[0] + 2.0 - bed0.x, fh[1] + 1.0 - bed0.y, 0];
+    t = new V(...${JSON.stringify(bedBox)}), d = t.clone().sub(o).normalize(), k = (${pz} - o.z) / d.z; return [o.x + d.x * k, o.y + d.y * k, ${pz}]`);
+  const goal = [fh[0] + 2.0 - bed0.x, fh[1] + 1.0 - bed0.y, pz];
   await G(p, `__xr.aim(__xr.ctl('right'), ${JSON.stringify(goal)}, -Math.PI / 2)`);
   await wait(400);
+  const dragFx = await G(p, 'return game.debug.wand().fx');
   await G(p, "__xr.ctl('right').updateButtonValue('trigger', 0)");
   // the release re-plans in the worker: wait for the new route (the desktop test's same move gives 3.67 -> 3.98 m)
   await p.waitForFunction((l0) => { const g = (window as any).game; return Math.abs(g.current().length_m - l0) > 0.01; }, len0, { timeout: 5000 }).catch(() => {});
   const bed1 = await G(p, "return { pose: game.layout().poses[game.items.indexOf('bed')], len: game.current().length_m, err: game.current().error }");
+  const fxAfter = await G(p, 'return game.debug.wand().fx');
+  check('dragging shows the origin ghost and an arrow; both are gone after the drop', hov.fx?.hover && dragFx.arrow && dragFx.ghost && !fxAfter.arrow && !fxAfter.ghost,
+    `hover ring=${hov.fx?.hover}; while dragging ${JSON.stringify(dragFx)}; after ${JSON.stringify(fxAfter)}`);
   check('wand hovers, grabs, drags and turns the bed; the route re-plans', hov.hover === 'bed' && grabbed.grab === 'bed' && Math.hypot(bed1.pose.x - 2.0, bed1.pose.y - 1.0) < 0.05 &&
     Math.abs(Math.abs(bed1.pose.yaw - bed0.yaw) - Math.PI / 2) < 0.01 && !bed1.err && Math.abs(bed1.len - len0) > 0.01,
     `hover=${hov.hover} grab=${grabbed.grab}; bed (${bed0.x.toFixed(2)}, ${bed0.y.toFixed(2)}, ${(bed0.yaw * 180 / Math.PI).toFixed(0)}) -> (${bed1.pose.x.toFixed(2)}, ${bed1.pose.y.toFixed(2)}, ${(bed1.pose.yaw * 180 / Math.PI).toFixed(0)} deg), route ${len0.toFixed(2)} -> ${bed1.len?.toFixed(2)} m`);
+
+  // 6b. a drag onto a spot that collides (no filmed floor there) turns the held outline red; dropping it there leaves the bed where it was
+  await G(p, `__xr.aim(__xr.ctl('right'), ${JSON.stringify(await G(p, "return __xr.proxy('bed')"))})`);
+  await wait();
+  await G(p, "__xr.ctl('right').updateButtonValue('trigger', 1)");
+  await wait();
+  await G(p, `__xr.aim(__xr.ctl('right'), [-6, -6, 0])`);
+  await wait(400);
+  const blockedNow = await G(p, "const c = game.debug.items[game.items.indexOf('bed')].outline.material.color; return { r: c.r, g: c.g, b: c.b, grab: game.debug.wand().grab, valid: game.debug.wand().valid }");
+  await G(p, "__xr.ctl('right').updateButtonValue('trigger', 0)");
+  await wait(500);
+  const bedAfter = await G(p, "return game.layout().poses[game.items.indexOf('bed')]");
+  check('dragging onto a collision turns the held object red and a drop there puts it back', blockedNow.grab === 'bed' && blockedNow.r > 0.9 && blockedNow.g < 0.3 && blockedNow.valid === null &&
+    Math.hypot(bedAfter.x - bed1.pose.x, bedAfter.y - bed1.pose.y) < 0.01, `outline rgb (${blockedNow.r.toFixed(2)}, ${blockedNow.g.toFixed(2)}, ${blockedNow.b.toFixed(2)}), valid=${JSON.stringify(blockedNow.valid)}; bed (${bedAfter.x.toFixed(2)}, ${bedAfter.y.toFixed(2)}) vs (${bed1.pose.x.toFixed(2)}, ${bed1.pose.y.toFixed(2)})`);
 
   // 7. hold still on the nightstand for 1.5 s: it's deleted; the outline goes red first
   const ns = await G(p, "return __xr.proxy('nightstand')");
@@ -164,13 +183,11 @@ try {
   check('hand pinch teleports like the trigger', inputs.includes('right:hand') && Math.hypot(t2[0] - tp2[0], t2[1] - tp2[1]) < 0.15,
     `inputs ${inputs.join(' ')}; landed ${f2(t2)} for target ${f2(tp2)}`);
 
-  const press = async (hand: string, i = 0) => {
-    await G(p, `const b = game.debug.xrButtons()[${i}]; __xr.aim(__xr.hand('${hand}'), b.at)`);
-    await wait();
-    const hov = await G(p, 'return game.debug.wand().button');
-    await G(p, `__xr.hand('${hand}').updatePinchValue(1)`); await wait(150);
-    await G(p, `__xr.hand('${hand}').updatePinchValue(0)`);
-    return hov;
+  // the story actions live in the panel's Tour tab now (checked in 9b): press one as a point-and-pinch on its row would
+  const press = async (_hand: string, i = 0) => {
+    await G(p, `game.debug.xrPress(${i})`);
+    await wait(150);
+    return i;
   };
 
   // 8b. "Show me the dangers": each press stands you in front of the next hazard, on filmed floor, facing it, with what it
@@ -182,13 +199,12 @@ try {
     await wait(400);
     stops.push(await G(p, `const h = game.xrPose().head, c = game.debug.renderer.xr.getCamera(), V = game.debug.rig.position.constructor, d = c.getWorldDirection(new V()),
       s = game.spots()[${Math.min(k, nSpots - 1)}]; return { hv: ${hv}, text: game.debug.xrButtons()[0].text, head: h, cell: game.cell(h[0], h[1]),
-      card: (b => b.at ? Math.atan2(Math.sin(Math.atan2(b.at[1] - h[1], b.at[0] - h[0]) - Math.atan2(d.y, d.x)), Math.cos(Math.atan2(b.at[1] - h[1], b.at[0] - h[0]) - Math.atan2(d.y, d.x))) : 9)(game.debug.xrButtons()[0]),
       dist: Math.hypot(s.xy[0] - h[0], s.xy[1] - h[1]), off: Math.atan2(Math.sin(Math.atan2(s.xy[1] - h[1], s.xy[0] - h[0]) - Math.atan2(d.y, d.x)), Math.cos(Math.atan2(s.xy[1] - h[1], s.xy[0] - h[0]) - Math.atan2(d.y, d.x))) }`));
   }
   const tourOk = nSpots > 0 && stops.slice(0, nSpots).every((s, k) => s.text[0].startsWith(`${k + 1} of ${nSpots}:`) && s.cell.floor && !s.cell.obst && s.cell.cov > 0 &&
-    s.dist > 0.4 && s.dist < 2.1 && Math.abs(s.off) < 0.17 && s.card > 0.3 && s.card < 0.7) && stops[nSpots].text[0] === 'Show me the dangers';
-  check('"Show me the dangers" stands you in front of each hazard, the card off to the left', tourOk,
-    stops.slice(0, nSpots).map(s => `"${s.text[0]}" ${s.dist.toFixed(2)} m, ${(s.off * 180 / Math.PI).toFixed(0)} deg off, card ${(s.card * 180 / Math.PI).toFixed(0)} deg left`).join('; ') + ` -> "${stops[nSpots]?.text[0]}"`);
+    s.dist > 0.4 && s.dist < 2.1 && Math.abs(s.off) < 0.17) && stops[nSpots].text[0] === 'Show me the dangers';
+  check('"Show me the dangers" stands you in front of each hazard, facing it', tourOk,
+    stops.slice(0, nSpots).map(s => `"${s.text[0]}" ${s.dist.toFixed(2)} m, ${(s.off * 180 / Math.PI).toFixed(0)} deg off`).join('; ') + ` -> "${stops[nSpots]?.text[0]}"`);
 
   // 8c. "Night walk": the lights go down and the button offers them back
   await press('right', 1); await wait(300);
@@ -200,16 +216,16 @@ try {
 
   // Layout changes replan; the separate comparison is visual only and leaves the active checks untouched.
   const originalRoom = await G(p, 'return { layout: game.layout(), pm: game.current().per_month, len: game.current().length_m, actions: game.describeChanges() }');
-  const card0 = await G(p, 'const b = game.debug.xrButtons()[2], h = game.xrPose().head; return { ...b, d: b.at ? Math.hypot(b.at[0] - h[0], b.at[1] - h[1]) : null }');
+  const card0 = await G(p, 'return game.debug.xrButtons()[2]');
   await G(p, 'window.__ts = []; window.__ti = setInterval(() => __ts.push(game.reimagine.t()), 100)');
   const hov1 = await press('right', 2);
   await p.waitForFunction(() => { const g = (window as any).game; return g.debug.xrButtons()[2].text[0] === 'Restore my room' && g.reimagine.t() === 1; }, null, { timeout: 120000 });
   const saferRoom = await G(p, "clearInterval(__ti); return { layout: game.layout(), pm: game.current().per_month, evals: game.evals, n: game.reimagine.changes().length, mid: __ts.filter(v => v > 0.05 && v < 0.95).length }");
-  check('"See a safer room" applies a layout and morphs the room around you', card0.text[0] === 'See a safer room' && card0.d > 0.35 && card0.d < 0.9 && hov1 === 2 &&
+  check('"See a safer room" applies a layout and morphs the room around you', card0.text[0] === 'See a safer room' && hov1 === 2 &&
     saferRoom.n > 0 && saferRoom.mid >= 3, `${saferRoom.n} changes, ${saferRoom.mid} in-between frames`);
-  await press('right', 3);
+  await press('right', 4);
   await p.waitForFunction(() => (window as any).game.debug.xrComparison().previewT === 0, null, { timeout: 10000 });
-  const preview = await G(p, `return { layout: game.layout(), pm: game.current().per_month, evals: game.evals, text: game.debug.xrButtons()[3].text,
+  const preview = await G(p, `return { layout: game.layout(), pm: game.current().per_month, evals: game.evals, text: game.debug.xrButtons()[4].text,
     poses: game.debug.items.map(it => ({ x: it.group.position.x, y: it.group.position.y, visible: it.group.visible })) }`);
   const visualPrior = preview.poses.every((q: any, k: number) => Math.hypot(q.x - originalRoom.layout.poses[k].x, q.y - originalRoom.layout.poses[k].y) < 1e-6 && q.visible === !originalRoom.layout.poses[k].removed);
   check('comparison previews the prior room while explicitly keeping safer-layout checks', visualPrior && JSON.stringify(preview.layout) === JSON.stringify(saferRoom.layout) &&
@@ -220,9 +236,9 @@ try {
   check('Restore my room restores the prior layout, receipts, routes and recalculated numbers', JSON.stringify(restored.layout) === JSON.stringify(originalRoom.layout) &&
     Math.abs(restored.pm - originalRoom.pm) < 1e-9 && Math.abs(restored.len - originalRoom.len) < 1e-9 && JSON.stringify(restored.actions) === JSON.stringify(originalRoom.actions) &&
     restored.evals > saferRoom.evals && !restored.previewing, `contacts/month ${saferRoom.pm.toFixed(2)} -> ${restored.pm.toFixed(2)}, evaluations ${saferRoom.evals} -> ${restored.evals}`);
-  await press('right', 3);
+  await press('right', 4);
   await p.waitForFunction(() => (window as any).game.debug.xrComparison().previewT === 1, null, { timeout: 10000 });
-  const priorPreview = await G(p, 'return { layout: game.layout(), pm: game.current().per_month, text: game.debug.xrButtons()[3].text }');
+  const priorPreview = await G(p, 'return { layout: game.layout(), pm: game.current().per_month, text: game.debug.xrButtons()[4].text }');
   check('comparison can show the safer room while the prior layout stays active', JSON.stringify(priorPreview.layout) === JSON.stringify(originalRoom.layout) &&
     priorPreview.pm === originalRoom.pm && priorPreview.text[2] === 'Checks and walking: prior layout', priorPreview.text.join(' / '));
   await press('right', 2);
@@ -239,18 +255,27 @@ try {
   await G(p, "__xr.ctl('right').updateButtonValue('squeeze', 1)");
   await wait();
   await G(p, "__xr.ctl('right').updateButtonValue('squeeze', 0)");
-  await wait(500);
+  await wait(200);
+  const resetFx = await G(p, 'return game.debug.wand().fx');
+  await wait(300);
   const bed2 = await G(p, "return game.layout().poses[game.items.indexOf('bed')]");
+  check('a reset flashes the spot it went back to', resetFx.flash > 0, JSON.stringify(resetFx));
   check('grip puts the pointed-at object back', Math.hypot(bed2.x - bed0.x, bed2.y - bed0.y) < 0.01 && Math.abs(bed2.yaw - bed0.yaw) < 0.01,
     `bed (${bed2.x.toFixed(2)}, ${bed2.y.toFixed(2)}) vs original (${bed0.x.toFixed(2)}, ${bed0.y.toFixed(2)})`);
   await G(p, `__xr.aim(__xr.ctl('right'), ${JSON.stringify(await G(p, "return __xr.proxy('bed')"))})`);
   await wait();
   await G(p, "__xr.ctl('right').updateButtonValue('a-button', 1)");
-  await wait();
+  await wait(150);
+  await G(p, "__xr.ctl('right').updateButtonValue('a-button', 0)");
+  await wait(300);
+  const tapInv = await G(p, 'return game.inventory()');
+  check('a tap on A no longer removes the object', !tapInv.includes('bed'), `removed: ${tapInv.join(', ')}`);
+  await G(p, "__xr.ctl('right').updateButtonValue('a-button', 1)");
+  await wait(700);
   await G(p, "__xr.ctl('right').updateButtonValue('a-button', 0)");
   await wait(500);
   const inv = await G(p, 'return game.inventory()');
-  check('A removes the pointed-at object', inv.includes('bed'), `removed: ${inv.join(', ')}`);
+  check('holding A removes the pointed-at object', inv.includes('bed'), `removed: ${inv.join(', ')}`);
   const stripNow = await G(p, 'return game.debug.xrStrip()');
   check('the off-hand strip card shows the current mode and keys', stripNow.visible && /Trigger|stick/i.test(stripNow.key), JSON.stringify(stripNow));
   await G(p, "__xr.ctl('right').updateButtonValue('thumbstick', 1)");
@@ -272,26 +297,52 @@ try {
   const rest = await G(p, "return { gone: game.inventory(), bed: game.layout().poses[game.items.indexOf('bed')] }");
   check('both grips held reset everything', rest.gone.length === 0 && Math.hypot(rest.bed.x - bed0.x, rest.bed.y - bed0.y) < 0.01, `removed: [${rest.gone.join(', ')}], bed (${rest.bed.x.toFixed(2)}, ${rest.bed.y.toFixed(2)})`);
 
-  // 9b. Results panel: the desktop's numbers in the headset. "Results" swaps the story buttons for a header (press: next
-  // page), four rows and Close; on Fixes, "Work out the fixes" rolls them out and pointing at one applies it.
-  await G(p, "game.debug.xrPress(game.debug.xrButtons().findIndex(b => b.text[0] === 'Results'))");
-  await p.waitForTimeout(300);
-  const rp0 = await G(p, 'const b = game.debug.xrButtons(); return { shown: b.filter(x => x.at).map(x => x.text[0]), panel: game.debug.xrPanel() }');
-  const hdr = await G(p, "return game.debug.xrButtons().findIndex(b => b.text[0] === 'Safety on this route')");
-  for (let i = 0; i < 6 && (await G(p, `return game.debug.xrButtons()[${hdr}].text[0]`)) !== 'Fixes'; i++) { await G(p, `game.debug.xrPress(${hdr})`); await p.waitForTimeout(150); }
-  await G(p, `game.debug.xrPress(${hdr + 1})`);   // "Work out the fixes"
-  await p.waitForFunction(() => Array.isArray((window as any).game.fixes), null, { timeout: 30000 });
-  await p.waitForTimeout(300);
-  const fixRows = await G(p, `return game.debug.xrButtons().slice(${hdr + 1}, ${hdr + 5}).map(b => b.text)`);
-  const k = fixRows.findIndex((t: string[]) => t[2] === 'point here to apply');
-  const ch0 = await G(p, 'return game.reimagine.changes().length');
-  if (k >= 0) { await G(p, `game.debug.xrPress(${hdr + 1 + k})`); await p.waitForFunction(n => (window as any).game.reimagine.changes().length > n, ch0, { timeout: 30000 }); }
-  const ch1 = await G(p, 'return game.reimagine.changes().length');
-  await G(p, `game.debug.xrPress(${hdr + 5})`); await p.waitForTimeout(300);   // Close
-  const rp1 = await G(p, 'return { shown: game.debug.xrButtons().filter(x => x.at).map(x => x.text[0]), panel: game.debug.xrPanel() }');
-  check('results panel: pages of the desktop numbers; a fix applied from it; Close brings the story buttons back',
-    rp0.panel && rp0.shown[0] === 'Safety on this route' && /toe catches a month/.test(rp0.shown[1]) && k >= 0 && ch1 > ch0 && !rp1.panel && rp1.shown.includes('Results'),
-    `open: ${rp0.shown.slice(0, 3).join(' | ')}; fixes: ${fixRows.map((t: string[]) => t[0]).join(', ')}; applied "${fixRows[k]?.[0]}", changes ${ch0} -> ${ch1}; closed: ${rp1.shown.length} story buttons`);
+  // 9b. The card menu is up by default (the three story buttons, Vision and "More"); holding the left stick opens ONE
+  // tabbed panel about 2 m out and the cards step aside; a second click closes it and they return.
+  const idle = await G(p, 'return { shown: game.debug.xrButtons().filter(x => x.at).length, texts: game.debug.xrButtons().map(b => b.text[0]), open: game.frontendXR.isOpen() }');
+  await G(p, "__xr.ctl('left').updateButtonValue('thumbstick', 1)"); await wait(900);
+  await G(p, "__xr.ctl('left').updateButtonValue('thumbstick', 0)"); await wait(400);
+  const pan = await G(p, `const h = game.xrPose().head, r = game.frontendXR.root.position; return { open: game.frontendXR.isOpen(), d: Math.hypot(r.x - h[0], r.y - h[1]), cards: game.debug.xrButtons().filter(x => x.at).length,
+    tabs: game.frontendXR.root.children.map(c => c.userData.label).slice(0, 5) }`);
+  await G(p, "__xr.ctl('left').updateButtonValue('thumbstick', 1)"); await wait(150);
+  await G(p, "__xr.ctl('left').updateButtonValue('thumbstick', 0)"); await wait(300);
+  const closed = await G(p, 'return { open: game.frontendXR.isOpen(), cards: game.debug.xrButtons().filter(x => x.at).length }');
+  check('the cards stand in the room by default; the tabbed panel opens about 2 m out and they step aside', idle.shown === 5 && !idle.open && !idle.texts.includes('Results') &&
+    pan.open && pan.d > 1.8 && pan.d < 2.2 && pan.cards === 0 && pan.tabs.join(',') === 'World,Vision,Device,Tour,More' && !closed.open && closed.cards === 5,
+    `in the room: ${idle.shown} cards; panel ${pan.open ? 'open' : 'shut'} ${pan.d.toFixed(2)} m out (${pan.cards} cards), tabs ${pan.tabs.join('/')}, closed again=${!closed.open} (${closed.cards} cards)`);
+
+  // 9c. The card menu: the demo's three buttons, Vision and "More" up front, on an arc to your left at chest height (none low,
+  // none across your view); "More" shows the rest with Hide and "Back"; "Back" returns
+  const menuAt = () => G(p, `const h = game.xrPose().head, c = game.debug.renderer.xr.getCamera(), d = c.getWorldDirection(new (game.debug.rig.position.constructor)());
+    return game.debug.xrButtons().filter(b => b.at).map(b => ({ t: b.text[0], z: b.at[2], h: h[2], a: Math.atan2(Math.sin(Math.atan2(b.at[1] - h[1], b.at[0] - h[0]) - Math.atan2(d.y, d.x)), Math.cos(Math.atan2(b.at[1] - h[1], b.at[0] - h[0]) - Math.atan2(d.y, d.x))) }))`);
+  const frontSet = await menuAt();
+  await G(p, "game.debug.xrPress(game.debug.xrButtons().findIndex(b => b.text[0] === 'More...'))"); await wait(300);
+  const moreSet = await menuAt();
+  await G(p, "game.debug.xrPress(game.debug.xrButtons().findIndex(b => b.text[0] === 'Back'))"); await wait(300);
+  const backSet = await menuAt();
+  const placed = (m: { z: number; h: number; a: number }[]) => m.every(b => b.z >= 0.5 - 0.08 && b.z < b.h && b.a > 0.15 && b.a < 1.3);
+  check('VR menu: the story, Vision and "More" on an arc to the left, nothing low; "More" shows the rest, "Back" returns',
+    frontSet.length === 5 && frontSet.some((b: { t: string }) => b.t === 'More...') && placed(frontSet) && moreSet.some((b: { t: string }) => b.t === 'Hide this menu') && moreSet.some((b: { t: string }) => b.t === 'Cost & impact') &&
+    moreSet.at(-1)?.t === 'Back' && placed(moreSet) && backSet.length === 5,
+    `front: ${frontSet.map((b: { t: string; z: number; a: number }) => `${b.t} ${b.z.toFixed(2)} m ${(b.a * 180 / Math.PI).toFixed(0)} deg`).join(', ')}; more: ${moreSet.map((b: { t: string }) => b.t).join(', ')} (lowest ${Math.min(...moreSet.map((b: { z: number }) => b.z)).toFixed(2)} m)`);
+
+  // 9d. Modes stay visible once on: Vision (a card badge plus the chip), Night; the stats card shows only with a fix applied;
+  // a tap of the off-hand grip hides and shows the cards; none of it takes a ray hit
+  const vi = await G(p, "return game.debug.xrButtons().findIndex(b => b.text[0].startsWith('Vision'))");
+  await G(p, `game.debug.xrPress(${vi})`); await wait(300);
+  const v1 = await G(p, "return { card: game.debug.xrButtons()[" + vi + "], sel: document.getElementById('vision').value, glance: game.debug.xrGlance() }");
+  await G(p, "document.getElementById('vision').value = 'normal'; document.getElementById('vision').dispatchEvent(new Event('change'))"); await wait(300);
+  const v0 = await G(p, 'return game.debug.xrGlance()');
+  const st = await G(p, 'return game.debug.xrGlance().stats');
+  check('Vision turns on from the card, shows ON and a chip, and the chip clears in Normal; no stats without a fix', v1.card.on && v1.sel !== 'normal' && v1.glance.chip.length > 0 && v1.glance.chipVisible && v0.chip === '' && st === '',
+    `vision ${v1.sel}, on=${v1.card.on}, chip "${v1.glance.chip}", cleared="${v0.chip}", stats "${st}"`);
+  await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 1)"); await wait(120);
+  await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 0)"); await wait(300);
+  const hid = await G(p, 'return { menu: game.debug.xrMenu(), cards: game.debug.xrButtons().filter(x => x.at).length }');
+  await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 1)"); await wait(120);
+  await G(p, "__xr.ctl('left').updateButtonValue('squeeze', 0)"); await wait(300);
+  const shownAgain = await G(p, 'return { menu: game.debug.xrMenu(), cards: game.debug.xrButtons().filter(x => x.at).length }');
+  check('a tap of the off-hand grip hides the cards and a second tap brings them back', !hid.menu.on && hid.cards === 0 && shownAgain.menu.on && shownAgain.cards === 5, `hidden: ${hid.cards} cards; again: ${shownAgain.cards}`);
 
   // 9. leaving VR puts the monitor back: DOM labels, performance mode as it was before entering
   await G(p, 'await game.debug.renderer.xr.getSession().end()');
