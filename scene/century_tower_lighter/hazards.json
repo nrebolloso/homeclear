@@ -3,51 +3,547 @@
  "hazards": [
   {
    "id": 0,
-   "type": "floor_bump",
+   "type": "tight_clearance",
    "path_index": [
-    2,
-    16
+    1967,
+    1995
    ],
-   "length_m": 0.33,
+   "length_m": 0.7,
    "heading_xy": [
-    -0.928,
-    0.371
+    0.863,
+    0.506
    ],
-   "max_bump_height_cm": 2.3,
-   "position_m": [
-    8.6,
-    -8.226,
-    0.023
-   ],
-   "estimated": false,
+   "min_side_clearance_m": 0.018,
+   "required_margin_m": 0.1,
    "verdict": "fail",
+   "position_m": [
+    4.393,
+    -10.004,
+    0.0
+   ],
    "source": "geometry",
    "ot_check": true,
-   "note": "2.3 cm floor bump over 0.33 m of the route (measured from the splat)"
+   "note": "2 cm each side of the walker over 0.7 m (measured)",
+   "pos": [
+    4.393,
+    -10.004
+   ],
+   "height_m": null,
+   "clearance_m": 0.018,
+   "basis": "measured",
+   "borderline": false
   },
   {
    "id": 1,
    "type": "floor_bump",
    "path_index": [
-    44,
-    49
+    96,
+    101
    ],
    "length_m": 0.14,
    "heading_xy": [
     -0.707,
     0.707
    ],
-   "max_bump_height_cm": 0.8,
+   "max_bump_height_cm": 1.2,
    "position_m": [
-    7.86,
-    -7.566,
-    0.008
+    8.413,
+    3.276,
+    0.012
    ],
    "estimated": false,
-   "verdict": "minor",
+   "verdict": "fail",
    "source": "geometry",
-   "ot_check": false,
-   "note": "0.8 cm floor bump over 0.14 m of the route (measured from the splat)"
+   "ot_check": true,
+   "note": "1.2 cm floor bump over 0.14 m of the route (measured from the splat)",
+   "pos": [
+    8.413,
+    3.276
+   ],
+   "height_m": 0.012,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 2,
+   "type": "floor_bump",
+   "path_index": [
+    147,
+    170
+   ],
+   "length_m": 0.61,
+   "heading_xy": [
+    -0.6,
+    0.8
+   ],
+   "max_bump_height_cm": 1.8,
+   "position_m": [
+    8.113,
+    4.476,
+    0.018
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "1.8 cm floor bump over 0.61 m of the route (measured from the splat)",
+   "pos": [
+    8.113,
+    4.476
+   ],
+   "height_m": 0.018,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 3,
+   "type": "floor_bump",
+   "path_index": [
+    224,
+    256
+   ],
+   "length_m": 0.79,
+   "heading_xy": [
+    -0.479,
+    0.878
+   ],
+   "max_bump_height_cm": 4.3,
+   "position_m": [
+    7.193,
+    6.116,
+    0.043
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "4.3 cm floor bump over 0.79 m of the route (measured from the splat)",
+   "pos": [
+    7.193,
+    6.116
+   ],
+   "height_m": 0.043,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 4,
+   "type": "floor_bump",
+   "path_index": [
+    590,
+    626
+   ],
+   "length_m": 0.76,
+   "heading_xy": [
+    -1.0,
+    -0.027
+   ],
+   "max_bump_height_cm": 4.1,
+   "position_m": [
+    -0.107,
+    8.956,
+    0.041
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "4.1 cm floor bump over 0.76 m of the route (measured from the splat)",
+   "pos": [
+    -0.107,
+    8.956
+   ],
+   "height_m": 0.041,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 5,
+   "type": "floor_bump",
+   "path_index": [
+    797,
+    812
+   ],
+   "length_m": 0.37,
+   "heading_xy": [
+    -0.49,
+    -0.872
+   ],
+   "max_bump_height_cm": 3.3,
+   "position_m": [
+    -3.287,
+    6.996,
+    0.033
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "3.3 cm floor bump over 0.37 m of the route (measured from the splat)",
+   "pos": [
+    -3.287,
+    6.996
+   ],
+   "height_m": 0.033,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 6,
+   "type": "floor_bump",
+   "path_index": [
+    848,
+    861
+   ],
+   "length_m": 0.27,
+   "heading_xy": [
+    -1.0,
+    0.0
+   ],
+   "max_bump_height_cm": 4.2,
+   "position_m": [
+    -4.227,
+    6.316,
+    0.042
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "4.2 cm floor bump over 0.27 m of the route (measured from the splat)",
+   "pos": [
+    -4.227,
+    6.316
+   ],
+   "height_m": 0.042,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 7,
+   "type": "floor_bump",
+   "path_index": [
+    979,
+    994
+   ],
+   "length_m": 0.36,
+   "heading_xy": [
+    -0.447,
+    -0.894
+   ],
+   "max_bump_height_cm": 2.6,
+   "position_m": [
+    -6.407,
+    4.736,
+    0.026
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "2.6 cm floor bump over 0.36 m of the route (measured from the splat)",
+   "pos": [
+    -6.407,
+    4.736
+   ],
+   "height_m": 0.026,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 8,
+   "type": "floor_bump",
+   "path_index": [
+    1033,
+    1062
+   ],
+   "length_m": 0.68,
+   "heading_xy": [
+    -0.371,
+    -0.928
+   ],
+   "max_bump_height_cm": 3.4,
+   "position_m": [
+    -6.927,
+    3.516,
+    0.034
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "3.4 cm floor bump over 0.68 m of the route (measured from the splat)",
+   "pos": [
+    -6.927,
+    3.516
+   ],
+   "height_m": 0.034,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 9,
+   "type": "floor_bump",
+   "path_index": [
+    1085,
+    1086
+   ],
+   "length_m": 0.03,
+   "heading_xy": [
+    -0.447,
+    -0.894
+   ],
+   "max_bump_height_cm": 1.1,
+   "position_m": [
+    -7.147,
+    2.756,
+    0.011
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "1.1 cm floor bump over 0.03 m of the route (measured from the splat)",
+   "pos": [
+    -7.147,
+    2.756
+   ],
+   "height_m": 0.011,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 10,
+   "type": "floor_bump",
+   "path_index": [
+    1087,
+    1088
+   ],
+   "length_m": 0.03,
+   "heading_xy": [
+    -0.447,
+    -0.894
+   ],
+   "max_bump_height_cm": 1.1,
+   "position_m": [
+    -7.167,
+    2.716,
+    0.011
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "1.1 cm floor bump over 0.03 m of the route (measured from the splat)",
+   "pos": [
+    -7.167,
+    2.716
+   ],
+   "height_m": 0.011,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 11,
+   "type": "floor_bump",
+   "path_index": [
+    1089,
+    1090
+   ],
+   "length_m": 0.03,
+   "heading_xy": [
+    -0.447,
+    -0.894
+   ],
+   "max_bump_height_cm": 1.1,
+   "position_m": [
+    -7.187,
+    2.676,
+    0.011
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "1.1 cm floor bump over 0.03 m of the route (measured from the splat)",
+   "pos": [
+    -7.187,
+    2.676
+   ],
+   "height_m": 0.011,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 12,
+   "type": "floor_bump",
+   "path_index": [
+    1833,
+    1866
+   ],
+   "length_m": 0.91,
+   "heading_xy": [
+    0.739,
+    -0.674
+   ],
+   "max_bump_height_cm": 3.2,
+   "position_m": [
+    1.773,
+    -8.804,
+    0.032
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "3.2 cm floor bump over 0.91 m of the route (measured from the splat)",
+   "pos": [
+    1.773,
+    -8.804
+   ],
+   "height_m": 0.032,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 13,
+   "type": "floor_bump",
+   "path_index": [
+    1870,
+    1919
+   ],
+   "length_m": 1.07,
+   "heading_xy": [
+    0.972,
+    -0.233
+   ],
+   "max_bump_height_cm": 4.2,
+   "position_m": [
+    2.673,
+    -9.284,
+    0.042
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "4.2 cm floor bump over 1.07 m of the route (measured from the splat)",
+   "pos": [
+    2.673,
+    -9.284
+   ],
+   "height_m": 0.042,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 14,
+   "type": "floor_bump",
+   "path_index": [
+    2159,
+    2190
+   ],
+   "length_m": 0.8,
+   "heading_xy": [
+    0.584,
+    0.812
+   ],
+   "max_bump_height_cm": 2.8,
+   "position_m": [
+    7.933,
+    -7.384,
+    0.028
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "2.8 cm floor bump over 0.8 m of the route (measured from the splat)",
+   "pos": [
+    7.933,
+    -7.384
+   ],
+   "height_m": 0.028,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 15,
+   "type": "floor_bump",
+   "path_index": [
+    2214,
+    2232
+   ],
+   "length_m": 0.41,
+   "heading_xy": [
+    0.301,
+    0.954
+   ],
+   "max_bump_height_cm": 2.6,
+   "position_m": [
+    8.153,
+    -6.404,
+    0.026
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "2.6 cm floor bump over 0.41 m of the route (measured from the splat)",
+   "pos": [
+    8.153,
+    -6.404
+   ],
+   "height_m": 0.026,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
+  },
+  {
+   "id": 16,
+   "type": "floor_bump",
+   "path_index": [
+    2261,
+    2287
+   ],
+   "length_m": 0.64,
+   "heading_xy": [
+    -0.46,
+    0.888
+   ],
+   "max_bump_height_cm": 1.7,
+   "position_m": [
+    8.293,
+    -5.384,
+    0.017
+   ],
+   "estimated": false,
+   "verdict": "fail",
+   "source": "geometry",
+   "ot_check": true,
+   "note": "1.7 cm floor bump over 0.64 m of the route (measured from the splat)",
+   "pos": [
+    8.293,
+    -5.384
+   ],
+   "height_m": 0.017,
+   "clearance_m": null,
+   "basis": "measured",
+   "borderline": false
   }
  ]
 }

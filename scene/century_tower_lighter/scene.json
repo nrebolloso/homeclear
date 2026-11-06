@@ -8,15 +8,16 @@
  "verification": null,
  "synthetic": [],
  "scale_note": "scale ASSUMED: camera height 1.4 m, no known size picked yet",
+ "bump_note": null,
  "grid": {
   "origin_xy": [
-   -13.9495,
-   -20.7556
+   -22.7167,
+   -31.7538
   ],
   "cell_m": 0.02,
   "shape": [
-   1822,
-   1695
+   2006,
+   2076
   ],
   "index": "flat i*ny + j; cell (i,j) spans origin + (i,j)*cell_m",
   "floor": "floor.u8",
@@ -43,6 +44,7 @@
  },
  "stairs": [],
  "doors": [],
+ "reach_points": [],
  "hazards": "hazards.json",
  "route": "route.json",
  "routes": "routes.json",
@@ -102,5 +104,6 @@
    "height": 0.0
   }
  },
+ "fixed": [],
  "fill_note": "imagined, not measured: floor and wall under/behind movable objects, inpainted (stage 12b)"
 }
